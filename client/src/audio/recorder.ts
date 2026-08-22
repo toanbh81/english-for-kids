@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
 export type RecorderState = 'idle' | 'recording' | 'processing'
 
@@ -18,6 +18,16 @@ export function useRecorder(opts: { maxMs?: number } = {}) {
   const stopResolve = useRef<((b: Blob) => void) | null>(null)
   const timer = useRef(0)
   const audioCtx = useRef<AudioContext | null>(null)
+  const starting = useRef(false)
+
+  // Release the mic, the level meter and the timers if the screen unmounts mid-recording.
+  useEffect(() => () => {
+    cancelAnimationFrame(raf.current)
+    clearTimeout(timer.current)
+    stream.current?.getTracks().forEach(t => t.stop())
+    void audioCtx.current?.close()
+    if (rec.current && rec.current.state !== 'inactive') rec.current.stop()
+  }, [])
 
   const stop = useCallback((): Promise<Blob> => new Promise(resolve => {
     if (!rec.current || rec.current.state === 'inactive') return resolve(new Blob())
@@ -27,31 +37,39 @@ export function useRecorder(opts: { maxMs?: number } = {}) {
   }), [])
 
   const start = useCallback(async () => {
-    if (rec.current && rec.current.state !== 'inactive') return
-    stream.current = await navigator.mediaDevices.getUserMedia({ audio: true })
-    const mime = pickMimeType()
-    rec.current = new MediaRecorder(stream.current, mime ? { mimeType: mime } : undefined)
-    chunks.current = []
-    rec.current.ondataavailable = e => { if (e.data.size) chunks.current.push(e.data) }
-    rec.current.onstop = () => {
-      cancelAnimationFrame(raf.current); clearTimeout(timer.current)
-      stream.current?.getTracks().forEach(t => t.stop())
-      void audioCtx.current?.close(); audioCtx.current = null
-      const blob = new Blob(chunks.current, { type: rec.current?.mimeType })
-      setState('idle'); setLevel(0)
-      stopResolve.current?.(blob)
+    // `starting` also covers the window where getUserMedia is still pending (rec.current is
+    // still null), so a double-tap cannot open a second mic stream and leak it.
+    if (starting.current || (rec.current && rec.current.state !== 'inactive')) return
+    starting.current = true
+    try {
+      stream.current = await navigator.mediaDevices.getUserMedia({ audio: true })
+      const mime = pickMimeType()
+      rec.current = new MediaRecorder(stream.current, mime ? { mimeType: mime } : undefined)
+      chunks.current = []
+      rec.current.ondataavailable = e => { if (e.data.size) chunks.current.push(e.data) }
+      rec.current.onstop = () => {
+        cancelAnimationFrame(raf.current); clearTimeout(timer.current)
+        stream.current?.getTracks().forEach(t => t.stop())
+        void audioCtx.current?.close(); audioCtx.current = null
+        const blob = new Blob(chunks.current, { type: rec.current?.mimeType })
+        setState('idle'); setLevel(0)
+        stopResolve.current?.(blob)
+      }
+      // level meter
+      const ctx = new AudioContext(); audioCtx.current = ctx
+      await ctx.resume() // iOS starts the context suspended until a user gesture resumes it
+      const src = ctx.createMediaStreamSource(stream.current)
+      const an = ctx.createAnalyser(); an.fftSize = 256; src.connect(an)
+      const data = new Uint8Array(an.frequencyBinCount)
+      const tick = () => { an.getByteTimeDomainData(data)
+        setLevel(Math.min(1, data.reduce((m, v) => Math.max(m, Math.abs(v - 128)), 0) / 64)); raf.current = requestAnimationFrame(tick) }
+      tick()
+      rec.current.start()
+      setState('recording')
+      timer.current = window.setTimeout(() => void stop(), maxMs)
+    } finally {
+      starting.current = false
     }
-    // level meter
-    const ctx = new AudioContext(); audioCtx.current = ctx
-    const src = ctx.createMediaStreamSource(stream.current)
-    const an = ctx.createAnalyser(); an.fftSize = 256; src.connect(an)
-    const data = new Uint8Array(an.frequencyBinCount)
-    const tick = () => { an.getByteTimeDomainData(data)
-      setLevel(Math.min(1, data.reduce((m, v) => Math.max(m, Math.abs(v - 128)), 0) / 64)); raf.current = requestAnimationFrame(tick) }
-    tick()
-    rec.current.start()
-    setState('recording')
-    timer.current = window.setTimeout(() => void stop(), maxMs)
   }, [maxMs, stop])
 
   return { state, start, stop, level }
