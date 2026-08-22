@@ -83,6 +83,8 @@ Chi phí: Azure Speech ≈ $1/giờ audio; 15 phút/ngày ≈ dưới $1/tháng,
 3. **Tuần 4:** Words, Sentence Builder, Foxy, streak.
 4. Sau đó: mỗi tuần thêm 1 truyện + 1 chủ đề.
 
+**Phase 2 (Listening) implemented 2026-08-23.**
+
 ### 2.6 Quyết định đã chốt (22/08/2026)
 - **Bộ chấm phát âm:** Azure Speech Pronunciation Assessment, tier **F0 miễn phí 5 giờ/tháng** (chính) + **Web Speech API** của Safari (fallback khi offline / hết quota, chỉ chấm mức từ). Cả hai nằm sau một interface chung `scorePronunciation(audio, targetText) → PronunciationResult` để có thể đổi engine sau này.
   - Đã loại: DeepSeek/Kimi (LLM text, không phân tích âm thanh); Gemini audio (không ra điểm ổn định); tự host wav2vec2/Kimi-Audio (tốn công, kém chính xác với giọng trẻ em); SpeechAce/ELSA (quá đắt).

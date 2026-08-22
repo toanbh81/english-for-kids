@@ -49,6 +49,37 @@ AZURE_SPEECH_KEY=your-key AZURE_SPEECH_REGION=southeastasia node scripts/gen-sto
 
 This writes mp3s to `client/public/audio/stories/<id>/` and fills word timings (start/end ms) into each story's JSON; commit the updated JSON files afterwards.
 
+## Phase 2 — Listening (Nghe kể chuyện)
+
+A listening module that engages kids in illustrated stories with synchronized karaoke-style text. Kids listen to a 60–120 s story (6–7 scenes), see words light up in sync with narration, can slow playback, tap words to replay, toggle Vietnamese subtitles, then answer 3 picture questions and retell one target sentence.
+
+**No-audio fallback:** If you have not yet run `gen-story.mjs` or audio files are missing, the player still works — it drives the karaoke from an estimated word timing based on a silent clock (Chưa có giọng đọc — chữ chạy theo nhịp ước lượng). Everything is testable without Azure Speech.
+
+Features:
+- **Karaoke player** with scene art (large emoji on gradient), current word enlarged in coral, past words greyed out
+- **Speed control:** 0.75× or 1× playback rate
+- **Tap-word replay:** tap any word to hear it in isolation
+- **Subtitles toggle:** 🇻🇳 Vietnamese subtitles
+- **Background music:** procedural ambient pad (Web Audio, toggle remembered in `localStorage`)
+- **Quiz:** 3 picture-choice questions, Foxy says right/wrong, retry allowed; stars stored in `story:<id>`
+- **Retell:** speak one target sentence; lenient scoring (≥60 → 3★, ≥35 → 2★, else 1★) with encouragement, no phoneme hint; stars stored in `retell:<id>`
+
+For narration timings, see **"Generating sample audio"** above (`scripts/gen-story.mjs`). Built-in stories: *The Little Fox*, *At the Zoo*, *My Breakfast*.
+
+### Verified on iPad
+
+| # | Step | Expected result | Result |
+|---|------|------------------|--------|
+| 1 | Share → Add to Home Screen | Opens full-screen, cream background, Nunito font | ⏳ pending |
+| 2 | Sound Zoo → "three": tap 🔊 → hears Jenny; tap mic → permission prompt → accept; say "three"; tap stop | Stars appear within 3 s; word colored; hint shows if score < 80 | ⏳ pending |
+| 3 | "Nghe mình" (listen to self) | Plays back the recording | ⏳ pending |
+| 4 | Turn Wi-Fi off → reload | Header shows "chế độ đơn giản"; scoring still returns stars (Web Speech fallback) | ⏳ pending |
+| 5 | Close and reopen the app | Stars persist | ⏳ pending |
+| 6 | Stories → The Little Fox → play scene 1; tap 🎵 | Background music fades in or out; selection persists across reload | ⏳ pending |
+| 7 | Stories → The Little Fox → play scene 1; drag speed slider to 🐢 | Audio playback and karaoke slow to 0.75× | ⏳ pending |
+| 8 | Stories → The Little Fox → scene 1, tap any word (e.g. "The") | Word plays in isolation; karaoke pauses | ⏳ pending |
+| 9 | Stories → The Little Fox → finish quiz (3 questions), then Retell → speak "He wants an apple." | Lenient score (1–3 stars) appears; encouragement message shown | ⏳ pending |
+
 ## Running
 
 ```bash

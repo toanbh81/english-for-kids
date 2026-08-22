@@ -42,3 +42,7 @@ type Story = { id: string; title: string; titleVi: string; emoji: string; scenes
 
 ## Constraints (inherit Phase 1 Global Constraints)
 Tap targets ≥ 64 px; karaoke text ≥ 32 px; Vietnamese UI copy; en-US; Azure key only in `server/.env`; secret-leak hooks stay in force; all tests/lint/typecheck/build green.
+
+---
+
+Status: implemented 2026-08-23 on branch phase2-listening (tasks 1–9).
