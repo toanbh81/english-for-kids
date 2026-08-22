@@ -5,7 +5,7 @@ import { useRecorder } from '../audio/recorder'
 import { playBlob, playUrl } from '../audio/player'
 import { createScorer } from '../scoring/createScorer'
 import { toFeedback } from '../scoring/feedback'
-import type { Feedback, PronunciationScorer } from '../scoring/types'
+import type { Feedback, PronunciationResult, PronunciationScorer } from '../scoring/types'
 import { WebSpeechScorer } from '../scoring/webSpeechScorer'
 import { setStars } from '../progress/store'
 import { MicButton } from '../components/MicButton'
@@ -18,13 +18,14 @@ const TAP_TARGET = 'min-h-[64px] min-w-[64px] flex items-center'
 
 /** The Web Speech engine listens on its own stream, so it needs an explicit start(). */
 type LiveScorer = PronunciationScorer & { start(): void }
+type ScorerBundle = { scorer: PronunciationScorer; engine: string }
 
 export function PracticeCard() {
   const { cardId = '' } = useParams()
   const nav = useNavigate()
   const card = findCard(cardId)
   const rec = useRecorder({ maxMs: 8000 })
-  const [scorer, setScorer] = useState<{ scorer: PronunciationScorer; engine: string } | null>(null)
+  const [scorer, setScorer] = useState<ScorerBundle | null>(null)
   const [feedback, setFeedback] = useState<Feedback | null>(null)
   const [lastBlob, setLastBlob] = useState<Blob | null>(null)
   const [attempts, setAttempts] = useState(0)
@@ -50,6 +51,23 @@ export function PracticeCard() {
   const isWebSpeech = scorer?.engine === 'webspeech'
   const recording = rec.state === 'recording' || wsRecording
 
+  /**
+   * Azure tokens expire after ~10 minutes, which a kid easily outlasts on one card.
+   * On an Azure failure, mint a fresh scorer and retry exactly once — never in a loop.
+   */
+  async function scoreWithTokenRefresh(active: ScorerBundle, blob: Blob, text: string): Promise<PronunciationResult> {
+    try {
+      return await active.scorer.score(blob, text)
+    } catch (e) {
+      if (active.engine !== 'azure') throw e
+      console.error(e)
+      const fresh = await createScorer()
+      setScorer(fresh)
+      if (fresh.engine !== 'azure') throw e
+      return await fresh.scorer.score(blob, text)
+    }
+  }
+
   async function stopAndScore() {
     if (stoppedRef.current) return
     stoppedRef.current = true
@@ -62,7 +80,7 @@ export function PracticeCard() {
     else setLastBlob(blob)
     setScoring(true)
     try {
-      const fb = toFeedback(await scorer.scorer.score(blob, card!.text))
+      const fb = toFeedback(await scoreWithTokenRefresh(scorer, blob, card!.text))
       setFeedback(fb); setAttempts(a => a + 1); setStars(card!.id, fb.stars)
     } catch (e) {
       setError('Không nghe rõ, bé thử lại nhé!'); console.error(e)
