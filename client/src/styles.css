@@ -1,0 +1,4 @@
+@import url('https://fonts.googleapis.com/css2?family=Nunito:wght@600;800&display=swap');
+@tailwind base; @tailwind components; @tailwind utilities;
+html, body, #root { height: 100%; }
+body { @apply bg-cream font-sans text-slate-800; -webkit-user-select: none; }
