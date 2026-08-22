@@ -65,7 +65,9 @@ export function useStoryPlayer(story: Story): StoryPlayer {
   const wordIndex = activeWordIndex(timings, tMs)
 
   // Refs mirror render state so the self-rescheduling rAF loop always reads current values.
-  const audioRef = useRef<HTMLAudioElement | null>(null)
+  const audioElRef = useRef<HTMLAudioElement | null>(null) // ONE element for the hook's lifetime
+  const audioActiveRef = useRef(false) // the current scene has its narration wired to that element
+  const loadTokenRef = useRef(0) // bumped per scene load; stale async callbacks compare against it
   const rafRef = useRef<number | null>(null)
   const clockRef = useRef(createClock())
   const musicRef = useRef<BackgroundMusic | null>(null)
@@ -87,34 +89,46 @@ export function useStoryPlayer(story: Story): StoryPlayer {
 
   function stopClock() { if (rafRef.current !== null) { cancelAnimationFrame(rafRef.current); rafRef.current = null } }
   function startClockLoop() { stopClock(); rafRef.current = requestAnimationFrame(tick) }
+  /**
+   * Critical fix: iOS unlocks media elements one-by-one, on a play() that originates from a user
+   * gesture. A `new Audio()` per scene therefore leaves scenes 2..n as fresh, still-locked elements
+   * that Safari refuses to play on an unattended auto-advance. One element, created once, swapped
+   * via `src`, stays unlocked for the whole story.
+   */
+  function ensureAudio(): HTMLAudioElement {
+    if (!audioElRef.current) audioElRef.current = new Audio()
+    return audioElRef.current
+  }
   function currentMs(): number {
-    const audio = audioRef.current
+    const audio = audioElRef.current
     return hasAudioRef.current && audio ? audio.currentTime * 1000 : clockRef.current.elapsed()
   }
   function pause() {
     stopClock()
-    audioRef.current?.pause()
+    audioElRef.current?.pause()
     replayUntilRef.current = null // Fix 4: a manual pause cancels any pending one-shot replay stop
     setPlaying(false)
   }
 
   // hasAudio only flips true once BOTH the element has metadata AND play() actually resolved —
   // an iOS NotAllowedError on an unattended auto-advance must never be mistaken for real playback.
-  function markReadyIfBoth(audio: HTMLAudioElement) {
-    if (audioRef.current !== audio) return // scene moved on since this audio was created; ignore
+  // The shared element can no longer identify a scene, so every async callback carries the load
+  // token it was registered with and bails once the scene has moved on.
+  function markReadyIfBoth(token: number) {
+    if (loadTokenRef.current !== token) return
     if (metadataReadyRef.current && playResolvedRef.current) {
       hasAudioRef.current = true
       setHasAudio(true)
     }
   }
-  function attemptPlay(audio: HTMLAudioElement, atMs: number) {
+  function attemptPlay(audio: HTMLAudioElement, atMs: number, token: number) {
     playResolvedRef.current = false // Low (a): a fresh attempt must re-earn "resolved" before hasAudio can flip true
     audio.play().then(() => {
-      if (audioRef.current !== audio) return
+      if (loadTokenRef.current !== token) return
       playResolvedRef.current = true
-      markReadyIfBoth(audio)
+      markReadyIfBoth(token)
     }).catch(() => {
-      if (audioRef.current !== audio) return
+      if (loadTokenRef.current !== token) return
       hasAudioRef.current = false
       setHasAudio(false)
       clockRef.current.rebase(atMs) // keep the fallback clock continuous from where we tried to start
@@ -129,8 +143,8 @@ export function useStoryPlayer(story: Story): StoryPlayer {
     clockRef.current.rebase(atMs)
     setPlaying(true)
     startClockLoop()
-    const audio = audioRef.current
-    if (audio) attemptPlay(audio, atMs)
+    const audio = audioElRef.current
+    if (audio && audioActiveRef.current) attemptPlay(audio, atMs, loadTokenRef.current)
   }
 
   // Shared by tick()'s total+400 check and the audio 'ended' event, guarded so only one fires.
@@ -162,15 +176,17 @@ export function useStoryPlayer(story: Story): StoryPlayer {
     rafRef.current = requestAnimationFrame(tick)
   }
 
-  // (Re)load audio on scene change; resume ticking if mid-auto-advance (playingRef is true here
-  // only for that case — manual scene navigation pauses first). Timings that aren't complete never
-  // get an Audio element at all: nothing to sync audio to, and no point fetching a 404.
+  // Repoint the ONE shared element at this scene's narration; resume ticking if mid-auto-advance
+  // (playingRef is true here only for that case — manual scene navigation pauses first). Scenes
+  // whose timings aren't complete never touch `src`: nothing to sync audio to, no point fetching a
+  // 404, and the element stays idle (and unlocked) for whichever later scene does have narration.
   useEffect(() => {
     stopClock()
     replayUntilRef.current = null
     advancedRef.current = false
     metadataReadyRef.current = false
     playResolvedRef.current = false
+    const token = ++loadTokenRef.current
     setTMs(NOT_STARTED)
     setEnded(false)
     setHasAudio(false)
@@ -178,17 +194,29 @@ export function useStoryPlayer(story: Story): StoryPlayer {
     clockRef.current = createClock(rateRef.current) // Fix 1: keep the selected rate across scenes
 
     if (!complete) {
-      audioRef.current = null
+      audioActiveRef.current = false
       if (playingRef.current) startClockLoop()
       return () => stopClock()
     }
 
-    const audio = new Audio(scene.audio)
-    audio.playbackRate = rateRef.current
-    audioRef.current = audio
-    const onReady = () => { metadataReadyRef.current = true; markReadyIfBoth(audio) }
-    const onError = () => { hasAudioRef.current = false; setHasAudio(false) }
+    const audio = ensureAudio()
+    audioActiveRef.current = true
+    audio.pause()
+    audio.src = scene.audio
+    audio.load()
+    audio.playbackRate = rateRef.current // Fix 1 again: a reused element keeps the previous rate
+    const onReady = () => {
+      if (loadTokenRef.current !== token) return
+      metadataReadyRef.current = true
+      markReadyIfBoth(token)
+    }
+    const onError = () => {
+      if (loadTokenRef.current !== token) return
+      hasAudioRef.current = false
+      setHasAudio(false)
+    }
     const onEnded = () => {
+      if (loadTokenRef.current !== token) return
       if (replayUntilRef.current !== null) return // a word replay owns the current one-shot stop
       finishScene(totalDuration(timingsRef.current))
     }
@@ -199,7 +227,7 @@ export function useStoryPlayer(story: Story): StoryPlayer {
 
     if (playingRef.current) {
       startClockLoop()
-      attemptPlay(audio, 0)
+      attemptPlay(audio, 0, token)
     }
     return () => {
       audio.removeEventListener('loadedmetadata', onReady)
@@ -207,26 +235,35 @@ export function useStoryPlayer(story: Story): StoryPlayer {
       audio.removeEventListener('error', onError)
       audio.removeEventListener('ended', onEnded)
       audio.pause()
-      audio.removeAttribute('src') // Low (b): drop the reference cleanly instead of loading an empty ''
-      audio.load()
-      audioRef.current = null
       stopClock()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [story, sceneIndex])
 
-  // Stop music only on true unmount; the effect above already tears down audio/rAF per scene.
-  useEffect(() => () => musicRef.current?.stop(), [])
+  // True unmount only: release the shared element and stop music. Declared after the scene effect
+  // so React runs that cleanup (listener removal + pause) first.
+  useEffect(() => () => {
+    const audio = audioElRef.current
+    if (audio) {
+      audio.pause()
+      audio.removeAttribute('src') // Low (b): drop the reference cleanly instead of loading an empty ''
+      audio.load()
+    }
+    audioElRef.current = null
+    audioActiveRef.current = false
+    musicRef.current?.stop()
+  }, [])
 
   function play() {
     // Not cleared here: pause() (and the scene-change effect) already own clearing
     // replayUntilRef, so this stays the single, testable source of truth for that reset.
     if (musicOn) musicRef.current?.start() // only place that starts music (iOS gesture rule)
+    if (complete) ensureAudio() // gesture-time creation, in case the scene effect has not yet run
     if (ended) {
       // Fix 5: ▶ on a finished story replays it, rather than doing nothing at tMs === total.
       setEnded(false)
       if (sceneIndex !== 0) { setPlaying(true); setSceneIndex(0); return }
-      if (audioRef.current) audioRef.current.currentTime = 0
+      if (audioActiveRef.current && audioElRef.current) audioElRef.current.currentTime = 0
       setTMs(0)
       beginPlayback(0)
       return
@@ -240,7 +277,7 @@ export function useStoryPlayer(story: Story): StoryPlayer {
     rateRef.current = r
     setRateState(r)
     clockRef.current.setRate(r)
-    if (audioRef.current) audioRef.current.playbackRate = r
+    if (audioElRef.current) audioElRef.current.playbackRate = r
   }
 
   function goScene(i: number) {
@@ -256,7 +293,7 @@ export function useStoryPlayer(story: Story): StoryPlayer {
     pause()
     replayUntilRef.current = w.end
     setTMs(w.start)
-    if (audioRef.current && hasAudioRef.current) audioRef.current.currentTime = w.start / 1000
+    if (audioElRef.current && hasAudioRef.current) audioElRef.current.currentTime = w.start / 1000
     setEnded(false)
     beginPlayback(w.start)
   }

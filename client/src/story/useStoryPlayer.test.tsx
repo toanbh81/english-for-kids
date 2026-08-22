@@ -32,6 +32,43 @@ function scene(words: { w: string; start: number; end: number }[], audio = '/a.m
   }
 }
 
+/** Records how many elements were constructed and every `src` assignment, so a test can prove the
+ * hook reuses ONE element across scenes (iOS unlocks media elements per element, on a gesture). */
+class TrackingAudio {
+  static created = 0
+  static srcHistory: string[] = []
+  static loadSpy = vi.fn()
+  static reset(): void {
+    TrackingAudio.created = 0
+    TrackingAudio.srcHistory = []
+    TrackingAudio.loadSpy.mockClear()
+  }
+  currentTime = 0
+  playbackRate = 1
+  _src = ''
+  constructor(src?: string) {
+    TrackingAudio.created++
+    if (src !== undefined) this.src = src
+  }
+  get src(): string {
+    return this._src
+  }
+  set src(v: string) {
+    this._src = v
+    TrackingAudio.srcHistory.push(v)
+  }
+  addEventListener(): void {}
+  removeEventListener(): void {}
+  play(): Promise<void> {
+    return Promise.resolve()
+  }
+  pause(): void {}
+  removeAttribute(): void {}
+  load(): void {
+    TrackingAudio.loadSpy()
+  }
+}
+
 function makeStory(): Story {
   return {
     id: 'test-story',
@@ -49,6 +86,23 @@ function makeStory(): Story {
         { w: 'Five', start: 0, end: 200 },
         { w: 'Six', start: 260, end: 500 },
       ]),
+    ],
+    quiz: [],
+    retell: { text: '', textVi: '' },
+  } as Story
+}
+
+/** Three scenes with complete timings and distinct audio urls, for the element-reuse test. */
+function makeStory3(): Story {
+  return {
+    id: 'test-story-3',
+    title: 'Test',
+    titleVi: 'Test',
+    emoji: '🦊',
+    scenes: [
+      scene([{ w: 'One', start: 0, end: 200 }, { w: 'Two', start: 260, end: 1300 }], '/s1.mp3'),
+      scene([{ w: 'Three', start: 0, end: 200 }, { w: 'Four', start: 260, end: 500 }], '/s2.mp3'),
+      scene([{ w: 'Five', start: 0, end: 200 }, { w: 'Six', start: 260, end: 500 }], '/s3.mp3'),
     ],
     quiz: [],
     retell: { text: '', textVi: '' },
@@ -369,6 +423,27 @@ it('review fix 5: play() after the story ends restarts from scene 0', async () =
 
   await tickMs(200)
   expect(result.current.wordIndex).toBeGreaterThanOrEqual(0)
+  unmount()
+})
+
+it('critical fix: one Audio element is reused across every scene (iOS per-element unlock)', async () => {
+  TrackingAudio.reset()
+  // @ts-expect-error stub Audio to count constructions and record every src assignment
+  globalThis.Audio = TrackingAudio
+  const story = makeStory3()
+  const { result, unmount } = renderHook(() => useStoryPlayer(story))
+
+  act(() => result.current.play())
+  await tickMs(1800) // scene 0 total 1300 + 400 grace
+  expect(result.current.sceneIndex).toBe(1)
+  await tickMs(1000) // scene 1 total 500 + 400 grace
+  expect(result.current.sceneIndex).toBe(2)
+
+  // A `new Audio()` per scene is exactly the bug: scenes 2..n would be fresh, still-locked
+  // elements that iOS refuses to play on an unattended auto-advance.
+  expect(TrackingAudio.created).toBe(1)
+  expect(TrackingAudio.srcHistory).toEqual(['/s1.mp3', '/s2.mp3', '/s3.mp3'])
+  expect(TrackingAudio.loadSpy).toHaveBeenCalledTimes(3)
   unmount()
 })
 
