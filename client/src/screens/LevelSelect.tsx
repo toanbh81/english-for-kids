@@ -4,7 +4,8 @@ import { getStars } from '../progress/store'
 import { Stars } from '../components/Stars'
 
 export function LevelSelect() {
-  const level = LEVELS.find(l => l.id === useParams().levelId)
+  const { levelId } = useParams()
+  const level = LEVELS.find(l => l.id === levelId)
   if (!level) return <p>Không tìm thấy</p>
   return (
     <main className="p-8">
