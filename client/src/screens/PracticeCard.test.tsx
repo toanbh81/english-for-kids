@@ -1,0 +1,189 @@
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
+import { MemoryRouter, Route, Routes } from 'react-router-dom'
+import { useState } from 'react'
+
+const recorderControl = vi.hoisted(() => ({ shouldFailStart: false, start: vi.fn() }))
+/** Queue of results for successive createScorer() calls; empty falls back to the default Azure stub. */
+const scorerControl = vi.hoisted(() => ({ queue: [] as { engine: string; scorer: unknown }[] }))
+
+vi.mock('../audio/recorder', () => ({
+  useRecorder: () => {
+    const [state, setState] = useState<'idle' | 'recording' | 'processing'>('idle')
+    return {
+      state,
+      level: 0,
+      start: vi.fn(async () => {
+        recorderControl.start()
+        if (recorderControl.shouldFailStart) throw new Error('mic denied')
+        setState('recording')
+      }),
+      stop: vi.fn(async () => { setState('idle'); return new Blob() }),
+    }
+  },
+}))
+const playerControl = vi.hoisted(() => ({ playUrl: vi.fn() }))
+vi.mock('../audio/player', () => ({ playUrl: playerControl.playUrl, playBlob: vi.fn().mockResolvedValue(undefined) }))
+vi.mock('../scoring/createScorer', () => ({
+  createScorer: async () => scorerControl.queue.shift() ?? ({
+    engine: 'azure',
+    scorer: {
+      score: async () => ({
+        overall: 85, accuracy: 85, fluency: 90, completeness: 100, engine: 'azure',
+        words: [{ word: 'three', score: 85, errorType: 'None', phonemes: [] }],
+      }),
+    },
+  }),
+}))
+import { PracticeCard } from './PracticeCard'
+
+function renderCard() {
+  render(<MemoryRouter initialEntries={['/practice/sz-th-three']}><Routes><Route path="/practice/:cardId" element={<PracticeCard />} /></Routes></MemoryRouter>)
+}
+
+beforeEach(() => {
+  playerControl.playUrl.mockReset().mockResolvedValue(undefined)
+})
+
+afterEach(() => {
+  recorderControl.shouldFailStart = false
+  recorderControl.start.mockClear()
+  scorerControl.queue.length = 0
+  delete (window as any).webkitSpeechRecognition
+  vi.useRealTimers()
+})
+
+it('shows the word, records, and renders 3 stars', async () => {
+  renderCard()
+  expect(screen.getByText('three')).toBeInTheDocument()
+  await waitFor(() => expect(screen.getByRole('button', { name: /bấm để nói/i })).toBeEnabled()) // scorer ready
+  fireEvent.click(screen.getByRole('button', { name: /bấm để nói/i })) // start
+  await waitFor(() => expect(screen.getByRole('button', { name: /dừng/i })).toBeInTheDocument())
+  fireEvent.click(screen.getByRole('button', { name: /dừng/i })) // stop
+  await waitFor(() => expect(screen.getAllByTestId('star-filled')).toHaveLength(3))
+  expect(screen.getByText('Tuyệt vời!')).toBeInTheDocument()
+  expect(screen.getAllByTestId('star-filled')[0]).toHaveClass('animate-bounce') // 3 stars celebrate
+})
+
+it('says the sample audio is missing instead of failing silently', async () => {
+  playerControl.playUrl.mockRejectedValue(new Error('audio failed'))
+  renderCard()
+  fireEvent.click(screen.getByRole('button', { name: '🔊' }))
+  await screen.findByText('Chưa có audio mẫu')
+})
+
+it('shows a friendly error when mic permission is denied', async () => {
+  recorderControl.shouldFailStart = true
+  renderCard()
+  await waitFor(() => expect(screen.getByRole('button', { name: /bấm để nói/i })).toBeEnabled())
+  fireEvent.click(screen.getByRole('button', { name: /bấm để nói/i }))
+  await screen.findByText(/cho phép dùng mic/)
+})
+
+it('Thử lại clears the result and re-enables the mic', async () => {
+  renderCard()
+  await waitFor(() => expect(screen.getByRole('button', { name: /bấm để nói/i })).toBeEnabled())
+  fireEvent.click(screen.getByRole('button', { name: /bấm để nói/i }))
+  await waitFor(() => expect(screen.getByRole('button', { name: /dừng/i })).toBeInTheDocument())
+  fireEvent.click(screen.getByRole('button', { name: /dừng/i }))
+  await waitFor(() => expect(screen.getAllByTestId('star-filled')).toHaveLength(3))
+
+  fireEvent.click(screen.getByRole('button', { name: /thử lại/i }))
+
+  expect(screen.queryAllByTestId('star-filled')).toHaveLength(0)
+  expect(screen.getByRole('button', { name: /bấm để nói/i })).toBeEnabled()
+})
+
+it('auto-stops the recording after 6s and still scores', async () => {
+  renderCard()
+  await waitFor(() => expect(screen.getByRole('button', { name: /bấm để nói/i })).toBeEnabled()) // scorer ready (real timers)
+  vi.useFakeTimers()
+  fireEvent.click(screen.getByRole('button', { name: /bấm để nói/i })) // start
+  await act(async () => { await vi.advanceTimersByTimeAsync(6000) }) // auto-stop fires and scoring completes
+  expect(screen.getAllByTestId('star-filled')).toHaveLength(3)
+})
+
+describe('Web Speech engine', () => {
+  const webSpeechScorer = () => ({
+    start: vi.fn(),
+    score: vi.fn(async () => ({
+      overall: 100, accuracy: 100, fluency: 100, completeness: 100, engine: 'webspeech' as const,
+      words: [{ word: 'three', score: 100, errorType: 'None' as const, phonemes: [] }],
+    })),
+  })
+
+  it('scores via the recognizer without ever starting MediaRecorder', async () => {
+    ;(window as any).webkitSpeechRecognition = class {}
+    const scorer = webSpeechScorer()
+    scorerControl.queue.push({ engine: 'webspeech', scorer })
+    renderCard()
+    await waitFor(() => expect(screen.getByRole('button', { name: /bấm để nói/i })).toBeEnabled())
+    expect(screen.getByText('chế độ đơn giản')).toBeInTheDocument()
+
+    vi.useFakeTimers()
+    fireEvent.click(screen.getByRole('button', { name: /bấm để nói/i }))
+    expect(scorer.start).toHaveBeenCalledTimes(1)
+    expect(screen.getByRole('button', { name: /dừng/i })).toBeInTheDocument() // wsRecording drives the mic button
+    await act(async () => { await vi.advanceTimersByTimeAsync(6000) })
+
+    expect(screen.getAllByTestId('star-filled')).toHaveLength(3)
+    expect(recorderControl.start).not.toHaveBeenCalled()
+    expect(scorer.score).toHaveBeenCalledTimes(1)
+    expect(screen.queryByRole('button', { name: /nghe mình/i })).not.toBeInTheDocument()
+  })
+
+  it('explains that the browser lacks speech recognition instead of blaming the mic', async () => {
+    scorerControl.queue.push({ engine: 'webspeech', scorer: webSpeechScorer() })
+    renderCard() // no window.webkitSpeechRecognition installed
+    await waitFor(() => expect(screen.getByRole('button', { name: /bấm để nói/i })).toBeEnabled())
+    fireEvent.click(screen.getByRole('button', { name: /bấm để nói/i }))
+    await screen.findByText('Trình duyệt này chưa hỗ trợ nhận dạng giọng nói')
+    expect(screen.queryByText(/cho phép dùng mic/)).not.toBeInTheDocument()
+  })
+})
+
+describe('expired Azure token', () => {
+  const okResult = {
+    overall: 85, accuracy: 85, fluency: 90, completeness: 100, engine: 'azure' as const,
+    words: [{ word: 'three', score: 85, errorType: 'None' as const, phonemes: [] }],
+  }
+
+  async function recordAndStop() {
+    await waitFor(() => expect(screen.getByRole('button', { name: /bấm để nói/i })).toBeEnabled())
+    fireEvent.click(screen.getByRole('button', { name: /bấm để nói/i }))
+    await waitFor(() => expect(screen.getByRole('button', { name: /dừng/i })).toBeInTheDocument())
+    fireEvent.click(screen.getByRole('button', { name: /dừng/i }))
+  }
+
+  it('mints a fresh scorer and retries the score exactly once', async () => {
+    const stale = vi.fn().mockRejectedValue(new Error('token expired'))
+    const fresh = vi.fn(async () => okResult)
+    scorerControl.queue.push({ engine: 'azure', scorer: { score: stale } }, { engine: 'azure', scorer: { score: fresh } })
+    renderCard()
+    await recordAndStop()
+    await waitFor(() => expect(screen.getAllByTestId('star-filled')).toHaveLength(3))
+    expect(stale).toHaveBeenCalledTimes(1)
+    expect(fresh).toHaveBeenCalledTimes(1)
+    expect(screen.queryByText(/Không nghe rõ/)).not.toBeInTheDocument()
+  })
+
+  it('surfaces the friendly error after the single retry also fails, without looping', async () => {
+    const stale = vi.fn().mockRejectedValue(new Error('token expired'))
+    const fresh = vi.fn().mockRejectedValue(new Error('still expired'))
+    scorerControl.queue.push({ engine: 'azure', scorer: { score: stale } }, { engine: 'azure', scorer: { score: fresh } })
+    renderCard()
+    await recordAndStop()
+    await screen.findByText('Không nghe rõ, bé thử lại nhé!')
+    expect(stale).toHaveBeenCalledTimes(1)
+    expect(fresh).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not retry when the refreshed engine is no longer Azure', async () => {
+    const stale = vi.fn().mockRejectedValue(new Error('token expired'))
+    const wsScore = vi.fn()
+    scorerControl.queue.push({ engine: 'azure', scorer: { score: stale } }, { engine: 'webspeech', scorer: { start: vi.fn(), score: wsScore } })
+    renderCard()
+    await recordAndStop()
+    await screen.findByText('Không nghe rõ, bé thử lại nhé!')
+    expect(wsScore).not.toHaveBeenCalled()
+  })
+})

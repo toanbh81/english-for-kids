@@ -1,0 +1,17 @@
+{
+  "name": "english-speaking",
+  "version": "1.0.0",
+  "description": "",
+  "private": true,
+  "packageManager": "pnpm@9.15.9",
+  "scripts": {
+    "dev": "pnpm -r --parallel dev",
+    "test": "pnpm -r test",
+    "lint": "pnpm -r lint",
+    "typecheck": "pnpm -r typecheck",
+    "build": "pnpm --filter client build"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC"
+}

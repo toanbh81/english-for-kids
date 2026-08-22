@@ -1,0 +1,14 @@
+{ "id": "word-pop", "title": "Word Pop", "cards": [
+  { "id": "wp-cat", "text": "cat", "ipa": "/kæt/", "emoji": "🐱", "audio": "/audio/cat.mp3" },
+  { "id": "wp-dog", "text": "dog", "ipa": "/dɔːɡ/", "emoji": "🐶", "audio": "/audio/dog.mp3" },
+  { "id": "wp-elephant", "text": "elephant", "ipa": "/ˈelɪfənt/", "emoji": "🐘", "audio": "/audio/elephant.mp3" },
+  { "id": "wp-monkey", "text": "monkey", "ipa": "/ˈmʌŋki/", "emoji": "🐵", "audio": "/audio/monkey.mp3" },
+  { "id": "wp-rabbit", "text": "rabbit", "ipa": "/ˈræbɪt/", "emoji": "🐰", "audio": "/audio/rabbit.mp3" },
+  { "id": "wp-tiger", "text": "tiger", "ipa": "/ˈtaɪɡər/", "emoji": "🐯", "audio": "/audio/tiger.mp3" },
+  { "id": "wp-bird", "text": "bird", "ipa": "/bɜːrd/", "emoji": "🐦", "audio": "/audio/bird.mp3" },
+  { "id": "wp-horse", "text": "horse", "ipa": "/hɔːrs/", "emoji": "🐴", "audio": "/audio/horse.mp3" },
+  { "id": "wp-sheep", "text": "sheep", "ipa": "/ʃiːp/", "emoji": "🐑", "audio": "/audio/sheep.mp3" },
+  { "id": "wp-frog", "text": "frog", "ipa": "/frɔːɡ/", "emoji": "🐸", "audio": "/audio/frog.mp3" },
+  { "id": "wp-snake", "text": "snake", "ipa": "/sneɪk/", "emoji": "🐍", "audio": "/audio/snake.mp3" },
+  { "id": "wp-giraffe", "text": "giraffe", "ipa": "/dʒəˈræf/", "emoji": "🦒", "audio": "/audio/giraffe.mp3" }
+] }
