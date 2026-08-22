@@ -302,7 +302,9 @@ export function useStoryPlayer(story: Story): StoryPlayer {
     const next = !musicOn // computed outside the setter: no side effects inside a state updater
     setMusicOn(next)
     setMusicPref(next)
-    if (!next) musicRef.current?.stop()
+    // Turning it back on mid-story used to do nothing until the next ▶. The toggle tap is itself a
+    // user gesture, so starting Web Audio here is allowed on iOS.
+    if (next) { if (playing) musicRef.current?.start() } else musicRef.current?.stop()
   }
   function toggleSubtitles() { setSubtitles(s => !s) }
 

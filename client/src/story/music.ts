@@ -26,7 +26,17 @@ export class BackgroundMusic {
   }
 
   start(): void {
-    if (this.ctx || typeof AudioContext === 'undefined') return
+    if (this.ctx) {
+      // iOS suspends the context on screen lock / backgrounding. Returning blindly here left the
+      // pad silent for the rest of the session; a resume on the next gesture brings it back.
+      if (this.ctx.state !== 'running') {
+        void this.ctx.resume?.()?.catch(() => {
+          /* still no gesture credit; music just stays silent */
+        })
+      }
+      return
+    }
+    if (typeof AudioContext === 'undefined') return
     const ctx = new AudioContext()
     this.ctx = ctx
     const master = ctx.createGain()

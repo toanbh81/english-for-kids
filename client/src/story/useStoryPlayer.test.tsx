@@ -92,6 +92,49 @@ function makeStory(): Story {
   } as Story
 }
 
+class FakeParam {
+  value = 0
+}
+class FakeAudioNode {
+  connect(): void {}
+  start(): void {}
+  stop(): void {}
+  type = ''
+  frequency = new FakeParam()
+  detune = new FakeParam()
+  gain = new FakeParam()
+}
+/** Minimal Web Audio stub: counts contexts created/closed so the test can observe BackgroundMusic. */
+class FakeMusicContext {
+  static created = 0
+  static closed = 0
+  static reset(): void {
+    FakeMusicContext.created = 0
+    FakeMusicContext.closed = 0
+  }
+  state = 'running'
+  destination = {}
+  constructor() {
+    FakeMusicContext.created++
+  }
+  createOscillator(): FakeAudioNode {
+    return new FakeAudioNode()
+  }
+  createGain(): FakeAudioNode {
+    return new FakeAudioNode()
+  }
+  createBiquadFilter(): FakeAudioNode {
+    return new FakeAudioNode()
+  }
+  resume(): Promise<void> {
+    return Promise.resolve()
+  }
+  close(): Promise<void> {
+    FakeMusicContext.closed++
+    return Promise.resolve()
+  }
+}
+
 /** Three scenes with complete timings and distinct audio urls, for the element-reuse test. */
 function makeStory3(): Story {
   return {
@@ -124,6 +167,8 @@ beforeEach(() => {
 afterEach(() => {
   vi.useRealTimers()
   globalThis.Audio = realAudio as typeof globalThis.Audio
+  // @ts-expect-error test-only cleanup of a global stubbed per test
+  delete globalThis.AudioContext
   localStorage.clear()
 })
 
@@ -265,6 +310,29 @@ it('6. toggleMusic() flips musicOn and persists to localStorage', async () => {
   act(() => result.current.toggleMusic())
   expect(result.current.musicOn).toBe(!initial)
   expect(localStorage.getItem('speakup.music')).toBe(!initial ? 'on' : 'off')
+  unmount()
+})
+
+it('review: toggling music back on mid-playback restarts the pad', async () => {
+  FakeMusicContext.reset()
+  // @ts-expect-error stub the global Web Audio constructor for this test
+  globalThis.AudioContext = FakeMusicContext
+  const story = makeStory()
+  const { result, unmount } = renderHook(() => useStoryPlayer(story))
+
+  act(() => result.current.play()) // the gesture that is allowed to start Web Audio
+  expect(result.current.musicOn).toBe(true)
+  expect(FakeMusicContext.created).toBe(1)
+
+  act(() => result.current.toggleMusic()) // off
+  expect(result.current.musicOn).toBe(false)
+  expect(FakeMusicContext.closed).toBe(1)
+
+  act(() => result.current.toggleMusic()) // on again — this tap IS a gesture, so it may start music
+  expect(result.current.musicOn).toBe(true)
+  expect(FakeMusicContext.created).toBe(2) // without the fix music stays off until the next play()
+
+  act(() => result.current.pause())
   unmount()
 })
 

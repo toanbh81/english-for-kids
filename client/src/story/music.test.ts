@@ -47,6 +47,8 @@ class FakeFilter extends FakeNode {
   frequency = new FakeAudioParam()
 }
 class FakeAudioContext {
+  static resumeSpy = vi.fn()
+  state = 'running'
   destination = {}
   createOscillator(): FakeOscillator {
     return new FakeOscillator()
@@ -58,11 +60,17 @@ class FakeAudioContext {
     return new FakeFilter()
   }
   resume(): Promise<void> {
+    FakeAudioContext.resumeSpy()
     return Promise.resolve()
   }
   close(): Promise<void> {
     return Promise.resolve()
   }
+}
+
+/** iOS suspends the AudioContext when the screen locks or the tab is backgrounded. */
+class SuspendedAudioContext extends FakeAudioContext {
+  state = 'suspended'
 }
 
 it('start()/stop() toggle playing with a fake AudioContext', () => {
@@ -81,6 +89,29 @@ it('start() twice in a row is a no-op the second time', () => {
   const music = new BackgroundMusic()
   music.start()
   expect(() => music.start()).not.toThrow()
+  expect(music.playing).toBe(true)
+  music.stop()
+})
+
+it('start() on an already-running context does not resume it again', () => {
+  // @ts-expect-error stub the global Web Audio constructor for this test
+  globalThis.AudioContext = FakeAudioContext
+  const music = new BackgroundMusic()
+  music.start()
+  FakeAudioContext.resumeSpy.mockClear()
+  music.start()
+  expect(FakeAudioContext.resumeSpy).not.toHaveBeenCalled()
+  music.stop()
+})
+
+it('start() resumes a suspended context (music comes back after lock/unlock)', () => {
+  // @ts-expect-error stub the global Web Audio constructor for this test
+  globalThis.AudioContext = SuspendedAudioContext
+  const music = new BackgroundMusic()
+  music.start() // builds the pad; the initial resume() happens here
+  FakeAudioContext.resumeSpy.mockClear()
+  music.start() // ctx exists but iOS suspended it: blindly returning leaves the pad silent forever
+  expect(FakeAudioContext.resumeSpy).toHaveBeenCalledTimes(1)
   expect(music.playing).toBe(true)
   music.stop()
 })
