@@ -13,7 +13,7 @@ export function scoreTranscript(transcript: string, target: string): Pronunciati
 }
 
 type Rec = { start(): void; stop(): void; lang: string; interimResults: boolean; continuous: boolean;
-  onresult: ((e: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => void) | null; onend: (() => void) | null }
+  onresult: ((e: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => void) | null; onend: (() => void) | null; onerror: ((e: { error: string }) => void) | null }
 
 export class WebSpeechScorer implements PronunciationScorer {
   private rec: Rec | null = null
@@ -30,9 +30,17 @@ export class WebSpeechScorer implements PronunciationScorer {
     this.done = new Promise(resolve => {
       this.rec!.onresult = e => { this.transcript = Array.from(e.results).map(r => r[0].transcript).join(' ') }
       this.rec!.onend = () => resolve(this.transcript)
+      this.rec!.onerror = () => resolve(this.transcript)
     })
     this.rec.start()
   }
-  stop() { this.rec?.stop(); return this.done }
+  stop() {
+    this.rec?.stop()
+    const timeout = new Promise<string>(resolve => {
+      const timer = setTimeout(() => resolve(this.transcript), 3000)
+      this.done.then(() => clearTimeout(timer))
+    })
+    return Promise.race([this.done, timeout])
+  }
   async score(_audio: Blob, target: string) { return scoreTranscript(await this.done, target) }
 }
