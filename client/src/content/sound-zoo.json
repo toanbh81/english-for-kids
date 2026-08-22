@@ -4,7 +4,7 @@
   { "id": "sz-dh-this", "text": "this", "ipa": "/ðɪs/", "emoji": "👉", "audio": "/audio/this.mp3", "targetPhoneme": "dh" },
   { "id": "sz-v-very", "text": "very", "ipa": "/ˈveri/", "emoji": "💯", "audio": "/audio/very.mp3", "targetPhoneme": "v" },
   { "id": "sz-f-fish", "text": "fish", "ipa": "/fɪʃ/", "emoji": "🐟", "audio": "/audio/fish.mp3", "targetPhoneme": "f" },
-  { "id": "sz-z-zoo", "text": "zoo", "ipa": "/zuː/", "emoji": "🦁", "audio": "/audio/zoo.mp3", "targetPhoneme": "z" },
+  { "id": "sz-z-zoo", "text": "zoo", "ipa": "/zuː/", "emoji": "🦓", "audio": "/audio/zoo.mp3", "targetPhoneme": "z" },
   { "id": "sz-sh-ship", "text": "ship", "ipa": "/ʃɪp/", "emoji": "🚢", "audio": "/audio/ship.mp3", "targetPhoneme": "sh" },
   { "id": "sz-ch-chair", "text": "chair", "ipa": "/tʃer/", "emoji": "🪑", "audio": "/audio/chair.mp3", "targetPhoneme": "ch" },
   { "id": "sz-r-red", "text": "red", "ipa": "/red/", "emoji": "🔴", "audio": "/audio/red.mp3", "targetPhoneme": "r" },

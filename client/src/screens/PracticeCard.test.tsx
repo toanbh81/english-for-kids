@@ -21,7 +21,8 @@ vi.mock('../audio/recorder', () => ({
     }
   },
 }))
-vi.mock('../audio/player', () => ({ playUrl: vi.fn().mockResolvedValue(undefined), playBlob: vi.fn().mockResolvedValue(undefined) }))
+const playerControl = vi.hoisted(() => ({ playUrl: vi.fn() }))
+vi.mock('../audio/player', () => ({ playUrl: playerControl.playUrl, playBlob: vi.fn().mockResolvedValue(undefined) }))
 vi.mock('../scoring/createScorer', () => ({
   createScorer: async () => scorerControl.queue.shift() ?? ({
     engine: 'azure',
@@ -38,6 +39,10 @@ import { PracticeCard } from './PracticeCard'
 function renderCard() {
   render(<MemoryRouter initialEntries={['/practice/sz-th-three']}><Routes><Route path="/practice/:cardId" element={<PracticeCard />} /></Routes></MemoryRouter>)
 }
+
+beforeEach(() => {
+  playerControl.playUrl.mockReset().mockResolvedValue(undefined)
+})
 
 afterEach(() => {
   recorderControl.shouldFailStart = false
@@ -56,6 +61,14 @@ it('shows the word, records, and renders 3 stars', async () => {
   fireEvent.click(screen.getByRole('button', { name: /dừng/i })) // stop
   await waitFor(() => expect(screen.getAllByTestId('star-filled')).toHaveLength(3))
   expect(screen.getByText('Tuyệt vời!')).toBeInTheDocument()
+  expect(screen.getAllByTestId('star-filled')[0]).toHaveClass('animate-bounce') // 3 stars celebrate
+})
+
+it('says the sample audio is missing instead of failing silently', async () => {
+  playerControl.playUrl.mockRejectedValue(new Error('audio failed'))
+  renderCard()
+  fireEvent.click(screen.getByRole('button', { name: '🔊' }))
+  await screen.findByText('Chưa có audio mẫu')
 })
 
 it('shows a friendly error when mic permission is denied', async () => {

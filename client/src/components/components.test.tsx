@@ -14,10 +14,12 @@ it('Stars renders 3 stars with filled count', () => {
   expect(screen.getAllByTestId('star-filled')).toHaveLength(2)
   expect(screen.getAllByTestId('star-empty')).toHaveLength(1)
 })
-it('ScoredWords applies tone classes and icons', () => {
+it('ScoredWords applies tone classes and names the tone on the button', () => {
   render(<ScoredWords words={[{ word: 'three', tone: 'fix' }, { word: 'cats', tone: 'good' }]} />)
   expect(screen.getByText('three')).toHaveClass('text-fix')
-  expect(screen.getByLabelText('cần sửa')).toBeInTheDocument()
+  const fix = screen.getByRole('button', { name: /cần sửa/ })
+  expect(fix).toHaveAccessibleName('three cần sửa')
+  expect(fix).toHaveClass('min-h-[64px]', 'px-2') // 64px tap target for small fingers
 })
 it('HintCard shows word and tip', () => {
   render(<HintCard hint={{ word: 'three', phoneme: 'th', tip: 'Đặt lưỡi giữa răng.' }} />)

@@ -32,12 +32,13 @@ export function PracticeCard() {
   const [error, setError] = useState<string | null>(null)
   const [scoring, setScoring] = useState(false)
   const [wsRecording, setWsRecording] = useState(false)
+  const [audioMissing, setAudioMissing] = useState(false)
   const timerRef = useRef<number | null>(null)
   const stoppedRef = useRef(true)
 
   useEffect(() => {
     setFeedback(null); setAttempts(0); setError(null); setScoring(false)
-    setWsRecording(false)
+    setWsRecording(false); setAudioMissing(false)
     stoppedRef.current = true
     if (timerRef.current) { clearTimeout(timerRef.current); timerRef.current = null }
     createScorer().then(setScorer)
@@ -123,6 +124,11 @@ export function PracticeCard() {
 
   function retry() { setFeedback(null); setError(null) }
 
+  /** Sample audio is generated locally and may simply not be there yet — say so, never throw. */
+  function playSample() {
+    playUrl(card!.audio).then(() => setAudioMissing(false), () => setAudioMissing(true))
+  }
+
   const micState = !scorer ? 'disabled' : scoring ? 'processing' : recording ? 'recording' : rec.state
   return (
     <main className="h-full flex flex-col items-center justify-between p-6">
@@ -135,19 +141,20 @@ export function PracticeCard() {
         <div className="text-center">
           <div className="text-7xl font-extrabold">{card.text}</div>
           <div className="text-2xl text-slate-500">{card.ipa}</div>
-          <button onClick={() => playUrl(card.audio).catch(() => {})} className="mt-4 w-20 h-20 rounded-full bg-teal text-white text-4xl">🔊</button>
+          <button onClick={playSample} className="mt-4 w-20 h-20 rounded-full bg-teal text-white text-4xl">🔊</button>
+          {audioMissing && <p className="mt-2 text-lg text-slate-400">Chưa có audio mẫu</p>}
         </div>
       </div>
       {error && <p className="text-2xl text-fix">{error}</p>}
       {feedback && (
         <section className="flex flex-col items-center gap-4">
-          <Stars value={feedback.stars} />
+          <Stars value={feedback.stars} animate={feedback.stars === 3} />
           <p className="text-3xl font-extrabold">{feedback.message}</p>
-          <ScoredWords words={feedback.words} onWordTap={() => playUrl(card.audio).catch(() => {})} />
+          <ScoredWords words={feedback.words} onWordTap={playSample} />
           {feedback.hint && <HintCard hint={feedback.hint} />}
           <div className="flex gap-4 text-xl">
             {lastBlob && <button onClick={() => playBlob(lastBlob).catch(() => {})} className={`px-6 py-3 rounded-2xl bg-white shadow ${TAP_TARGET}`}>🎧 Nghe mình</button>}
-            <button onClick={() => playUrl(card.audio).catch(() => {})} className={`px-6 py-3 rounded-2xl bg-white shadow ${TAP_TARGET}`}>🔊 Nghe mẫu</button>
+            <button onClick={playSample} className={`px-6 py-3 rounded-2xl bg-white shadow ${TAP_TARGET}`}>🔊 Nghe mẫu</button>
             <button onClick={retry} className={`px-6 py-3 rounded-2xl bg-white shadow ${TAP_TARGET}`}>Thử lại</button>
             {next && (feedback.stars === 3 || attempts >= 3) && (
               <button onClick={() => nav(`/practice/${next.id}`)} className={`px-6 py-3 rounded-2xl bg-coral text-white font-extrabold ${TAP_TARGET}`}>Tiếp theo →</button>

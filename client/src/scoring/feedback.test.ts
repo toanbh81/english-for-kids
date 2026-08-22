@@ -28,6 +28,12 @@ describe('toFeedback', () => {
     ] }))
     expect(fb.hint).toEqual({ word: 'three', phoneme: 'th', tip: 'Đặt đầu lưỡi giữa hai hàm răng rồi thổi nhẹ.' })
   })
+  it('falls back to the default tip when the weak word has no phoneme detail', () => {
+    const fb = toFeedback(base({ overall: 70, words: [
+      { word: 'three', score: 55, errorType: 'Mispronunciation', phonemes: [] },
+    ] }))
+    expect(fb.hint).toEqual({ word: 'three', phoneme: undefined, tip: 'Nghe mẫu rồi nói chậm lại từng âm nhé.' })
+  })
   it('gives no hint when every word is good', () => {
     expect(toFeedback(base({ overall: 90, words: [{ word: 'cat', score: 92, errorType: 'None', phonemes: [] }] })).hint).toBeUndefined()
   })

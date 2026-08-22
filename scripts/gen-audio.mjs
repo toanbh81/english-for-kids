@@ -17,12 +17,20 @@ if (words.length === 0) {
 }
 
 const tokRes = await fetch(`https://${region}.api.cognitive.microsoft.com/sts/v1.0/issueToken`, { method: 'POST', headers: { 'Ocp-Apim-Subscription-Key': key } })
+if (!tokRes.ok) {
+  console.error(`Could not get an Azure token (HTTP ${tokRes.status} ${tokRes.statusText}). Check AZURE_SPEECH_KEY and AZURE_SPEECH_REGION.`)
+  process.exit(1)
+}
 const token = await tokRes.text()
 mkdirSync('client/public/audio', { recursive: true })
 for (const w of words) {
   const ssml = `<speak version="1.0" xml:lang="en-US"><voice name="en-US-JennyNeural"><prosody rate="-15%">${w}</prosody></voice></speak>`
   const res = await fetch(`https://${region}.tts.speech.microsoft.com/cognitiveservices/v1`, { method: 'POST',
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/ssml+xml', 'X-Microsoft-OutputFormat': 'audio-24khz-48kbitrate-mono-mp3' }, body: ssml })
+  if (!res.ok) {
+    console.error(`Text-to-speech failed for "${w}" (HTTP ${res.status} ${res.statusText}). Nothing was written for it.`)
+    process.exit(1)
+  }
   writeFileSync(`client/public/audio/${w}.mp3`, Buffer.from(await res.arrayBuffer()))
   console.log('ok', w)
 }
