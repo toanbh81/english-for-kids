@@ -17,6 +17,7 @@ class FakeAudio {
     return Promise.resolve()
   }
   pause(): void {}
+  load(): void {}
 }
 
 function scene(words: { w: string; start: number; end: number }[], audio = '/a.mp3') {
@@ -75,6 +76,61 @@ async function tickMs(ms: number) {
   await act(async () => {
     await vi.advanceTimersByTimeAsync(ms)
   })
+}
+
+/** Drains pending microtasks (e.g. an audio.play() promise settling) without advancing fake time. */
+async function flush() {
+  await act(async () => {
+    await Promise.resolve()
+    await Promise.resolve()
+  })
+}
+
+/** Metadata loads synchronously but play() always rejects, simulating an iOS NotAllowedError. */
+class RejectingAudio {
+  src: string
+  currentTime = 0
+  playbackRate = 1
+  constructor(src?: string) {
+    this.src = src ?? ''
+  }
+  addEventListener(type: string, cb: () => void): void {
+    if (type === 'loadedmetadata') cb()
+  }
+  removeEventListener(): void {}
+  play(): Promise<void> {
+    return Promise.reject(new Error('NotAllowedError'))
+  }
+  pause(): void {}
+  load(): void {}
+}
+
+/** Metadata loads and play() resolves, and the test can fire 'ended' itself to simulate short trailing silence. */
+class EndableAudio {
+  static instances: EndableAudio[] = []
+  src: string
+  currentTime = 0
+  playbackRate = 1
+  private endedCb: (() => void) | null = null
+  constructor(src?: string) {
+    this.src = src ?? ''
+    EndableAudio.instances.push(this)
+  }
+  addEventListener(type: string, cb: () => void): void {
+    if (type === 'loadedmetadata') cb()
+    if (type === 'ended') this.endedCb = cb
+  }
+  removeEventListener(type: string): void {
+    if (type === 'ended') this.endedCb = null
+  }
+  play(): Promise<void> {
+    return Promise.resolve()
+  }
+  pause(): void {}
+  load(): void {}
+  dispatchEnded(): void {
+    this.endedCb?.()
+  }
 }
 
 it('1. initial state', async () => {
@@ -187,5 +243,116 @@ it('nextScene/prevScene navigate and reset tMs', async () => {
 
   act(() => result.current.prevScene())
   expect(result.current.sceneIndex).toBe(0)
+  unmount()
+})
+
+it('review fix 1: setRate() survives an auto-advance into the next scene', async () => {
+  const story = makeStory()
+  const { result, unmount } = renderHook(() => useStoryPlayer(story))
+
+  act(() => result.current.play())
+  act(() => result.current.setRate(0.75))
+  // scene 0 totalDuration = 1300, so real elapsed must reach 1700 / 0.75 ≈ 2267ms to cross over
+  await tickMs(2300)
+  expect(result.current.sceneIndex).toBe(1)
+  expect(result.current.rate).toBe(0.75)
+
+  const before = result.current.tMs
+  await tickMs(1000)
+  // without the fix the new scene's clock silently resets to rate 1, giving ~1000ms instead of ~750ms
+  expect(result.current.tMs - before).toBeGreaterThan(650)
+  expect(result.current.tMs - before).toBeLessThan(850)
+  unmount()
+})
+
+it('review fix 2: falls back to the clock when audio.play() rejects (iOS NotAllowedError)', async () => {
+  // @ts-expect-error stub Audio whose metadata loads but play() always rejects
+  globalThis.Audio = RejectingAudio
+  const story = makeStory()
+  const { result, unmount } = renderHook(() => useStoryPlayer(story))
+
+  act(() => result.current.play())
+  await flush() // let the rejected play() promise settle
+  expect(result.current.hasAudio).toBe(false)
+  expect(result.current.playing).toBe(true)
+
+  await tickMs(1000)
+  expect(result.current.wordIndex).toBeGreaterThanOrEqual(1)
+  expect(result.current.tMs).toBeGreaterThan(0)
+  unmount()
+})
+
+it('review fix 3: an audio "ended" event advances the scene (short trailing silence)', async () => {
+  EndableAudio.instances.length = 0
+  // @ts-expect-error stub Audio that loads, plays, and lets the test dispatch 'ended'
+  globalThis.Audio = EndableAudio
+  const story = makeStory()
+  const { result, unmount } = renderHook(() => useStoryPlayer(story))
+
+  act(() => result.current.play())
+  await flush() // let play() resolve so hasAudio flips true
+  expect(result.current.hasAudio).toBe(true)
+  expect(result.current.sceneIndex).toBe(0)
+
+  const lastAudio = EndableAudio.instances.at(-1)
+  act(() => lastAudio?.dispatchEnded())
+  expect(result.current.sceneIndex).toBe(1)
+  expect(result.current.playing).toBe(true)
+  unmount()
+})
+
+it('review fix 4: a manual pause cancels a pending replayWord one-shot stop', async () => {
+  const story = makeStory()
+  const { result, unmount } = renderHook(() => useStoryPlayer(story))
+  const timings = result.current.timings
+
+  act(() => result.current.replayWord(2))
+  act(() => result.current.pause())
+  act(() => result.current.play())
+  // if replayUntilRef survived the pause, tick() would stop playback again at timings[2].end
+  await tickMs(timings[2].end - timings[2].start + 300)
+  expect(result.current.playing).toBe(true)
+  unmount()
+})
+
+it('review fix 5: play() after the story ends restarts from scene 0', async () => {
+  const story = makeStory()
+  const { result, unmount } = renderHook(() => useStoryPlayer(story))
+
+  act(() => result.current.goScene(1))
+  act(() => result.current.play())
+  await tickMs(1000) // scene 1 totalDuration = 500, +400 buffer -> ended
+  expect(result.current.ended).toBe(true)
+  expect(result.current.playing).toBe(false)
+
+  act(() => result.current.play())
+  expect(result.current.ended).toBe(false)
+  expect(result.current.sceneIndex).toBe(0)
+  expect(result.current.playing).toBe(true)
+
+  await tickMs(200)
+  expect(result.current.wordIndex).toBeGreaterThanOrEqual(0)
+  unmount()
+})
+
+it('minor fix: an incomplete-timings scene never creates an Audio element', async () => {
+  let created = 0
+  class CountingAudio extends FakeAudio {
+    constructor(src?: string) {
+      super(src)
+      created++
+    }
+  }
+  // @ts-expect-error stub Audio to count construction attempts
+  globalThis.Audio = CountingAudio
+  const story = makeStory()
+  story.scenes[0] = { ...story.scenes[0], words: story.scenes[0].words.map(w => ({ w: w.w })) } // no start/end
+  const { result, unmount } = renderHook(() => useStoryPlayer(story))
+  expect(result.current.hasAudio).toBe(false)
+  expect(created).toBe(0)
+  act(() => result.current.play())
+  await tickMs(500)
+  expect(result.current.wordIndex).toBeGreaterThanOrEqual(0) // fallback clock still advances
+  expect(created).toBe(0)
   unmount()
 })

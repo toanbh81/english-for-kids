@@ -56,7 +56,9 @@ export class BackgroundMusic {
     }
     lfo.start()
     this.nodes.push(lfo)
-    void ctx.resume?.()
+    void ctx.resume?.()?.catch(() => {
+      /* resume can reject (e.g. no user gesture yet); music just stays silent */
+    })
   }
 
   stop(): void {
@@ -68,7 +70,9 @@ export class BackgroundMusic {
       }
     })
     this.nodes = []
-    void this.ctx?.close()
+    void this.ctx?.close().catch(() => {
+      /* already closed or closing; nothing to do */
+    })
     this.ctx = null
   }
 }

@@ -33,8 +33,8 @@ const ADVANCE_GRACE_MS = 400
 const NOT_STARTED = -1 // always < any word's start, so activeWordIndex reads -1 before playback
 
 /** Fallback (no-audio) clock: elapsed = base + (now - start) * rate. rebase()/setRate() keep it jump-free. */
-function createClock() {
-  let base = 0, start = performance.now(), rate: 0.75 | 1 = 1
+function createClock(initialRate: 0.75 | 1 = 1) {
+  let base = 0, start = performance.now(), rate = initialRate
   return {
     rebase(atMs: number) { base = atMs; start = performance.now() },
     setRate(r: 0.75 | 1) { base += (performance.now() - start) * rate; start = performance.now(); rate = r },
@@ -76,6 +76,9 @@ export function useStoryPlayer(story: Story): StoryPlayer {
   const sceneIndexRef = useRef(sceneIndex)
   const sceneCountRef = useRef(story.scenes.length)
   const playingRef = useRef(false)
+  const metadataReadyRef = useRef(false) // 'loadedmetadata'/'canplaythrough' fired for the current audio
+  const playResolvedRef = useRef(false) // audio.play() actually resolved (not blocked by iOS gesture rules)
+  const advancedRef = useRef(false) // guards against tick() and the audio 'ended' event double-advancing
   if (!musicRef.current) musicRef.current = new BackgroundMusic()
   timingsRef.current = timings
   sceneIndexRef.current = sceneIndex
@@ -88,7 +91,55 @@ export function useStoryPlayer(story: Story): StoryPlayer {
     const audio = audioRef.current
     return hasAudioRef.current && audio ? audio.currentTime * 1000 : clockRef.current.elapsed()
   }
-  function pause() { stopClock(); audioRef.current?.pause(); setPlaying(false) }
+  function pause() {
+    stopClock()
+    audioRef.current?.pause()
+    replayUntilRef.current = null // Fix 4: a manual pause cancels any pending one-shot replay stop
+    setPlaying(false)
+  }
+
+  // hasAudio only flips true once BOTH the element has metadata AND play() actually resolved —
+  // an iOS NotAllowedError on an unattended auto-advance must never be mistaken for real playback.
+  function markReadyIfBoth(audio: HTMLAudioElement) {
+    if (audioRef.current !== audio) return // scene moved on since this audio was created; ignore
+    if (metadataReadyRef.current && playResolvedRef.current) {
+      hasAudioRef.current = true
+      setHasAudio(true)
+    }
+  }
+  function attemptPlay(audio: HTMLAudioElement, atMs: number) {
+    audio.play().then(() => {
+      if (audioRef.current !== audio) return
+      playResolvedRef.current = true
+      markReadyIfBoth(audio)
+    }).catch(() => {
+      if (audioRef.current !== audio) return
+      hasAudioRef.current = false
+      setHasAudio(false)
+      clockRef.current.rebase(atMs) // keep the fallback clock continuous from where we tried to start
+    })
+  }
+  function beginPlayback(atMs: number) {
+    clockRef.current.rebase(atMs)
+    setPlaying(true)
+    startClockLoop()
+    const audio = audioRef.current
+    if (audio) attemptPlay(audio, atMs)
+  }
+
+  // Shared by tick()'s total+400 check and the audio 'ended' event, guarded so only one fires.
+  function finishScene(finalMs: number) {
+    if (advancedRef.current) return
+    advancedRef.current = true
+    stopClock()
+    if (sceneIndexRef.current + 1 < sceneCountRef.current) {
+      setSceneIndex(i => i + 1) // scene-change effect below resumes the loop
+    } else {
+      setTMs(finalMs)
+      setEnded(true)
+      pause()
+    }
+  }
 
   function tick() {
     const ms = currentMs()
@@ -100,49 +151,59 @@ export function useStoryPlayer(story: Story): StoryPlayer {
       return
     }
     const total = totalDuration(timingsRef.current)
-    if (ms >= total + ADVANCE_GRACE_MS) {
-      if (sceneIndexRef.current + 1 < sceneCountRef.current) {
-        setSceneIndex(i => i + 1) // scene-change effect below resumes the loop
-      } else {
-        setTMs(total)
-        setEnded(true)
-        pause()
-      }
-      return
-    }
+    if (ms >= total + ADVANCE_GRACE_MS) { finishScene(total); return }
     setTMs(ms)
     rafRef.current = requestAnimationFrame(tick)
   }
 
-  // (Re)load audio on scene change; resume ticking if mid-auto-advance (playingRef is true
-  // here only for that case — manual scene navigation pauses first).
+  // (Re)load audio on scene change; resume ticking if mid-auto-advance (playingRef is true here
+  // only for that case — manual scene navigation pauses first). Timings that aren't complete never
+  // get an Audio element at all: nothing to sync audio to, and no point fetching a 404.
   useEffect(() => {
     stopClock()
     replayUntilRef.current = null
+    advancedRef.current = false
+    metadataReadyRef.current = false
+    playResolvedRef.current = false
     setTMs(NOT_STARTED)
     setEnded(false)
     setHasAudio(false)
     hasAudioRef.current = false
-    clockRef.current = createClock()
+    clockRef.current = createClock(rateRef.current) // Fix 1: keep the selected rate across scenes
+
+    if (!complete) {
+      audioRef.current = null
+      if (playingRef.current) startClockLoop()
+      return () => stopClock()
+    }
 
     const audio = new Audio(scene.audio)
     audio.playbackRate = rateRef.current
     audioRef.current = audio
-    const onReady = () => { if (complete) { setHasAudio(true); hasAudioRef.current = true } }
-    const onError = () => { setHasAudio(false); hasAudioRef.current = false }
+    const onReady = () => { metadataReadyRef.current = true; markReadyIfBoth(audio) }
+    const onError = () => { hasAudioRef.current = false; setHasAudio(false) }
+    const onEnded = () => {
+      if (replayUntilRef.current !== null) return // a word replay owns the current one-shot stop
+      finishScene(totalDuration(timingsRef.current))
+    }
     audio.addEventListener('loadedmetadata', onReady)
     audio.addEventListener('canplaythrough', onReady)
     audio.addEventListener('error', onError)
+    audio.addEventListener('ended', onEnded)
 
     if (playingRef.current) {
-      audio.play().catch(() => {})
       startClockLoop()
+      attemptPlay(audio, 0)
     }
     return () => {
       audio.removeEventListener('loadedmetadata', onReady)
       audio.removeEventListener('canplaythrough', onReady)
       audio.removeEventListener('error', onError)
+      audio.removeEventListener('ended', onEnded)
       audio.pause()
+      audio.src = ''
+      audio.load()
+      audioRef.current = null
       stopClock()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -152,12 +213,18 @@ export function useStoryPlayer(story: Story): StoryPlayer {
   useEffect(() => () => musicRef.current?.stop(), [])
 
   function play() {
-    if (musicOn) musicRef.current?.start()
-    audioRef.current?.play().catch(() => {}) // autoplay can be blocked; fallback clock still advances
-    clockRef.current.rebase(tMs)
-    setEnded(false)
-    setPlaying(true)
-    startClockLoop()
+    replayUntilRef.current = null
+    if (musicOn) musicRef.current?.start() // only place that starts music (iOS gesture rule)
+    if (ended) {
+      // Fix 5: ▶ on a finished story replays it, rather than doing nothing at tMs === total.
+      setEnded(false)
+      if (sceneIndex !== 0) { setPlaying(true); setSceneIndex(0); return }
+      if (audioRef.current) audioRef.current.currentTime = 0
+      setTMs(0)
+      beginPlayback(0)
+      return
+    }
+    beginPlayback(tMs)
   }
 
   function toggle() { if (playing) pause(); else play() }
@@ -183,15 +250,15 @@ export function useStoryPlayer(story: Story): StoryPlayer {
     replayUntilRef.current = w.end
     setTMs(w.start)
     if (audioRef.current && hasAudioRef.current) audioRef.current.currentTime = w.start / 1000
-    clockRef.current.rebase(w.start)
     setEnded(false)
-    setPlaying(true)
-    audioRef.current?.play().catch(() => {})
-    startClockLoop()
+    beginPlayback(w.start)
   }
 
   function toggleMusic() {
-    setMusicOn(on => { const next = !on; setMusicPref(next); if (!next) musicRef.current?.stop(); return next })
+    const next = !musicOn // computed outside the setter: no side effects inside a state updater
+    setMusicOn(next)
+    setMusicPref(next)
+    if (!next) musicRef.current?.stop()
   }
   function toggleSubtitles() { setSubtitles(s => !s) }
 
