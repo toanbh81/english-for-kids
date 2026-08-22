@@ -42,5 +42,5 @@ export class WebSpeechScorer implements PronunciationScorer {
     })
     return Promise.race([this.done, timeout])
   }
-  async score(_audio: Blob, target: string) { return scoreTranscript(await this.done, target) }
+  async score(_audio: Blob, target: string) { return scoreTranscript(await this.stop(), target) }
 }
