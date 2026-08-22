@@ -108,6 +108,7 @@ export function useStoryPlayer(story: Story): StoryPlayer {
     }
   }
   function attemptPlay(audio: HTMLAudioElement, atMs: number) {
+    playResolvedRef.current = false // Low (a): a fresh attempt must re-earn "resolved" before hasAudio can flip true
     audio.play().then(() => {
       if (audioRef.current !== audio) return
       playResolvedRef.current = true
@@ -120,6 +121,11 @@ export function useStoryPlayer(story: Story): StoryPlayer {
     })
   }
   function beginPlayback(atMs: number) {
+    // New critical fix: advancedRef only reset by the scene-change effect, so any playback
+    // resumed within the SAME scene after finishScene() latched it (replayWord()/play() on the
+    // scene that just fired 'ended') would leave tick() returning early forever. Every path that
+    // (re)starts ticking within a scene must clear the guard.
+    advancedRef.current = false
     clockRef.current.rebase(atMs)
     setPlaying(true)
     startClockLoop()
@@ -201,7 +207,7 @@ export function useStoryPlayer(story: Story): StoryPlayer {
       audio.removeEventListener('error', onError)
       audio.removeEventListener('ended', onEnded)
       audio.pause()
-      audio.src = ''
+      audio.removeAttribute('src') // Low (b): drop the reference cleanly instead of loading an empty ''
       audio.load()
       audioRef.current = null
       stopClock()
@@ -213,7 +219,8 @@ export function useStoryPlayer(story: Story): StoryPlayer {
   useEffect(() => () => musicRef.current?.stop(), [])
 
   function play() {
-    replayUntilRef.current = null
+    // Not cleared here: pause() (and the scene-change effect) already own clearing
+    // replayUntilRef, so this stays the single, testable source of truth for that reset.
     if (musicOn) musicRef.current?.start() // only place that starts music (iOS gesture rule)
     if (ended) {
       // Fix 5: ▶ on a finished story replays it, rather than doing nothing at tMs === total.

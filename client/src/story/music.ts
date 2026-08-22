@@ -70,7 +70,7 @@ export class BackgroundMusic {
       }
     })
     this.nodes = []
-    void this.ctx?.close().catch(() => {
+    void this.ctx?.close()?.catch(() => {
       /* already closed or closing; nothing to do */
     })
     this.ctx = null

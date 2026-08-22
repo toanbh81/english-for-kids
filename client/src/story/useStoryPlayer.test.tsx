@@ -17,6 +17,7 @@ class FakeAudio {
     return Promise.resolve()
   }
   pause(): void {}
+  removeAttribute(): void {}
   load(): void {}
 }
 
@@ -102,6 +103,7 @@ class RejectingAudio {
     return Promise.reject(new Error('NotAllowedError'))
   }
   pause(): void {}
+  removeAttribute(): void {}
   load(): void {}
 }
 
@@ -127,6 +129,7 @@ class EndableAudio {
     return Promise.resolve()
   }
   pause(): void {}
+  removeAttribute(): void {}
   load(): void {}
   dispatchEnded(): void {
     this.endedCb?.()
@@ -308,10 +311,44 @@ it('review fix 4: a manual pause cancels a pending replayWord one-shot stop', as
 
   act(() => result.current.replayWord(2))
   act(() => result.current.pause())
+  // setRate(1) is a no-op change between pause() and play() — it only rules out setRate() being
+  // an accidental second place that happens to clear replayUntilRef, so pause() is the sole thing
+  // under test. play() itself no longer clears replayUntilRef (see useStoryPlayer.ts), so this
+  // genuinely fails if the `replayUntilRef.current = null` line is removed from pause().
+  act(() => result.current.setRate(1))
   act(() => result.current.play())
   // if replayUntilRef survived the pause, tick() would stop playback again at timings[2].end
   await tickMs(timings[2].end - timings[2].start + 300)
   expect(result.current.playing).toBe(true)
+  unmount()
+})
+
+it('review fix round 2: advancedRef does not latch across a replay within the last scene', async () => {
+  const story = makeStory()
+  const { result, unmount } = renderHook(() => useStoryPlayer(story))
+  const lastIndex = story.scenes.length - 1
+
+  act(() => result.current.goScene(lastIndex))
+  act(() => result.current.play())
+  await tickMs(1000) // scene 1 totalDuration = 500, +400 buffer -> ended, advancedRef latched true
+  expect(result.current.ended).toBe(true)
+  expect(result.current.playing).toBe(false)
+
+  const lastTimings = result.current.timings
+  act(() => result.current.replayWord(0))
+  // The one-shot fires at timings[0].end and pauses (play() no longer clears replayUntilRef —
+  // see the finding-4 test above), so reaching total+400 again needs a second play() afterward.
+  await tickMs(lastTimings[0].end - lastTimings[0].start + 100)
+  expect(result.current.playing).toBe(false) // one-shot replay completed
+  expect(result.current.ended).toBe(false) // did not (mis)trigger scene-end
+
+  act(() => result.current.play())
+  // Without resetting advancedRef inside beginPlayback(), finishScene() would see it still latched
+  // from the very first advance above and return early: tick() stops rescheduling, playing stays
+  // true, tMs freezes, and ended never re-fires.
+  await tickMs(1000)
+  expect(result.current.ended).toBe(true)
+  expect(result.current.playing).toBe(false)
   unmount()
 })
 
