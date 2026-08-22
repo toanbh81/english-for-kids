@@ -16,6 +16,9 @@ import { HintCard } from '../components/HintCard'
 const AUTO_STOP_MS = 6000
 const TAP_TARGET = 'min-h-[64px] min-w-[64px] flex items-center'
 
+/** The Web Speech engine listens on its own stream, so it needs an explicit start(). */
+type LiveScorer = PronunciationScorer & { start(): void }
+
 export function PracticeCard() {
   const { cardId = '' } = useParams()
   const nav = useNavigate()
@@ -27,11 +30,13 @@ export function PracticeCard() {
   const [attempts, setAttempts] = useState(0)
   const [error, setError] = useState<string | null>(null)
   const [scoring, setScoring] = useState(false)
+  const [wsRecording, setWsRecording] = useState(false)
   const timerRef = useRef<number | null>(null)
   const stoppedRef = useRef(true)
 
   useEffect(() => {
     setFeedback(null); setAttempts(0); setError(null); setScoring(false)
+    setWsRecording(false)
     stoppedRef.current = true
     if (timerRef.current) { clearTimeout(timerRef.current); timerRef.current = null }
     createScorer().then(setScorer)
@@ -42,12 +47,19 @@ export function PracticeCard() {
   const allCards = LEVELS.flatMap(l => l.cards)
   const next = allCards[allCards.findIndex(c => c.id === cardId) + 1]
 
+  const isWebSpeech = scorer?.engine === 'webspeech'
+  const recording = rec.state === 'recording' || wsRecording
+
   async function stopAndScore() {
     if (stoppedRef.current) return
     stoppedRef.current = true
     if (timerRef.current) { clearTimeout(timerRef.current); timerRef.current = null }
     if (!scorer) return
-    const blob = await rec.stop(); setLastBlob(blob)
+    // Web Speech never opened a MediaRecorder (iOS cannot run both at once), so there is
+    // no recorded blob to stop, play back or send — score() just stops the recognizer.
+    const blob = isWebSpeech ? new Blob() : await rec.stop()
+    if (isWebSpeech) setWsRecording(false)
+    else setLastBlob(blob)
     setScoring(true)
     try {
       const fb = toFeedback(await scorer.scorer.score(blob, card!.text))
@@ -59,32 +71,46 @@ export function PracticeCard() {
     }
   }
 
+  function armAutoStop() {
+    stoppedRef.current = false
+    timerRef.current = window.setTimeout(() => { void stopAndScore() }, AUTO_STOP_MS)
+  }
+
   async function startRecording() {
     if (!scorer || scoring) return
     setFeedback(null); setError(null)
+    if (isWebSpeech) {
+      if (!WebSpeechScorer.isSupported()) { setError('Trình duyệt này chưa hỗ trợ nhận dạng giọng nói'); return }
+      try {
+        (scorer.scorer as LiveScorer).start()
+        setWsRecording(true)
+        armAutoStop()
+      } catch (e) {
+        setError('Bé cho phép dùng mic nhé! 🎤'); console.error(e)
+      }
+      return
+    }
     try {
-      if (scorer.scorer instanceof WebSpeechScorer) scorer.scorer.start()
       await rec.start()
-      stoppedRef.current = false
-      timerRef.current = window.setTimeout(() => { void stopAndScore() }, AUTO_STOP_MS)
+      armAutoStop()
     } catch (e) {
       setError('Bé cho phép dùng mic nhé! 🎤'); console.error(e)
     }
   }
 
   function onMic() {
-    if (rec.state === 'idle') { void startRecording(); return }
-    if (rec.state === 'recording') void stopAndScore()
+    if (recording) { void stopAndScore(); return }
+    if (rec.state === 'idle') void startRecording()
   }
 
   function retry() { setFeedback(null); setError(null) }
 
-  const micState = !scorer ? 'disabled' : scoring ? 'processing' : rec.state
+  const micState = !scorer ? 'disabled' : scoring ? 'processing' : recording ? 'recording' : rec.state
   return (
     <main className="h-full flex flex-col items-center justify-between p-6">
       <div className="w-full flex justify-between text-xl">
         <Link to={`/level/${LEVELS.find(l => l.cards.includes(card))!.id}`} className="inline-flex items-center min-h-[64px] px-4">← Quay lại</Link>
-        <span className="text-slate-400">{scorer?.engine === 'webspeech' ? 'chế độ offline' : ''}</span>
+        <span className="text-slate-400">{isWebSpeech ? 'chế độ đơn giản' : ''}</span>
       </div>
       <div className="flex items-center gap-10">
         <span className="text-[120px]">{card.emoji}</span>

@@ -2,7 +2,8 @@ import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { useState } from 'react'
 
-const recorderControl = vi.hoisted(() => ({ shouldFailStart: false }))
+const recorderControl = vi.hoisted(() => ({ shouldFailStart: false, start: vi.fn() }))
+const scorerControl = vi.hoisted(() => ({ next: null as null | { engine: string; scorer: unknown } }))
 
 vi.mock('../audio/recorder', () => ({
   useRecorder: () => {
@@ -11,6 +12,7 @@ vi.mock('../audio/recorder', () => ({
       state,
       level: 0,
       start: vi.fn(async () => {
+        recorderControl.start()
         if (recorderControl.shouldFailStart) throw new Error('mic denied')
         setState('recording')
       }),
@@ -20,7 +22,7 @@ vi.mock('../audio/recorder', () => ({
 }))
 vi.mock('../audio/player', () => ({ playUrl: vi.fn().mockResolvedValue(undefined), playBlob: vi.fn().mockResolvedValue(undefined) }))
 vi.mock('../scoring/createScorer', () => ({
-  createScorer: async () => ({
+  createScorer: async () => scorerControl.next ?? ({
     engine: 'azure',
     scorer: {
       score: async () => ({
@@ -38,6 +40,9 @@ function renderCard() {
 
 afterEach(() => {
   recorderControl.shouldFailStart = false
+  recorderControl.start.mockClear()
+  scorerControl.next = null
+  delete (window as any).webkitSpeechRecognition
   vi.useRealTimers()
 })
 
@@ -81,4 +86,43 @@ it('auto-stops the recording after 6s and still scores', async () => {
   fireEvent.click(screen.getByRole('button', { name: /bấm để nói/i })) // start
   await act(async () => { await vi.advanceTimersByTimeAsync(6000) }) // auto-stop fires and scoring completes
   expect(screen.getAllByTestId('star-filled')).toHaveLength(3)
+})
+
+describe('Web Speech engine', () => {
+  const webSpeechScorer = () => ({
+    start: vi.fn(),
+    score: vi.fn(async () => ({
+      overall: 100, accuracy: 100, fluency: 100, completeness: 100, engine: 'webspeech' as const,
+      words: [{ word: 'three', score: 100, errorType: 'None' as const, phonemes: [] }],
+    })),
+  })
+
+  it('scores via the recognizer without ever starting MediaRecorder', async () => {
+    ;(window as any).webkitSpeechRecognition = class {}
+    const scorer = webSpeechScorer()
+    scorerControl.next = { engine: 'webspeech', scorer }
+    renderCard()
+    await waitFor(() => expect(screen.getByRole('button', { name: /bấm để nói/i })).toBeEnabled())
+    expect(screen.getByText('chế độ đơn giản')).toBeInTheDocument()
+
+    vi.useFakeTimers()
+    fireEvent.click(screen.getByRole('button', { name: /bấm để nói/i }))
+    expect(scorer.start).toHaveBeenCalledTimes(1)
+    expect(screen.getByRole('button', { name: /dừng/i })).toBeInTheDocument() // wsRecording drives the mic button
+    await act(async () => { await vi.advanceTimersByTimeAsync(6000) })
+
+    expect(screen.getAllByTestId('star-filled')).toHaveLength(3)
+    expect(recorderControl.start).not.toHaveBeenCalled()
+    expect(scorer.score).toHaveBeenCalledTimes(1)
+    expect(screen.queryByRole('button', { name: /nghe mình/i })).not.toBeInTheDocument()
+  })
+
+  it('explains that the browser lacks speech recognition instead of blaming the mic', async () => {
+    scorerControl.next = { engine: 'webspeech', scorer: webSpeechScorer() }
+    renderCard() // no window.webkitSpeechRecognition installed
+    await waitFor(() => expect(screen.getByRole('button', { name: /bấm để nói/i })).toBeEnabled())
+    fireEvent.click(screen.getByRole('button', { name: /bấm để nói/i }))
+    await screen.findByText('Trình duyệt này chưa hỗ trợ nhận dạng giọng nói')
+    expect(screen.queryByText(/cho phép dùng mic/)).not.toBeInTheDocument()
+  })
 })

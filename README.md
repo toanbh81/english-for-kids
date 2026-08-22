@@ -99,7 +99,7 @@ limit per client.
 | 1 | Share → Add to Home Screen | Opens full-screen, cream background, Nunito font | ⏳ pending |
 | 2 | Sound Zoo → "three": tap 🔊 → hears Jenny; tap mic → permission prompt → accept; say "three"; tap stop | Stars appear within 3 s; word colored; hint shows if score < 80 | ⏳ pending |
 | 3 | "Nghe mình" (listen to self) | Plays back the recording | ⏳ pending |
-| 4 | Turn Wi-Fi off → reload | Header shows "chế độ offline"; scoring still returns stars (Web Speech fallback) | ⏳ pending |
+| 4 | Turn Wi-Fi off → reload | Header shows "chế độ đơn giản"; scoring still returns stars (Web Speech fallback) | ⏳ pending |
 | 5 | Close and reopen the app | Stars persist | ⏳ pending |
 
 ## Architecture
