@@ -73,6 +73,13 @@ it('shows the question progress indicator', () => {
   expect(screen.getByText('Câu 1/3')).toBeInTheDocument()
 })
 
+it('offers a way back to the story from the question screen', () => {
+  renderQuiz()
+  const back = screen.getByRole('link', { name: '← Truyện' })
+  expect(back).toHaveAttribute('href', '/story/little-fox')
+  expect(back).toHaveClass('min-h-[64px]')
+})
+
 it('ignores taps while the correct-answer advance is pending', () => {
   renderQuiz()
   const q0 = story.quiz[0]

@@ -48,7 +48,9 @@ function playSample(story: Story) {
 }
 
 function StoryRetellInner({ story, id }: { story: Story; id: string }) {
-  const a = useSpeakingAttempt({ targetText: story.retell.text, resetKey: id })
+  // A whole sentence takes a young child longer than a single word, so give the retell the
+  // recorder's full 8 s window instead of the 6 s default.
+  const a = useSpeakingAttempt({ targetText: story.retell.text, resetKey: id, autoStopMs: 8000 })
   const stars = a.result ? retellStars(a.result.overall) : null
 
   useEffect(() => {

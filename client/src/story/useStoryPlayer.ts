@@ -10,6 +10,8 @@ export type PlayerState = {
   rate: 0.75 | 1
   tMs: number
   wordIndex: number
+  /** The scene ships real per-word timings, i.e. narration exists to be played at all. */
+  hasTimings: boolean
   hasAudio: boolean
   musicOn: boolean
   subtitles: boolean
@@ -328,7 +330,7 @@ export function useStoryPlayer(story: Story): StoryPlayer {
   function toggleSubtitles() { setSubtitles(s => !s) }
 
   return {
-    sceneIndex, playing, rate, tMs, wordIndex, hasAudio, musicOn, subtitles, ended, timings,
+    sceneIndex, playing, rate, tMs, wordIndex, hasTimings: complete, hasAudio, musicOn, subtitles, ended, timings,
     play, pause, toggle, setRate, nextScene, prevScene, goScene, replayWord, toggleMusic, toggleSubtitles,
   }
 }

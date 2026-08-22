@@ -4,3 +4,9 @@ dist
 *.local
 .superpowers/
 .claude/settings.local.json
+
+# Generated locally by scripts/gen-audio.mjs and scripts/gen-story.mjs (see README).
+# Note: the contents are ignored rather than the directory itself — git cannot re-include a file
+# whose parent directory is excluded, which would break the .gitkeep negation below.
+client/public/audio/*
+!client/public/audio/.gitkeep

@@ -242,6 +242,7 @@ it('1. initial state', async () => {
   expect(result.current.playing).toBe(false)
   expect(result.current.wordIndex).toBe(-1)
   expect(result.current.hasAudio).toBe(false)
+  expect(result.current.hasTimings).toBe(true) // makeStory ships real start/end per word
   expect(result.current.timings).toHaveLength(story.scenes[0].words.length)
   unmount()
 })
@@ -608,6 +609,7 @@ it('minor fix: an incomplete-timings scene never creates an Audio element', asyn
   story.scenes[0] = { ...story.scenes[0], words: story.scenes[0].words.map(w => ({ w: w.w })) } // no start/end
   const { result, unmount } = renderHook(() => useStoryPlayer(story))
   expect(result.current.hasAudio).toBe(false)
+  expect(result.current.hasTimings).toBe(false)
   expect(created).toBe(0)
   act(() => result.current.play())
   await tickMs(500)

@@ -99,7 +99,10 @@ function StoryQuizInner({ quiz, id }: { quiz: QuizQ[]; id: string }) {
 
   return (
     <main className="p-8 flex flex-col items-center gap-6">
-      <p className="self-start text-lg text-slate-500">Câu {qIndex + 1}/3</p>
+      <div className="w-full flex items-center justify-between">
+        <Link to={`/story/${id}`} className={`text-2xl px-4 ${TAP_TARGET}`}>← Truyện</Link>
+        <p className="text-lg text-slate-500">Câu {qIndex + 1}/3</p>
+      </div>
       <p className="text-3xl font-extrabold text-center">{q.q}</p>
       <p className="text-xl text-slate-500 text-center">{q.qVi}</p>
       <div className="flex gap-5 flex-wrap justify-center">

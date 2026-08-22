@@ -7,6 +7,7 @@ const state = vi.hoisted(() => ({
   rate: 1 as 0.75 | 1,
   tMs: 0,
   wordIndex: 1,
+  hasTimings: false,
   hasAudio: false,
   musicOn: true,
   subtitles: false,
@@ -44,7 +45,7 @@ function renderPlayer(id = 'little-fox') {
 
 beforeEach(() => {
   Object.assign(state, {
-    sceneIndex: 0, playing: false, rate: 1, tMs: 0, wordIndex: 1,
+    sceneIndex: 0, playing: false, rate: 1, tMs: 0, wordIndex: 1, hasTimings: false,
     hasAudio: false, musicOn: true, subtitles: false, ended: false, timings: [],
   })
   Object.values(actions).forEach(fn => fn.mockClear())
@@ -104,15 +105,34 @@ it('hides the Vietnamese subtitle when subtitles is false', () => {
   expect(screen.queryByText('Đây là Foxy. Foxy là một chú cáo nhỏ.')).not.toBeInTheDocument()
 })
 
-it('shows the no-audio note when hasAudio is false', () => {
+it('shows the estimated-clock note when the scene has no timings', () => {
   renderPlayer()
   expect(screen.getByText(/Chưa có giọng đọc/)).toBeInTheDocument()
 })
 
-it('hides the no-audio note when hasAudio is true', () => {
+it('hides the estimated-clock note once the scene has timings', () => {
+  state.hasTimings = true
   state.hasAudio = true
   renderPlayer()
   expect(screen.queryByText(/Chưa có giọng đọc/)).not.toBeInTheDocument()
+  expect(screen.queryByText('Không phát được giọng đọc')).not.toBeInTheDocument()
+})
+
+it('shows a playback-failed note when a timed scene is playing without audio', () => {
+  state.hasTimings = true
+  state.hasAudio = false
+  state.playing = true
+  renderPlayer()
+  // The narration exists but is not coming out (missing mp3 / blocked autoplay) — a different
+  // problem from "gen-story.mjs was never run", so it gets its own wording.
+  expect(screen.getByText('Không phát được giọng đọc')).toBeInTheDocument()
+  expect(screen.queryByText(/Chưa có giọng đọc/)).not.toBeInTheDocument()
+})
+
+it('stays quiet about audio on a timed scene that is not playing yet', () => {
+  state.hasTimings = true
+  renderPlayer()
+  expect(screen.queryByText('Không phát được giọng đọc')).not.toBeInTheDocument()
 })
 
 it('shows a "Trả lời câu hỏi →" link to the quiz when ended', () => {

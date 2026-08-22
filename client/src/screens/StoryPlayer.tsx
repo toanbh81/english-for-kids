@@ -46,11 +46,15 @@ function StoryPlayerInner({ story, id }: { story: Story; id: string }) {
         onWordTap={p.replayWord}
       />
 
-      {!p.hasAudio && (
+      {/* No timings at all means gen-story.mjs has not run: the karaoke is on the estimated clock.
+          Timings but no playing audio is a different problem (missing mp3, blocked autoplay). */}
+      {!p.hasTimings ? (
         <p className="text-center text-sm text-slate-400">
           Chưa có giọng đọc — chữ chạy theo nhịp ước lượng
         </p>
-      )}
+      ) : !p.hasAudio && p.playing ? (
+        <p className="text-center text-sm text-slate-400">Không phát được giọng đọc</p>
+      ) : null}
 
       <PlayerControls
         playing={p.playing}
