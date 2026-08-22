@@ -336,6 +336,47 @@ it('review: toggling music back on mid-playback restarts the pad', async () => {
   unmount()
 })
 
+it('review: a long background pause cannot skip a scene in one frame', async () => {
+  // Browsers freeze rAF for a hidden tab, so the first frame after unhiding arrives with a huge
+  // wall-clock gap. Drive the frames by hand (fake timers still own performance.now) to reproduce it.
+  const pending = new Map<number, FrameRequestCallback>()
+  let nextFrameId = 1
+  const realRaf = globalThis.requestAnimationFrame
+  const realCaf = globalThis.cancelAnimationFrame
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'performance'] })
+  globalThis.requestAnimationFrame = (cb: FrameRequestCallback) => {
+    const id = nextFrameId++
+    pending.set(id, cb)
+    return id
+  }
+  globalThis.cancelAnimationFrame = (id: number) => {
+    pending.delete(id)
+  }
+  async function runFrame() {
+    const cbs = [...pending.values()]
+    pending.clear()
+    await act(async () => {
+      cbs.forEach(cb => cb(performance.now()))
+    })
+  }
+
+  try {
+    const story = makeStory() // scene 0 totalDuration = 1300
+    const { result, unmount } = renderHook(() => useStoryPlayer(story))
+
+    act(() => result.current.play())
+    vi.advanceTimersByTime(120_000) // two minutes hidden; no frames ran
+    await runFrame()
+
+    expect(result.current.sceneIndex).toBe(0) // one frame may never advance more than 250ms
+    expect(result.current.tMs).toBeLessThanOrEqual(250)
+    unmount()
+  } finally {
+    globalThis.requestAnimationFrame = realRaf
+    globalThis.cancelAnimationFrame = realCaf
+  }
+})
+
 it('marks ended and stops playing after the last scene finishes', async () => {
   const story = makeStory()
   const { result, unmount } = renderHook(() => useStoryPlayer(story))

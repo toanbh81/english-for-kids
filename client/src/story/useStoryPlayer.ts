@@ -31,14 +31,25 @@ export type StoryPlayer = PlayerState & {
 
 const ADVANCE_GRACE_MS = 400
 const NOT_STARTED = -1 // always < any word's start, so activeWordIndex reads -1 before playback
+const MAX_FRAME_MS = 250 // a hidden tab freezes rAF; the catch-up frame must not skip whole scenes
 
-/** Fallback (no-audio) clock: elapsed = base + (now - start) * rate. rebase()/setRate() keep it jump-free. */
+/**
+ * Fallback (no-audio) clock. It accumulates per read instead of measuring wall-clock since the last
+ * rebase, and clamps each step to MAX_FRAME_MS: backgrounding the tab for two minutes then coming
+ * back used to hand tick() a 120 000 ms jump, which raced through every remaining scene at once.
+ */
 function createClock(initialRate: 0.75 | 1 = 1) {
-  let base = 0, start = performance.now(), rate = initialRate
+  let acc = 0, last = performance.now(), rate = initialRate
+  function step() {
+    const now = performance.now()
+    const raw = now - last
+    last = now
+    acc += Math.min(Math.max(raw, 0), MAX_FRAME_MS) * rate
+  }
   return {
-    rebase(atMs: number) { base = atMs; start = performance.now() },
-    setRate(r: 0.75 | 1) { base += (performance.now() - start) * rate; start = performance.now(); rate = r },
-    elapsed() { return base + (performance.now() - start) * rate },
+    rebase(atMs: number) { acc = atMs; last = performance.now() },
+    setRate(r: 0.75 | 1) { step(); rate = r },
+    elapsed() { step(); return acc },
   }
 }
 
