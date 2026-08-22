@@ -28,6 +28,11 @@ AZURE_SPEECH_KEY=your-key
 AZURE_SPEECH_REGION=southeastasia   # e.g. southeastasia — use the region of your Azure Speech resource
 ```
 
+The client normally reaches the token API through the Vite dev/preview proxy, so no client config is
+needed. If you serve the built client from somewhere the proxy does not cover, copy
+`client/.env.example` to `client/.env` and set `VITE_API_BASE` to the server's origin (e.g.
+`http://192.168.10.4:8787`); leaving it empty keeps the same-origin `/api/speech-token` path.
+
 ## Generating sample audio (Nghe mình / Nghe cô)
 
 Sample word audio (Jenny's voice) is generated locally and saved to `client/public/audio/`. It is **not** committed — run this once after setup, or whenever you add new words:

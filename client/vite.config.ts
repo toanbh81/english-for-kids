@@ -18,8 +18,11 @@ export default defineConfig({
         theme_color: '#FF7A59',
         icons: [{ src: 'icon-512.png', sizes: '512x512', type: 'image/png' }],
       },
+      // The sample word audio is .mp3 and must be precached, or offline practice has no "Nghe mẫu".
+      workbox: { globPatterns: ['**/*.{js,css,html,svg,png,mp3}'] },
     }),
   ],
   server: { host: true, proxy: { '/api': 'http://localhost:8787' } },
+  preview: { proxy: { '/api': 'http://localhost:8787' } },
   test: { environment: 'jsdom', setupFiles: './src/test-setup.ts', globals: true },
 })

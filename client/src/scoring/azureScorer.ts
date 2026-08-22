@@ -27,7 +27,7 @@ export function parseAzureResult(json: unknown): PronunciationResult {
 }
 
 export async function fetchToken(): Promise<{ token: string; region: string }> {
-  const res = await fetch('/api/speech-token')
+  const res = await fetch(`${import.meta.env.VITE_API_BASE ?? ''}/api/speech-token`)
   if (!res.ok) throw new Error('token unavailable')
   return res.json()
 }
