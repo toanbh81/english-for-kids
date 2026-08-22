@@ -1,4 +1,4 @@
-import { render, screen, fireEvent } from '@testing-library/react'
+import { render, screen, fireEvent, cleanup } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 
 const state = vi.hoisted(() => ({
@@ -73,6 +73,18 @@ it('clicking Phát calls toggle', () => {
   renderPlayer()
   fireEvent.click(screen.getByRole('button', { name: 'Phát' }))
   expect(actions.toggle).toHaveBeenCalledTimes(1)
+})
+
+it('the 🐢/🐇 button toggles the rate between 1 and 0.75', () => {
+  renderPlayer()
+  fireEvent.click(screen.getByRole('button', { name: 'Tốc độ 0.75' }))
+  expect(actions.setRate).toHaveBeenCalledWith(0.75)
+
+  cleanup()
+  state.rate = 0.75
+  renderPlayer()
+  fireEvent.click(screen.getByRole('button', { name: 'Tốc độ 1' }))
+  expect(actions.setRate).toHaveBeenLastCalledWith(1)
 })
 
 it('clicking a word calls replayWord with its index', () => {
