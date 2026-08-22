@@ -1,6 +1,7 @@
 import type { Config } from 'tailwindcss'
 export default {
   content: ['./index.html', './src/**/*.{ts,tsx}'],
+  safelist: ['text-good', 'text-ok', 'text-fix'],
   theme: {
     extend: {
       colors: {
