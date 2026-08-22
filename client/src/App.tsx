@@ -4,6 +4,7 @@ import { LevelSelect } from './screens/LevelSelect'
 import { PracticeCard } from './screens/PracticeCard'
 import { StoryList } from './screens/StoryList'
 import { StoryPlayer } from './screens/StoryPlayer'
+import { StoryQuiz } from './screens/StoryQuiz'
 
 export default function App() {
   return (
@@ -13,6 +14,7 @@ export default function App() {
       <Route path="/practice/:cardId" element={<PracticeCard />} />
       <Route path="/stories" element={<StoryList />} />
       <Route path="/story/:id" element={<StoryPlayer />} />
+      <Route path="/story/:id/quiz" element={<StoryQuiz />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   )
