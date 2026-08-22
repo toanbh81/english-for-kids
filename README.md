@@ -73,6 +73,26 @@ deploy it as-is to the public internet** — a leaked token endpoint means someo
 Azure quota. Before any cloud deploy, add a shared secret (or real auth) on the endpoint plus a rate
 limit per client.
 
+## Secret-leak guard (bắt buộc trước khi commit/push)
+
+`scripts/check-secrets.sh` scans for `.env` files and secret-looking strings (Azure keys, tokens, private keys). It runs automatically:
+
+- as git hooks in `.githooks/` — enable once per clone:
+
+```bash
+git config core.hooksPath .githooks
+```
+
+- as a Claude Code hook (`.claude/settings.json`) before any `git commit` / `git push` Claude runs.
+
+Manual audit of all tracked files:
+
+```bash
+bash scripts/check-secrets.sh tree
+```
+
+Never bypass with `--no-verify`; fix the pattern instead if it false-positives.
+
 ## iPad setup & testing (Thiết lập trên iPad)
 
 1. Make sure your iPad and PC are on the same Wi-Fi network.
