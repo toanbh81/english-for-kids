@@ -8,6 +8,12 @@ export function Home() {
       <h1 className="text-6xl font-extrabold text-coral">Speak Up! 🦊</h1>
       <div className="text-2xl">⭐ {totalStars()} sao</div>
       <div className="flex gap-6">
+        <Link
+          to="/stories"
+          className="w-64 h-40 rounded-3xl bg-coral text-white text-3xl font-extrabold flex items-center justify-center shadow-lg active:scale-95"
+        >
+          🎧 Nghe kể chuyện
+        </Link>
         {LEVELS.map(l => (
           <Link
             key={l.id}
