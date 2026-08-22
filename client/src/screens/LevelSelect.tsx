@@ -8,7 +8,7 @@ export function LevelSelect() {
   if (!level) return <p>Không tìm thấy</p>
   return (
     <main className="p-8">
-      <Link to="/" className="text-2xl">← Về nhà</Link>
+      <Link to="/" className="text-2xl inline-flex items-center min-h-[64px] px-4">← Về nhà</Link>
       <h1 className="text-5xl font-extrabold my-6">{level.title}</h1>
       <div className="grid grid-cols-3 gap-5">
         {level.cards.map(c => (
