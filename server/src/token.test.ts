@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { fetchAzureToken } from './token'
+import { fetchAzureToken } from './token.js'
 
 describe('fetchAzureToken', () => {
   it('posts key to the region token endpoint and returns the text token', async () => {

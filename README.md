@@ -51,10 +51,22 @@ The client dev server uses HTTPS because Safari on iOS/iPadOS only allows microp
 ## Testing
 
 ```bash
-pnpm test
+pnpm test        # client (Vitest, 22+ tests) + server (Vitest, 2 tests)
+pnpm lint        # oxlint on the client
+pnpm typecheck   # tsc -b (client) + tsc --noEmit (server)
 ```
 
-Runs the client and server test suites (Vitest).
+`pnpm test` runs `pnpm -r test`, which executes the client suite (`vitest run`, 22+ tests) and the
+server suite (`vitest run`, 2 tests). `pnpm lint` and `pnpm typecheck` fan out the same way.
+
+## Security note
+
+The token endpoint (`GET /api/speech-token`) is **unauthenticated**: anyone who can reach the server
+gets a short-lived Azure Speech token. That is acceptable only because this setup is meant to run on
+a home LAN for a single family, behind the router's NAT. **Never port-forward this server and never
+deploy it as-is to the public internet** — a leaked token endpoint means someone else spending your
+Azure quota. Before any cloud deploy, add a shared secret (or real auth) on the endpoint plus a rate
+limit per client.
 
 ## iPad setup & testing (Thiết lập trên iPad)
 
@@ -69,6 +81,14 @@ Runs the client and server test suites (Vitest).
 5. Safari will warn about the self-signed certificate — tap **Show Details → visit this website** to accept it.
 6. Tap the **Share** button → **Add to Home Screen** to install the app (Thêm vào Màn hình chính).
 7. Open the app from the Home Screen icon and test — the microphone will only work over HTTPS, which is why step 2 (LAN HTTPS) is required.
+
+> **Service worker / offline on iOS:** iOS Safari refuses to register a service worker on a
+> self-signed certificate, so the PWA install above gives you the icon and full-screen chrome but
+> **not** offline caching. To verify the PWA/offline behaviour on the iPad you need a certificate the
+> device actually trusts: generate one with [`mkcert`](https://github.com/FiloSottile/mkcert), install
+> the mkcert CA profile on the iPad, and enable it under **Settings → General → VPN & Device
+> Management → Certificate Trust Settings**. Until that is done, the checklist below only validates
+> the manifest/meta tags (icon, full-screen launch, theme colour), not service-worker caching.
 
 ### Verified on iPad
 
