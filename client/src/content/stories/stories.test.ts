@@ -33,6 +33,12 @@ it('every quiz has exactly 3 questions with 3 options and a valid answer index',
   }
 })
 
+it('every retell sentence appears verbatim in some scene, so its narration can be reused', () => {
+  for (const story of STORIES) {
+    expect(story.scenes.some(scene => scene.text.includes(story.retell.text))).toBe(true)
+  }
+})
+
 it('quiz answers are not all at the same index within a story', () => {
   for (const story of STORIES) {
     const answers = story.quiz.map(q => q.answer)

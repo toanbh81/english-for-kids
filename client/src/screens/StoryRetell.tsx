@@ -42,6 +42,8 @@ function playSample(story: Story) {
   if (hasCompleteTimings(scene)) {
     playUrl(scene!.audio).catch(() => {})
   } else if (window.speechSynthesis) {
+    // Cancel any queued/ongoing utterance first so a double-tap restarts instead of queueing.
+    window.speechSynthesis.cancel()
     const u = new SpeechSynthesisUtterance(story.retell.text)
     u.lang = 'en-US'
     window.speechSynthesis.speak(u)

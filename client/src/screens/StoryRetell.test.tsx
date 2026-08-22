@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen, fireEvent } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import type { SpeakingAttempt } from '../speaking/useSpeakingAttempt'
 
@@ -46,8 +46,8 @@ it('shows a not-found message for an unknown story id', () => {
 it('shows the retell sentence and its translation', () => {
   renderRetell()
   expect(screen.getByText('Bé kể lại nhé')).toBeInTheDocument()
-  expect(screen.getByText('Foxy wants a big red apple.')).toBeInTheDocument()
-  expect(screen.getByText('Foxy muốn một quả táo đỏ to.')).toBeInTheDocument()
+  expect(screen.getByText('He wants an apple.')).toBeInTheDocument()
+  expect(screen.getByText('Cậu ấy muốn một quả táo.')).toBeInTheDocument()
 })
 
 it('shows a lenient pass of 2 stars and saves progress once', () => {
@@ -84,4 +84,39 @@ it('shows a simple-mode label for the webspeech engine', () => {
   attemptControl.current = { ...baseAttempt(), engine: 'webspeech' }
   renderRetell()
   expect(screen.getByText('chế độ đơn giản')).toBeInTheDocument()
+})
+
+describe('speech synthesis sample fallback', () => {
+  const originalSpeechSynthesis = window.speechSynthesis
+  const originalUtterance = (window as unknown as { SpeechSynthesisUtterance?: unknown }).SpeechSynthesisUtterance
+
+  afterEach(() => {
+    Object.defineProperty(window, 'speechSynthesis', { value: originalSpeechSynthesis, configurable: true, writable: true })
+    ;(window as unknown as { SpeechSynthesisUtterance?: unknown }).SpeechSynthesisUtterance = originalUtterance
+  })
+
+  it('cancels any queued utterance before speaking again, so a double-tap restarts instead of queueing', () => {
+    const synth = { cancel: vi.fn(), speak: vi.fn() }
+    Object.defineProperty(window, 'speechSynthesis', { value: synth, configurable: true, writable: true })
+    // jsdom does not implement SpeechSynthesisUtterance either — stub a minimal constructor.
+    ;(window as unknown as { SpeechSynthesisUtterance: unknown }).SpeechSynthesisUtterance = class {
+      lang = ''
+      text: string
+      constructor(text: string) {
+        this.text = text
+      }
+    }
+    renderRetell()
+
+    const playButton = screen.getByRole('button', { name: '🔊' })
+    fireEvent.click(playButton)
+    fireEvent.click(playButton)
+
+    expect(synth.cancel).toHaveBeenCalledTimes(2)
+    expect(synth.speak).toHaveBeenCalledTimes(2)
+    for (const call of synth.speak.mock.calls) {
+      const utterance = call[0] as SpeechSynthesisUtterance
+      expect(utterance.lang).toBe('en-US')
+    }
+  })
 })
