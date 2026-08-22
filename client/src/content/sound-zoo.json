@@ -1,0 +1,12 @@
+{ "id": "sound-zoo", "title": "Sound Zoo", "cards": [
+  { "id": "sz-th-three", "text": "three", "ipa": "/θriː/", "emoji": "3️⃣", "audio": "/audio/three.mp3", "targetPhoneme": "th" },
+  { "id": "sz-th-thank", "text": "thank", "ipa": "/θæŋk/", "emoji": "🙏", "audio": "/audio/thank.mp3", "targetPhoneme": "th" },
+  { "id": "sz-dh-this", "text": "this", "ipa": "/ðɪs/", "emoji": "👉", "audio": "/audio/this.mp3", "targetPhoneme": "dh" },
+  { "id": "sz-v-very", "text": "very", "ipa": "/ˈveri/", "emoji": "💯", "audio": "/audio/very.mp3", "targetPhoneme": "v" },
+  { "id": "sz-f-fish", "text": "fish", "ipa": "/fɪʃ/", "emoji": "🐟", "audio": "/audio/fish.mp3", "targetPhoneme": "f" },
+  { "id": "sz-z-zoo", "text": "zoo", "ipa": "/zuː/", "emoji": "🦁", "audio": "/audio/zoo.mp3", "targetPhoneme": "z" },
+  { "id": "sz-sh-ship", "text": "ship", "ipa": "/ʃɪp/", "emoji": "🚢", "audio": "/audio/ship.mp3", "targetPhoneme": "sh" },
+  { "id": "sz-ch-chair", "text": "chair", "ipa": "/tʃer/", "emoji": "🪑", "audio": "/audio/chair.mp3", "targetPhoneme": "ch" },
+  { "id": "sz-r-red", "text": "red", "ipa": "/red/", "emoji": "🔴", "audio": "/audio/red.mp3", "targetPhoneme": "r" },
+  { "id": "sz-l-lion", "text": "lion", "ipa": "/ˈlaɪən/", "emoji": "🦁", "audio": "/audio/lion.mp3", "targetPhoneme": "l" }
+] }
