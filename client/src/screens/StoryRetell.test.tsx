@@ -1,4 +1,4 @@
-import { render, screen, fireEvent } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import type { SpeakingAttempt } from '../speaking/useSpeakingAttempt'
 
@@ -95,7 +95,7 @@ describe('speech synthesis sample fallback', () => {
     ;(window as unknown as { SpeechSynthesisUtterance?: unknown }).SpeechSynthesisUtterance = originalUtterance
   })
 
-  it('cancels any queued utterance before speaking again, so a double-tap restarts instead of queueing', () => {
+  it('cancels any queued utterance before speaking again, so a double-tap restarts instead of queueing', async () => {
     const synth = { cancel: vi.fn(), speak: vi.fn() }
     Object.defineProperty(window, 'speechSynthesis', { value: synth, configurable: true, writable: true })
     // jsdom does not implement SpeechSynthesisUtterance either — stub a minimal constructor.
@@ -113,7 +113,8 @@ describe('speech synthesis sample fallback', () => {
     fireEvent.click(playButton)
 
     expect(synth.cancel).toHaveBeenCalledTimes(2)
-    expect(synth.speak).toHaveBeenCalledTimes(2)
+    // speakText() defers speak() one task past cancel() (WebKit drops same-task utterances).
+    await waitFor(() => expect(synth.speak).toHaveBeenCalledTimes(2))
     for (const call of synth.speak.mock.calls) {
       const utterance = call[0] as SpeechSynthesisUtterance
       expect(utterance.lang).toBe('en-US')

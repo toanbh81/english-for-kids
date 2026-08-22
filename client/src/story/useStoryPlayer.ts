@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Story } from '../content/stories/types'
 import { activeWordIndex, estimateTimings, totalDuration } from './timing'
 import { BackgroundMusic, getMusicPref, setMusicPref } from './music'
+import { speakText } from './speak'
 
 export type PlayerState = {
   sceneIndex: number
@@ -32,6 +33,7 @@ export type StoryPlayer = PlayerState & {
 const ADVANCE_GRACE_MS = 400
 const NOT_STARTED = -1 // always < any word's start, so activeWordIndex reads -1 before playback
 const MAX_FRAME_MS = 250 // a hidden tab freezes rAF; the catch-up frame must not skip whole scenes
+const PUNCTUATION = /[^\p{L}\p{N}'’-]/gu // keeps letters, digits, apostrophes and hyphens
 
 /**
  * Fallback (no-audio) clock. It accumulates per read instead of measuring wall-clock since the last
@@ -307,6 +309,12 @@ export function useStoryPlayer(story: Story): StoryPlayer {
     if (audioElRef.current && hasAudioRef.current) audioElRef.current.currentTime = w.start / 1000
     setEnded(false)
     beginPlayback(w.start)
+    // Without narration a tap only moves the highlight, which teaches nothing about pronunciation.
+    // Speak the bare word instead (punctuation would be read out as "exclamation mark").
+    if (!hasAudioRef.current) {
+      const bare = (scene.words[i]?.w ?? '').replace(PUNCTUATION, '')
+      if (bare) speakText(bare)
+    }
   }
 
   function toggleMusic() {

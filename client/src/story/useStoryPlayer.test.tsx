@@ -313,6 +313,44 @@ it('6. toggleMusic() flips musicOn and persists to localStorage', async () => {
   unmount()
 })
 
+it('review: tapping a word speaks it when the story has no narration', async () => {
+  const synth = { cancel: vi.fn(), speak: vi.fn() }
+  const original = window.speechSynthesis
+  type SynthWindow = { SpeechSynthesisUtterance?: unknown }
+  const originalUtterance = (window as unknown as SynthWindow).SpeechSynthesisUtterance
+  Object.defineProperty(window, 'speechSynthesis', { value: synth, configurable: true, writable: true })
+  ;(window as unknown as SynthWindow).SpeechSynthesisUtterance = class {
+    lang = ''
+    text: string
+    constructor(text: string) {
+      this.text = text
+    }
+  }
+
+  try {
+    const story = makeStory()
+    story.scenes[0] = scene([
+      { w: 'Hello,', start: 0, end: 200 },
+      { w: 'Foxy!', start: 260, end: 500 },
+    ])
+    const { result, unmount } = renderHook(() => useStoryPlayer(story))
+    expect(result.current.hasAudio).toBe(false) // FakeAudio never reports metadata
+
+    act(() => result.current.replayWord(1))
+    await tickMs(1) // speakText defers speak() one task past cancel()
+
+    expect(synth.cancel).toHaveBeenCalled()
+    expect(synth.speak).toHaveBeenCalledTimes(1)
+    const u = synth.speak.mock.calls[0][0] as SpeechSynthesisUtterance
+    expect(u.text).toBe('Foxy') // punctuation stripped, or the voice reads "Foxy exclamation mark"
+    expect(u.lang).toBe('en-US')
+    unmount()
+  } finally {
+    Object.defineProperty(window, 'speechSynthesis', { value: original, configurable: true, writable: true })
+    ;(window as unknown as SynthWindow).SpeechSynthesisUtterance = originalUtterance
+  }
+})
+
 it('review: toggling music back on mid-playback restarts the pad', async () => {
   FakeMusicContext.reset()
   // @ts-expect-error stub the global Web Audio constructor for this test

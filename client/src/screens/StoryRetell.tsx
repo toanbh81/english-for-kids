@@ -8,6 +8,7 @@ import { useSpeakingAttempt } from '../speaking/useSpeakingAttempt'
 import { MicButton } from '../components/MicButton'
 import { Stars } from '../components/Stars'
 import { retellStars, RETELL_MESSAGE } from '../story/retellStars'
+import { speakText } from '../story/speak'
 
 const TAP_TARGET = 'min-h-[64px] min-w-[64px] flex items-center'
 
@@ -41,12 +42,8 @@ function playSample(story: Story) {
   const scene = findRetellScene(story)
   if (hasCompleteTimings(scene)) {
     playUrl(scene!.audio).catch(() => {})
-  } else if (window.speechSynthesis) {
-    // Cancel any queued/ongoing utterance first so a double-tap restarts instead of queueing.
-    window.speechSynthesis.cancel()
-    const u = new SpeechSynthesisUtterance(story.retell.text)
-    u.lang = 'en-US'
-    window.speechSynthesis.speak(u)
+  } else {
+    speakText(story.retell.text) // no-op without speech synthesis; cancels any queued utterance
   }
 }
 
