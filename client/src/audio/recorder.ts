@@ -27,6 +27,7 @@ export function useRecorder(opts: { maxMs?: number } = {}) {
   }), [])
 
   const start = useCallback(async () => {
+    if (rec.current && rec.current.state !== 'inactive') return
     stream.current = await navigator.mediaDevices.getUserMedia({ audio: true })
     const mime = pickMimeType()
     rec.current = new MediaRecorder(stream.current, mime ? { mimeType: mime } : undefined)
