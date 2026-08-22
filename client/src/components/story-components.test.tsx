@@ -30,6 +30,13 @@ describe('Karaoke', () => {
     expect(buttons[0]).toHaveClass('text-slate-400')
     expect(buttons[2]).toHaveClass('text-slate-800')
   })
+  it('gives every word a 64px-wide centred tap target', () => {
+    render(<Karaoke words={words} activeIndex={1} onWordTap={() => {}} />)
+    // Short words like "a" or "is" are otherwise far too narrow for a 5-year-old's finger.
+    for (const button of screen.getAllByRole('button')) {
+      expect(button).toHaveClass('min-h-[64px]', 'min-w-[64px]', 'justify-center')
+    }
+  })
   it('calls onWordTap with the tapped index', () => {
     const fn = vi.fn()
     render(<Karaoke words={words} activeIndex={1} onWordTap={fn} />)

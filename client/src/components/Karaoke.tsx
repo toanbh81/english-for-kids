@@ -7,7 +7,7 @@ export function Karaoke({ words, activeIndex, onWordTap, subtitle }: Props) {
       <div className="flex flex-wrap justify-center gap-2">
         {words.map((word, i) => (
           <button key={i} onClick={() => onWordTap(i)}
-            className={`min-h-[64px] px-2 text-4xl font-extrabold ${
+            className={`min-h-[64px] min-w-[64px] inline-flex items-center justify-center px-2 text-4xl font-extrabold ${
               i === activeIndex ? 'text-coral scale-110' : i < activeIndex ? 'text-slate-400' : 'text-slate-800'
             }`}>
             {word.w}
