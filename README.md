@@ -41,6 +41,14 @@ Sample word audio (Jenny's voice) is generated locally and saved to `client/publ
 AZURE_SPEECH_KEY=your-key AZURE_SPEECH_REGION=southeastasia node scripts/gen-audio.mjs three thank this very fish zoo ship chair red lion cat dog elephant monkey rabbit tiger bird horse sheep frog snake giraffe
 ```
 
+Story narration (full scenes with per-word timings) is generated the same way:
+
+```bash
+AZURE_SPEECH_KEY=your-key AZURE_SPEECH_REGION=southeastasia node scripts/gen-story.mjs little-fox at-the-zoo my-breakfast
+```
+
+This writes mp3s to `client/public/audio/stories/<id>/` and fills word timings (start/end ms) into each story's JSON; commit the updated JSON files afterwards.
+
 ## Running
 
 ```bash
