@@ -322,3 +322,25 @@ it('review mode hides the English word behind emoji + Vietnamese meaning until G
   expect(front.getByText('apple')).toBeInTheDocument()
   expect(front.queryByText('?')).not.toBeInTheDocument()
 })
+
+/** 🔊 says the word out loud, so on a hidden review card it *is* the answer — leaving it on the
+ * front face made "Gợi ý" pointless: one tap and the recall step is over. */
+it('review mode withholds the front-face 🔊 until the hint is revealed', () => {
+  const past = Date.now() - 2 * 24 * 60 * 60 * 1000
+  promote('food-apple', past)
+  renderCard('review', 'food-apple')
+
+  const front = within(screen.getByTestId('face-front'))
+  expect(front.queryByRole('button', { name: 'Nghe mẫu' })).not.toBeInTheDocument()
+
+  fireEvent.click(front.getByRole('button', { name: 'Gợi ý' }))
+
+  expect(front.getByRole('button', { name: 'Nghe mẫu' })).toBeInTheDocument()
+})
+
+it('keeps 🔊 on the front face outside the review deck', () => {
+  promote('food-apple') // unlocked, so the card opens straight on the flip card
+  renderCard('food', 'food-apple')
+
+  expect(within(screen.getByTestId('face-front')).getByRole('button', { name: 'Nghe mẫu' })).toBeInTheDocument()
+})

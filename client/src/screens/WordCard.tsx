@@ -258,17 +258,21 @@ function WordCardInner({ word, topic, isReview, list }: { word: Word; topic: str
                     </>
                   )}
                   {/* 58 px circle inside a 64 px tap target — the handoff's size without shrinking the
-                      area a small finger has to hit. */}
-                  <button
-                    type="button"
-                    aria-label="Nghe mẫu"
-                    onClick={e => onFaceButton(e, playSample)}
-                    className="flex h-16 w-16 items-center justify-center active:translate-y-[2px]"
-                  >
-                    <span aria-hidden="true" className="flex h-[58px] w-[58px] items-center justify-center rounded-full bg-teal-500 text-3xl text-white shadow-chunky-teal">
-                      🔊
-                    </span>
-                  </button>
+                      area a small finger has to hit. It is withheld while a review card is still
+                      hidden: 🔊 speaks the word, so it *is* the answer, and one tap would retire the
+                      recall step that "Gợi ý" exists to gate. */}
+                  {(!isReview || hintRevealed) && (
+                    <button
+                      type="button"
+                      aria-label="Nghe mẫu"
+                      onClick={e => onFaceButton(e, playSample)}
+                      className="flex h-16 w-16 items-center justify-center active:translate-y-[2px]"
+                    >
+                      <span aria-hidden="true" className="flex h-[58px] w-[58px] items-center justify-center rounded-full bg-teal-500 text-3xl text-white shadow-chunky-teal">
+                        🔊
+                      </span>
+                    </button>
+                  )}
                   <Chip className="absolute bottom-4">MẶT TRƯỚC</Chip>
                   <button type="button" aria-label="Lật thẻ" onClick={e => onFaceButton(e, flip)} className={FLIP_BUTTON}>
                     <span aria-hidden="true">🔄</span>

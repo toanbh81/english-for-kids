@@ -304,6 +304,8 @@ Minimal Pairs; Học từ mới logs `word` events instead).
   topic); a wrong pick shakes the card. Then the card flips and "🎤 Nói để mở khoá" works as before.
   In the **Ôn tập** (review) deck the front face hides the English word — only emoji + Vietnamese
   meaning show, so the child has to recall and say the word — with a "Gợi ý" button to reveal it.
+  The front-face 🔊 is withheld until that hint is tapped: it speaks the word, so leaving it there
+  would be a one-tap bypass of the whole recall step.
   Leitner unlock/spacing rules are unchanged.
 - **👯 Nghe & chọn (Minimal Pairs)** — a new level, `/level/minimal-pairs` (`PairLevel`) →
   `/pair/:id` (`PairPractice`): 8 contrastive pairs (ship/sheep, bat/bad, three/tree, fan/van,
