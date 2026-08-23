@@ -55,8 +55,17 @@ it('keeps Foxy off the locked steps once every playable level is finished', () =
   }
 })
 
-it('ignores the old per-card sz- key now that Tập âm stars live under sound:<ph>', () => {
-  localStorage.setItem('speakup.stars', JSON.stringify({ 'sz-th-three': 3 }))
+/** Phase 5 moved Tập âm's stars from per-card `sz-*` keys to per-sound `sound:<ph>` keys, so a
+ * child who practised before that has only the old keys — reading just the new ones emptied the
+ * step and looked like lost progress. */
+it('still counts the legacy per-card sz- key so returning children keep their stars', () => {
+  localStorage.setItem('speakup.stars', JSON.stringify({ 'sz-th-three': 2 }))
   renderStairs()
-  expect(within(screen.getByTestId('step-sound-zoo')).queryAllByTestId('star-filled')).toHaveLength(0)
+  expect(within(screen.getByTestId('step-sound-zoo')).getAllByTestId('star-filled')).toHaveLength(2)
+})
+
+it('takes the best of the new sound key and the legacy card key', () => {
+  localStorage.setItem('speakup.stars', JSON.stringify({ 'sz-th-three': 2, 'sound:v': 3 }))
+  renderStairs()
+  expect(within(screen.getByTestId('step-sound-zoo')).getAllByTestId('star-filled')).toHaveLength(3)
 })

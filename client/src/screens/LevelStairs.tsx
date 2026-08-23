@@ -28,12 +28,18 @@ function levelStars(id: string): Stars {
 }
 
 /** Tập âm keeps its stars per *sound*, not per card — a card only clears once all 3 of its
- * sound's words score high, so the step's stars are the best across the 9 `sound:<ph>` keys. */
+ * sound's words score high, so the step's stars are the best across the 9 `sound:<ph>` keys.
+ *
+ * Phase 5 is what moved them there; before that each `sz-*` card had its own star. Those keys are
+ * still sitting in a returning child's storage, and reading only the new ones emptied the step and
+ * looked like the app had wiped their progress — so the step takes the best of both. */
 function soundStars(): Stars {
-  return SOUNDS.reduce<Stars>((best, s) => {
+  const bySound = SOUNDS.reduce<Stars>((best, s) => {
     const stars = getStars(`sound:${s.ph}`)
     return stars > best ? stars : best
   }, 0)
+  const legacy = levelStars('sound-zoo')
+  return bySound > legacy ? bySound : legacy
 }
 
 /** Minimal Pairs keeps its stars per *pair*, not per card, so it needs its own reducer. */

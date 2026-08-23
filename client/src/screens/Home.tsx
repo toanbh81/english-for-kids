@@ -30,6 +30,11 @@ type Stars = 0 | 1 | 2 | 3
 
 const best = (values: number[]): Stars => Math.max(0, ...values) as Stars
 
+/** Phase 5 moved Tập âm's stars from per-card `sz-*` keys to per-sound `sound:<ph>` keys. The old
+ * keys are still in a returning child's storage, and reading only the new ones showed them an
+ * empty island — so the island takes the best of both. */
+const SOUND_ZOO_CARDS = LEVELS.find(l => l.id === 'sound-zoo')?.cards ?? []
+
 /** The vocabulary island has no per-card star, so the Leitner deck stands in for it: the more
  * words the child has unlocked, the more stars the island shows. */
 function wordStars(): Stars {
@@ -74,7 +79,10 @@ export function Home() {
 
   const stars: Record<string, Stars> = {
     '/stories': best(STORIES.map(s => getStars(`story:${s.id}`))),
-    '/level/sound-zoo': best(SOUNDS.map(s => getStars(`sound:${s.ph}`))),
+    '/level/sound-zoo': best([
+      ...SOUNDS.map(s => getStars(`sound:${s.ph}`)),
+      ...SOUND_ZOO_CARDS.map(c => getStars(c.id)),
+    ]),
     '/level/word-pop': best((LEVELS.find(l => l.id === 'word-pop')?.cards ?? []).map(c => getStars(c.id))),
     '/words': wordStars(),
     '/sentences': best(SENTENCES.map(s => getStars(`sentence:${s.id}`))),
