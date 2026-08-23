@@ -8,6 +8,8 @@ import { PracticeCard } from './screens/PracticeCard'
 import { SoundPractice } from './screens/SoundPractice'
 import { PairLevel } from './screens/PairLevel'
 import { PairPractice } from './screens/PairPractice'
+import { StarLevel } from './screens/StarLevel'
+import { StarPractice } from './screens/StarPractice'
 import { StoryList } from './screens/StoryList'
 import { StoryPlayer } from './screens/StoryPlayer'
 import { StoryQuiz } from './screens/StoryQuiz'
@@ -26,12 +28,14 @@ export default function App() {
       <Route path="/mission" element={<DailyMission />} />
       <Route path="/mission/done" element={<MissionComplete />} />
       <Route path="/levels" element={<LevelStairs />} />
-      {/* Static before dynamic: Minimal Pairs is a bậc of its own, not one of the card levels. */}
+      {/* Static before dynamic: Minimal Pairs and Sentence Stars are bậc of their own, not card levels. */}
       <Route path="/level/minimal-pairs" element={<PairLevel />} />
+      <Route path="/level/sentence-stars" element={<StarLevel />} />
       <Route path="/level/:levelId" element={<LevelSelect />} />
       <Route path="/practice/:cardId" element={<PracticeCard />} />
       <Route path="/sound/:ph" element={<SoundPractice />} />
       <Route path="/pair/:id" element={<PairPractice />} />
+      <Route path="/star/:id" element={<StarPractice />} />
       <Route path="/stories" element={<StoryList />} />
       <Route path="/story/:id" element={<StoryPlayer />} />
       <Route path="/story/:id/quiz" element={<StoryQuiz />} />
