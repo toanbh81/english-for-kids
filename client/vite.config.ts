@@ -3,10 +3,12 @@ import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 import basicSsl from '@vitejs/plugin-basic-ssl'
 
-export default defineConfig({
+// `vite --mode nossl` serves plain HTTP (for in-app browser previews that reject self-signed certs);
+// the default dev server stays HTTPS because iPad Safari needs it for the microphone.
+export default defineConfig(({ mode }) => ({
   plugins: [
     react(),
-    basicSsl(),
+    ...(mode === 'nossl' ? [] : [basicSsl()]),
     VitePWA({
       registerType: 'autoUpdate',
       manifest: {
@@ -25,4 +27,4 @@ export default defineConfig({
   server: { host: true, proxy: { '/api': 'http://localhost:8787' } },
   preview: { proxy: { '/api': 'http://localhost:8787' } },
   test: { environment: 'jsdom', setupFiles: './src/test-setup.ts', globals: true },
-})
+}))
