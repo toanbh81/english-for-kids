@@ -74,6 +74,33 @@ This writes `client/public/audio/sentences/<id>.mp3` for every sentence in
 `client/src/content/sentences.json` (or, given ids as extra args, only those sentences). Run it
 whenever you add or change a sentence; the mp3s are gitignored like the other generated audio.
 
+Tập âm's 27 sound-zoo words (Phase 5) added 17 new words beyond the original 10 (`rabbit` and
+`sheep` were already generated for Word Pop, so they are not repeated below):
+
+```bash
+AZURE_SPEECH_KEY=your-key AZURE_SPEECH_REGION=southeastasia node scripts/gen-audio.mjs think that mother van seven fox five zip zebra shoe cheese chicken run leg lamp
+```
+
+Minimal Pairs (Phase 5) words go in their own folder, same as vocabulary words:
+
+```bash
+AZURE_SPEECH_KEY=your-key AZURE_SPEECH_REGION=southeastasia node scripts/gen-audio.mjs --out client/public/audio/pairs ship sheep bat bad three tree fan van sit seat thin tin rice lice cap cup
+```
+
+Isolated sound samples for Tập âm's "🔊 Nghe âm lẻ" button (the 9 target sounds on their own, not
+inside a word) are generated with `scripts/gen-sounds.mjs`, which speaks each phoneme via SSML
+`<phoneme alphabet="ipa">`:
+
+```bash
+AZURE_SPEECH_KEY=your-key AZURE_SPEECH_REGION=southeastasia node scripts/gen-sounds.mjs
+```
+
+This writes `client/public/audio/sounds/<ph>.mp3` for each of `th dh v f z sh ch r l`. Most single
+consonants sound clipped or wrong when Azure is asked to say the bare IPA symbol on its own, so the
+script appends a light schwa (`ə`) to the phoneme value it sends (e.g. `θ` becomes `θə`) — Jenny
+then articulates a clean, isolated consonant sound rather than a garbled fragment, while the output
+still reads to a child as "just the /θ/ sound".
+
 ## Phase 2 — Listening (Nghe kể chuyện)
 
 A listening module that engages kids in illustrated stories with synchronized karaoke-style text. Kids listen to a 60–120 s story (6–7 scenes), see words light up in sync with narration, can slow playback, tap words to replay, toggle Vietnamese subtitles, then answer 3 picture questions and retell one target sentence.
