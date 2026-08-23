@@ -5,3 +5,7 @@ body { @apply bg-cream font-sans text-slate-800; -webkit-user-select: none; }
 
 @keyframes shake { 0%,100%{transform:translateX(0)} 25%{transform:translateX(-8px)} 75%{transform:translateX(8px)} }
 .animate-shake{animation:shake .4s}
+
+/* Mission-complete confetti: 1.6 s fall, matched by LIFETIME_MS in components/Confetti.tsx. */
+@keyframes confetti-fall { from{transform:translateY(0) rotate(0deg);opacity:1} to{transform:translateY(110vh) rotate(360deg);opacity:0} }
+.animate-confetti-fall{animation:confetti-fall 1.6s linear forwards}

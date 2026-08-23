@@ -1,6 +1,6 @@
-import { render, screen } from '@testing-library/react'
+import { act, render, screen } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
-import { logActivity } from '../progress/activity'
+import { dayKey, logActivity } from '../progress/activity'
 import { Home } from './Home'
 
 const NOW = new Date('2026-08-23T10:00:00').getTime()
@@ -60,6 +60,46 @@ it('shows an idle Foxy greeting with no activity yet', () => {
   const foxy = screen.getByTestId('foxy')
   expect(foxy).toHaveAttribute('data-mood', 'idle')
   expect(screen.getByText('Chào bé! Hôm nay mình học gì nào?')).toBeInTheDocument()
+})
+
+it('rains confetti when the mission is finished, then clears it after 2 s', () => {
+  seedDoneDay(NOW - 1000)
+
+  renderHome()
+
+  expect(screen.getByTestId('confetti')).toBeInTheDocument()
+  expect(localStorage.getItem('speakup.celebrated')).toBe(dayKey(NOW))
+
+  act(() => { vi.advanceTimersByTime(2000) })
+
+  expect(screen.queryByTestId('confetti')).not.toBeInTheDocument()
+})
+
+it('does not celebrate the same finished mission twice in one day', () => {
+  seedDoneDay(NOW - 1000)
+  localStorage.setItem('speakup.celebrated', dayKey(NOW))
+
+  renderHome()
+
+  expect(screen.queryByTestId('confetti')).not.toBeInTheDocument()
+})
+
+it('celebrates again on a new day even if yesterday was celebrated', () => {
+  seedDoneDay(NOW - 1000)
+  localStorage.setItem('speakup.celebrated', dayKey(NOW - DAY_MS))
+
+  renderHome()
+
+  expect(screen.getByTestId('confetti')).toBeInTheDocument()
+})
+
+it('shows no confetti while the mission is unfinished', () => {
+  logActivity({ ts: NOW, kind: 'story', id: 'little-fox' })
+
+  renderHome()
+
+  expect(screen.queryByTestId('confetti')).not.toBeInTheDocument()
+  expect(localStorage.getItem('speakup.celebrated')).toBeNull()
 })
 
 it('shows a 3-day streak after three consecutive completed days', () => {

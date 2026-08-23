@@ -1,13 +1,28 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { LEVELS } from '../content'
 import { totalStars } from '../progress/store'
-import { getActivity, missionStatus, streak, weekDots, minutesToday } from '../progress/activity'
+import { dayKey, getActivity, missionStatus, streak, weekDots, minutesToday } from '../progress/activity'
 import { getLimitMinutes } from '../progress/limit'
+import { Confetti } from '../components/Confetti'
 import { Foxy } from '../components/Foxy'
 import type { FoxyMood } from '../components/Foxy'
 import { MissionCard } from '../components/MissionCard'
 import { StreakWeek } from '../components/StreakWeek'
+
+const CELEBRATED_KEY = 'speakup.celebrated'
+
+// The celebration is once per day, not once per visit to Home — the day it last fired is
+// remembered so coming back to Home does not re-throw confetti at the child.
+function alreadyCelebrated(day: string): boolean {
+  try { return localStorage.getItem(CELEBRATED_KEY) === day }
+  catch { return false }
+}
+
+function markCelebrated(day: string): void {
+  try { localStorage.setItem(CELEBRATED_KEY, day) }
+  catch { /* ignore: storage unavailable */ }
+}
 
 const MODULE_CARDS = [
   { to: '/stories', emoji: '🎧', label: 'Nghe kể chuyện', bg: 'bg-coral text-white' },
@@ -30,9 +45,17 @@ export function Home() {
       : 'Chào bé! Hôm nay mình học gì nào?'
   const overLimit = minutesToday(now, events) >= getLimitMinutes()
 
+  // Decided once per mount, then remembered in storage by the effect below, so the confetti is
+  // not restarted by an unrelated re-render.
+  const [celebrating] = useState(() => status.done && !alreadyCelebrated(dayKey(now)))
+  useEffect(() => {
+    if (celebrating) markCelebrated(dayKey(now))
+  }, [celebrating, now])
+
   return (
     <main className="h-full overflow-y-auto flex flex-col items-center gap-6 p-6 relative">
       <h1 className="sr-only">Speak Up!</h1>
+      {celebrating && <Confetti />}
 
       <section className="flex flex-col items-center gap-3">
         <Foxy mood={mood} size="lg" say={say} />

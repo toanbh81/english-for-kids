@@ -1,5 +1,6 @@
-import { render, screen } from '@testing-library/react'
+import { act, render, screen } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
+import { Confetti } from './Confetti'
 import { Foxy } from './Foxy'
 import { MissionCard } from './MissionCard'
 import { StreakWeek } from './StreakWeek'
@@ -62,5 +63,34 @@ describe('StreakWeek', () => {
     expect(screen.getAllByText('★')).toHaveLength(2)
     expect(screen.getAllByText('○')).toHaveLength(5)
     expect(screen.getByText('🔥 2 ngày')).toBeInTheDocument()
+  })
+})
+
+describe('Confetti', () => {
+  afterEach(() => vi.useRealTimers())
+
+  it('drops 24 pieces that never intercept taps, then removes itself after 2 s', () => {
+    vi.useFakeTimers()
+    render(<Confetti />)
+
+    const layer = screen.getByTestId('confetti')
+    expect(layer).toHaveClass('pointer-events-none')
+    expect(layer.children).toHaveLength(24)
+
+    act(() => { vi.advanceTimersByTime(2000) })
+
+    expect(screen.queryByTestId('confetti')).not.toBeInTheDocument()
+  })
+
+  it('lays the pieces out deterministically, so re-rendering does not reshuffle them', () => {
+    const { unmount } = render(<Confetti />)
+    const first = Array.from(screen.getByTestId('confetti').children).map(c => c.getAttribute('style'))
+    unmount()
+
+    render(<Confetti />)
+    const second = Array.from(screen.getByTestId('confetti').children).map(c => c.getAttribute('style'))
+
+    expect(second).toEqual(first)
+    expect(new Set(first).size).toBeGreaterThan(1)
   })
 })
