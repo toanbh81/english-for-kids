@@ -22,9 +22,6 @@ import { useSpeakingAttempt } from '../speaking/useSpeakingAttempt'
 const AUTO_STOP_MS = 6000
 const COUNTDOWN_FROM = AUTO_STOP_MS / 1000
 
-/** How many listens the child has to get right before the mic step opens. */
-const NEEDED = 2
-
 type Side = 'a' | 'b'
 
 const SIDES = ['a', 'b'] as const
@@ -58,7 +55,10 @@ function PairRun({ pair }: { pair: PairItem }) {
   const [listens, setListens] = useState(0)
   const [target, setTarget] = useState<Side | null>(null)
   const [answer, setAnswer] = useState<'right' | 'wrong' | null>(null)
-  const [correct, setCorrect] = useState(0)
+  // One tick per WORD, not a count of correct answers. Two right picks used to open the mic, and
+  // the draw can serve the same side twice — so a child could pass the listening game having
+  // heard only "ship", which proves nothing about the contrast the pair exists to teach.
+  const [done, setDone] = useState<Record<Side, boolean>>({ a: false, b: false })
   const [audioMissing, setAudioMissing] = useState(false)
   const [secondsLeft, setSecondsLeft] = useState(COUNTDOWN_FROM)
 
@@ -94,7 +94,9 @@ function PairRun({ pair }: { pair: PairItem }) {
 
   const index = PAIRS.findIndex(p => p.id === pair.id)
   const next = PAIRS[index + 1]
-  const listening = correct < NEEDED
+  const listening = !(done.a && done.b)
+  /** "ship ✓ · sheep ○" — which word the child still owes, in one line. */
+  const ticks = `${pair.a.word} ${done.a ? '✓' : '○'} · ${pair.b.word} ${done.b ? '✓' : '○'}`
 
   /** Sample audio is generated locally and may simply not be there yet — say so, never throw. */
   function listen() {
@@ -113,7 +115,7 @@ function PairRun({ pair }: { pair: PairItem }) {
   function choose(side: Side) {
     if (!target) return
     setAnswer(side === target ? 'right' : 'wrong')
-    if (side === target) setCorrect(c => c + 1)
+    if (side === target) setDone(d => ({ ...d, [target]: true }))
     setTarget(null)
   }
 
@@ -189,14 +191,14 @@ function PairRun({ pair }: { pair: PairItem }) {
               )}
             </div>
 
-            <p className="font-display text-xl font-extrabold text-ink-500">Đúng {correct}/{NEEDED}</p>
+            <p className="font-display text-xl font-extrabold text-ink-500">{ticks}</p>
           </section>
         ) : (
           <>
             {/* The listening game is over, so it shrinks to one line and hands the screen to the mic. */}
             <Card className="flex min-h-[64px] items-center justify-center gap-3 px-6 py-3">
               <span aria-hidden="true" className="text-[28px] leading-none">👂</span>
-              <span className="font-display text-xl font-extrabold text-ink-900">Nghe &amp; chọn: {correct}/{NEEDED} đúng ✅</span>
+              <span className="font-display text-xl font-extrabold text-ink-900">{`Nghe & chọn: ${ticks}`}</span>
             </Card>
 
             {feedback ? (

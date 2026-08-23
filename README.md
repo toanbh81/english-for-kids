@@ -319,8 +319,11 @@ skill, on top of the same scoring engine (`useSpeakingAttempt` + `toFeedback`) a
   sit/seat, thin/tin, rice/lice, cap/cup). 🔊 plays one of the two words, picked **seeded
   pseudo-random per pair** (a PRNG stream seeded by the pair id, so the order has no beat the child
   can count but is identical every time that pair is opened); the child taps
-  the matching picture/word card (✅/🙈 + Foxy); after 2 correct listens a mic step asks the child
-  to read both words in one go ("ship, sheep"), scored the normal way.
+  the matching picture/word card (✅/🙈 + Foxy). The scoreboard is one tick per **word** ("ship ✓ ·
+  sheep ○"), and the mic step opens only once **each** word has been picked correctly at least
+  once — two right answers on the same word prove nothing about the contrast. The draw never plays
+  the same word more than twice running, so both sides come up within any four listens. The mic
+  step then asks the child to read both words in one go ("ship, sheep"), scored the normal way.
 
 **Routes:**
 
@@ -401,7 +404,7 @@ excludes.
 | 23 | Đọc từ (Word Pop) → say a word twice in a row scoring ≥ 80 | Streak fills ●●, then awards 3 stars ("Lần 1/2 · Lần 2/2 ✓") | ⏳ pending |
 | 24 | Học từ mới → new card → tap a wrong meaning in "Đoán nghĩa" | Card shakes and lets the child try again | ⏳ pending |
 | 25 | Học từ mới → "Ôn tập hôm nay" → open a due word | English word is hidden (emoji + Vietnamese only) until "Gợi ý" is tapped | ⏳ pending |
-| 26 | Nghe & chọn (`/level/minimal-pairs`) → open a pair → listen, choose, then read both words | 🔊 plays one word, tapping the matching card gives ✅/🙈 + Foxy; after 2 correct listens the mic step appears for reading both words | ⏳ pending |
+| 26 | Nghe & chọn (`/level/minimal-pairs`) → open a pair → listen, choose, then read both words | 🔊 plays one word, tapping the matching card gives ✅/🙈 + Foxy. The line under the cards ticks off one word at a time ("ship ✓ · sheep ○") and the mic step appears only after BOTH words have been picked correctly — deliberately getting the same word right twice must not open it | ⏳ pending |
 | 27 | `/levels` stairs | "Nghe & chọn" step shows unlocked (not the 🔒 "Sắp có" placeholder) | ⏳ pending |
 | 28 | Turn Wi-Fi off (header shows "chế độ đơn giản") → Tập âm → say all 3 words of a sound | Chip reads "Chưa chấm được âm — cần kết nối Azure" with no number, the word's own score still shows, and the run awards at most 2 stars | ⏳ pending |
 | 29 | Học từ mới → "Ôn tập hôm nay" → open a due word | No 🔊 on the hidden front face; it appears only after "Gợi ý" is tapped | ⏳ pending |

@@ -33,6 +33,14 @@ function result(ph: number | null, overall = 90): PronunciationResult {
   }
 }
 
+/** The same word on the Web Speech engine: a word-level score and no phoneme detail at all. */
+function ws(accuracy: number): PronunciationResult {
+  return {
+    overall: accuracy, accuracy, fluency: accuracy, completeness: 100, engine: 'webspeech',
+    words: [{ word: 'three', score: accuracy, errorType: 'None', phonemes: [] }],
+  }
+}
+
 function score(r: PronunciationResult) {
   act(() => { mic.push(r) })
 }
@@ -114,22 +122,42 @@ it('never fabricates a phoneme score on the Web Speech fallback, and caps such a
   mic.engine = 'webspeech'
   renderSound()
 
-  const ws: PronunciationResult = {
-    overall: 100, accuracy: 100, fluency: 100, completeness: 100, engine: 'webspeech',
-    words: [{ word: 'three', score: 100, errorType: 'None', phonemes: [] }],
-  }
-
-  score(ws)
+  score(ws(100))
   const chip = screen.getByTestId('sound-chip')
   expect(chip).toHaveAttribute('data-tone', 'unknown')
   expect(chip.textContent).not.toMatch(/\d/)
 
-  nextWord(); score(ws)
-  nextWord(); score(ws)
+  nextWord(); score(ws(100))
+  nextWord(); score(ws(100))
 
   // A perfect Web Speech run proves the child said *something*, not that the θ was right.
-  expect(screen.getAllByTestId('star-filled').length).toBeLessThanOrEqual(2)
-  expect(JSON.parse(localStorage.getItem('speakup.stars') ?? '{}')['sound:th']).toBeLessThanOrEqual(2)
+  expect(screen.getAllByTestId('star-filled')).toHaveLength(2)
+  expect(JSON.parse(localStorage.getItem('speakup.stars') ?? '{}')['sound:th']).toBe(2)
+})
+
+/** 2 stars is the CEILING of an unscored run, never its floor: with no phoneme detail to judge,
+ * the word's own score is the only evidence there is, and a run the engine barely recognised must
+ * not come out level with one it heard perfectly. */
+it('still separates 1 from 2 stars on an unscored run, using the word scores', () => {
+  mic.engine = 'webspeech'
+  renderSound()
+
+  score(ws(100)); nextWord()
+  score(ws(30)); nextWord()
+  score(ws(100))
+
+  expect(screen.getAllByTestId('star-filled')).toHaveLength(1)
+})
+
+it('gives an unscored run 2 stars when every word was at least passable', () => {
+  mic.engine = 'webspeech'
+  renderSound()
+
+  score(ws(100)); nextWord()
+  score(ws(70)); nextWord()
+  score(ws(100))
+
+  expect(screen.getAllByTestId('star-filled')).toHaveLength(2)
 })
 
 it('caps the run at 2 stars when a single word never got phoneme detail', () => {

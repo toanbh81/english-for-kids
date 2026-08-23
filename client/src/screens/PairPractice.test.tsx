@@ -22,7 +22,7 @@ const playerControl = vi.hoisted(() => ({ playUrl: vi.fn() }))
 vi.mock('../audio/player', () => ({ playUrl: playerControl.playUrl, playBlob: vi.fn().mockResolvedValue(undefined) }))
 
 import { PairPractice } from './PairPractice'
-import { findPair } from '../content'
+import { PAIRS, findPair } from '../content'
 import { seededSide } from '../content/shuffle'
 
 const SHIP_SHEEP = findPair('pair-ship-sheep')!
@@ -33,6 +33,11 @@ const SHIP_SHEEP = findPair('pair-ship-sheep')!
 const played = (n: number) => SHIP_SHEEP[seededSide(SHIP_SHEEP.id, n, ['a', 'b'] as const)].word
 /** The word that was *not* played — the wrong card, whichever side that happens to be. */
 const other = (word: string) => (word === SHIP_SHEEP.a.word ? SHIP_SHEEP.b.word : SHIP_SHEEP.a.word)
+/** The listening scoreboard: one tick per word, so the child can see which one they still owe. */
+const caption = (a: boolean, b: boolean) =>
+  `${SHIP_SHEEP.a.word} ${a ? '✓' : '○'} · ${SHIP_SHEEP.b.word} ${b ? '✓' : '○'}`
+/** Ticks the scoreboard would show after one correct pick of `word`. */
+const ticks = (word: string) => (word === SHIP_SHEEP.a.word ? caption(true, false) : caption(false, true))
 
 /** One attempt on "ship, sheep" — both words scored the same, which is all the screen reads. */
 function result(overall = 85): PronunciationResult {
@@ -94,7 +99,7 @@ it('cheers the matching card and locks up again after it', () => {
   listen()
   pick(played(0))
   expect(screen.getByText('Đúng rồi! 🎉')).toBeInTheDocument()
-  expect(screen.getByText('Đúng 1/2')).toBeInTheDocument()
+  expect(screen.getByText(ticks(played(0)))).toBeInTheDocument()
   // A finished round locks the cards again until the next 🔊.
   expect(screen.getByRole('button', { name: 'ship' })).toBeDisabled()
   expect(screen.getByRole('button', { name: 'sheep' })).toBeDisabled()
@@ -109,12 +114,12 @@ it('makes a wrong pick cost a listen instead of handing over the answer', () => 
   pick(other(played(0)))
   expect(screen.getByText('Nghe lại nhé')).toBeInTheDocument()
   expect(screen.getByText('Bấm 🔊 nghe lại nhé')).toBeInTheDocument()
-  expect(screen.getByText('Đúng 0/2')).toBeInTheDocument()
+  expect(screen.getByText(caption(false, false))).toBeInTheDocument()
 
   // The other card is locked, so tapping it changes nothing.
   expect(screen.getByRole('button', { name: played(0) })).toBeDisabled()
   pick(played(0))
-  expect(screen.getByText('Đúng 0/2')).toBeInTheDocument()
+  expect(screen.getByText(caption(false, false))).toBeInTheDocument()
   expect(screen.queryByText('Đúng rồi! 🎉')).not.toBeInTheDocument()
 
   // A fresh listen moves on to the next draw of the pair's seeded stream.
@@ -122,7 +127,7 @@ it('makes a wrong pick cost a listen instead of handing over the answer', () => 
   expect(playerControl.playUrl).toHaveBeenLastCalledWith(`/audio/pairs/${played(1)}.mp3`)
   pick(played(1))
   expect(screen.getByText('Đúng rồi! 🎉')).toBeInTheDocument()
-  expect(screen.getByText('Đúng 1/2')).toBeInTheDocument()
+  expect(screen.getByText(ticks(played(1)))).toBeInTheDocument()
 })
 
 /** Every 🔊 url played over `n` listens on a freshly mounted screen. */
@@ -154,6 +159,16 @@ it('does not simply alternate: both words come up over the first 12 listens', ()
   expect(urls.some((u, i) => i > 0 && u === urls[i - 1])).toBe(true)
 })
 
+/** Unpredictable must not turn into "heard the same word five times running": the contrast is the
+ * whole exercise, and a child who never hears the other side has nothing to compare against. The
+ * run cap in `seededSide` bounds that at two, which puts both words inside any four listens. */
+it('gives every pair both of its words within the first 4 listens', () => {
+  for (const p of PAIRS) {
+    const sides = [0, 1, 2, 3].map(n => seededSide(p.id, n, ['a', 'b'] as const))
+    expect(new Set(sides), `pair ${p.id} drew ${sides.join('')}`).toEqual(new Set(['a', 'b']))
+  }
+})
+
 it('says so when the pair audio is missing', async () => {
   playerControl.playUrl.mockRejectedValue(new Error('audio failed'))
   renderPair()
@@ -162,26 +177,44 @@ it('says so when the pair audio is missing', async () => {
   await screen.findByText('Chưa có audio mẫu')
 })
 
-it('opens the mic step after two correct listens', () => {
+/** Two correct picks used to open the mic, which a child could satisfy without ever hearing the
+ * contrast — the draw repeats a side, and "ship" twice proves nothing about "sheep". The gate is
+ * now one correct pick of EACH word. */
+it('does not open the mic until each word has been picked correctly once', () => {
   renderPair()
 
+  // This pair's stream opens on the same side twice, so two correct picks cover only one word.
+  expect(played(0)).toBe(played(1))
+
   listen(); pick(played(0))
+  expect(screen.getByText(ticks(played(0)))).toBeInTheDocument()
   expect(screen.queryByRole('button', { name: /bấm để nói/i })).not.toBeInTheDocument()
 
   listen(); pick(played(1))
+  // Still the same single tick — the other word is still owed.
+  expect(screen.getByText(ticks(played(0)))).toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: /bấm để nói/i })).not.toBeInTheDocument()
+})
+
+it('opens the mic step once both words have been picked correctly', () => {
+  reachMic()
 
   expect(screen.getByText('Giờ đọc cả hai từ nào!')).toBeInTheDocument()
   expect(screen.getByText('ship, sheep')).toBeInTheDocument()
   expect(screen.getByRole('button', { name: /bấm để nói/i })).toBeInTheDocument()
   // The listening game collapses into a one-line summary.
-  expect(screen.getByText('Nghe & chọn: 2/2 đúng ✅')).toBeInTheDocument()
+  expect(screen.getByText('Nghe & chọn: ship ✓ · sheep ✓')).toBeInTheDocument()
   expect(screen.queryByText('Bấm 🔊 trước nhé')).not.toBeInTheDocument()
 })
 
+/** Listens and picks correctly until the gate opens — how many turns that takes depends on the
+ * pair's own draw order, which is exactly what the screen decides. */
 function reachMic() {
   renderPair()
-  listen(); pick(played(0))
-  listen(); pick(played(1))
+  for (let n = 0; n < 8 && !screen.queryByText('Giờ đọc cả hai từ nào!'); n++) {
+    listen()
+    pick(played(n))
+  }
 }
 
 it('turns a good attempt into 3 stars stored on the pair key', () => {

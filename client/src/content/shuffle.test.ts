@@ -50,6 +50,26 @@ describe('seededSide', () => {
     expect(seq.some((s, i) => i > 0 && s === seq[i - 1])).toBe(true)
   })
 
+  /** Unpredictability must not cost the contrast: five of the same word in a row is a run a
+   * seeded stream will produce sooner or later, and a child who never hears the other side has
+   * nothing to compare against. Two in a row is the cap. */
+  it('never repeats a side more than twice in a row', () => {
+    for (let i = 0; i < 200; i++) {
+      const seq = run(`seed-${i}`, 40)
+      const tripled = seq.some((s, j) => j >= 2 && s === seq[j - 1] && s === seq[j - 2])
+      expect(tripled, `seed-${i} drew ${seq.join('')}`).toBe(false)
+    }
+  })
+
+  it('puts both sides inside any four consecutive draws', () => {
+    for (let i = 0; i < 200; i++) {
+      const seq = run(`seed-${i}`, 40)
+      for (let j = 0; j + 4 <= seq.length; j++) {
+        expect(new Set(seq.slice(j, j + 4)).size, `seed-${i} at ${j}`).toBe(2)
+      }
+    }
+  })
+
   it('different ids get different sequences', () => {
     const orders = new Set(Array.from({ length: 20 }, (_, i) => run(`pair-${i}`, 8).join('')))
     expect(orders.size).toBeGreaterThan(1)

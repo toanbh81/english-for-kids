@@ -44,15 +44,21 @@ function targetScore(result: PronunciationResult, ph: string): number | null {
   return hits.length ? Math.min(...hits.map(p => p.score)) : null
 }
 
+/** What one word of the run is worth: the target sound's own score when something measured it,
+ * and the word-level score the attempt did produce when nothing did. */
+type WordBest = { phoneme: number | null; word: number }
+
 /**
- * 3 stars only when the sound was good in all three words; 2 when it was at least passable.
- * A word whose sound was never measured (`null`) caps the run at 2 — an unscored run has not
- * shown the child can make the sound, so it must not hand out the top award either.
+ * 3 stars only when the sound itself was good in all three words — that needs real phoneme
+ * detail, so a word the engine never scored the sound in caps the run at 2.
+ *
+ * That cap is a ceiling, not a floor. The 1-vs-2 decision still has to be made, and for an
+ * unmeasured word the word-level score is the only evidence there is: a Web Speech run the engine
+ * barely recognised must not come out level with one it heard perfectly.
  */
-function starsFor(scores: (number | null)[]): 1 | 2 | 3 {
-  const known = scores.filter((s): s is number => s !== null)
-  if (known.some(s => s < 60)) return 1
-  if (known.length === scores.length && known.every(s => s >= 80)) return 3
+function starsFor(scores: WordBest[]): 1 | 2 | 3 {
+  if (scores.some(s => (s.phoneme ?? s.word) < 60)) return 1
+  if (scores.every(s => s.phoneme !== null && s.phoneme >= 80)) return 3
   return 2
 }
 
@@ -103,9 +109,10 @@ export function SoundPractice() {
 function SoundRun({ sound }: { sound: SoundGroup }) {
   const { ph, ipa, cards } = sound
   const [idx, setIdx] = useState(0)
-  // Best target-phoneme score per word, so a retry can only improve the sound's stars. `null` is
-  // "no engine has scored the sound in this word yet" — distinct from a genuine 0.
-  const [best, setBest] = useState<(number | null)[]>(() => cards.map(() => null))
+  // Best scores per word, so a retry can only improve the sound's stars. A `phoneme` of `null` is
+  // "no engine has scored the sound in this word yet" — distinct from a genuine 0 — and `word` is
+  // the fallback the star rule falls back on when it stays null.
+  const [best, setBest] = useState<WordBest[]>(() => cards.map(() => ({ phoneme: null, word: 0 })))
   const [earned, setEarned] = useState<1 | 2 | 3 | null>(null)
   const [soundMissing, setSoundMissing] = useState(false)
   const [sampleMissing, setSampleMissing] = useState(false)
@@ -136,8 +143,11 @@ function SoundRun({ sound }: { sound: SoundGroup }) {
   useEffect(() => {
     if (!result) return
     const next = best.map((v, i) => {
-      if (i !== idx || score === null) return v
-      return v === null ? score : Math.max(v, score)
+      if (i !== idx) return v
+      return {
+        phoneme: score === null ? v.phoneme : Math.max(v.phoneme ?? score, score),
+        word: Math.max(v.word, result.accuracy),
+      }
     })
     setBest(next)
     if (isLast) {
