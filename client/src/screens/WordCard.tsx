@@ -1,9 +1,10 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import type { KeyboardEvent, MouseEvent } from 'react'
 import type { Word } from '../content/words/types'
 import type { PronunciationResult } from '../scoring/types'
 import { findTopic, findWord } from '../content/words'
+import { shuffleTiles } from '../content/shuffle'
 import { getBox, promote, demote, dueWords } from '../progress/leitner'
 import { logActivity, missionStatus } from '../progress/activity'
 import { saveRecording } from '../progress/recordings'
@@ -18,6 +19,16 @@ import { HintCard } from '../components/HintCard'
 import { BackButton, Button, Chip } from '../components/ui'
 
 const UNLOCK_SCORE = 60
+
+/** Matches the .animate-shake keyframe duration in styles.css. */
+const SHAKE_MS = 400
+
+/** Two wrong Vietnamese meanings to go with the right one, picked deterministically from the
+ * word's own topic so a repeat visit to the same card sees the same three options. */
+function pickDistractors(word: Word, topic: string): Word[] {
+  const others = (findTopic(topic)?.words ?? []).filter(w => w.id !== word.id)
+  return shuffleTiles(others, `${word.id}-distractors`).slice(0, 2)
+}
 
 /** The daily mission asks for 3 new words; the header counts today's progress towards it. */
 const WORD_TARGET = 3
@@ -66,6 +77,42 @@ function WordCardInner({ word, topic, isReview, list }: { word: Word; topic: str
   const [audioMissing, setAudioMissing] = useState(false)
   const [outcome, setOutcome] = useState<'unlocked' | 'retry' | null>(null)
 
+  // A brand-new, still-locked word makes the child guess its meaning before the flip card ever
+  // shows. Read once on mount (like wordsToday above): a word that unlocks mid-session must not
+  // suddenly grow a guess step, and one already unlocked when the card opened must never show it.
+  const [guessPending, setGuessPending] = useState(() => !isReview && getBox(word.id) === 0)
+  const [guessJustCorrect, setGuessJustCorrect] = useState(false)
+  const [wrongOption, setWrongOption] = useState<number | null>(null)
+  const wrongTimerRef = useRef<number | null>(null)
+  const [hintRevealed, setHintRevealed] = useState(false)
+
+  const guessOptions = useMemo(
+    () => shuffleTiles([word, ...pickDistractors(word, topic)], `${word.id}-options`),
+    [word, topic],
+  )
+
+  useEffect(() => () => {
+    if (wrongTimerRef.current) clearTimeout(wrongTimerRef.current)
+  }, [])
+
+  /** Wrong guess shakes just that option and invites another try; right guess retires the whole
+   * step so the flip card + mic can take over. */
+  function handleGuess(option: Word) {
+    if (wrongTimerRef.current) { clearTimeout(wrongTimerRef.current); wrongTimerRef.current = null }
+    if (option.id === word.id) {
+      setWrongOption(null)
+      setGuessPending(false)
+      setGuessJustCorrect(true)
+      return
+    }
+    const idx = guessOptions.indexOf(option)
+    setWrongOption(idx)
+    wrongTimerRef.current = window.setTimeout(() => {
+      setWrongOption(null)
+      wrongTimerRef.current = null
+    }, SHAKE_MS)
+  }
+
   function handleResult(result: PronunciationResult, blob: Blob | null) {
     if (result.overall >= UNLOCK_SCORE) {
       promote(word.id)
@@ -100,7 +147,12 @@ function WordCardInner({ word, topic, isReview, list }: { word: Word; topic: str
     playUrl(word.audio).then(() => setAudioMissing(false), () => setAudioMissing(true))
   }
 
-  function flip() { setFlipped(f => !f) }
+  /** The "Đúng rồi! 🎉" praise belongs to the moment the guess step hands off to the card, so the
+   * first real interaction with the card (a flip) is what clears it. */
+  function flip() {
+    setFlipped(f => !f)
+    if (guessJustCorrect) setGuessJustCorrect(false)
+  }
 
   /** The card is the flip target, so the audio buttons riding on its faces must not flip it too. */
   function onFaceButton(e: MouseEvent, run: () => void) {
@@ -120,7 +172,11 @@ function WordCardInner({ word, topic, isReview, list }: { word: Word; topic: str
 
   const mood: FoxyMood = attempt.micState === 'recording'
     ? 'listening'
-    : outcome === 'unlocked' ? 'cheer' : outcome === 'retry' ? 'surprised' : 'idle'
+    : outcome === 'unlocked' ? 'cheer'
+    : outcome === 'retry' ? 'surprised'
+    : guessJustCorrect ? 'happy'
+    : 'idle'
+  const say = outcome === 'retry' ? 'Thử lại nhé' : guessJustCorrect ? 'Đúng rồi! 🎉' : undefined
 
   return (
     <main className="h-full overflow-y-auto bg-cream-50 px-6 py-5">
@@ -139,94 +195,134 @@ function WordCardInner({ word, topic, isReview, list }: { word: Word; topic: str
           </span>
         </header>
 
-        <div className="h-[360px] w-[320px] shrink-0 [perspective:1200px]">
-          {/* A plain div, not a `role="button"`: the whole card stays tap-anywhere for a small
-              finger, while the flip each face carries is the real control screen readers and
-              keyboards use. */}
-          <div
-            data-testid="flip-card"
-            onClick={flip}
-            onKeyDown={onCardKey}
-            className={`relative h-full w-full cursor-pointer transition-transform duration-500 [transform-style:preserve-3d] ${
-              flipped ? '[transform:rotateY(180deg)]' : ''
-            }`}
-          >
-            {/* The face turned away is still painted-over by `backface-visibility`, but that is a
-                purely visual trick: `inert` + `aria-hidden` are what keep its buttons out of the
-                tab order and out of the screen reader. */}
-            <div
-              data-testid="face-front"
-              className={`${FACE} bg-white shadow-card`}
-              inert={flipped}
-              aria-hidden={flipped ? 'true' : undefined}
-            >
-              <span aria-hidden="true" className="text-[96px] leading-none">{word.emoji}</span>
-              <span className="font-display text-[44px] font-extrabold leading-none text-ink-900">{word.word}</span>
-              <span className="text-xl font-bold text-ink-300">{word.ipa}</span>
-              {/* 58 px circle inside a 64 px tap target — the handoff's size without shrinking the
-                  area a small finger has to hit. */}
-              <button
-                type="button"
-                aria-label="Nghe mẫu"
-                onClick={e => onFaceButton(e, playSample)}
-                className="flex h-16 w-16 items-center justify-center active:translate-y-[2px]"
+        {guessPending ? (
+          <div className="flex flex-1 flex-col items-center justify-center gap-6 py-4">
+            <span aria-hidden="true" className="text-[96px] leading-none">{word.emoji}</span>
+            <span className="font-display text-[44px] font-extrabold leading-none text-ink-900">{word.word}</span>
+            <p className="font-display text-xl font-extrabold text-ink-500">Từ này nghĩa là gì?</p>
+            <div className="flex flex-wrap justify-center gap-4">
+              {guessOptions.map((option, idx) => (
+                <Button
+                  key={option.id}
+                  variant="outline"
+                  className={`min-w-[160px] font-display text-2xl ${wrongOption === idx ? 'animate-shake' : ''}`}
+                  onClick={() => handleGuess(option)}
+                >
+                  {option.vi}
+                </Button>
+              ))}
+            </div>
+            <Foxy
+              mood={wrongOption !== null ? 'surprised' : 'idle'}
+              size="sm"
+              say={wrongOption !== null ? 'Thử lại nhé' : undefined}
+            />
+          </div>
+        ) : (
+          <>
+            <div className="h-[360px] w-[320px] shrink-0 [perspective:1200px]">
+              {/* A plain div, not a `role="button"`: the whole card stays tap-anywhere for a small
+                  finger, while the flip each face carries is the real control screen readers and
+                  keyboards use. */}
+              <div
+                data-testid="flip-card"
+                onClick={flip}
+                onKeyDown={onCardKey}
+                className={`relative h-full w-full cursor-pointer transition-transform duration-500 [transform-style:preserve-3d] ${
+                  flipped ? '[transform:rotateY(180deg)]' : ''
+                }`}
               >
-                <span aria-hidden="true" className="flex h-[58px] w-[58px] items-center justify-center rounded-full bg-teal-500 text-3xl text-white shadow-chunky-teal">
-                  🔊
-                </span>
-              </button>
-              <Chip className="absolute bottom-4">MẶT TRƯỚC</Chip>
-              <button type="button" aria-label="Lật thẻ" onClick={e => onFaceButton(e, flip)} className={FLIP_BUTTON}>
-                <span aria-hidden="true">🔄</span>
-              </button>
+                {/* The face turned away is still painted-over by `backface-visibility`, but that is a
+                    purely visual trick: `inert` + `aria-hidden` are what keep its buttons out of the
+                    tab order and out of the screen reader. */}
+                <div
+                  data-testid="face-front"
+                  className={`${FACE} bg-white shadow-card`}
+                  inert={flipped}
+                  aria-hidden={flipped ? 'true' : undefined}
+                >
+                  <span aria-hidden="true" className="text-[96px] leading-none">{word.emoji}</span>
+                  {isReview && !hintRevealed ? (
+                    <>
+                      <span className="text-center font-display text-[36px] font-extrabold leading-tight text-coral-600">{word.vi}</span>
+                      <span aria-hidden="true" className="font-display text-[44px] font-extrabold leading-none text-ink-300">?</span>
+                      <Button variant="ghost" onClick={e => onFaceButton(e, () => setHintRevealed(true))}>Gợi ý</Button>
+                    </>
+                  ) : (
+                    <>
+                      {isReview && (
+                        <span className="text-center font-display text-[36px] font-extrabold leading-tight text-coral-600">{word.vi}</span>
+                      )}
+                      <span className="font-display text-[44px] font-extrabold leading-none text-ink-900">{word.word}</span>
+                      <span className="text-xl font-bold text-ink-300">{word.ipa}</span>
+                    </>
+                  )}
+                  {/* 58 px circle inside a 64 px tap target — the handoff's size without shrinking the
+                      area a small finger has to hit. */}
+                  <button
+                    type="button"
+                    aria-label="Nghe mẫu"
+                    onClick={e => onFaceButton(e, playSample)}
+                    className="flex h-16 w-16 items-center justify-center active:translate-y-[2px]"
+                  >
+                    <span aria-hidden="true" className="flex h-[58px] w-[58px] items-center justify-center rounded-full bg-teal-500 text-3xl text-white shadow-chunky-teal">
+                      🔊
+                    </span>
+                  </button>
+                  <Chip className="absolute bottom-4">MẶT TRƯỚC</Chip>
+                  <button type="button" aria-label="Lật thẻ" onClick={e => onFaceButton(e, flip)} className={FLIP_BUTTON}>
+                    <span aria-hidden="true">🔄</span>
+                  </button>
+                </div>
+
+                <div
+                  data-testid="face-back"
+                  className={`${FACE} bg-[#FFF1E6] shadow-[0_8px_0_#F2DFC9] [transform:rotateY(180deg)]`}
+                  inert={!flipped}
+                  aria-hidden={flipped ? undefined : 'true'}
+                >
+                  <span className="text-center font-display text-[36px] font-extrabold leading-tight text-coral-600">{word.vi}</span>
+                  <span className="text-center text-[22px] font-bold leading-snug text-ink-500">{word.example}</span>
+                  <button type="button" onClick={e => onFaceButton(e, () => speakText(word.example))} className={SPEAK_CHIP}>
+                    🔊 Nghe câu ví dụ
+                  </button>
+                  <Chip className="absolute bottom-4">MẶT SAU</Chip>
+                  <button type="button" aria-label="Lật thẻ" onClick={e => onFaceButton(e, flip)} className={FLIP_BUTTON}>
+                    <span aria-hidden="true">🔄</span>
+                  </button>
+                </div>
+              </div>
             </div>
 
-            <div
-              data-testid="face-back"
-              className={`${FACE} bg-[#FFF1E6] shadow-[0_8px_0_#F2DFC9] [transform:rotateY(180deg)]`}
-              inert={!flipped}
-              aria-hidden={flipped ? undefined : 'true'}
-            >
-              <span className="text-center font-display text-[36px] font-extrabold leading-tight text-coral-600">{word.vi}</span>
-              <span className="text-center text-[22px] font-bold leading-snug text-ink-500">{word.example}</span>
-              <button type="button" onClick={e => onFaceButton(e, () => speakText(word.example))} className={SPEAK_CHIP}>
-                🔊 Nghe câu ví dụ
-              </button>
-              <Chip className="absolute bottom-4">MẶT SAU</Chip>
-              <button type="button" aria-label="Lật thẻ" onClick={e => onFaceButton(e, flip)} className={FLIP_BUTTON}>
-                <span aria-hidden="true">🔄</span>
-              </button>
+            {audioMissing && <p className="text-lg font-bold text-ink-300">Chưa có audio mẫu</p>}
+
+            {outcome === 'unlocked' && (
+              <span className="inline-flex items-center gap-2 rounded-xl2 bg-sun-50 px-6 py-3 font-display text-2xl font-extrabold text-sun-700 shadow-chunky-sun">
+                🔓 Mở khoá!
+              </span>
+            )}
+
+            {attempt.error && <p className="font-display text-2xl font-extrabold text-fix-700">{attempt.error}</p>}
+
+            {outcome === 'retry' && feedback?.hint && <HintCard hint={feedback.hint} />}
+
+            <div className="flex items-end gap-6">
+              <Foxy mood={mood} size="sm" say={say} />
+              <div className="flex flex-col items-center gap-2">
+                <MicButton state={attempt.micState} level={attempt.level} onPress={attempt.onMic} />
+                <p className="font-display text-xl font-extrabold text-ink-500">🎤 Nói để mở khoá</p>
+              </div>
             </div>
-          </div>
-        </div>
 
-        {audioMissing && <p className="text-lg font-bold text-ink-300">Chưa có audio mẫu</p>}
-
-        {outcome === 'unlocked' && (
-          <span className="inline-flex items-center gap-2 rounded-xl2 bg-sun-50 px-6 py-3 font-display text-2xl font-extrabold text-sun-700 shadow-chunky-sun">
-            🔓 Mở khoá!
-          </span>
-        )}
-
-        {attempt.error && <p className="font-display text-2xl font-extrabold text-fix-700">{attempt.error}</p>}
-
-        {outcome === 'retry' && feedback?.hint && <HintCard hint={feedback.hint} />}
-
-        <div className="flex items-end gap-6">
-          <Foxy mood={mood} size="sm" say={outcome === 'retry' ? 'Thử lại nhé' : undefined} />
-          <div className="flex flex-col items-center gap-2">
-            <MicButton state={attempt.micState} level={attempt.level} onPress={attempt.onMic} />
-            <p className="font-display text-xl font-extrabold text-ink-500">🎤 Nói để mở khoá</p>
-          </div>
-        </div>
-
-        {outcome && (
-          <div className="flex flex-wrap justify-center gap-4 pb-2">
-            <Button variant="outline" onClick={retry}>Thử lại</Button>
-            <Button size="lg" pulse onClick={() => nav(next ? `/words/${topic}/${next.id}` : backTo)}>
-              Tiếp theo →
-            </Button>
-          </div>
+            {outcome && (
+              <div className="flex flex-wrap justify-center gap-4 pb-2">
+                <Button variant="outline" onClick={retry}>Thử lại</Button>
+                <Button size="lg" pulse onClick={() => nav(next ? `/words/${topic}/${next.id}` : backTo)}>
+                  Tiếp theo →
+                </Button>
+              </div>
+            )}
+          </>
         )}
       </div>
     </main>
