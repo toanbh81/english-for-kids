@@ -159,6 +159,11 @@ it('says the intonation was not marked on the simple engine, and caps the stars'
 
   expect(screen.getByTestId('prosody-chip')).toHaveTextContent('Chưa chấm được ngữ điệu')
   expect(screen.getByTestId('prosody-chip')).toHaveAttribute('data-tone', 'none')
+  // …and the bar under it must not quietly paint accuracy in the prosody slot.
+  const bars = screen.getAllByTestId('score-bar')
+  expect(bars[3]).toHaveAttribute('data-value', 'none')
+  expect(bars[3].style.width).toBe('0%')
+  expect(screen.getByText('Ngữ điệu —')).toBeInTheDocument()
   expect(screen.getAllByTestId('star-filled')).toHaveLength(2)
   expect(screen.queryByTestId('confetti')).not.toBeInTheDocument()
   expect(JSON.parse(localStorage.getItem('speakup.stars') ?? '{}')['voice:sv1']).toBe(2)
