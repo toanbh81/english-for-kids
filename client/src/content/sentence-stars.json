@@ -1,0 +1,89 @@
+[
+  {
+    "id": "ss1",
+    "text": "I have a red apple.",
+    "words": ["I", "have", "a", "red", "apple."],
+    "stress": [1, 3, 4],
+    "link": [[3, 4]],
+    "vi": "Tôi có một quả táo đỏ.",
+    "audio": "/audio/stars/ss1.mp3"
+  },
+  {
+    "id": "ss2",
+    "text": "My mom is in the kitchen.",
+    "words": ["My", "mom", "is", "in", "the", "kitchen."],
+    "stress": [1, 5],
+    "link": [[2, 3]],
+    "vi": "Mẹ tôi đang ở trong bếp.",
+    "audio": "/audio/stars/ss2.mp3"
+  },
+  {
+    "id": "ss3",
+    "text": "The cat is under the table.",
+    "words": ["The", "cat", "is", "under", "the", "table."],
+    "stress": [1, 5],
+    "link": [[2, 3]],
+    "vi": "Con mèo đang ở dưới cái bàn.",
+    "audio": "/audio/stars/ss3.mp3"
+  },
+  {
+    "id": "ss4",
+    "text": "We go to school by bus.",
+    "words": ["We", "go", "to", "school", "by", "bus."],
+    "stress": [1, 3, 5],
+    "vi": "Chúng tôi đi học bằng xe buýt.",
+    "audio": "/audio/stars/ss4.mp3"
+  },
+  {
+    "id": "ss5",
+    "text": "Can I have some water?",
+    "words": ["Can", "I", "have", "some", "water?"],
+    "stress": [2, 4],
+    "link": [[0, 1]],
+    "vi": "Tôi xin một ít nước được không?",
+    "audio": "/audio/stars/ss5.mp3"
+  },
+  {
+    "id": "ss6",
+    "text": "My brother likes ice cream.",
+    "words": ["My", "brother", "likes", "ice", "cream."],
+    "stress": [1, 2, 3],
+    "link": [[2, 3]],
+    "vi": "Anh trai tôi thích kem.",
+    "audio": "/audio/stars/ss6.mp3"
+  },
+  {
+    "id": "ss7",
+    "text": "It is sunny today.",
+    "words": ["It", "is", "sunny", "today."],
+    "stress": [2, 3],
+    "link": [[0, 1]],
+    "vi": "Hôm nay trời nắng.",
+    "audio": "/audio/stars/ss7.mp3"
+  },
+  {
+    "id": "ss8",
+    "text": "Where is my blue bag?",
+    "words": ["Where", "is", "my", "blue", "bag?"],
+    "stress": [0, 3, 4],
+    "vi": "Túi màu xanh của tôi đâu rồi?",
+    "audio": "/audio/stars/ss8.mp3"
+  },
+  {
+    "id": "ss9",
+    "text": "I can run very fast!",
+    "words": ["I", "can", "run", "very", "fast!"],
+    "stress": [2, 4],
+    "vi": "Tôi chạy rất nhanh!",
+    "audio": "/audio/stars/ss9.mp3"
+  },
+  {
+    "id": "ss10",
+    "text": "The fox jumps over the log.",
+    "words": ["The", "fox", "jumps", "over", "the", "log."],
+    "stress": [1, 2, 5],
+    "link": [[2, 3]],
+    "vi": "Con cáo nhảy qua khúc gỗ.",
+    "audio": "/audio/stars/ss10.mp3"
+  }
+]

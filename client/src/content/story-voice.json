@@ -1,0 +1,74 @@
+[
+  {
+    "id": "sv1",
+    "mood": "happy",
+    "moodVi": "vui vẻ",
+    "emoji": "😊",
+    "text": "I love my dog! He is my best friend. We play every day.",
+    "vi": "Tôi yêu chú chó của tôi! Nó là người bạn thân nhất của tôi. Chúng tôi chơi cùng nhau mỗi ngày.",
+    "audio": "/audio/voice/sv1.mp3"
+  },
+  {
+    "id": "sv2",
+    "mood": "surprised",
+    "moodVi": "ngạc nhiên",
+    "emoji": "😲",
+    "text": "Wow, look at that! The elephant is so big. I can't believe it!",
+    "vi": "Ồ, nhìn kìa! Con voi to quá! Tôi không thể tin được!",
+    "audio": "/audio/voice/sv2.mp3"
+  },
+  {
+    "id": "sv3",
+    "mood": "question",
+    "moodVi": "hỏi",
+    "emoji": "🤔",
+    "text": "Where is my hat? Is it under the bed? Oh, here it is!",
+    "vi": "Mũ của tôi đâu rồi? Nó ở dưới giường à? Ồ, nó đây rồi!",
+    "audio": "/audio/voice/sv3.mp3"
+  },
+  {
+    "id": "sv4",
+    "mood": "sad",
+    "moodVi": "buồn",
+    "emoji": "😢",
+    "text": "My ice cream fell down. I am so sad. Can I have another one?",
+    "vi": "Kem của tôi rơi mất rồi. Tôi buồn quá. Con xin một cây khác được không?",
+    "audio": "/audio/voice/sv4.mp3"
+  },
+  {
+    "id": "sv5",
+    "mood": "excited",
+    "moodVi": "háo hức",
+    "emoji": "🤩",
+    "text": "Today is my birthday! I have a big cake. Let's eat it together!",
+    "vi": "Hôm nay là sinh nhật của tôi! Tôi có một chiếc bánh to. Cùng ăn nào!",
+    "audio": "/audio/voice/sv5.mp3"
+  },
+  {
+    "id": "sv6",
+    "mood": "calm",
+    "moodVi": "nhẹ nhàng",
+    "emoji": "😌",
+    "text": "It is time for bed. Good night, Foxy. Sleep well.",
+    "vi": "Đến giờ đi ngủ rồi. Chúc ngủ ngon, Foxy. Ngủ ngon nhé.",
+    "audio": "/audio/voice/sv6.mp3"
+  },
+  {
+    "id": "sv7",
+    "mood": "excited",
+    "moodVi": "háo hức",
+    "emoji": "🙌",
+    "text": "I did it! I can ride my bike. Look at me, Mom!",
+    "vi": "Tôi làm được rồi! Tôi có thể đi xe đạp. Nhìn con này, Mẹ ơi!",
+    "audio": "/audio/voice/sv7.mp3"
+  },
+  {
+    "id": "sv8",
+    "mood": "surprised",
+    "moodVi": "ngạc nhiên",
+    "emoji": "😅",
+    "text": "What is that noise? Oh, it is only the cat. Phew!",
+    "vi": "Tiếng gì vậy nhỉ? À, chỉ là con mèo thôi. Hú hồn!",
+    "audio": "/audio/voice/sv8.mp3"
+  }
+]

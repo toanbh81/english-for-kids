@@ -8,3 +8,26 @@ export type SoundGroup = { ph: string; ipa: string; example: string; cards: Less
 export type PairWord = { word: string; ipa: string; emoji: string; audio: string }
 /** A minimal-pairs listening item: two words that differ by one contrasting sound. */
 export type PairItem = { id: string; a: PairWord; b: PairWord; contrast: string }
+
+/** A Sentence Stars item: a whole sentence with sentence-stress and linking marked up for the
+ * rhythm card. `stress` and the indexes inside `link` are indexes into `words`. */
+export type SentenceStar = {
+  id: string
+  text: string
+  words: string[]
+  stress: number[]
+  link?: [number, number][]
+  vi: string
+  audio: string
+}
+
+/** A Story Voice passage: 2–3 sentences read with a target mood/intonation. */
+export type VoicePassage = {
+  id: string
+  mood: 'happy' | 'surprised' | 'question' | 'sad' | 'excited' | 'calm'
+  moodVi: string
+  emoji: string
+  text: string
+  vi: string
+  audio: string
+}

@@ -78,6 +78,19 @@ This writes `client/public/audio/sentences/<id>.mp3` for every sentence in
 `client/src/content/sentences.json` (or, given ids as extra args, only those sentences). Run it
 whenever you add or change a sentence, and commit the mp3s like the other generated audio.
 
+Sentence Stars and Story Voice (Phase 6) share one generator, since both are plain Emma HD phrases
+read straight from their JSON `text` field (Story Voice's mood rides on punctuation alone, no SSML
+styling):
+
+```bash
+AZURE_SPEECH_KEY=your-key AZURE_SPEECH_REGION=southeastasia node scripts/gen-phrases.mjs
+```
+
+This writes `client/public/audio/stars/<id>.mp3` for every sentence in
+`client/src/content/sentence-stars.json` and `client/public/audio/voice/<id>.mp3` for every passage
+in `client/src/content/story-voice.json` (or, given ids as extra args, only those items). Run it
+whenever you add or change a sentence/passage, and commit the mp3s like the other generated audio.
+
 Tập âm's 27 sound-zoo words (Phase 5) added 17 new words beyond the original 10 (`rabbit` and
 `sheep` were already generated for Word Pop, so they are not repeated below):
 

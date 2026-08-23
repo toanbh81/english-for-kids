@@ -1,4 +1,4 @@
-import { LEVELS, PAIRS, findPair } from './index'
+import { LEVELS, PAIRS, findPair, SENTENCE_STARS, findSentenceStar, STORY_VOICE, findVoice } from './index'
 import { SOUNDS, findSound } from './sounds'
 import { PHONEME_TIPS } from '../scoring/feedback'
 
@@ -85,4 +85,63 @@ it('every minimal-pair word has audio under /audio/pairs/', () => {
 it('findPair resolves a known id and returns undefined for an unknown one', () => {
   expect(findPair('pair-ship-sheep')?.contrast).toBe('ɪ/iː')
   expect(findPair('nope')).toBeUndefined()
+})
+
+it('has 10 sentence stars with unique ids, 4-8 words each', () => {
+  expect(SENTENCE_STARS).toHaveLength(10)
+  expect(new Set(SENTENCE_STARS.map(s => s.id)).size).toBe(10)
+  for (const s of SENTENCE_STARS) {
+    expect(s.words.length).toBeGreaterThanOrEqual(4)
+    expect(s.words.length).toBeLessThanOrEqual(8)
+  }
+})
+
+it('every sentence star has stress and link indexes in range, with adjacent links', () => {
+  for (const s of SENTENCE_STARS) {
+    expect(s.stress.length).toBeGreaterThan(0)
+    for (const i of s.stress) {
+      expect(i).toBeGreaterThanOrEqual(0)
+      expect(i).toBeLessThan(s.words.length)
+    }
+    for (const [a, b] of s.link ?? []) {
+      expect(a).toBeGreaterThanOrEqual(0)
+      expect(b).toBeLessThan(s.words.length)
+      expect(b).toBe(a + 1)
+    }
+  }
+})
+
+it('every sentence star has audio under /audio/stars/', () => {
+  for (const s of SENTENCE_STARS) {
+    expect(s.audio).toBe(`/audio/stars/${s.id}.mp3`)
+  }
+})
+
+it('findSentenceStar resolves a known id and returns undefined for an unknown one', () => {
+  expect(findSentenceStar('ss1')?.text).toBe('I have a red apple.')
+  expect(findSentenceStar('nope')).toBeUndefined()
+})
+
+const VALID_MOODS = ['happy', 'surprised', 'question', 'sad', 'excited', 'calm']
+
+it('has 8 story-voice passages with unique ids, valid moods and 2-3 sentences', () => {
+  expect(STORY_VOICE).toHaveLength(8)
+  expect(new Set(STORY_VOICE.map(v => v.id)).size).toBe(8)
+  for (const v of STORY_VOICE) {
+    expect(VALID_MOODS).toContain(v.mood)
+    const sentenceCount = (v.text.match(/[.!?]/g) ?? []).length
+    expect(sentenceCount).toBeGreaterThanOrEqual(2)
+    expect(sentenceCount).toBeLessThanOrEqual(3)
+  }
+})
+
+it('every story-voice passage has audio under /audio/voice/', () => {
+  for (const v of STORY_VOICE) {
+    expect(v.audio).toBe(`/audio/voice/${v.id}.mp3`)
+  }
+})
+
+it('findVoice resolves a known id and returns undefined for an unknown one', () => {
+  expect(findVoice('sv1')?.mood).toBe('happy')
+  expect(findVoice('nope')).toBeUndefined()
 })
