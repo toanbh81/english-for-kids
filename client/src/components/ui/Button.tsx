@@ -4,9 +4,11 @@ import { Link } from 'react-router-dom'
 export type ButtonVariant = 'primary' | 'secondary' | 'outline' | 'ghost'
 export type ButtonSize = 'md' | 'lg'
 
+// The press sinks the button into its own shadow: the offset halves as the face moves down 2 px,
+// so the button looks pushed rather than just nudged. Shadowless variants only move.
 const VARIANT: Record<ButtonVariant, string> = {
-  primary: 'bg-coral-500 text-white shadow-chunky-coral',
-  secondary: 'bg-teal-500 text-white shadow-chunky-teal',
+  primary: 'bg-coral-500 text-white shadow-chunky-coral active:shadow-[0_3px_0_#E05A3A]',
+  secondary: 'bg-teal-500 text-white shadow-chunky-teal active:shadow-[0_3px_0_#1FA396]',
   outline: 'bg-white text-teal-600 border-[3px] border-teal-500/30',
   ghost: 'bg-transparent text-ink-300 border-[3px] border-dashed border-line-200',
 }

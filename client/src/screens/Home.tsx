@@ -1,14 +1,16 @@
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
-import { LEVELS } from '../content'
-import { totalStars } from '../progress/store'
+import { Link, useNavigate } from 'react-router-dom'
+import { LEVELS, SENTENCES } from '../content'
+import { STORIES } from '../content/stories'
+import { getStars, totalStars } from '../progress/store'
+import { unlockedCount } from '../progress/leitner'
 import { dayKey, getActivity, missionStatus, streak, weekDots, minutesToday } from '../progress/activity'
 import { getLimitMinutes } from '../progress/limit'
-import { Confetti } from '../components/Confetti'
 import { Foxy } from '../components/Foxy'
 import type { FoxyMood } from '../components/Foxy'
 import { MissionCard } from '../components/MissionCard'
 import { StreakWeek } from '../components/StreakWeek'
+import { SpeechBubble, StarRow } from '../components/ui'
 
 const CELEBRATED_KEY = 'speakup.celebrated'
 
@@ -24,14 +26,36 @@ function markCelebrated(day: string): void {
   catch { /* ignore: storage unavailable */ }
 }
 
-const MODULE_CARDS = [
-  { to: '/stories', emoji: '🎧', label: 'Nghe kể chuyện', bg: 'bg-coral text-white' },
-  ...LEVELS.map(l => ({ to: `/level/${l.id}`, emoji: '🗣️', label: l.title, bg: 'bg-teal text-white' })),
-  { to: '/words', emoji: '🧩', label: 'Từ vựng', bg: 'bg-star text-slate-800' },
-  { to: '/sentences', emoji: '🧱', label: 'Ghép câu', bg: 'bg-good text-white' },
-]
+type Stars = 0 | 1 | 2 | 3
+
+const best = (values: number[]): Stars => Math.max(0, ...values) as Stars
+
+/** The vocabulary island has no per-card star, so the Leitner deck stands in for it: the more
+ * words the child has unlocked, the more stars the island shows. */
+function wordStars(): Stars {
+  const unlocked = unlockedCount()
+  if (unlocked === 0) return 0
+  if (unlocked < 8) return 1
+  if (unlocked < 16) return 2
+  return 3
+}
+
+/** Islands of the landscape map. `left`/`top` are percentages of the 1194×834 frame taken from the
+ * handoff, so the map scales with the viewport instead of drifting on a narrower iPad. */
+const ISLANDS = [
+  { to: '/stories', emoji: '🎧', name: 'Nghe kể chuyện', left: '9%', top: '47%', size: 'h-[128px] w-[128px] text-[54px]', color: 'bg-coral-500 shadow-[0_8px_0_#E05A3A,0_0_0_8px_#FFE9DF]' },
+  { to: '/level/sound-zoo', emoji: '🦁', name: 'Sound Zoo', left: '28%', top: '32%', size: 'h-[120px] w-[120px] text-[50px]', color: 'bg-teal-500 shadow-[0_8px_0_#1FA396,0_0_0_8px_#D3F1EC]' },
+  { to: '/level/word-pop', emoji: '🎈', name: 'Word Pop', left: '47%', top: '48%', size: 'h-[120px] w-[120px] text-[50px]', color: 'bg-peach-400 shadow-[0_8px_0_#E07A42,0_0_0_8px_#FFE7D2]' },
+  { to: '/words', emoji: '🧩', name: 'Từ vựng', left: '67%', top: '26%', size: 'h-[120px] w-[120px] text-[50px]', color: 'bg-sky-400 shadow-[0_8px_0_#5BA7D4,0_0_0_8px_#DDF0FB]' },
+  { to: '/sentences', emoji: '🧱', name: 'Ghép câu', left: '84%', top: '40%', size: 'h-[118px] w-[118px] text-[48px]', color: 'bg-sun-400 shadow-[0_8px_0_#E0A61A,0_0_0_8px_#FFF1C9]' },
+] as const
+
+// The dotted trail the islands sit on. Decorative only, and drawn in frame coordinates so it
+// stretches with the container.
+const TRAIL = 'M107 392 C 200 300, 250 250, 334 267 S 480 460, 561 400 S 700 180, 800 217 S 950 380, 1003 334'
 
 export function Home() {
+  const navigate = useNavigate()
   // One read of the activity log per mount, shared by every query below — the log is a single
   // localStorage entry, and each query used to parse it again.
   const [{ events, now }] = useState(() => ({ events: getActivity(), now: Date.now() }))
@@ -42,57 +66,104 @@ export function Home() {
     ? 'Hoàn thành nhiệm vụ rồi! 🎉'
     : hasProgress
       ? 'Giỏi lắm, tiếp tục nhé!'
-      : 'Chào bé! Hôm nay mình học gì nào?'
+      : 'Hôm nay mình luyện nói nhé!'
   const overLimit = minutesToday(now, events) >= getLimitMinutes()
 
-  // Decided once per mount, then remembered in storage by the effect below, so the confetti is
-  // not restarted by an unrelated re-render.
+  const stars: Record<string, Stars> = {
+    '/stories': best(STORIES.map(s => getStars(`story:${s.id}`))),
+    '/level/sound-zoo': best((LEVELS.find(l => l.id === 'sound-zoo')?.cards ?? []).map(c => getStars(c.id))),
+    '/level/word-pop': best((LEVELS.find(l => l.id === 'word-pop')?.cards ?? []).map(c => getStars(c.id))),
+    '/words': wordStars(),
+    '/sentences': best(SENTENCES.map(s => getStars(`sentence:${s.id}`))),
+  }
+
+  // Decided once per mount, then remembered in storage by the effect below, so the trip to the
+  // celebration screen happens on the render that first sees a finished mission — and only then.
   const [celebrating] = useState(() => status.done && !alreadyCelebrated(dayKey(now)))
   useEffect(() => {
-    if (celebrating) markCelebrated(dayKey(now))
-  }, [celebrating, now])
+    if (!celebrating) return
+    markCelebrated(dayKey(now))
+    navigate('/mission/done')
+  }, [celebrating, now, navigate])
 
   return (
-    <main className="h-full overflow-y-auto flex flex-col items-center gap-6 p-6 relative">
+    <main className="relative h-full overflow-y-auto overflow-x-hidden bg-cream-50 p-5 sm:p-7">
       <h1 className="sr-only">Speak Up!</h1>
-      {celebrating && <Confetti />}
 
-      <section className="flex flex-col items-center gap-3">
-        <Foxy mood={mood} size="lg" say={say} />
-        <StreakWeek dots={weekDots(now, events)} streak={streak(now, events)} />
-        <div className="text-2xl font-extrabold">⭐ {totalStars()} sao</div>
-      </section>
+      {/* Soft background blobs of the handoff frame. */}
+      <div aria-hidden="true" className="pointer-events-none absolute -left-24 -top-28 h-[300px] w-[300px] rounded-full bg-[#FFEDD6]" />
+      <div aria-hidden="true" className="pointer-events-none absolute -bottom-32 -right-20 h-[340px] w-[340px] rounded-full bg-teal-50" />
 
-      {overLimit && (
-        <div
-          data-testid="limit-banner"
-          className="w-full max-w-md rounded-2xl bg-star/30 text-slate-800 text-lg font-bold text-center px-4 py-3"
-        >
-          Hôm nay bé học đủ rồi 🦊 Mai gặp lại nhé!
-        </div>
-      )}
+      <div className="relative mx-auto flex w-full max-w-[1194px] flex-col gap-4">
+        <header className="flex flex-wrap items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <Foxy mood={mood} size="md" className="animate-bob" />
+            <SpeechBubble title={<span className="text-coral-text">Chào bé! 👋</span>} subtitle={say} className="flex-1" />
+          </div>
+          <div className="flex flex-wrap items-center gap-3">
+            <StreakWeek dots={weekDots(now, events)} streak={streak(now, events)} />
+            <div className="inline-flex items-center gap-2 rounded-[18px] bg-sun-50 px-5 py-3 font-display text-[22px] font-extrabold text-sun-700 shadow-chunky-sun">
+              ⭐ {totalStars()}
+            </div>
+          </div>
+        </header>
 
-      <MissionCard status={status} />
-
-      <section className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-4 w-full max-w-4xl">
-        {MODULE_CARDS.map(card => (
-          <Link
-            key={card.to}
-            to={card.to}
-            className={`min-h-[64px] h-32 rounded-3xl ${card.bg} text-2xl font-extrabold flex flex-col items-center justify-center gap-1 shadow-lg active:scale-95`}
+        {overLimit && (
+          <div
+            data-testid="limit-banner"
+            className="rounded-xl2 bg-sun-50 px-5 py-4 text-center font-display text-xl font-extrabold text-sun-700 shadow-card-sm"
           >
-            <span className="text-4xl">{card.emoji}</span>
-            <span>{card.label}</span>
-          </Link>
-        ))}
-      </section>
+            Hôm nay bé học đủ rồi 🦊 Mai gặp lại nhé!
+          </div>
+        )}
 
-      <Link
-        to="/parent"
-        className="min-h-[64px] min-w-[64px] self-end mt-2 px-4 rounded-2xl bg-white shadow text-lg font-bold flex items-center justify-center active:scale-95"
-      >
-        👨‍👩‍👧 Phụ huynh
-      </Link>
+        {/* One set of islands serves both layouts: a 2-column grid on a phone or portrait tablet,
+          * and the absolutely positioned map from `lg` up, where the percentage offsets take
+          * effect. The frame keeps the handoff's 1194×834 proportions but never grows past the
+          * viewport, so on a 1024×768 iPad the whole map — mission card included — stays on
+          * screen. */}
+        <div className="relative grid grid-cols-2 gap-x-4 gap-y-6 lg:block lg:aspect-[1194/834] lg:max-h-[calc(100vh-180px)]">
+          <svg
+            aria-hidden="true"
+            viewBox="0 0 1194 834"
+            preserveAspectRatio="none"
+            className="pointer-events-none absolute inset-0 hidden h-full w-full lg:block"
+          >
+            <path d={TRAIL} stroke="#EAD9BE" strokeWidth={14} strokeLinecap="round" strokeDasharray="2 26" fill="none" />
+          </svg>
+
+          {ISLANDS.map(island => (
+            <Link
+              key={island.to}
+              to={island.to}
+              aria-label={`${island.name}, ${stars[island.to]} sao`}
+              style={{ left: island.left, top: island.top }}
+              // The press is a scale, not a nudge down: on the map the island is centred on its
+              // percentage with a translate, which a `translate-y` press would cancel out.
+              className="flex flex-col items-center gap-2 transition-transform active:scale-95 lg:absolute lg:-translate-x-1/2 lg:-translate-y-1/2"
+            >
+              <span aria-hidden="true" className={`flex items-center justify-center rounded-full ${island.size} ${island.color}`}>
+                {island.emoji}
+              </span>
+              <span aria-hidden="true" className="font-display text-xl font-extrabold text-ink-900">{island.name}</span>
+              <StarRow value={stars[island.to]} size="sm" />
+            </Link>
+          ))}
+
+          <div className="col-span-2 lg:absolute lg:bottom-2 lg:left-2 lg:w-[380px]">
+            <MissionCard status={status} />
+          </div>
+
+          <div className="col-span-2 flex justify-end lg:absolute lg:bottom-2 lg:right-2">
+            <Link
+              to="/parent"
+              className="flex min-h-[64px] min-w-[64px] items-center justify-center rounded-xl2 bg-white px-5 font-display text-lg font-extrabold text-ink-500 shadow-card-sm active:translate-y-[2px]"
+            >
+              👨‍👩‍👧 Phụ huynh
+            </Link>
+          </div>
+        </div>
+      </div>
     </main>
   )
 }

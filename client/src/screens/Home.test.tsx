@@ -1,15 +1,21 @@
-import { act, render, screen } from '@testing-library/react'
-import { MemoryRouter } from 'react-router-dom'
+import { render, screen, within } from '@testing-library/react'
+import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { dayKey, logActivity } from '../progress/activity'
+import { setStars } from '../progress/store'
 import { Home } from './Home'
 
 const NOW = new Date('2026-08-23T10:00:00').getTime()
 const DAY_MS = 24 * 60 * 60 * 1000
 
+/** Home is rendered inside a router that also serves a stub for the celebration screen, so the
+ * once-a-day redirect can be observed without pulling in MissionComplete. */
 function renderHome() {
   render(
-    <MemoryRouter>
-      <Home />
+    <MemoryRouter initialEntries={['/']}>
+      <Routes>
+        <Route path="/" element={<Home />} />
+        <Route path="/mission/done" element={<p>màn hình chúc mừng</p>} />
+      </Routes>
     </MemoryRouter>,
   )
 }
@@ -40,39 +46,37 @@ it('shows mission progress from seeded activity and a happy Foxy', () => {
   expect(screen.getByText('1 truyện 1/1')).toBeInTheDocument()
   expect(screen.getByText('5 thẻ 2/5')).toBeInTheDocument()
   expect(screen.getByText('3 từ 0/3')).toBeInTheDocument()
-  const foxy = screen.getByTestId('foxy')
-  expect(foxy).toHaveAttribute('data-mood', 'happy')
+  expect(screen.getByTestId('foxy')).toHaveAttribute('data-mood', 'happy')
   expect(screen.getByText('Giỏi lắm, tiếp tục nhé!')).toBeInTheDocument()
-})
-
-it('shows a cheering Foxy once the daily mission is complete', () => {
-  seedDoneDay(NOW - 1000)
-  renderHome()
-
-  const foxy = screen.getByTestId('foxy')
-  expect(foxy).toHaveAttribute('data-mood', 'cheer')
-  expect(screen.getByText('Hoàn thành nhiệm vụ rồi! 🎉')).toBeInTheDocument()
+  expect(screen.getByRole('link', { name: 'Bắt đầu ▸' })).toHaveAttribute('href', '/mission')
 })
 
 it('shows an idle Foxy greeting with no activity yet', () => {
   renderHome()
 
-  const foxy = screen.getByTestId('foxy')
-  expect(foxy).toHaveAttribute('data-mood', 'idle')
-  expect(screen.getByText('Chào bé! Hôm nay mình học gì nào?')).toBeInTheDocument()
+  expect(screen.getByTestId('foxy')).toHaveAttribute('data-mood', 'idle')
+  expect(screen.getByText('Chào bé! 👋')).toBeInTheDocument()
+  expect(screen.getByText('Hôm nay mình luyện nói nhé!')).toBeInTheDocument()
 })
 
-it('rains confetti when the mission is finished, then clears it after 2 s', () => {
+it('offers a replay CTA once the mission is done and already celebrated', () => {
+  seedDoneDay(NOW - 1000)
+  localStorage.setItem('speakup.celebrated', dayKey(NOW))
+
+  renderHome()
+
+  expect(screen.getByTestId('foxy')).toHaveAttribute('data-mood', 'cheer')
+  expect(screen.getByText('Hoàn thành nhiệm vụ rồi! 🎉')).toBeInTheDocument()
+  expect(screen.getByRole('link', { name: 'Hoàn thành rồi! 🎉 Chơi lại?' })).toHaveAttribute('href', '/mission')
+})
+
+it('sends the child to the celebration screen when the mission is finished', () => {
   seedDoneDay(NOW - 1000)
 
   renderHome()
 
-  expect(screen.getByTestId('confetti')).toBeInTheDocument()
+  expect(screen.getByText('màn hình chúc mừng')).toBeInTheDocument()
   expect(localStorage.getItem('speakup.celebrated')).toBe(dayKey(NOW))
-
-  act(() => { vi.advanceTimersByTime(2000) })
-
-  expect(screen.queryByTestId('confetti')).not.toBeInTheDocument()
 })
 
 it('does not celebrate the same finished mission twice in one day', () => {
@@ -81,7 +85,7 @@ it('does not celebrate the same finished mission twice in one day', () => {
 
   renderHome()
 
-  expect(screen.queryByTestId('confetti')).not.toBeInTheDocument()
+  expect(screen.queryByText('màn hình chúc mừng')).not.toBeInTheDocument()
 })
 
 it('celebrates again on a new day even if yesterday was celebrated', () => {
@@ -90,15 +94,15 @@ it('celebrates again on a new day even if yesterday was celebrated', () => {
 
   renderHome()
 
-  expect(screen.getByTestId('confetti')).toBeInTheDocument()
+  expect(screen.getByText('màn hình chúc mừng')).toBeInTheDocument()
 })
 
-it('shows no confetti while the mission is unfinished', () => {
+it('stays on the map while the mission is unfinished', () => {
   logActivity({ ts: NOW, kind: 'story', id: 'little-fox' })
 
   renderHome()
 
-  expect(screen.queryByTestId('confetti')).not.toBeInTheDocument()
+  expect(screen.queryByText('màn hình chúc mừng')).not.toBeInTheDocument()
   expect(localStorage.getItem('speakup.celebrated')).toBeNull()
 })
 
@@ -106,6 +110,7 @@ it('shows a 3-day streak after three consecutive completed days', () => {
   seedDoneDay(NOW - 2 * DAY_MS)
   seedDoneDay(NOW - DAY_MS)
   seedDoneDay(NOW)
+  localStorage.setItem('speakup.celebrated', dayKey(NOW))
 
   renderHome()
 
@@ -131,7 +136,7 @@ it('does not show the time-limit banner under the limit', () => {
   expect(screen.queryByTestId('limit-banner')).not.toBeInTheDocument()
 })
 
-it('links to every module and to the parent area', () => {
+it('puts the five islands on the map and links each to its module', () => {
   renderHome()
 
   expect(screen.getByRole('link', { name: /Nghe kể chuyện/ })).toHaveAttribute('href', '/stories')
@@ -139,6 +144,30 @@ it('links to every module and to the parent area', () => {
   expect(screen.getByRole('link', { name: /Word Pop/ })).toHaveAttribute('href', '/level/word-pop')
   expect(screen.getByRole('link', { name: /Từ vựng/ })).toHaveAttribute('href', '/words')
   expect(screen.getByRole('link', { name: /Ghép câu/ })).toHaveAttribute('href', '/sentences')
-  const parentLink = screen.getByRole('link', { name: /Phụ huynh/ })
-  expect(parentLink).toHaveAttribute('href', '/parent')
+  expect(screen.getByRole('link', { name: /Phụ huynh/ })).toHaveAttribute('href', '/parent')
+})
+
+it('shows each island the best stars earned inside that module', () => {
+  setStars('story:little-fox', 2)
+  setStars('sz-th-three', 3)
+
+  renderHome()
+
+  const stories = screen.getByRole('link', { name: /Nghe kể chuyện/ })
+  expect(within(stories).getAllByTestId('star-filled')).toHaveLength(2)
+  const soundZoo = screen.getByRole('link', { name: /Sound Zoo/ })
+  expect(within(soundZoo).getAllByTestId('star-filled')).toHaveLength(3)
+  const wordPop = screen.getByRole('link', { name: /Word Pop/ })
+  expect(within(wordPop).queryAllByTestId('star-filled')).toHaveLength(0)
+})
+
+it('turns unlocked vocabulary cards into stars on the Từ vựng island', () => {
+  localStorage.setItem('speakup.leitner', JSON.stringify(
+    Object.fromEntries(Array.from({ length: 9 }, (_, i) => [`w-${i}`, { box: 1, due: 0 }])),
+  ))
+
+  renderHome()
+
+  const words = screen.getByRole('link', { name: /Từ vựng/ })
+  expect(within(words).getAllByTestId('star-filled')).toHaveLength(2)
 })
