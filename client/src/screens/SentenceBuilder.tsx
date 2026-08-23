@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import type { Sentence } from '../content'
 import { SENTENCES, findSentence } from '../content'
@@ -17,7 +17,7 @@ import { Stars } from '../components/Stars'
 import { shuffleTiles } from '../content/shuffle'
 
 const TAP_TARGET = 'min-h-[64px] min-w-[64px] flex items-center justify-center'
-const SHAKE_MS = 500
+const SHAKE_MS = 400 // matches the .animate-shake keyframe duration in styles.css
 
 const TILE = `px-5 rounded-2xl shadow text-2xl font-extrabold active:scale-95 ${TAP_TARGET}`
 
@@ -53,7 +53,12 @@ function SentenceBuilderInner({ sentence }: { sentence: Sentence }) {
 
   // Tile display order is shuffled once per sentence, but tiles keep their identity as an index
   // into sentence.words — this is what lets the tray/pool logic tell duplicate words apart.
-  const order = shuffleTiles(sentence.words.map((_, i) => i), sentence.id)
+  // Memoized on the sentence id so it is computed once per mount rather than every render (the
+  // inner component is already remounted — and re-seeded — whenever the id changes).
+  const order = useMemo(
+    () => shuffleTiles(sentence.words.map((_, i) => i), sentence.id),
+    [sentence.id, sentence.words],
+  )
   const poolIndices = order.filter(i => !trayIndices.includes(i))
 
   useEffect(() => {
@@ -72,7 +77,15 @@ function SentenceBuilderInner({ sentence }: { sentence: Sentence }) {
 
   useEffect(() => {
     if (!correct) return
-    playUrl(sentence.audio).then(() => setAudioMissing(false), () => setAudioMissing(true))
+    // Sample audio is generated locally and may simply not be there yet — say so, never throw.
+    // `alive` guards against setting state after this effect's owner has unmounted or moved on
+    // (e.g. a fast "Tiếp theo" tap), which would otherwise log a stray act() warning in tests.
+    let alive = true
+    playUrl(sentence.audio).then(
+      () => { if (alive) setAudioMissing(false) },
+      () => { if (alive) setAudioMissing(true) },
+    )
+    return () => { alive = false }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [correct])
 

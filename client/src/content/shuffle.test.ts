@@ -7,11 +7,10 @@ it('is deterministic: the same seed always produces the same order', () => {
 
 it('different seeds can produce different orders', () => {
   const words = ['I', 'eat', 'an', 'apple.']
-  const a = shuffleTiles(words, 's1')
-  const b = shuffleTiles(words, 's7')
-  expect(a).not.toBe(b) // distinct array instances
-  // Not asserting a !== b by value: two seeds could coincidentally agree, but across the pair
-  // used elsewhere in this file they do not.
+  // Any single pair of ids could coincidentally land on the same order, so check across a spread
+  // of ids that at least two distinct orders show up rather than asserting on one fixed pair.
+  const orders = new Set(Array.from({ length: 20 }, (_, i) => shuffleTiles(words, `s${i}`).join(' ')))
+  expect(orders.size).toBeGreaterThan(1)
 })
 
 it('never returns the original order for 2+ items, across many seeds', () => {

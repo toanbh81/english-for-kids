@@ -6,6 +6,9 @@ const ROOT = new URL('../', import.meta.url)
 const repoPath = p => fileURLToPath(new URL(p, ROOT))
 const require = createRequire(new URL('client/package.json', ROOT))
 const sdk = require('microsoft-cognitiveservices-speech-sdk')
+// Sentence text is interpolated straight into the SSML document below, so escape the characters
+// XML treats specially before it gets there (same helper as story-ssml.mjs).
+const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 const key = process.env.AZURE_SPEECH_KEY, region = process.env.AZURE_SPEECH_REGION
 if (!key || !region) { console.error('Usage: AZURE_SPEECH_KEY=… AZURE_SPEECH_REGION=… [SENTENCE_VOICE=en-US-Emma:DragonHDLatestNeural] node scripts/gen-sentences.mjs [<sentenceId> ...]'); process.exit(1) }
 // Emma HD reads with natural, context-driven expression, same voice as the story narration.
@@ -23,7 +26,7 @@ async function synthesize(text) {
   cfg.speechSynthesisVoiceName = VOICE
   cfg.speechSynthesisOutputFormat = sdk.SpeechSynthesisOutputFormat.Audio24Khz48KBitRateMonoMp3
   const synth = new sdk.SpeechSynthesizer(cfg, null)
-  const ssml = `<speak version="1.0" xml:lang="en-US"><voice name="${VOICE}"><prosody rate="-10%">${text}</prosody></voice></speak>`
+  const ssml = `<speak version="1.0" xml:lang="en-US"><voice name="${VOICE}"><prosody rate="-10%">${esc(text)}</prosody></voice></speak>`
   // audioData must be read BEFORE close() — the SDK releases the result buffer on close.
   const audioData = await new Promise((res, rej) => synth.speakSsmlAsync(ssml, r => {
     const ok = r.reason === sdk.ResultReason.SynthesizingAudioCompleted
