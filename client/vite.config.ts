@@ -20,8 +20,29 @@ export default defineConfig(({ mode }) => ({
         theme_color: '#FF7A59',
         icons: [{ src: 'icon-512.png', sizes: '512x512', type: 'image/png' }],
       },
-      // The sample word audio is .mp3 and must be precached, or offline practice has no "Nghe mẫu".
-      workbox: { globPatterns: ['**/*.{js,css,html,svg,png,mp3}'] },
+      workbox: {
+        // The sample word audio is .mp3 and must be precached, or offline practice has no "Nghe mẫu".
+        globPatterns: ['**/*.{js,css,html,svg,png,mp3}'],
+        // Baloo 2 / Nunito come from Google Fonts, which precaching cannot reach: without these
+        // two routes an offline launch falls back to the system font and the whole app reflows.
+        runtimeCaching: [
+          {
+            urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
+            handler: 'StaleWhileRevalidate',
+            options: { cacheName: 'google-fonts-stylesheets' },
+          },
+          {
+            urlPattern: /^https:\/\/fonts\.gstatic\.com\/.*/i,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'google-fonts-webfonts',
+              // The font files are immutable and few — keep them for a year.
+              expiration: { maxEntries: 30, maxAgeSeconds: 60 * 60 * 24 * 365 },
+              cacheableResponse: { statuses: [0, 200] },
+            },
+          },
+        ],
+      },
     }),
   ],
   server: { host: true, proxy: { '/api': 'http://localhost:8787' } },
