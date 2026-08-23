@@ -143,6 +143,16 @@ it('the last card of a level finishes back at the level instead of jumping to th
   expect(screen.getByText('danh sách thẻ')).toBeInTheDocument()
 })
 
+/** The legacy `/practice/sz-*` route still walks all 27 Sound Zoo cards. 27 dots at 16 px + gap
+ * is ~640 px of header, which on a portrait iPad squeezed the 66 px back button below a thumb's
+ * worth of tap target. Past a dozen cards the "Thẻ n/N" counter carries the position on its own. */
+it('drops the per-card dots on a level too long to show them', () => {
+  renderCard() // sz-th-three: 27 cards
+  expect(soundZooCards.length).toBeGreaterThan(12)
+  expect(screen.getByText(`Thẻ 1/${soundZooCards.length}`)).toBeInTheDocument()
+  expect(screen.queryByTestId('card-dots')).not.toBeInTheDocument()
+})
+
 it('says the sample audio is missing instead of failing silently', async () => {
   playerControl.playUrl.mockRejectedValue(new Error('audio failed'))
   renderCard()
@@ -327,6 +337,13 @@ describe('Word Pop: hidden IPA + two-in-a-row streak', () => {
     expect(screen.getByLabelText('Lần 2/2')).toHaveTextContent('○')
     const stars = JSON.parse(localStorage.getItem('speakup.stars') ?? '{}')
     expect(stars[card.id] ?? 0).toBeLessThanOrEqual(2)
+  })
+
+  it('keeps the per-card dots for a 12-card level', () => {
+    renderCard(card.id)
+    const dots = screen.getByTestId('card-dots')
+    expect(wordPopCards.length).toBeLessThanOrEqual(12)
+    expect(dots.children).toHaveLength(wordPopCards.length)
   })
 
   it('leaves Sound Zoo cards unchanged: IPA visible, no streak slots', async () => {

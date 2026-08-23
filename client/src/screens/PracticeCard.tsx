@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { findCard, LEVELS } from '../content'
 import type { PronunciationResult } from '../scoring/types'
@@ -25,12 +25,18 @@ const COUNTDOWN_FROM = AUTO_STOP_MS / 1000
 const SAMPLE_CHIP =
   'inline-flex min-h-[64px] items-center gap-2 rounded-full bg-teal-50 px-7 font-display text-xl font-extrabold text-teal-600 shadow-[0_5px_0_#C4E8E1] active:translate-y-[2px]'
 
+/** How many cards a level may have before the header's progress dots are dropped for the
+ * "Thẻ n/N" counter alone — see the header below. */
+const DOT_LIMIT = 12
+
 export function PracticeCard() {
   const { cardId = '' } = useParams()
   const nav = useNavigate()
   const card = findCard(cardId)
-  // Hoisted above the early return so the result effect below can branch on it: `level` is
-  // recomputed once more (non-null) after the `!card` guard, once we know the card is real.
+  // Computed above the `!card` early return rather than after it, because every hook below has to
+  // run unconditionally and the result effect branches on `isWordPop`. It is computed exactly
+  // once: past the guard the card is known to be real, which is all the `level!` assertions
+  // further down are asserting — nothing is recomputed there.
   const level = card ? LEVELS.find(l => l.cards.includes(card)) : undefined
   const isWordPop = level?.id === 'word-pop'
 
@@ -54,7 +60,10 @@ export function PracticeCard() {
     setAttempts(0); setAudioMissing(false); setIpaRevealed(false); setStreak(0)
   }, [cardId])
 
-  useEffect(() => {
+  // `useLayoutEffect`, not `useEffect`: the render that first sees the result still has the old
+  // streak, so it draws 2 stars, and this effect is what turns them into 3. Run after paint, that
+  // is a visible 2★ flash on the winning attempt; run before it, the child only ever sees 3★.
+  useLayoutEffect(() => {
     if (!feedback) return
     setAttempts(a => a + 1)
     if (isWordPop) {
@@ -110,17 +119,24 @@ export function PracticeCard() {
       <div className="mx-auto flex min-h-full w-full max-w-5xl flex-col items-center gap-5">
         <header className="flex w-full items-center justify-between gap-4">
           <BackButton to={`/level/${level!.id}`} label="Quay lại" />
-          <div className="flex flex-col items-center gap-2">
+          <div className="flex min-w-0 flex-col items-center gap-2 overflow-hidden">
             <span className="font-display text-xl font-extrabold text-ink-500">Thẻ {cardIndex + 1}/{level!.cards.length}</span>
-            <div className="flex gap-2">
-              {level!.cards.map((c, i) => (
-                <span
-                  key={c.id}
-                  aria-hidden="true"
-                  className={`h-4 w-4 rounded-full ${i < cardIndex ? 'bg-teal-500' : i === cardIndex ? 'bg-coral-500' : 'bg-line-200'}`}
-                />
-              ))}
-            </div>
+            {/* The dots are a nicety, the counter above them is the real read-out. Past a dozen
+                cards they stop fitting: the legacy `/practice/sz-*` route walks all 27 Sound Zoo
+                cards, and 27 of them made the header wider than a portrait iPad, squeezing the
+                66 px back button under the 64 px tap-target floor. So they wrap, and beyond
+                DOT_LIMIT they simply do not render. */}
+            {level!.cards.length <= DOT_LIMIT && (
+              <div data-testid="card-dots" className="flex flex-wrap justify-center gap-2">
+                {level!.cards.map((c, i) => (
+                  <span
+                    key={c.id}
+                    aria-hidden="true"
+                    className={`h-4 w-4 rounded-full ${i < cardIndex ? 'bg-teal-500' : i === cardIndex ? 'bg-coral-500' : 'bg-line-200'}`}
+                  />
+                ))}
+              </div>
+            )}
           </div>
           <span className="min-w-[66px] text-right text-base font-bold text-ink-300">{isWebSpeech ? 'chế độ đơn giản' : ''}</span>
         </header>
