@@ -19,9 +19,30 @@ export function splitSentences(words) {
  * @param {{ text: string, words: {w:string}[], voice?: {style?, degree?, rate?, pitch?, emphasis?: number[], pauseMs?} }} scene
  * @param {{ voice?: string, rate?: string }} opts  default voice name and base rate
  */
+export const DEFAULT_VOICE = 'en-US-Emma:DragonHDLatestNeural'
+export const isHdVoice = v => /:DragonHD/i.test(v)
+
+/**
+ * HD ("Dragon") voices act the text out from context on their own and ignore express-as styles,
+ * emphasis and contours — measured against samples/, Emma HD matched the reference narrator's
+ * register (~205 Hz) and pitch range (13–19 st) with plain text. They do honour rate and break,
+ * and they barely pause at full stops (~40 ms), so sentence breaks are added explicitly.
+ */
+function buildHdSsml(scene, voice, hints) {
+  const pause = hints.pauseMs ?? 400
+  const rate = hints.rate ?? '-15%'
+  const sentences = splitSentences(scene.words)
+  const body = sentences.map((sentence, si) => {
+    const tokens = sentence.map(w => esc(w.w) + (/,$/.test(w.w) ? '<break time="150ms"/>' : '')).join(' ')
+    return tokens + (si < sentences.length - 1 ? `<break time="${pause}ms"/>` : '')
+  }).join(' ')
+  return `<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xml:lang="en-US"><voice name="${voice}"><prosody rate="${rate}">${body}</prosody></voice></speak>`
+}
+
 export function buildSceneSsml(scene, opts = {}) {
-  const voice = opts.voice ?? 'en-US-AriaNeural'
+  const voice = opts.voice ?? DEFAULT_VOICE
   const hints = scene.voice ?? {}
+  if (isHdVoice(voice)) return buildHdSsml(scene, voice, hints)
   const emphasis = new Set(hints.emphasis ?? [])
   // Azure already leaves ~900 ms after a full stop; the reference narration pauses 350–500 ms,
   // so add only a hair rather than stacking another long break on top.

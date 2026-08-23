@@ -1,17 +1,18 @@
 import { createRequire } from 'node:module'
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
-import { buildSceneSsml } from './story-ssml.mjs'
+import { buildSceneSsml, DEFAULT_VOICE } from './story-ssml.mjs'
 // Everything resolves against the repo root, so the script behaves the same from any cwd.
 const ROOT = new URL('../', import.meta.url)
 const repoPath = p => fileURLToPath(new URL(p, ROOT))
 const require = createRequire(new URL('client/package.json', ROOT))
 const sdk = require('microsoft-cognitiveservices-speech-sdk')
 const key = process.env.AZURE_SPEECH_KEY, region = process.env.AZURE_SPEECH_REGION
-if (!key || !region) { console.error('Usage: AZURE_SPEECH_KEY=… AZURE_SPEECH_REGION=… [STORY_VOICE=en-US-AriaNeural] node scripts/gen-story.mjs <storyId> [...]'); process.exit(1) }
+if (!key || !region) { console.error('Usage: AZURE_SPEECH_KEY=… AZURE_SPEECH_REGION=… [STORY_VOICE=en-US-Emma:DragonHDLatestNeural] node scripts/gen-story.mjs <storyId> [...]'); process.exit(1) }
 const ids = process.argv.slice(2); if (!ids.length) { console.error('no story ids'); process.exit(1) }
-// Aria has the widest range of storytelling styles (cheerful, excited, sad, whispering, …).
-const VOICE = process.env.STORY_VOICE || 'en-US-AriaNeural'
+// Emma HD reads with natural, context-driven expression (see story-ssml.mjs); non-HD voices
+// such as en-US-AriaNeural fall back to the styled/emphasis SSML path.
+const VOICE = process.env.STORY_VOICE || DEFAULT_VOICE
 // Azure's word boundaries carry no punctuation, so compare on letters/digits/apostrophes only.
 const bare = s => String(s).toLowerCase().replace(/[^\p{L}\p{N}']/gu, '')
 

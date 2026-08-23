@@ -13,33 +13,33 @@
       "words": [
         {
           "w": "It",
-          "start": 57,
-          "end": 227
+          "start": 79,
+          "end": 169
         },
         {
           "w": "is",
-          "start": 241,
-          "end": 383
+          "start": 170,
+          "end": 351
         },
         {
           "w": "morning.",
-          "start": 398,
-          "end": 1506
+          "start": 352,
+          "end": 1079
         },
         {
           "w": "I",
-          "start": 2566,
-          "end": 2765
+          "start": 1696,
+          "end": 1923
         },
         {
           "w": "am",
-          "start": 2779,
-          "end": 2921
+          "start": 1924,
+          "end": 2060
         },
         {
           "w": "hungry.",
-          "start": 2935,
-          "end": 4157
+          "start": 2060,
+          "end": 2832
         }
       ],
       "voice": {
@@ -60,28 +60,28 @@
       "words": [
         {
           "w": "I",
-          "start": 52,
-          "end": 273
+          "start": 82,
+          "end": 223
         },
         {
           "w": "eat",
-          "start": 286,
-          "end": 612
+          "start": 223,
+          "end": 458
         },
         {
           "w": "eggs",
-          "start": 625,
-          "end": 1302
+          "start": 458,
+          "end": 881
         },
         {
           "w": "and",
-          "start": 1315,
-          "end": 1458
+          "start": 882,
+          "end": 1070
         },
         {
           "w": "bread.",
-          "start": 1471,
-          "end": 2409
+          "start": 1070,
+          "end": 1681
         }
       ],
       "voice": {
@@ -101,33 +101,33 @@
       "words": [
         {
           "w": "I",
-          "start": 52,
-          "end": 208
+          "start": 82,
+          "end": 176
         },
         {
           "w": "drink",
-          "start": 221,
-          "end": 521
+          "start": 176,
+          "end": 505
         },
         {
           "w": "milk.",
-          "start": 534,
-          "end": 1419
+          "start": 505,
+          "end": 1069
         },
         {
           "w": "Milk",
-          "start": 2398,
-          "end": 2723
+          "start": 1587,
+          "end": 1963
         },
         {
           "w": "is",
-          "start": 2736,
-          "end": 2866
+          "start": 1963,
+          "end": 2151
         },
         {
           "w": "white.",
-          "start": 2880,
-          "end": 3817
+          "start": 2152,
+          "end": 2810
         }
       ],
       "voice": {
@@ -147,28 +147,28 @@
       "words": [
         {
           "w": "My",
-          "start": 52,
-          "end": 312
+          "start": 82,
+          "end": 317
         },
         {
           "w": "sister",
-          "start": 326,
-          "end": 1237
+          "start": 317,
+          "end": 787
         },
         {
           "w": "eats",
-          "start": 1250,
-          "end": 1458
+          "start": 788,
+          "end": 1023
         },
         {
           "w": "a",
-          "start": 1471,
-          "end": 1550
+          "start": 1023,
+          "end": 1070
         },
         {
           "w": "banana.",
-          "start": 1563,
-          "end": 2813
+          "start": 1070,
+          "end": 1822
         }
       ],
       "voice": {
@@ -188,38 +188,38 @@
       "words": [
         {
           "w": "My",
-          "start": 52,
-          "end": 260
+          "start": 82,
+          "end": 270
         },
         {
           "w": "dad",
-          "start": 273,
-          "end": 573
+          "start": 270,
+          "end": 552
         },
         {
           "w": "drinks",
-          "start": 586,
-          "end": 885
+          "start": 552,
+          "end": 881
         },
         {
           "w": "coffee.",
-          "start": 898,
-          "end": 1966
+          "start": 882,
+          "end": 1682
         },
         {
           "w": "It",
-          "start": 2945,
-          "end": 3101
+          "start": 2423,
+          "end": 2611
         },
         {
           "w": "is",
-          "start": 3114,
-          "end": 3231
+          "start": 2611,
+          "end": 2846
         },
         {
           "w": "hot.",
-          "start": 3244,
-          "end": 4182
+          "start": 2847,
+          "end": 3505
         }
       ],
       "voice": {
@@ -239,18 +239,18 @@
       "words": [
         {
           "w": "Breakfast",
-          "start": 49,
-          "end": 602
+          "start": 82,
+          "end": 834
         },
         {
           "w": "is",
-          "start": 614,
-          "end": 737
+          "start": 835,
+          "end": 1023
         },
         {
           "w": "yummy!",
-          "start": 749,
-          "end": 1781
+          "start": 1023,
+          "end": 1681
         }
       ],
       "voice": {

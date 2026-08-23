@@ -88,21 +88,30 @@ For narration timings, see **"Generating sample audio"** above (`scripts/gen-sto
 | 11 | Retell → record once, go back to the player, tap a word | speechSynthesis word replay works after a mic recording | ⏳ pending |
 | 12 | Play with 🎵 on → lock the iPad → unlock and tap ▶ / 🎵 | Music resumes after lock/unlock instead of staying silent | ⏳ pending |
 
-### Expressive narration (giọng kể có cảm xúc)
+### Narration voice (giọng kể)
 
-Each scene in `client/src/content/stories/*.json` carries optional acting hints under `voice`:
-`style` (Azure express-as: cheerful, excited, sad, whispering, friendly…), `degree` (0.01–2), `rate`, `pitch`,
-`emphasis` (indexes of words read with strong emphasis) and `pauseMs` (pause between sentences, default 350 ms).
-`scripts/story-ssml.mjs` turns them into SSML (questions lift pitch, exclamations brighten, commas add a short breath).
-Default voice is `en-US-AriaNeural`; override with `STORY_VOICE=en-US-JennyNeural`.
+Default voice is **`en-US-Emma:DragonHDLatestNeural`** (Azure HD): it acts the text out from context on its own, and
+measured against a reference children's-story video it matched the narrator's register (~205 Hz) and pitch range.
+HD voices ignore `express-as`/`emphasis`; the generator only adds a slower rate (`-15%`) and explicit sentence
+breaks (400 ms), per-scene overridable via `voice.rate` / `voice.pauseMs` in the story JSON.
+Override the voice with `STORY_VOICE=en-US-AriaNeural` — non-HD voices use the styled SSML path
+(`voice.style`, `degree`, `pitch`, `emphasis` hints).
 
-To compare voices on one scene before regenerating everything:
+Tools for comparing voices / tuning against a reference clip (put videos in the git-ignored `samples/`):
 
 ```bash
 node scripts/audition-voices.mjs little-fox 3
 ```
 
-then listen at `https://localhost:5173/audio/audition/<voice>.mp3` (files are git-ignored).
+```bash
+node scripts/transcribe-sample.mjs samples/clip.wav > samples/clip.words.json
+```
+
+```bash
+py -3.11 scripts/analyze-prosody.py samples/clip.wav client/public/audio/stories/little-fox/scene-4.mp3
+```
+
+(`analyze-prosody.py` needs `pip install praat-parselmouth numpy`; audition files land in `client/public/audio/audition/`, git-ignored.)
 
 ## Running
 
