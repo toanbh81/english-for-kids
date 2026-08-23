@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import { LEVELS, PAIRS, SOUNDS } from '../content'
+import { LEVELS, PAIRS, SENTENCE_STARS, SOUNDS, STORY_VOICE } from '../content'
 import { getStars } from '../progress/store'
 import { Foxy } from '../components/Foxy'
 import { BackButton, Chip, StarRow } from '../components/ui'
@@ -15,8 +15,8 @@ const STEPS: Step[] = [
   { key: 'sound-zoo', emoji: '🦁', name: 'Tập âm', to: '/level/sound-zoo', lift: 'lg:mt-[240px]' },
   { key: 'word-pop', emoji: '🎈', name: 'Đọc từ', to: '/level/word-pop', lift: 'lg:mt-[180px]' },
   { key: 'minimal-pairs', emoji: '👯', name: 'Nghe & chọn', to: '/level/minimal-pairs', lift: 'lg:mt-[120px]' },
-  { key: 'sentence-stars', emoji: '⭐', name: 'Sentence Stars', lift: 'lg:mt-[60px]' },
-  { key: 'story-voice', emoji: '🎭', name: 'Story Voice', lift: 'lg:mt-0' },
+  { key: 'sentence-stars', emoji: '⭐', name: 'Sentence Stars', to: '/level/sentence-stars', lift: 'lg:mt-[60px]' },
+  { key: 'story-voice', emoji: '🎭', name: 'Story Voice', to: '/level/story-voice', lift: 'lg:mt-0' },
 ]
 
 const TILE = 'flex h-[180px] w-full max-w-[220px] flex-col items-center justify-center gap-2 rounded-xl3'
@@ -50,15 +50,33 @@ function pairStars(): Stars {
   }, 0)
 }
 
+/** Sentence Stars keeps its stars per *sentence*, mirroring the pair/sound reducers above. */
+function sentenceStarStars(): Stars {
+  return SENTENCE_STARS.reduce<Stars>((best, s) => {
+    const stars = getStars(`sstar:${s.id}`)
+    return stars > best ? stars : best
+  }, 0)
+}
+
+/** Story Voice keeps its stars per *passage*. */
+function storyVoiceStars(): Stars {
+  return STORY_VOICE.reduce<Stars>((best, v) => {
+    const stars = getStars(`voice:${v.id}`)
+    return stars > best ? stars : best
+  }, 0)
+}
+
 export function LevelStairs() {
   const stars: Record<string, Stars> = {
     'sound-zoo': soundStars(),
     'word-pop': levelStars('word-pop'),
     'minimal-pairs': pairStars(),
+    'sentence-stars': sentenceStarStars(),
+    'story-voice': storyVoiceStars(),
   }
-  // Foxy waits on the first *playable* step that is not finished yet — never on a locked one,
-  // which is where he ended up once both open levels were done.
-  const foxyOn = (STEPS.find(s => s.to && stars[s.key] < 3) ?? STEPS[1]).key
+  // Foxy waits on the first *playable* step that is not finished yet; once every step is 3★ he
+  // has nowhere left to climb, so he stands on the last one instead.
+  const foxyOn = (STEPS.find(s => s.to && stars[s.key] < 3) ?? STEPS[STEPS.length - 1]).key
 
   return (
     <main className="relative h-full overflow-y-auto bg-cream-50 p-6">

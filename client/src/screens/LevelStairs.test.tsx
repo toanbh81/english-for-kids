@@ -8,17 +8,15 @@ function renderStairs() {
 
 beforeEach(() => localStorage.clear())
 
-it('links the three playable levels and shows the other two as locked', () => {
+it('links all five levels of the Speak Lab staircase', () => {
   renderStairs()
   expect(screen.getByRole('link', { name: /Tập âm/ })).toHaveAttribute('href', '/level/sound-zoo')
   expect(screen.getByRole('link', { name: /Đọc từ/ })).toHaveAttribute('href', '/level/word-pop')
   expect(screen.getByRole('link', { name: /Nghe & chọn/ })).toHaveAttribute('href', '/level/minimal-pairs')
+  expect(screen.getByRole('link', { name: /Sentence Stars/ })).toHaveAttribute('href', '/level/sentence-stars')
+  expect(screen.getByRole('link', { name: /Story Voice/ })).toHaveAttribute('href', '/level/story-voice')
 
-  expect(screen.getAllByText('Sắp có')).toHaveLength(2)
-  for (const name of ['Sentence Stars', 'Story Voice']) {
-    expect(screen.getByText(name)).toBeInTheDocument()
-    expect(screen.queryByRole('link', { name: new RegExp(name) })).not.toBeInTheDocument()
-  }
+  expect(screen.queryByText('Sắp có')).not.toBeInTheDocument()
 })
 
 it('reads the Nghe & chọn stars off the pair keys, not off any word card', () => {
@@ -30,6 +28,15 @@ it('reads the Nghe & chọn stars off the pair keys, not off any word card', () 
   expect(step.getAllByTestId('star-filled')).toHaveLength(2)
   // Tập âm is unaffected by a pair key.
   expect(within(screen.getByTestId('step-sound-zoo')).queryAllByTestId('star-filled')).toHaveLength(0)
+})
+
+it('reads the Sentence Stars stars off the sstar keys and Story Voice off the voice keys', () => {
+  localStorage.setItem('speakup.stars', JSON.stringify({ 'sstar:ss1': 1, 'sstar:ss9': 3, 'voice:sv2': 2 }))
+  renderStairs()
+
+  // The best of the ten sentences / eight passages is what each step shows.
+  expect(within(screen.getByTestId('step-sentence-stars')).getAllByTestId('star-filled')).toHaveLength(3)
+  expect(within(screen.getByTestId('step-story-voice')).getAllByTestId('star-filled')).toHaveLength(2)
 })
 
 it('stands Foxy on the first step that is not finished yet', () => {
@@ -45,14 +52,26 @@ it('moves Foxy on to Nghe & chọn once the two word levels are done', () => {
   expect(within(screen.getByTestId('step-minimal-pairs')).getByTestId('foxy')).toBeInTheDocument()
 })
 
-it('keeps Foxy off the locked steps once every playable level is finished', () => {
+it('moves Foxy on to Sentence Stars and then Story Voice as each level finishes', () => {
   localStorage.setItem('speakup.stars', JSON.stringify({ 'sound:th': 3, 'wp-cat': 3, 'pair:pair-ship-sheep': 3 }))
   renderStairs()
-  // Nothing is left to climb, so he waits on a level he can actually play.
-  expect(within(screen.getByTestId('step-word-pop')).getByTestId('foxy')).toBeInTheDocument()
-  for (const key of ['sentence-stars', 'story-voice']) {
-    expect(within(screen.getByTestId(`step-${key}`)).queryByTestId('foxy')).not.toBeInTheDocument()
-  }
+  expect(within(screen.getByTestId('step-sentence-stars')).getByTestId('foxy')).toBeInTheDocument()
+})
+
+it('stands Foxy on the last step once every earlier level is finished', () => {
+  localStorage.setItem('speakup.stars', JSON.stringify({
+    'sound:th': 3, 'wp-cat': 3, 'pair:pair-ship-sheep': 3, 'sstar:ss1': 3,
+  }))
+  renderStairs()
+  expect(within(screen.getByTestId('step-story-voice')).getByTestId('foxy')).toBeInTheDocument()
+})
+
+it('falls back to the last step once the whole staircase is finished', () => {
+  localStorage.setItem('speakup.stars', JSON.stringify({
+    'sound:th': 3, 'wp-cat': 3, 'pair:pair-ship-sheep': 3, 'sstar:ss1': 3, 'voice:sv1': 3,
+  }))
+  renderStairs()
+  expect(within(screen.getByTestId('step-story-voice')).getByTestId('foxy')).toBeInTheDocument()
 })
 
 /** Phase 5 moved Tập âm's stars from per-card `sz-*` keys to per-sound `sound:<ph>` keys, so a

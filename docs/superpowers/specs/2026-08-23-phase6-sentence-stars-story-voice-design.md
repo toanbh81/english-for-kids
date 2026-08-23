@@ -2,6 +2,8 @@
 
 Refines §2.2B rows 4–5 of `docs/2026-08-22-giai-phap-va-design-brief.md`. Phases 1–5 are on `main`.
 
+Status: implemented 2026-08-23 on branch phase6-stars-voice (tasks 1–4).
+
 ## Goal
 Finish the Speak Lab staircase: after sounds (Tập âm), words (Đọc từ) and ears (Nghe & chọn), the child speaks **whole sentences** with stress/linking, then **short passages with feeling**. Both levels reuse `useSpeakingAttempt` + Azure Pronunciation Assessment; the new thing is *which* scores matter and how they are shown.
 
