@@ -5,7 +5,7 @@ import type { Word } from '../content/words/types'
 import type { PronunciationResult } from '../scoring/types'
 import { findTopic, findWord } from '../content/words'
 import { getBox, promote, demote, dueWords } from '../progress/leitner'
-import { logActivity } from '../progress/activity'
+import { logActivity, missionStatus } from '../progress/activity'
 import { saveRecording } from '../progress/recordings'
 import { playUrl } from '../audio/player'
 import { speakText } from '../story/speak'
@@ -18,6 +18,9 @@ import { HintCard } from '../components/HintCard'
 import { BackButton, Button, Chip } from '../components/ui'
 
 const UNLOCK_SCORE = 60
+
+/** The daily mission asks for 3 new words; the header counts today's progress towards it. */
+const WORD_TARGET = 3
 
 /** Both faces sit on top of each other inside the rotating shell; only the one facing the
  * child is painted (`backface-visibility`). */
@@ -56,6 +59,9 @@ export function WordCard() {
 
 function WordCardInner({ word, topic, isReview, list }: { word: Word; topic: string; isReview: boolean; list: Word[] }) {
   const nav = useNavigate()
+  // Read once on mount: the counter is the day's tally as the child opened this card, so it does
+  // not tick up mid-attempt and distract from the word in front of them.
+  const [wordsToday] = useState(() => Math.min(missionStatus().word, WORD_TARGET))
   const [flipped, setFlipped] = useState(false)
   const [audioMissing, setAudioMissing] = useState(false)
   const [outcome, setOutcome] = useState<'unlocked' | 'retry' | null>(null)
@@ -121,7 +127,13 @@ function WordCardInner({ word, topic, isReview, list }: { word: Word; topic: str
       <div className="mx-auto flex min-h-full w-full max-w-4xl flex-col items-center gap-4">
         <header className="flex w-full items-center justify-between gap-4">
           <BackButton to={backTo} label={isReview ? 'Ôn tập' : 'Từ vựng'} />
-          <p className="font-display text-xl font-extrabold text-ink-500">Chạm thẻ để lật</p>
+          <div className="flex flex-1 flex-col items-center gap-1">
+            <div className="flex items-center gap-3">
+              <h1 className="font-display text-[30px] font-extrabold leading-none text-ink-900">Từ mới hôm nay 🧩</h1>
+              <Chip tone="sun">{wordsToday}/{WORD_TARGET}</Chip>
+            </div>
+            <p className="font-display text-lg font-extrabold text-ink-500">Chạm thẻ để lật — nói đúng để mở khoá!</p>
+          </div>
           <span className="min-w-[66px] text-right text-base font-bold text-ink-300">
             {attempt.engine === 'webspeech' ? 'chế độ đơn giản' : ''}
           </span>

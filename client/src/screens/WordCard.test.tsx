@@ -36,6 +36,7 @@ vi.mock('../progress/recordings', () => recordingsMock)
 import { WordCard } from './WordCard'
 import { WordList } from './WordList'
 import { getBox, promote } from '../progress/leitner'
+import { logActivity } from '../progress/activity'
 
 const resultHigh: PronunciationResult = {
   overall: 70, accuracy: 70, fluency: 70, completeness: 70,
@@ -70,6 +71,22 @@ beforeEach(() => {
 it('shows a not-found message for an unknown word id', () => {
   renderCard('food', 'nope')
   expect(screen.getByText('Không tìm thấy từ')).toBeInTheDocument()
+})
+
+it('heads the card with today\'s word count out of the mission target of 3', () => {
+  logActivity({ ts: Date.now(), kind: 'word', id: 'food-banana', score: 80 })
+  logActivity({ ts: Date.now(), kind: 'word', id: 'food-bread', score: 20 }) // too low to count
+  renderCard('food', 'food-apple')
+
+  expect(screen.getByText('Từ mới hôm nay 🧩')).toBeInTheDocument()
+  expect(screen.getByText('1/3')).toBeInTheDocument()
+  expect(screen.getByText('Chạm thẻ để lật — nói đúng để mở khoá!')).toBeInTheDocument()
+})
+
+it('caps the header counter at the mission target', () => {
+  for (let i = 0; i < 5; i++) logActivity({ ts: Date.now(), kind: 'word', id: `w-${i}`, score: 80 })
+  renderCard('food', 'food-apple')
+  expect(screen.getByText('3/3')).toBeInTheDocument()
 })
 
 it('shows the front face by default and flips to the Vietnamese/example face on tap', () => {
