@@ -1,12 +1,17 @@
 import { useEffect } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import type { Story } from '../content/stories/types'
+import type { PronunciationResult } from '../scoring/types'
 import { findStory } from '../content/stories'
 import { setStars } from '../progress/store'
+import { logActivity } from '../progress/activity'
+import { saveRecording } from '../progress/recordings'
 import { playUrl, playBlob } from '../audio/player'
 import { useSpeakingAttempt } from '../speaking/useSpeakingAttempt'
 import { MicButton } from '../components/MicButton'
 import { Stars } from '../components/Stars'
+import { Foxy } from '../components/Foxy'
+import type { FoxyMood } from '../components/Foxy'
 import { retellStars, RETELL_MESSAGE } from '../story/retellStars'
 import { speakText } from '../story/speak'
 
@@ -48,15 +53,24 @@ function playSample(story: Story) {
 }
 
 function StoryRetellInner({ story, id }: { story: Story; id: string }) {
+  function handleResult(result: PronunciationResult, blob: Blob | null) {
+    logActivity({ ts: Date.now(), kind: 'sentence', id: `retell:${id}`, score: result.overall })
+    if (blob) saveRecording({ id: `retell:${id}:${Date.now()}`, ts: Date.now(), text: story.retell.text, blob }).catch(() => {})
+  }
+
   // A whole sentence takes a young child longer than a single word, so give the retell the
   // recorder's full 8 s window instead of the 6 s default.
-  const a = useSpeakingAttempt({ targetText: story.retell.text, resetKey: id, autoStopMs: 8000 })
+  const a = useSpeakingAttempt({ targetText: story.retell.text, resetKey: id, autoStopMs: 8000, onResult: handleResult })
   const stars = a.result ? retellStars(a.result.overall) : null
 
   useEffect(() => {
     if (a.result) setStars(`retell:${id}`, retellStars(a.result.overall))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [a.result])
+
+  const mood: FoxyMood = a.micState === 'recording'
+    ? 'listening'
+    : stars === 3 ? 'cheer' : stars === 2 ? 'happy' : 'idle'
 
   return (
     <main className="h-full flex flex-col items-center justify-between p-6 gap-4">
@@ -107,6 +121,7 @@ function StoryRetellInner({ story, id }: { story: Story; id: string }) {
         </section>
       )}
 
+      <Foxy mood={mood} />
       <MicButton state={a.micState} level={a.level} onPress={a.onMic} />
     </main>
   )

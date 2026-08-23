@@ -64,6 +64,19 @@ it('shows the word, records, and renders 3 stars', async () => {
   expect(screen.getAllByTestId('star-filled')[0]).toHaveClass('animate-bounce') // 3 stars celebrate
 })
 
+it('logs a speak activity event after a scored attempt', async () => {
+  localStorage.removeItem('speakup.activity')
+  renderCard()
+  await waitFor(() => expect(screen.getByRole('button', { name: /bấm để nói/i })).toBeEnabled())
+  fireEvent.click(screen.getByRole('button', { name: /bấm để nói/i }))
+  await waitFor(() => expect(screen.getByRole('button', { name: /dừng/i })).toBeInTheDocument())
+  fireEvent.click(screen.getByRole('button', { name: /dừng/i }))
+  await waitFor(() => expect(screen.getAllByTestId('star-filled')).toHaveLength(3))
+
+  const events = JSON.parse(localStorage.getItem('speakup.activity') ?? '[]')
+  expect(events).toContainEqual(expect.objectContaining({ kind: 'speak', id: 'sz-th-three' }))
+})
+
 it('says the sample audio is missing instead of failing silently', async () => {
   playerControl.playUrl.mockRejectedValue(new Error('audio failed'))
   renderCard()

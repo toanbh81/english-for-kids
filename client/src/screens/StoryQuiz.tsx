@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router-dom'
 import type { QuizQ } from '../content/stories/types'
 import { findStory } from '../content/stories'
 import { setStars } from '../progress/store'
+import { logActivity } from '../progress/activity'
 import { Stars } from '../components/Stars'
 
 const ADVANCE_MS = 900
@@ -56,6 +57,7 @@ function StoryQuizInner({ quiz, id }: { quiz: QuizQ[]; id: string }) {
           if (!savedRef.current) {
             savedRef.current = true
             setStars(`story:${id}`, stars)
+            logActivity({ ts: Date.now(), kind: 'story', id })
           }
           setFirstTryCorrect(nextFirstTryCorrect)
           setResult({ stars, correctCount: nextFirstTryCorrect })

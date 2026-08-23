@@ -1,13 +1,18 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { findCard, LEVELS } from '../content'
+import type { PronunciationResult } from '../scoring/types'
 import { playBlob, playUrl } from '../audio/player'
 import { toFeedback } from '../scoring/feedback'
 import { setStars } from '../progress/store'
+import { logActivity } from '../progress/activity'
+import { saveRecording } from '../progress/recordings'
 import { MicButton } from '../components/MicButton'
 import { Stars } from '../components/Stars'
 import { ScoredWords } from '../components/ScoredWords'
 import { HintCard } from '../components/HintCard'
+import { Foxy } from '../components/Foxy'
+import type { FoxyMood } from '../components/Foxy'
 import { useSpeakingAttempt } from '../speaking/useSpeakingAttempt'
 
 const TAP_TARGET = 'min-h-[64px] min-w-[64px] flex items-center'
@@ -16,7 +21,13 @@ export function PracticeCard() {
   const { cardId = '' } = useParams()
   const nav = useNavigate()
   const card = findCard(cardId)
-  const attempt = useSpeakingAttempt({ targetText: card?.text ?? '', resetKey: cardId })
+
+  function handleResult(result: PronunciationResult, blob: Blob | null) {
+    logActivity({ ts: Date.now(), kind: 'speak', id: cardId, score: result.overall, phonemes: result.words.flatMap(w => w.phonemes) })
+    if (blob) saveRecording({ id: `${cardId}:${Date.now()}`, ts: Date.now(), text: card?.text ?? '', blob }).catch(() => {})
+  }
+
+  const attempt = useSpeakingAttempt({ targetText: card?.text ?? '', resetKey: cardId, onResult: handleResult })
   const [attempts, setAttempts] = useState(0)
   const [audioMissing, setAudioMissing] = useState(false)
 
@@ -34,6 +45,10 @@ export function PracticeCard() {
   if (!card) return <p>Không tìm thấy thẻ</p>
   const allCards = LEVELS.flatMap(l => l.cards)
   const next = allCards[allCards.findIndex(c => c.id === cardId) + 1]
+
+  const mood: FoxyMood = attempt.micState === 'recording'
+    ? 'listening'
+    : feedback?.stars === 3 ? 'cheer' : feedback?.stars === 2 ? 'happy' : 'idle'
 
   const isWebSpeech = attempt.engine === 'webspeech'
 
@@ -76,6 +91,7 @@ export function PracticeCard() {
           </div>
         </section>
       )}
+      <Foxy mood={mood} />
       <MicButton state={attempt.micState} level={attempt.level} onPress={attempt.onMic} />
     </main>
   )
