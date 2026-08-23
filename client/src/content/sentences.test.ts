@@ -22,6 +22,14 @@ it('every sentence has a Vietnamese translation and an audio path', () => {
   }
 })
 
+// The builder tells duplicate tiles apart by index, but a repeated word still makes two orderings
+// look identical to a child, so content keeps every sentence duplicate-free.
+it('no sentence repeats a word', () => {
+  for (const s of SENTENCES) {
+    expect(new Set(s.words).size, `${s.id}: ${s.words.join(' ')}`).toBe(s.words.length)
+  }
+})
+
 it('findSentence resolves a known id and returns undefined for an unknown one', () => {
   expect(findSentence('s1')?.words.join(' ')).toBe('I eat an apple.')
   expect(findSentence('nope')).toBeUndefined()

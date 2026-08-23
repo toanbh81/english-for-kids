@@ -20,9 +20,21 @@ const args = process.argv.slice(2)
 let out = 'client/public/audio'
 let voice = 'en-US-JennyNeural'
 const words = []
+
+// A flag with no value ("--out" last, or "--out --voice x") used to silently swallow the next
+// flag or set the value to undefined and write to "undefined/". Refuse instead.
+function flagValue(flag, value) {
+  if (value === undefined || value.startsWith('--')) {
+    console.error(USAGE)
+    console.error(`Missing value for ${flag}.`)
+    process.exit(1)
+  }
+  return value
+}
+
 for (let i = 0; i < args.length; i++) {
-  if (args[i] === '--out') { out = args[++i]; continue }
-  if (args[i] === '--voice') { voice = args[++i]; continue }
+  if (args[i] === '--out') { out = flagValue('--out', args[i + 1]); i++; continue }
+  if (args[i] === '--voice') { voice = flagValue('--voice', args[i + 1]); i++; continue }
   words.push(args[i])
 }
 

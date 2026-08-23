@@ -112,6 +112,15 @@ it('minutesToday matches minutesPerDay(1) for today', () => {
   expect(minutesToday(BASE)).toBe(4)
 })
 
+it('logActivity stores only the weak phonemes (score < 80) and drops the field when none are', () => {
+  logActivity({ ts: BASE, kind: 'word', id: 'w1', phonemes: [{ phoneme: 'th', score: 40 }, { phoneme: 'r', score: 95 }] })
+  logActivity({ ts: BASE + 1, kind: 'word', id: 'w2', phonemes: [{ phoneme: 'r', score: 90 }] })
+
+  const stored = getActivity()
+  expect(stored[0].phonemes).toEqual([{ phoneme: 'th', score: 40 }])
+  expect(stored[1].phonemes).toBeUndefined()
+})
+
 it('weakPhonemes averages scores across events and ignores phonemes seen once', () => {
   logActivity({ ts: BASE, kind: 'word', id: 'w1', phonemes: [{ phoneme: 'th', score: 40 }, { phoneme: 'r', score: 90 }] })
   logActivity({ ts: BASE + 1, kind: 'word', id: 'w2', phonemes: [{ phoneme: 'th', score: 60 }] })

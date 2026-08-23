@@ -92,8 +92,11 @@ function SentenceBuilderInner({ sentence }: { sentence: Sentence }) {
   function handleResult(result: PronunciationResult, blob: Blob | null) {
     const fb = toFeedback(result)
     setStars(`sentence:${sentence.id}`, fb.stars)
-    logActivity({ ts: Date.now(), kind: 'sentence', id: sentence.id, score: result.overall, phonemes: result.words.flatMap(w => w.phonemes) })
-    if (blob) saveRecording({ id: sentence.id, ts: Date.now(), text: target, blob }).catch(() => {})
+    const ts = Date.now()
+    logActivity({ ts, kind: 'sentence', id: sentence.id, score: result.overall, phonemes: result.words.flatMap(w => w.phonemes) })
+    // Timestamped id: keying on the sentence alone overwrote the previous take of the same
+    // sentence, so the "last 20 recordings" list silently held fewer than 20.
+    if (blob) saveRecording({ id: `${sentence.id}:${ts}`, ts, text: target, blob }).catch(() => {})
   }
 
   // Called unconditionally on every render regardless of tray state, so hooks stay unconditional —

@@ -2,6 +2,7 @@ const KEY = 'speakup.activity'
 const CAP = 2000
 const MISSION_TARGET = { story: 1, speak: 5, word: 3 } as const
 const WORD_MISSION_SCORE = 60 // same bar as the Leitner unlock in WordCard
+const WEAK_PHONEME_SCORE = 80 // phonemes at or above this are never reported, so never stored
 const SESSION_GAP_MS = 10 * 60 * 1000
 const DAY_MS = 24 * 60 * 60 * 1000
 
@@ -27,9 +28,19 @@ const write = (events: ActivityEvent[]) => {
   catch { /* ignore: storage unavailable */ }
 }
 
+// Only weak phonemes are ever read back (weakPhonemes / the parent dashboard), and a scored
+// sentence can carry dozens of them, so the good ones are dropped before they reach the 2000-entry
+// log rather than filling up the child's localStorage quota.
+function trimPhonemes(e: ActivityEvent): ActivityEvent {
+  if (!e.phonemes) return e
+  const weak = e.phonemes.filter(p => p.score < WEAK_PHONEME_SCORE)
+  const { phonemes: _dropped, ...rest } = e
+  return weak.length ? { ...rest, phonemes: weak } : rest
+}
+
 export function logActivity(e: ActivityEvent): void {
   const events = read()
-  events.push(e)
+  events.push(trimPhonemes(e))
   if (events.length > CAP) events.splice(0, events.length - CAP)
   write(events)
 }

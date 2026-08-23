@@ -54,8 +54,11 @@ function WordCardInner({ word, topic, isReview, list }: { word: Word; topic: str
       if (getBox(word.id) > 0) demote(word.id)
       setOutcome('retry')
     }
-    logActivity({ ts: Date.now(), kind: 'word', id: word.id, score: result.overall, phonemes: result.words.flatMap(w => w.phonemes) })
-    if (blob) saveRecording({ id: word.id, ts: Date.now(), text: word.word, blob }).catch(() => {})
+    const ts = Date.now()
+    logActivity({ ts, kind: 'word', id: word.id, score: result.overall, phonemes: result.words.flatMap(w => w.phonemes) })
+    // Timestamped id: keying on the word alone overwrote the previous take of the same word, so
+    // the "last 20 recordings" list silently held fewer than 20.
+    if (blob) saveRecording({ id: `${word.id}:${ts}`, ts, text: word.word, blob }).catch(() => {})
   }
 
   const attempt = useSpeakingAttempt({ targetText: word.word, resetKey: word.id, onResult: handleResult })
@@ -64,6 +67,13 @@ function WordCardInner({ word, topic, isReview, list }: { word: Word; topic: str
   const index = list.findIndex(w => w.id === word.id)
   const next = index >= 0 ? list[index + 1] : undefined
   const backTo = isReview ? '/words/review' : `/words/${topic}`
+
+  /** The outcome banner belongs to this attempt, so clear it with the attempt — otherwise
+   * "🔓 Mở khoá!" stays on screen while the child records again. */
+  function retry() {
+    attempt.reset()
+    setOutcome(null)
+  }
 
   /** Sample audio is generated locally and may simply not be there yet — say so, never throw. */
   function playSample() {
@@ -115,22 +125,13 @@ function WordCardInner({ word, topic, isReview, list }: { word: Word; topic: str
 
       {outcome && (
         <div className="flex gap-4 text-xl flex-wrap justify-center">
-          <button onClick={attempt.reset} className={`px-6 rounded-2xl bg-white shadow ${TAP_TARGET}`}>Thử lại</button>
-          {next ? (
-            <button
-              onClick={() => nav(`/words/${topic}/${next.id}`)}
-              className={`px-6 rounded-2xl bg-coral text-white font-extrabold justify-center ${TAP_TARGET}`}
-            >
-              Tiếp theo →
-            </button>
-          ) : (
-            <button
-              onClick={() => nav(backTo)}
-              className={`px-6 rounded-2xl bg-coral text-white font-extrabold justify-center ${TAP_TARGET}`}
-            >
-              Tiếp theo →
-            </button>
-          )}
+          <button onClick={retry} className={`px-6 rounded-2xl bg-white shadow ${TAP_TARGET}`}>Thử lại</button>
+          <button
+            onClick={() => nav(next ? `/words/${topic}/${next.id}` : backTo)}
+            className={`px-6 rounded-2xl bg-coral text-white font-extrabold justify-center ${TAP_TARGET}`}
+          >
+            Tiếp theo →
+          </button>
         </div>
       )}
 

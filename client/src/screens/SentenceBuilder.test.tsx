@@ -190,7 +190,9 @@ it('a spoken score of 85 shows 3 filled stars, stores sentence:s1 = 3, and logs 
   expect(events).toHaveLength(1)
   expect(events[0]).toMatchObject({ kind: 'sentence', id: 's1', score: 85 })
 
-  expect(recordingsMock.saveRecording).toHaveBeenCalledWith(expect.objectContaining({ id: 's1', text: 'I eat an apple.', blob }))
+  expect(recordingsMock.saveRecording).toHaveBeenCalledWith(
+    expect.objectContaining({ id: expect.stringMatching(/^s1:\d+$/), text: 'I eat an apple.', blob }),
+  )
 })
 
 it('does not save a recording when no blob is available (web speech engine)', () => {

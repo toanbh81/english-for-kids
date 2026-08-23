@@ -112,7 +112,9 @@ it('unlocks a locked word at score >= 60, logs the activity event, and saves the
   expect(events[0]).toMatchObject({ kind: 'word', id: 'food-apple', score: 70 })
   expect(events[0].phonemes).toEqual([{ phoneme: 'a', score: 70 }])
 
-  expect(recordingsMock.saveRecording).toHaveBeenCalledWith(expect.objectContaining({ id: 'food-apple', text: 'apple', blob }))
+  expect(recordingsMock.saveRecording).toHaveBeenCalledWith(
+    expect.objectContaining({ id: expect.stringMatching(/^food-apple:\d+$/), text: 'apple', blob }),
+  )
 })
 
 it('does not save a recording when no blob is available (web speech engine)', () => {
@@ -148,6 +150,20 @@ it('a low score on a still-locked word stays locked (no box entry created)', () 
 
   expect(getBox('food-apple')).toBe(0)
   expect(screen.getByText('Thử lại nhé')).toBeInTheDocument()
+})
+
+it('Thử lại clears the outcome so the child can record the word again', () => {
+  attemptControl.current = { ...baseAttempt(), result: resultHigh }
+  renderCard('food', 'food-apple')
+
+  act(() => { attemptControl.onResult?.(resultHigh, null) })
+  expect(screen.getByText('🔓 Mở khoá!')).toBeInTheDocument()
+
+  fireEvent.click(screen.getByRole('button', { name: 'Thử lại' }))
+
+  expect(screen.queryByText('🔓 Mở khoá!')).not.toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: /Tiếp theo/ })).not.toBeInTheDocument()
+  expect((attemptControl.current as SpeakingAttempt).reset).toHaveBeenCalled()
 })
 
 it('Tiếp theo goes to the next word in topic order', () => {
