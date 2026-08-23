@@ -6,14 +6,24 @@ import { MissionCard } from './MissionCard'
 import { StreakWeek } from './StreakWeek'
 
 describe('Foxy', () => {
-  it('renders the mood and an optional speech bubble', () => {
+  it('draws the mascot and reports its mood', () => {
     const { rerender } = render(<Foxy mood="happy" />)
     const foxy = screen.getByTestId('foxy')
     expect(foxy).toHaveAttribute('data-mood', 'happy')
+    expect(foxy.querySelector('svg')).toBeInTheDocument()
+    expect(screen.getByRole('img', { name: 'Foxy' })).toBeInTheDocument()
 
     rerender(<Foxy mood="cheer" say="Giỏi quá!" />)
     expect(screen.getByTestId('foxy')).toHaveAttribute('data-mood', 'cheer')
     expect(screen.getByText('Giỏi quá!')).toBeInTheDocument()
+  })
+
+  it('grows with the size prop', () => {
+    const { rerender } = render(<Foxy mood="idle" size="sm" />)
+    expect(screen.getByTestId('foxy').querySelector('svg')).toHaveAttribute('width', '64')
+
+    rerender(<Foxy mood="idle" size="lg" />)
+    expect(screen.getByTestId('foxy').querySelector('svg')).toHaveAttribute('width', '160')
   })
 
   it('has no speech bubble when say is omitted', () => {
