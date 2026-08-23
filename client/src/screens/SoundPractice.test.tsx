@@ -5,7 +5,7 @@ import type { PronunciationResult } from '../scoring/types'
 
 /** The hook is mocked, not the recorder + scorer: these tests are about what SoundPractice does
  * with a result, and `useSpeakingAttempt` is covered by its own suite and PracticeCard.test. */
-const mic = vi.hoisted(() => ({ push: (_r: PronunciationResult) => {} }))
+const mic = vi.hoisted(() => ({ push: (_r: PronunciationResult) => {}, engine: 'azure' as 'azure' | 'webspeech' }))
 vi.mock('../speaking/useSpeakingAttempt', () => ({
   useSpeakingAttempt(opts: { resetKey?: string; onResult?: (r: PronunciationResult, b: Blob | null) => void }) {
     const [result, setResult] = useState<PronunciationResult | null>(null)
@@ -13,7 +13,7 @@ vi.mock('../speaking/useSpeakingAttempt', () => ({
     useEffect(() => { setResult(null) }, [opts.resetKey])
     mic.push = (r: PronunciationResult) => { setResult(r); opts.onResult?.(r, null) }
     return {
-      micState: 'idle' as const, level: 0, engine: 'azure' as const,
+      micState: 'idle' as const, level: 0, engine: mic.engine,
       result, error: null, lastBlob: null,
       onMic: () => {}, reset: () => setResult(null),
     }
@@ -50,8 +50,11 @@ function renderSound(ph = 'th') {
 
 beforeEach(() => {
   localStorage.clear()
+  mic.engine = 'azure'
   playerControl.playUrl.mockReset().mockResolvedValue(undefined)
 })
+
+const nextWord = () => fireEvent.click(screen.getByRole('button', { name: /tiếp theo/i }))
 
 it('leads with the sound itself and the first of its three words', () => {
   renderSound()
@@ -92,13 +95,52 @@ it('turns a weak target sound into a fix chip plus the mouth tip', () => {
   expect(screen.getByText(/90 điểm/)).toBeInTheDocument()
 })
 
-it('falls back to the word accuracy when the engine reports no phoneme detail', () => {
+/** The word's accuracy is not the sound's score: "three" said as "tree" can still be 90 % accurate
+ * overall. Standing that number under a /θ/ chip told the child their θ was fine when nothing had
+ * measured it, so a result with no phoneme detail now says so instead of borrowing a number. */
+it('says the sound was not scored when the engine reports no phoneme detail', () => {
   renderSound()
   score(result(null, 70))
 
   const chip = screen.getByTestId('sound-chip')
-  expect(chip).toHaveAttribute('data-tone', 'ok')
-  expect(chip).toHaveTextContent('70')
+  expect(chip).toHaveAttribute('data-tone', 'unknown')
+  expect(chip).toHaveTextContent('Chưa chấm được âm — cần kết nối Azure')
+  expect(chip.textContent).not.toMatch(/\d/)
+  // The word's own score is still reported — that much was measured.
+  expect(screen.getByText(/70 điểm/)).toBeInTheDocument()
+})
+
+it('never fabricates a phoneme score on the Web Speech fallback, and caps such a run at 2 stars', () => {
+  mic.engine = 'webspeech'
+  renderSound()
+
+  const ws: PronunciationResult = {
+    overall: 100, accuracy: 100, fluency: 100, completeness: 100, engine: 'webspeech',
+    words: [{ word: 'three', score: 100, errorType: 'None', phonemes: [] }],
+  }
+
+  score(ws)
+  const chip = screen.getByTestId('sound-chip')
+  expect(chip).toHaveAttribute('data-tone', 'unknown')
+  expect(chip.textContent).not.toMatch(/\d/)
+
+  nextWord(); score(ws)
+  nextWord(); score(ws)
+
+  // A perfect Web Speech run proves the child said *something*, not that the θ was right.
+  expect(screen.getAllByTestId('star-filled').length).toBeLessThanOrEqual(2)
+  expect(JSON.parse(localStorage.getItem('speakup.stars') ?? '{}')['sound:th']).toBeLessThanOrEqual(2)
+})
+
+it('caps the run at 2 stars when a single word never got phoneme detail', () => {
+  renderSound()
+  score(result(95))
+  nextWord()
+  score(result(null, 95)) // Azure dropped the sound in this word
+  nextWord()
+  score(result(95))
+
+  expect(screen.getAllByTestId('star-filled')).toHaveLength(2)
 })
 
 it('takes the worst occurrence of the sound, not the average', () => {

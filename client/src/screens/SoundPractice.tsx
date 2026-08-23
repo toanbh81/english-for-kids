@@ -29,26 +29,53 @@ const TONE: Record<WordTone, { box: string; glyph: string; label: string }> = {
   fix: { box: 'bg-fix-50 border-fix-300 text-fix-700', glyph: '✗', label: 'cần sửa' },
 }
 
+const UNSCORED = 'Chưa chấm được âm — cần kết nối Azure'
+
 /**
  * Tập âm scores ONE sound, not the whole word: the chip shows the target phoneme's own score,
  * taken from its WORST occurrence in the attempt (a word can contain the sound twice, and the
- * weak one is the one worth fixing). Engines that report no phoneme detail — Web Speech, or an
- * Azure result where the sound was dropped entirely — fall back to the word's accuracy.
+ * weak one is the one worth fixing). `null` when nothing measured the sound — Web Speech reports
+ * no phoneme detail at all, and an Azure result can drop the sound entirely. The word's accuracy
+ * is NOT a stand-in: "three" said as "tree" scores high as a word while the θ never happened, and
+ * printing that number under a /θ/ chip tells the child their θ was fine when nobody checked.
  */
-function targetScore(result: PronunciationResult, ph: string): number {
+function targetScore(result: PronunciationResult, ph: string): number | null {
   const hits = result.words.flatMap(w => w.phonemes).filter(p => p.phoneme === ph)
-  return hits.length ? Math.min(...hits.map(p => p.score)) : result.accuracy
+  return hits.length ? Math.min(...hits.map(p => p.score)) : null
 }
 
-/** 3 stars only when the sound was good in all three words; 2 when it was at least passable. */
-function starsFor(scores: number[]): 1 | 2 | 3 {
-  if (scores.every(s => s >= 80)) return 3
-  if (scores.every(s => s >= 60)) return 2
-  return 1
+/**
+ * 3 stars only when the sound was good in all three words; 2 when it was at least passable.
+ * A word whose sound was never measured (`null`) caps the run at 2 — an unscored run has not
+ * shown the child can make the sound, so it must not hand out the top award either.
+ */
+function starsFor(scores: (number | null)[]): 1 | 2 | 3 {
+  const known = scores.filter((s): s is number => s !== null)
+  if (known.some(s => s < 60)) return 1
+  if (known.length === scores.length && known.every(s => s >= 80)) return 3
+  return 2
 }
 
-/** The whole result in one glance: the IPA symbol, how it went, and the number. */
-function SoundChip({ ipa, score }: { ipa: string; score: number }) {
+/** The whole result in one glance: the IPA symbol, how it went, and the number — or, when no
+ * engine scored the sound, a plainly neutral card that says so instead of showing a number. */
+function SoundChip({ ipa, score }: { ipa: string; score: number | null }) {
+  const CHIP = 'inline-flex min-h-[110px] items-center gap-5 rounded-xl3 border-[4px] px-9 font-display font-extrabold'
+
+  if (score === null) {
+    return (
+      <div
+        data-testid="sound-chip"
+        data-tone="unknown"
+        aria-label={`Âm ${ipa}: ${UNSCORED}`}
+        className={`${CHIP} max-w-xl border-line-200 bg-white text-ink-500`}
+      >
+        <span aria-hidden="true" className="text-[54px] leading-none">/{ipa}/</span>
+        <span aria-hidden="true" className="text-[38px] leading-none">?</span>
+        <span aria-hidden="true" className="max-w-[260px] text-[20px] leading-snug">{UNSCORED}</span>
+      </div>
+    )
+  }
+
   const tone = toneFor(score)
   const t = TONE[tone]
   return (
@@ -56,7 +83,7 @@ function SoundChip({ ipa, score }: { ipa: string; score: number }) {
       data-testid="sound-chip"
       data-tone={tone}
       aria-label={`Âm ${ipa} ${Math.round(score)} điểm, ${t.label}`}
-      className={`inline-flex min-h-[110px] items-center gap-5 rounded-xl3 border-[4px] px-9 font-display font-extrabold ${t.box}`}
+      className={`${CHIP} ${t.box}`}
     >
       <span aria-hidden="true" className="text-[54px] leading-none">/{ipa}/</span>
       <span aria-hidden="true" className="text-[38px] leading-none">{t.glyph}</span>
@@ -76,8 +103,9 @@ export function SoundPractice() {
 function SoundRun({ sound }: { sound: SoundGroup }) {
   const { ph, ipa, cards } = sound
   const [idx, setIdx] = useState(0)
-  // Best target-phoneme score per word, so a retry can only improve the sound's stars.
-  const [best, setBest] = useState<number[]>(() => cards.map(() => 0))
+  // Best target-phoneme score per word, so a retry can only improve the sound's stars. `null` is
+  // "no engine has scored the sound in this word yet" — distinct from a genuine 0.
+  const [best, setBest] = useState<(number | null)[]>(() => cards.map(() => null))
   const [earned, setEarned] = useState<1 | 2 | 3 | null>(null)
   const [soundMissing, setSoundMissing] = useState(false)
   const [sampleMissing, setSampleMissing] = useState(false)
@@ -98,14 +126,19 @@ function SoundRun({ sound }: { sound: SoundGroup }) {
   })
 
   const result = attempt.result
-  const score = result ? targetScore(result, ph) : null
+  // Web Speech never reports phonemes, so it can only ever say "not scored" — asking `targetScore`
+  // would give the same `null`, but naming the engine keeps the rule visible at the call site.
+  const score = result && attempt.engine !== 'webspeech' ? targetScore(result, ph) : null
 
   // One place decides the run's outcome: every scored attempt updates that word's best, and the
   // last word's result closes the run (a retry there can still raise the stars — `setStars` keeps
   // the highest it has seen).
   useEffect(() => {
     if (!result) return
-    const next = best.map((v, i) => (i === idx ? Math.max(v, targetScore(result, ph)) : v))
+    const next = best.map((v, i) => {
+      if (i !== idx || score === null) return v
+      return v === null ? score : Math.max(v, score)
+    })
     setBest(next)
     if (isLast) {
       const stars = starsFor(next)
@@ -171,7 +204,7 @@ function SoundRun({ sound }: { sound: SoundGroup }) {
           {soundMissing && <p className="text-lg font-bold text-ink-300">Chưa có audio âm này</p>}
         </section>
 
-        {result && score !== null ? (
+        {result ? (
           <>
             {earned === 3 && <Confetti />}
             <section className="flex flex-col items-center gap-4 pb-2">

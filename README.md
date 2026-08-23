@@ -293,7 +293,10 @@ Minimal Pairs; Học từ mới logs `word` events instead).
   text, a "🔊 Nghe âm lẻ" button that plays the sound in isolation (generated via SSML
   `<phoneme>`, see `gen-sounds.mjs` below), and the 3 words as a "Từ 1/3" mini-carousel. Scoring
   shows only the target sound — a chip like "/θ/ ✓ 92" — with the word itself shown small
-  underneath; 3 stars once all 3 words score ≥ 80 on the target phoneme.
+  underneath; 3 stars once all 3 words score ≥ 80 on the target phoneme. When nothing measured the
+  sound — Web Speech's "chế độ đơn giản" reports no phonemes, and an Azure result can drop one —
+  the chip goes neutral ("Chưa chấm được âm — cần kết nối Azure", no number) instead of borrowing
+  the word's accuracy, and a run containing such a word is capped at 2 stars.
 - **🎈 Đọc từ (Word Pop)** — whole-word fluency on the same 12 animal words (`/practice/:cardId`).
   IPA is hidden by default (tap "Xem phiên âm" to reveal). A streak challenge replaces a single
   attempt: two slots ○○ ("Lần 1/2 · Lần 2/2 ✓"); an attempt ≥ 80 fills the next slot, one < 80
