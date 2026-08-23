@@ -12,28 +12,44 @@
       "audio": "/audio/stories/little-fox/scene-1.mp3",
       "words": [
         {
-          "w": "This"
+          "w": "This",
+          "start": 56,
+          "end": 306
         },
         {
-          "w": "is"
+          "w": "is",
+          "start": 319,
+          "end": 472
         },
         {
-          "w": "Foxy."
+          "w": "Foxy.",
+          "start": 486,
+          "end": 1208
         },
         {
-          "w": "Foxy"
+          "w": "Foxy",
+          "start": 2167,
+          "end": 2694
         },
         {
-          "w": "is"
+          "w": "is",
+          "start": 2708,
+          "end": 2819
         },
         {
-          "w": "a"
+          "w": "a",
+          "start": 2833,
+          "end": 2903
         },
         {
-          "w": "little"
+          "w": "little",
+          "start": 2917,
+          "end": 3181
         },
         {
-          "w": "fox."
+          "w": "fox.",
+          "start": 3194,
+          "end": 3889
         }
       ]
     },
@@ -45,19 +61,29 @@
       "audio": "/audio/stories/little-fox/scene-2.mp3",
       "words": [
         {
-          "w": "Foxy"
+          "w": "Foxy",
+          "start": 56,
+          "end": 569
         },
         {
-          "w": "lives"
+          "w": "lives",
+          "start": 583,
+          "end": 833
         },
         {
-          "w": "in"
+          "w": "in",
+          "start": 847,
+          "end": 944
         },
         {
-          "w": "the"
+          "w": "the",
+          "start": 958,
+          "end": 1042
         },
         {
-          "w": "forest."
+          "w": "forest.",
+          "start": 1056,
+          "end": 1778
         }
       ]
     },
@@ -69,25 +95,39 @@
       "audio": "/audio/stories/little-fox/scene-3.mp3",
       "words": [
         {
-          "w": "Foxy"
+          "w": "Foxy",
+          "start": 56,
+          "end": 583
         },
         {
-          "w": "is"
+          "w": "is",
+          "start": 597,
+          "end": 722
         },
         {
-          "w": "hungry."
+          "w": "hungry.",
+          "start": 736,
+          "end": 1333
         },
         {
-          "w": "He"
+          "w": "He",
+          "start": 2292,
+          "end": 2472
         },
         {
-          "w": "wants"
+          "w": "wants",
+          "start": 2486,
+          "end": 2806
         },
         {
-          "w": "an"
+          "w": "an",
+          "start": 2819,
+          "end": 2958
         },
         {
-          "w": "apple."
+          "w": "apple.",
+          "start": 2972,
+          "end": 3500
         }
       ]
     },
@@ -99,31 +139,49 @@
       "audio": "/audio/stories/little-fox/scene-4.mp3",
       "words": [
         {
-          "w": "He"
+          "w": "He",
+          "start": 56,
+          "end": 264
         },
         {
-          "w": "sees"
+          "w": "sees",
+          "start": 278,
+          "end": 542
         },
         {
-          "w": "a"
+          "w": "a",
+          "start": 556,
+          "end": 625
         },
         {
-          "w": "big"
+          "w": "big",
+          "start": 639,
+          "end": 889
         },
         {
-          "w": "red"
+          "w": "red",
+          "start": 903,
+          "end": 1125
         },
         {
-          "w": "apple"
+          "w": "apple",
+          "start": 1139,
+          "end": 1486
         },
         {
-          "w": "on"
+          "w": "on",
+          "start": 1500,
+          "end": 1625
         },
         {
-          "w": "a"
+          "w": "a",
+          "start": 1639,
+          "end": 1694
         },
         {
-          "w": "tree."
+          "w": "tree.",
+          "start": 1708,
+          "end": 2208
         }
       ]
     },
@@ -135,28 +193,44 @@
       "audio": "/audio/stories/little-fox/scene-5.mp3",
       "words": [
         {
-          "w": "Foxy"
+          "w": "Foxy",
+          "start": 56,
+          "end": 528
         },
         {
-          "w": "jumps,"
+          "w": "jumps,",
+          "start": 542,
+          "end": 1083
         },
         {
-          "w": "but"
+          "w": "but",
+          "start": 1208,
+          "end": 1361
         },
         {
-          "w": "the"
+          "w": "the",
+          "start": 1375,
+          "end": 1486
         },
         {
-          "w": "apple"
+          "w": "apple",
+          "start": 1500,
+          "end": 1861
         },
         {
-          "w": "is"
+          "w": "is",
+          "start": 1875,
+          "end": 2028
         },
         {
-          "w": "too"
+          "w": "too",
+          "start": 2042,
+          "end": 2250
         },
         {
-          "w": "high."
+          "w": "high.",
+          "start": 2264,
+          "end": 2764
         }
       ]
     },
@@ -168,28 +242,44 @@
       "audio": "/audio/stories/little-fox/scene-6.mp3",
       "words": [
         {
-          "w": "A"
+          "w": "A",
+          "start": 56,
+          "end": 194
         },
         {
-          "w": "bird"
+          "w": "bird",
+          "start": 208,
+          "end": 472
         },
         {
-          "w": "helps"
+          "w": "helps",
+          "start": 486,
+          "end": 792
         },
         {
-          "w": "Foxy."
+          "w": "Foxy.",
+          "start": 806,
+          "end": 1514
         },
         {
-          "w": "The"
+          "w": "The",
+          "start": 2472,
+          "end": 2625
         },
         {
-          "w": "apple"
+          "w": "apple",
+          "start": 2639,
+          "end": 2972
         },
         {
-          "w": "falls"
+          "w": "falls",
+          "start": 2986,
+          "end": 3347
         },
         {
-          "w": "down."
+          "w": "down.",
+          "start": 3361,
+          "end": 3875
         }
       ]
     },
@@ -201,25 +291,39 @@
       "audio": "/audio/stories/little-fox/scene-7.mp3",
       "words": [
         {
-          "w": "Foxy"
+          "w": "Foxy",
+          "start": 56,
+          "end": 556
         },
         {
-          "w": "says"
+          "w": "says",
+          "start": 569,
+          "end": 889
         },
         {
-          "w": "thank"
+          "w": "thank",
+          "start": 903,
+          "end": 1167
         },
         {
-          "w": "you."
+          "w": "you.",
+          "start": 1181,
+          "end": 1528
         },
         {
-          "w": "He"
+          "w": "He",
+          "start": 2486,
+          "end": 2694
         },
         {
-          "w": "is"
+          "w": "is",
+          "start": 2708,
+          "end": 2847
         },
         {
-          "w": "happy!"
+          "w": "happy!",
+          "start": 2861,
+          "end": 3431
         }
       ]
     }

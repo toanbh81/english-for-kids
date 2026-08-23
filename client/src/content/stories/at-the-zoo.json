@@ -12,31 +12,49 @@
       "audio": "/audio/stories/at-the-zoo/scene-1.mp3",
       "words": [
         {
-          "w": "Today"
+          "w": "Today",
+          "start": 56,
+          "end": 417
         },
         {
-          "w": "I"
+          "w": "I",
+          "start": 431,
+          "end": 542
         },
         {
-          "w": "go"
+          "w": "go",
+          "start": 556,
+          "end": 694
         },
         {
-          "w": "to"
+          "w": "to",
+          "start": 708,
+          "end": 819
         },
         {
-          "w": "the"
+          "w": "the",
+          "start": 833,
+          "end": 944
         },
         {
-          "w": "zoo"
+          "w": "zoo",
+          "start": 958,
+          "end": 1139
         },
         {
-          "w": "with"
+          "w": "with",
+          "start": 1153,
+          "end": 1319
         },
         {
-          "w": "my"
+          "w": "my",
+          "start": 1333,
+          "end": 1472
         },
         {
-          "w": "mom."
+          "w": "mom.",
+          "start": 1486,
+          "end": 2000
         }
       ]
     },
@@ -48,31 +66,49 @@
       "audio": "/audio/stories/at-the-zoo/scene-2.mp3",
       "words": [
         {
-          "w": "I"
+          "w": "I",
+          "start": 56,
+          "end": 208
         },
         {
-          "w": "see"
+          "w": "see",
+          "start": 222,
+          "end": 458
         },
         {
-          "w": "a"
+          "w": "a",
+          "start": 472,
+          "end": 542
         },
         {
-          "w": "big"
+          "w": "big",
+          "start": 556,
+          "end": 806
         },
         {
-          "w": "lion."
+          "w": "lion.",
+          "start": 819,
+          "end": 1333
         },
         {
-          "w": "The"
+          "w": "The",
+          "start": 2292,
+          "end": 2444
         },
         {
-          "w": "lion"
+          "w": "lion",
+          "start": 2458,
+          "end": 2833
         },
         {
-          "w": "is"
+          "w": "is",
+          "start": 2847,
+          "end": 2972
         },
         {
-          "w": "sleeping."
+          "w": "sleeping.",
+          "start": 2986,
+          "end": 3639
         }
       ]
     },
@@ -84,28 +120,44 @@
       "audio": "/audio/stories/at-the-zoo/scene-3.mp3",
       "words": [
         {
-          "w": "The"
+          "w": "The",
+          "start": 56,
+          "end": 194
         },
         {
-          "w": "monkeys"
+          "w": "monkeys",
+          "start": 208,
+          "end": 681
         },
         {
-          "w": "are"
+          "w": "are",
+          "start": 694,
+          "end": 806
         },
         {
-          "w": "funny."
+          "w": "funny.",
+          "start": 819,
+          "end": 1389
         },
         {
-          "w": "They"
+          "w": "They",
+          "start": 2347,
+          "end": 2542
         },
         {
-          "w": "jump"
+          "w": "jump",
+          "start": 2556,
+          "end": 2861
         },
         {
-          "w": "and"
+          "w": "and",
+          "start": 2875,
+          "end": 3000
         },
         {
-          "w": "play."
+          "w": "play.",
+          "start": 3014,
+          "end": 3556
         }
       ]
     },
@@ -117,31 +169,49 @@
       "audio": "/audio/stories/at-the-zoo/scene-4.mp3",
       "words": [
         {
-          "w": "The"
+          "w": "The",
+          "start": 56,
+          "end": 208
         },
         {
-          "w": "elephant"
+          "w": "elephant",
+          "start": 222,
+          "end": 722
         },
         {
-          "w": "is"
+          "w": "is",
+          "start": 736,
+          "end": 889
         },
         {
-          "w": "grey."
+          "w": "grey.",
+          "start": 903,
+          "end": 1403
         },
         {
-          "w": "It"
+          "w": "It",
+          "start": 2361,
+          "end": 2514
         },
         {
-          "w": "has"
+          "w": "has",
+          "start": 2528,
+          "end": 2722
         },
         {
-          "w": "a"
+          "w": "a",
+          "start": 2736,
+          "end": 2806
         },
         {
-          "w": "long"
+          "w": "long",
+          "start": 2819,
+          "end": 3139
         },
         {
-          "w": "nose."
+          "w": "nose.",
+          "start": 3153,
+          "end": 3750
         }
       ]
     },
@@ -153,31 +223,49 @@
       "audio": "/audio/stories/at-the-zoo/scene-5.mp3",
       "words": [
         {
-          "w": "I"
+          "w": "I",
+          "start": 56,
+          "end": 236
         },
         {
-          "w": "eat"
+          "w": "eat",
+          "start": 250,
+          "end": 444
         },
         {
-          "w": "ice"
+          "w": "ice",
+          "start": 458,
+          "end": 736
         },
         {
-          "w": "cream."
+          "w": "cream.",
+          "start": 750,
+          "end": 1236
         },
         {
-          "w": "It"
+          "w": "It",
+          "start": 2194,
+          "end": 2361
         },
         {
-          "w": "is"
+          "w": "is",
+          "start": 2375,
+          "end": 2528
         },
         {
-          "w": "cold"
+          "w": "cold",
+          "start": 2542,
+          "end": 2875
         },
         {
-          "w": "and"
+          "w": "and",
+          "start": 2889,
+          "end": 3014
         },
         {
-          "w": "sweet."
+          "w": "sweet.",
+          "start": 3028,
+          "end": 3611
         }
       ]
     },
@@ -189,16 +277,24 @@
       "audio": "/audio/stories/at-the-zoo/scene-6.mp3",
       "words": [
         {
-          "w": "I"
+          "w": "I",
+          "start": 56,
+          "end": 194
         },
         {
-          "w": "love"
+          "w": "love",
+          "start": 208,
+          "end": 472
         },
         {
-          "w": "the"
+          "w": "the",
+          "start": 486,
+          "end": 611
         },
         {
-          "w": "zoo!"
+          "w": "zoo!",
+          "start": 625,
+          "end": 1153
         }
       ]
     }
