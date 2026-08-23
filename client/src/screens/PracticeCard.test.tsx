@@ -36,8 +36,26 @@ vi.mock('../scoring/createScorer', () => ({
 }))
 import { PracticeCard } from './PracticeCard'
 
-function renderCard() {
-  render(<MemoryRouter initialEntries={['/practice/sz-th-three']}><Routes><Route path="/practice/:cardId" element={<PracticeCard />} /></Routes></MemoryRouter>)
+/** The level route is stubbed rather than pulling in LevelSelect: these tests only care that
+ * "Hoàn thành 🎉" lands back on the level the card belongs to. */
+function renderCard(cardId = 'sz-th-three') {
+  render(
+    <MemoryRouter initialEntries={[`/practice/${cardId}`]}>
+      <Routes>
+        <Route path="/practice/:cardId" element={<PracticeCard />} />
+        <Route path="/level/:levelId" element={<p>danh sách thẻ</p>} />
+      </Routes>
+    </MemoryRouter>,
+  )
+}
+
+/** Records one attempt and waits for the 3-star result, which is what reveals the next/finish CTA. */
+async function scoreOnce() {
+  await waitFor(() => expect(screen.getByRole('button', { name: /bấm để nói/i })).toBeEnabled())
+  fireEvent.click(screen.getByRole('button', { name: /bấm để nói/i }))
+  await waitFor(() => expect(screen.getByRole('button', { name: /dừng/i })).toBeInTheDocument())
+  fireEvent.click(screen.getByRole('button', { name: /dừng/i }))
+  await waitFor(() => expect(screen.getAllByTestId('star-filled')).toHaveLength(3))
 }
 
 beforeEach(() => {
@@ -75,6 +93,28 @@ it('logs a speak activity event after a scored attempt', async () => {
 
   const events = JSON.parse(localStorage.getItem('speakup.activity') ?? '[]')
   expect(events).toContainEqual(expect.objectContaining({ kind: 'speak', id: 'sz-th-three' }))
+})
+
+it('Tiếp theo goes to the next card of the same level', async () => {
+  renderCard()
+  await scoreOnce()
+
+  fireEvent.click(screen.getByRole('button', { name: /tiếp theo/i }))
+
+  expect(screen.getByText('thank')).toBeInTheDocument() // sz-th-thank, the 2nd Sound Zoo card
+  expect(screen.getByText('Thẻ 2/10')).toBeInTheDocument()
+})
+
+it('the last card of a level finishes back at the level instead of jumping to the next level', async () => {
+  renderCard('sz-l-lion') // 10th and last Sound Zoo card
+  await scoreOnce()
+  expect(screen.getByText('Thẻ 10/10')).toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: /tiếp theo/i })).not.toBeInTheDocument()
+
+  fireEvent.click(screen.getByRole('button', { name: /hoàn thành/i }))
+
+  // Not Word Pop's first card: the counter says 10/10, so the run is over.
+  expect(screen.getByText('danh sách thẻ')).toBeInTheDocument()
 })
 
 it('says the sample audio is missing instead of failing silently', async () => {

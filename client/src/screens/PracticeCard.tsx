@@ -64,8 +64,9 @@ export function PracticeCard() {
   if (!card) return <p>Không tìm thấy thẻ</p>
   const level = LEVELS.find(l => l.cards.includes(card))!
   const cardIndex = level.cards.findIndex(c => c.id === cardId)
-  const allCards = LEVELS.flatMap(l => l.cards)
-  const next = allCards[allCards.findIndex(c => c.id === cardId) + 1]
+  // "Tiếp theo" stays inside this level, so it agrees with the "Thẻ n/N" counter above it: on
+  // card N of N there is no next card, and the run ends with "Hoàn thành 🎉" back at the level.
+  const next = level.cards[cardIndex + 1]
 
   const mood: FoxyMood = recording
     ? 'listening'
