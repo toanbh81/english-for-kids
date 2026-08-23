@@ -398,7 +398,10 @@ shown.
 - **🎭 Story Voice (`/level/story-voice` → `/voice/:id`)** — 8 short passages
   (`client/src/content/story-voice.json`), each tagged with a `mood` (happy, surprised, question,
   sad, excited, calm) and read with a mood tips card ("🎭 Gợi ý giọng") before the mic opens — the
-  mood's three shared tips, or the passage's own `tips` when it has them. The mic stays open 13 s
+  mood's three shared tips, or the passage's own `tips` when it has them. The whole screen is sized
+  to a landscape iPad: at 1194×834 the mic ends 68 px above the fold on all 8 passages with no
+  scrolling (56 px mood emoji, compact 14 px tips list, and 30 px passage type on `lg` once a
+  passage runs past 12 words). The mic stays open 13 s
   here (every other bậc uses 6 s), long enough for three sentences read slowly and with feeling.
   Scoring is prosody-first: a big "Ngữ điệu NN" chip toned by `result.prosody` leads the result,
   ahead of the usual score bars. Prosody is never faked from accuracy: when a run has no prosody
@@ -481,6 +484,7 @@ sample audio" above for the exact command and output folders (`client/public/aud
 | 35 | Turn Wi-Fi off (header shows "chế độ đơn giản") → Story Voice → score a passage | Chip reads "Chưa chấm được ngữ điệu" instead of a number, the fourth score bar is empty and labelled "Ngữ điệu —", and the run is capped at 2 stars | ⏳ pending |
 | 36 | `/levels` stairs | All 5 steps show as playable links — Sentence Stars and Story Voice have no 🔒 "Sắp có" placeholder left | ⏳ pending |
 | 37 | Story Voice → tap the mic and read a whole passage slowly, with feeling | The countdown ticks 13→1 and the mic stays open to the end of the third sentence — it must not cut off mid-passage | ⏳ pending |
+| 38 | Story Voice → open each of the 8 passages in landscape | The whole screen fits with no scrolling and the mic is fully visible above the fold on every one, including the longest (sv4) | ⏳ pending |
 
 ## Architecture
 

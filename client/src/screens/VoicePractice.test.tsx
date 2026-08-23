@@ -106,6 +106,18 @@ it('tints the sentence-final ❗❓ and leaves the words alone', () => {
   expect(qs.map(q => q.textContent)).toEqual(['?', '?', '!'])
 })
 
+/** Measured on a landscape iPad (1194×834): with these sizes the mic ends 68 px above the fold on
+ * all 8 passages and nothing scrolls. jsdom cannot lay that out, so it guards the inputs. */
+it('keeps the long passages at the smaller size a landscape iPad has room for', () => {
+  renderVoice('sv4') // 15 words — three lines at 34 px
+  expect(screen.getByTestId('voice-passage')).toHaveClass('lg:text-[30px]')
+  expect(screen.getByTestId('mood-emoji')).toHaveClass('text-[56px]')
+
+  cleanupAndRender('sv6') // 10 words — fits at the bigger size
+  expect(screen.getByTestId('voice-passage')).not.toHaveClass('lg:text-[30px]')
+  expect(screen.getByTestId('voice-passage')).toHaveClass('text-[34px]')
+})
+
 /** A ! that closes a quote inside a sentence is not an instruction to the voice — the sentence
  * keeps going. Only a mark with a space (or nothing) after it ends a line. */
 it('tints only the marks that actually end a sentence', () => {

@@ -68,10 +68,14 @@ const MOOD_TIPS: Record<VoicePassage['mood'], string[]> = {
  * is "followed by a space or the end of the passage" — enough to tell `look!` from `"stop!"`.
  * The paragraph carries one aria-label so a screen reader hears the passage, not fragments. */
 export function Passage({ text }: { text: string }) {
+  // The long passages run to three full lines at 34 px and push the mic off the bottom of a
+  // landscape iPad. On a wide screen they drop to 30 px — the short ones keep the bigger type.
+  const long = text.trim().split(/\s+/).length > 12
   return (
     <p
       aria-label={text}
-      className="max-w-3xl text-center font-display text-[34px] font-extrabold leading-snug text-ink-900"
+      data-testid="voice-passage"
+      className={`max-w-3xl text-center font-display font-extrabold leading-snug text-ink-900 ${long ? 'text-[34px] lg:text-[30px]' : 'text-[34px]'}`}
     >
       {text.split(/([!?](?=\s|$))/).map((part, i) =>
         part === '!' || part === '?' ? (
@@ -147,7 +151,10 @@ function VoiceRun({ passage }: { passage: VoicePassage }) {
 
   return (
     <main className="h-full overflow-y-auto bg-cream-50 px-6 py-5">
-      <div className="mx-auto flex min-h-full w-full max-w-5xl flex-col items-center gap-4">
+      {/* Everything down to the mic has to fit a landscape iPad (1194×834) without scrolling:
+        * a mic below the fold reads as "there is nothing to do here". Hence gap-3 rather than
+        * gap-4, the smaller mood emoji, and the compact tips list. */}
+      <div className="mx-auto flex min-h-full w-full max-w-5xl flex-col items-center gap-3">
         <header className="flex w-full items-center justify-between gap-4">
           <BackButton to="/level/story-voice" label="Quay lại" />
           <Chip tone="coral">Đoạn {index + 1}/{STORY_VOICE.length}</Chip>
@@ -158,7 +165,7 @@ function VoiceRun({ passage }: { passage: VoicePassage }) {
 
         {/* The mood is the instruction on this screen — bigger than the passage's own words. */}
         <section className="flex flex-col items-center gap-1">
-          <span aria-hidden="true" className="text-[72px] leading-none">{passage.emoji}</span>
+          <span aria-hidden="true" data-testid="mood-emoji" className="text-[56px] leading-none">{passage.emoji}</span>
           <p className="font-display text-2xl font-extrabold text-ink-900">Đọc với giọng: {passage.moodVi}</p>
         </section>
 
@@ -169,11 +176,13 @@ function VoiceRun({ passage }: { passage: VoicePassage }) {
           {audioMissing && <p className="text-lg font-bold text-ink-300">Chưa có audio mẫu</p>}
         </section>
 
-        <Card className="flex w-full max-w-2xl flex-col gap-2 px-6 py-4">
-          <p className="font-display text-xl font-extrabold text-ink-900">🎭 Gợi ý giọng</p>
-          <ul className="flex flex-col gap-1">
+        {/* Three tips, three lines, 14 px: read once before the attempt and then ignored, so it
+          * buys its height back for the mic rather than shouting over the passage. */}
+        <Card className="flex w-full max-w-2xl flex-col gap-0.5 px-6 py-3">
+          <p className="font-display text-lg font-extrabold text-ink-900">🎭 Gợi ý giọng</p>
+          <ul className="flex flex-col">
             {tips.map(tip => (
-              <li key={tip} data-testid="mood-tip" className="text-lg font-bold text-ink-500">• {tip}</li>
+              <li key={tip} data-testid="mood-tip" className="text-[14px] font-bold leading-snug text-ink-500">• {tip}</li>
             ))}
           </ul>
         </Card>
@@ -199,7 +208,9 @@ function VoiceRun({ passage }: { passage: VoicePassage }) {
             </div>
           </section>
         ) : (
-          <section className="flex min-h-[112px] flex-1 flex-col items-center justify-center gap-3">
+          /* 112 px of reserved blank space here was what pushed the mic off a landscape iPad. The
+           * countdown state outgrows any reserve anyway, so it only ever padded the idle line. */
+          <section className="flex min-h-[64px] flex-1 flex-col items-center justify-center gap-3">
             {recording ? (
               <>
                 <div aria-hidden="true" className="font-display text-[56px] font-extrabold leading-none text-coral-text">{secondsLeft}</div>
