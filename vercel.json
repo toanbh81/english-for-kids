@@ -1,7 +1,7 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "installCommand": "pnpm install --frozen-lockfile",
-  "buildCommand": "pnpm --filter client build && rm -rf dist && cp -r client/dist dist",
+  "buildCommand": "node $( [ -f scripts/vercel-build.mjs ] && echo scripts/vercel-build.mjs || echo ../scripts/vercel-build.mjs )",
   "outputDirectory": "dist",
   "framework": null,
   "rewrites": [
