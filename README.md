@@ -35,7 +35,11 @@ needed. If you serve the built client from somewhere the proxy does not cover, c
 
 ## Generating sample audio (Nghe mình / Nghe cô)
 
-Sample word audio (Jenny's voice) is generated locally and saved to `client/public/audio/`. It is **not** committed — run this once after setup, or whenever you add new words:
+Sample word audio (Jenny's voice) is generated locally and saved to `client/public/audio/`. The
+generated mp3s **are committed** (deploys need sound, and regenerating them costs an Azure call per
+word) — the one exception is `client/public/audio/audition/`, the voice-audition scratch folder,
+which is the only audio path in `.gitignore`. Run this once after setup, or whenever you add new
+words, and commit what it writes:
 
 ```bash
 AZURE_SPEECH_KEY=your-key AZURE_SPEECH_REGION=southeastasia node scripts/gen-audio.mjs three thank this very fish zoo ship chair red lion cat dog elephant monkey rabbit tiger bird horse sheep frog snake giraffe
@@ -48,7 +52,7 @@ AZURE_SPEECH_KEY=your-key AZURE_SPEECH_REGION=southeastasia node scripts/gen-sto
 ```
 
 This writes mp3s to `client/public/audio/stories/<id>/` and fills word timings (start/end ms) into
-each story's JSON; commit the updated JSON files afterwards (the mp3s themselves are gitignored).
+each story's JSON; commit both the updated JSON files and the mp3s.
 Run the commands from the repo root — the script resolves every path against the repo root, so it
 writes to the same places whatever your current directory is. If Azure's word boundaries do not
 line up with a scene's `words` array, the script exits with a message instead of writing shifted
@@ -72,7 +76,7 @@ AZURE_SPEECH_KEY=your-key AZURE_SPEECH_REGION=southeastasia node scripts/gen-sen
 
 This writes `client/public/audio/sentences/<id>.mp3` for every sentence in
 `client/src/content/sentences.json` (or, given ids as extra args, only those sentences). Run it
-whenever you add or change a sentence; the mp3s are gitignored like the other generated audio.
+whenever you add or change a sentence, and commit the mp3s like the other generated audio.
 
 Tập âm's 27 sound-zoo words (Phase 5) added 17 new words beyond the original 10 (`rabbit` and
 `sheep` were already generated for Word Pop, so they are not repeated below):
@@ -283,8 +287,8 @@ pnpm --filter client exec vite --mode nossl --port 5174
 Sound Zoo, Word Pop and Từ vựng used to all present "a word + a mic", so a child (and a parent
 watching) could not tell the four speaking games apart. Phase 5 gives each bậc a visibly different
 skill, on top of the same scoring engine (`useSpeakingAttempt` + `toFeedback`) and the same
-`speak` activity logging (all four count toward the daily mission's "5 thẻ" step: Tập âm, Đọc từ,
-Minimal Pairs; Học từ mới logs `word` events instead).
+`speak` activity logging — three of the four log `speak` and so count toward the daily mission's
+"5 thẻ" step (Tập âm, Đọc từ, Nghe & chọn); Học từ mới logs `word` events instead.
 
 - **🦁 Tập âm (Sound Zoo)** — organised **by sound, not by word**: 9 target sounds (th /θ/, dh /ð/,
   v, f, z, sh /ʃ/, ch /tʃ/, r, l), each with 3 words (27 cards total). The level screen
@@ -339,8 +343,10 @@ Minimal Pairs; Học từ mới logs `word` events instead).
 **Audio generation:** new Sound Zoo words, Minimal Pairs words and the 9 isolated-sound samples
 are produced by the same `gen-audio.mjs` / `gen-sounds.mjs` scripts documented above under
 "Generating sample audio" — see that section for the exact commands and output folders
-(`client/public/audio`, `client/public/audio/pairs`, `client/public/audio/sounds`). Unlike Phase
-2–4 audio, these mp3s are committed (tracked in git), not gitignored.
+(`client/public/audio`, `client/public/audio/pairs`, `client/public/audio/sounds`). Like the Phase
+2–4 audio, these mp3s are committed: every folder under `client/public/audio/` is tracked in git
+except `audio/audition/`, the voice-audition scratch folder, which is the only one `.gitignore`
+excludes.
 
 ## iPad setup & testing (Thiết lập trên iPad)
 
@@ -391,12 +397,14 @@ are produced by the same `gen-audio.mjs` / `gen-sounds.mjs` scripts documented a
 | 19 | Parent Dashboard → tap "Khoá lại" | Immediately re-locks and shows a fresh math question, without leaving `/parent` | ⏳ pending |
 | 20 | Story player → tap the subtitle switch | Toggle switch flips state and announces it (e.g. "Phụ đề bật") | ⏳ pending |
 | 21 | Tập âm → `/level/sound-zoo` → open a sound tile → tap "🔊 Nghe âm lẻ" | Plays the isolated-sound sample (just the phoneme, not a full word) | ⏳ pending |
-| 22 | Tập âm practice → tap a word's sound chip | Chip plays a short tone distinct from the word's own audio | ⏳ pending |
+| 22 | Tập âm practice → score a word, then tap "🔊 Nghe mẫu" under the result | Replays that word's own sample (the same audio as before the attempt). The /θ/ chip next to it is a read-out, not a button — nothing happens when it is tapped | ⏳ pending |
 | 23 | Đọc từ (Word Pop) → say a word twice in a row scoring ≥ 80 | Streak fills ●●, then awards 3 stars ("Lần 1/2 · Lần 2/2 ✓") | ⏳ pending |
 | 24 | Học từ mới → new card → tap a wrong meaning in "Đoán nghĩa" | Card shakes and lets the child try again | ⏳ pending |
 | 25 | Học từ mới → "Ôn tập hôm nay" → open a due word | English word is hidden (emoji + Vietnamese only) until "Gợi ý" is tapped | ⏳ pending |
 | 26 | Nghe & chọn (`/level/minimal-pairs`) → open a pair → listen, choose, then read both words | 🔊 plays one word, tapping the matching card gives ✅/🙈 + Foxy; after 2 correct listens the mic step appears for reading both words | ⏳ pending |
 | 27 | `/levels` stairs | "Nghe & chọn" step shows unlocked (not the 🔒 "Sắp có" placeholder) | ⏳ pending |
+| 28 | Turn Wi-Fi off (header shows "chế độ đơn giản") → Tập âm → say all 3 words of a sound | Chip reads "Chưa chấm được âm — cần kết nối Azure" with no number, the word's own score still shows, and the run awards at most 2 stars | ⏳ pending |
+| 29 | Học từ mới → "Ôn tập hôm nay" → open a due word | No 🔊 on the hidden front face; it appears only after "Gợi ý" is tapped | ⏳ pending |
 
 ## Architecture
 
