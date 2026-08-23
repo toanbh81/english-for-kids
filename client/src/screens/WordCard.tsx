@@ -23,6 +23,11 @@ const UNLOCK_SCORE = 60
  * child is painted (`backface-visibility`). */
 const FACE = 'absolute inset-0 flex flex-col items-center justify-center gap-3 rounded-xl4 p-6 [backface-visibility:hidden]'
 
+/** 64 px tap target in the face's bottom corner — the explicit, focusable way to flip, so the
+ * card never has to pretend to be a button. */
+const FLIP_BUTTON =
+  'absolute bottom-2 right-2 flex h-16 w-16 items-center justify-center rounded-full text-3xl active:translate-y-[2px]'
+
 const SPEAK_CHIP =
   'inline-flex min-h-[64px] items-center gap-2 rounded-full bg-white px-6 font-display text-lg font-extrabold text-teal-600 shadow-[0_4px_0_#F2DFC9] active:translate-y-[2px]'
 
@@ -97,7 +102,7 @@ function WordCardInner({ word, topic, isReview, list }: { word: Word; topic: str
     run()
   }
 
-  /** Only the card itself flips on Enter/Space: a key press aimed at one of the audio buttons
+  /** Only the card surface itself flips on Enter/Space: a key press aimed at one of the buttons
    * riding on a face bubbles up here, and swallowing it would flip the card instead of playing
    * the sound for anyone using a keyboard. */
   function onCardKey(e: KeyboardEvent<HTMLDivElement>) {
@@ -123,17 +128,26 @@ function WordCardInner({ word, topic, isReview, list }: { word: Word; topic: str
         </header>
 
         <div className="h-[360px] w-[320px] shrink-0 [perspective:1200px]">
+          {/* A plain div, not a `role="button"`: the whole card stays tap-anywhere for a small
+              finger, while the flip each face carries is the real control screen readers and
+              keyboards use. */}
           <div
-            role="button"
-            tabIndex={0}
-            aria-label="Lật thẻ"
+            data-testid="flip-card"
             onClick={flip}
             onKeyDown={onCardKey}
             className={`relative h-full w-full cursor-pointer transition-transform duration-500 [transform-style:preserve-3d] ${
               flipped ? '[transform:rotateY(180deg)]' : ''
             }`}
           >
-            <div className={`${FACE} bg-white shadow-card`}>
+            {/* The face turned away is still painted-over by `backface-visibility`, but that is a
+                purely visual trick: `inert` + `aria-hidden` are what keep its buttons out of the
+                tab order and out of the screen reader. */}
+            <div
+              data-testid="face-front"
+              className={`${FACE} bg-white shadow-card`}
+              inert={flipped}
+              aria-hidden={flipped ? 'true' : undefined}
+            >
               <span aria-hidden="true" className="text-[96px] leading-none">{word.emoji}</span>
               <span className="font-display text-[44px] font-extrabold leading-none text-ink-900">{word.word}</span>
               <span className="text-xl font-bold text-ink-300">{word.ipa}</span>
@@ -149,15 +163,26 @@ function WordCardInner({ word, topic, isReview, list }: { word: Word; topic: str
                 </span>
               </button>
               <Chip className="absolute bottom-4">MẶT TRƯỚC</Chip>
+              <button type="button" aria-label="Lật thẻ" onClick={e => onFaceButton(e, flip)} className={FLIP_BUTTON}>
+                <span aria-hidden="true">🔄</span>
+              </button>
             </div>
 
-            <div className={`${FACE} bg-[#FFF1E6] shadow-[0_8px_0_#F2DFC9] [transform:rotateY(180deg)]`}>
+            <div
+              data-testid="face-back"
+              className={`${FACE} bg-[#FFF1E6] shadow-[0_8px_0_#F2DFC9] [transform:rotateY(180deg)]`}
+              inert={!flipped}
+              aria-hidden={flipped ? undefined : 'true'}
+            >
               <span className="text-center font-display text-[36px] font-extrabold leading-tight text-coral-600">{word.vi}</span>
               <span className="text-center text-[22px] font-bold leading-snug text-ink-500">{word.example}</span>
               <button type="button" onClick={e => onFaceButton(e, () => speakText(word.example))} className={SPEAK_CHIP}>
                 🔊 Nghe câu ví dụ
               </button>
               <Chip className="absolute bottom-4">MẶT SAU</Chip>
+              <button type="button" aria-label="Lật thẻ" onClick={e => onFaceButton(e, flip)} className={FLIP_BUTTON}>
+                <span aria-hidden="true">🔄</span>
+              </button>
             </div>
           </div>
         </div>

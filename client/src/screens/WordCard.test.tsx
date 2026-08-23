@@ -83,18 +83,46 @@ it('shows the front face by default and flips to the Vietnamese/example face on 
   expect(screen.getByText('apple')).toBeInTheDocument()
 })
 
-it('Enter on the card flips it, but Enter aimed at an audio button on a face does not', () => {
+it('the Lật thẻ button flips the card, but Enter aimed at an audio button on a face does not', () => {
   renderCard('food', 'food-apple')
-  const card = screen.getByRole('button', { name: 'Lật thẻ' })
+  const shell = screen.getByTestId('flip-card')
   const FLIPPED = '[transform:rotateY(180deg)]'
 
   // A key press on a nested button bubbles to the card — it must not be swallowed as a flip,
   // or the button never gets to play its sound for a keyboard user.
   fireEvent.keyDown(screen.getByRole('button', { name: '🔊' }), { key: 'Enter' })
-  expect(card).not.toHaveClass(FLIPPED)
+  expect(shell).not.toHaveClass(FLIPPED)
 
-  fireEvent.keyDown(card, { key: 'Enter' })
-  expect(card).toHaveClass(FLIPPED)
+  // The keyboard path to the flip is a real button on the face, not the card container.
+  fireEvent.click(screen.getByRole('button', { name: 'Lật thẻ' }))
+  expect(shell).toHaveClass(FLIPPED)
+})
+
+it('hides the face turned away from the accessibility tree and from the tab order', () => {
+  renderCard('food', 'food-apple')
+
+  // Only the face the child is actually looking at is reachable: the other one is inert (no
+  // focus, no clicks) and aria-hidden, so its buttons cannot be tabbed into through the card.
+  expect(screen.getByTestId('face-front')).not.toHaveAttribute('aria-hidden')
+  expect(screen.getByTestId('face-front')).not.toHaveAttribute('inert')
+  expect(screen.getByTestId('face-back')).toHaveAttribute('aria-hidden', 'true')
+  expect(screen.getByTestId('face-back')).toHaveAttribute('inert')
+  expect(screen.getAllByRole('button', { name: 'Lật thẻ' })).toHaveLength(1)
+
+  fireEvent.click(screen.getByRole('button', { name: 'Lật thẻ' }))
+
+  expect(screen.getByTestId('face-front')).toHaveAttribute('aria-hidden', 'true')
+  expect(screen.getByTestId('face-front')).toHaveAttribute('inert')
+  expect(screen.getByTestId('face-back')).not.toHaveAttribute('aria-hidden')
+  expect(screen.getByTestId('face-back')).not.toHaveAttribute('inert')
+  expect(screen.getAllByRole('button', { name: 'Lật thẻ' })).toHaveLength(1)
+})
+
+it('the card container is no longer a button itself', () => {
+  renderCard('food', 'food-apple')
+  const shell = screen.getByTestId('flip-card')
+  expect(shell).not.toHaveAttribute('role')
+  expect(shell).not.toHaveAttribute('tabindex')
 })
 
 it('plays the sample audio and clears the missing-audio notice on success', async () => {
