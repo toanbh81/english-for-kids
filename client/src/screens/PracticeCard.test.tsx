@@ -61,7 +61,7 @@ it('shows the word, records, and renders 3 stars', async () => {
   fireEvent.click(screen.getByRole('button', { name: /dừng/i })) // stop
   await waitFor(() => expect(screen.getAllByTestId('star-filled')).toHaveLength(3))
   expect(screen.getByText('Tuyệt vời!')).toBeInTheDocument()
-  expect(screen.getAllByTestId('star-filled')[0]).toHaveClass('animate-bounce') // 3 stars celebrate
+  expect(screen.getAllByTestId('star-filled')[0]).toHaveClass('animate-star-drop') // the stars drop in
 })
 
 it('logs a speak activity event after a scored attempt', async () => {
@@ -80,7 +80,7 @@ it('logs a speak activity event after a scored attempt', async () => {
 it('says the sample audio is missing instead of failing silently', async () => {
   playerControl.playUrl.mockRejectedValue(new Error('audio failed'))
   renderCard()
-  fireEvent.click(screen.getByRole('button', { name: '🔊' }))
+  fireEvent.click(screen.getByRole('button', { name: /nghe mẫu/i }))
   await screen.findByText('Chưa có audio mẫu')
 })
 
@@ -113,6 +113,17 @@ it('auto-stops the recording after 6s and still scores', async () => {
   fireEvent.click(screen.getByRole('button', { name: /bấm để nói/i })) // start
   await act(async () => { await vi.advanceTimersByTimeAsync(6000) }) // auto-stop fires and scoring completes
   expect(screen.getAllByTestId('star-filled')).toHaveLength(3)
+})
+
+it('counts the recording down from the 6s auto-stop', async () => {
+  renderCard()
+  await waitFor(() => expect(screen.getByRole('button', { name: /bấm để nói/i })).toBeEnabled()) // scorer ready (real timers)
+  vi.useFakeTimers()
+  fireEvent.click(screen.getByRole('button', { name: /bấm để nói/i }))
+  await act(async () => { await vi.advanceTimersByTimeAsync(1) }) // recorder.start() resolves -> recording
+  expect(screen.getByText('6')).toBeInTheDocument()
+  await act(async () => { await vi.advanceTimersByTimeAsync(1000) })
+  expect(screen.getByText('5')).toBeInTheDocument()
 })
 
 describe('Web Speech engine', () => {
