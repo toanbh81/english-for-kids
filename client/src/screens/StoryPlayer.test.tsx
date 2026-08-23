@@ -65,9 +65,9 @@ it('shows the scene 0 emoji', () => {
 it('renders the words of scene 0 with wordIndex 1 active', () => {
   renderPlayer()
   const isButtons = screen.getAllByText('is') // scene 0 words: This is Foxy. Foxy is a little fox.
-  expect(isButtons[0]).toHaveClass('text-coral', 'scale-110') // index 1
-  expect(screen.getByText('This')).toHaveClass('text-slate-400') // index 0, already passed
-  expect(screen.getByText('little')).toHaveClass('text-slate-800') // index 6, not yet reached
+  expect(isButtons[0]).toHaveClass('text-coral-text', 'text-[44px]') // index 1
+  expect(screen.getByText('This')).toHaveClass('text-[#CDBFA9]') // index 0, already passed
+  expect(screen.getByText('little')).toHaveClass('text-ink-900') // index 6, not yet reached
 })
 
 it('clicking Phát calls toggle', () => {
@@ -135,16 +135,22 @@ it('stays quiet about audio on a timed scene that is not playing yet', () => {
   expect(screen.queryByText('Không phát được giọng đọc')).not.toBeInTheDocument()
 })
 
-it('shows a "Trả lời câu hỏi →" link to the quiz when ended', () => {
+it('pulses a "Tiếp tục ▸" link to the quiz when the story has ended', () => {
   state.ended = true
   renderPlayer()
-  const link = screen.getByRole('link', { name: /Trả lời câu hỏi/ })
+  const link = screen.getByRole('link', { name: /Tiếp tục/ })
   expect(link).toHaveAttribute('href', '/story/little-fox/quiz')
+  expect(link).toHaveClass('animate-pulse-soft')
+  expect(screen.queryByRole('link', { name: /Bỏ qua/ })).not.toBeInTheDocument()
 })
 
-it('does not show the quiz link when not ended', () => {
+it('offers a quiet "Bỏ qua ▸" to the same quiz before the story ends', () => {
   renderPlayer()
-  expect(screen.queryByRole('link', { name: /Trả lời câu hỏi/ })).not.toBeInTheDocument()
+  // The child may already know the story: skipping ahead stays possible, it just does not shout.
+  const link = screen.getByRole('link', { name: /Bỏ qua/ })
+  expect(link).toHaveAttribute('href', '/story/little-fox/quiz')
+  expect(link).not.toHaveClass('animate-pulse-soft')
+  expect(screen.queryByRole('link', { name: /Tiếp tục/ })).not.toBeInTheDocument()
 })
 
 it('shows a not-found message for an unknown story id', () => {

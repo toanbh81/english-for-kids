@@ -26,9 +26,9 @@ describe('Karaoke', () => {
     render(<Karaoke words={words} activeIndex={1} onWordTap={() => {}} />)
     const buttons = screen.getAllByRole('button')
     expect(buttons).toHaveLength(3)
-    expect(buttons[1]).toHaveClass('text-coral', 'scale-110')
-    expect(buttons[0]).toHaveClass('text-slate-400')
-    expect(buttons[2]).toHaveClass('text-slate-800')
+    expect(buttons[1]).toHaveClass('text-coral-text', 'text-[44px]')
+    expect(buttons[0]).toHaveClass('text-[#CDBFA9]')
+    expect(buttons[2]).toHaveClass('text-ink-900')
   })
   it('gives every word a 64px-wide centred tap target', () => {
     render(<Karaoke words={words} activeIndex={1} onWordTap={() => {}} />)
@@ -45,11 +45,11 @@ describe('Karaoke', () => {
   })
   it('shows the subtitle line when provided', () => {
     render(<Karaoke words={words} activeIndex={0} onWordTap={() => {}} subtitle="Con mèo chạy." />)
-    expect(screen.getByText('Con mèo chạy.')).toHaveClass('text-2xl', 'text-slate-500')
+    expect(screen.getByText('Con mèo chạy.')).toHaveClass('text-[19px]', 'text-ink-300')
   })
   it('does not render a subtitle line when omitted', () => {
     render(<Karaoke words={words} activeIndex={0} onWordTap={() => {}} />)
-    expect(screen.queryByText(/./, { selector: '.text-slate-500' })).not.toBeInTheDocument()
+    expect(screen.queryByText(/./, { selector: '.text-ink-300' })).not.toBeInTheDocument()
   })
 })
 
@@ -67,21 +67,23 @@ describe('PlayerControls', () => {
     expect(screen.getByRole('button', { name: 'Tạm dừng' })).toBeInTheDocument()
   })
 
-  it('play button is 96px (w-24 h-24)', () => {
+  it('play button is the 104px teal circle of the handoff', () => {
     render(<PlayerControls {...baseProps} />)
-    expect(screen.getByRole('button', { name: 'Phát' })).toHaveClass('w-24', 'h-24', 'rounded-full', 'bg-coral', 'text-white', 'text-5xl')
+    expect(screen.getByRole('button', { name: 'Phát' })).toHaveClass('w-[104px]', 'h-[104px]', 'rounded-full', 'bg-teal-500', 'text-white')
   })
 
-  it('rate button shows 🐢 (slow down) at rate 1 and is labeled "Tốc độ 0.75"', () => {
+  it('rate pill offers "Tốc độ 0.75" at rate 1, with 🐇 marked as the speed playing now', () => {
     render(<PlayerControls {...baseProps} rate={1} />)
     const btn = screen.getByRole('button', { name: 'Tốc độ 0.75' })
     expect(btn).toHaveTextContent('🐢')
+    expect(screen.getByText('🐇')).toHaveClass('bg-coral-50')
   })
 
-  it('rate button shows 🐇 at rate 0.75 and is labeled "Tốc độ 1"', () => {
+  it('rate pill offers "Tốc độ 1" at rate 0.75, with 🐢 marked as the speed playing now', () => {
     render(<PlayerControls {...baseProps} rate={0.75} />)
     const btn = screen.getByRole('button', { name: 'Tốc độ 1' })
     expect(btn).toHaveTextContent('🐇')
+    expect(screen.getByText('🐢')).toHaveClass('bg-coral-50')
   })
 
   it('music and subtitles buttons reflect on/off state in their labels', () => {
@@ -97,6 +99,11 @@ describe('PlayerControls', () => {
     const active = dots.filter(d => d.getAttribute('data-active') === 'true')
     expect(active).toHaveLength(1)
     expect(dots[1]).toHaveAttribute('data-active', 'true')
+  })
+
+  it('hides its dots when the screen draws them over the picture', () => {
+    render(<PlayerControls {...baseProps} dots={false} />)
+    expect(screen.queryAllByTestId('scene-dot')).toHaveLength(0)
   })
 
   it('calls each handler when its button is tapped', () => {
