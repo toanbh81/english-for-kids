@@ -385,18 +385,24 @@ shown.
 
 - **⭐ Sentence Stars (`/level/sentence-stars` → `/star/:id`)** — 10 sentences
   (`client/src/content/sentence-stars.json`), each with `stress` (which words carry the beat) and
-  an optional `link` (adjacent word pairs that run together, e.g. "an apple"). The sentence renders
+  an optional `link` (adjacent word pairs that run together, e.g. "red apple"). The sentence renders
   in `StressedSentence`: stressed words go coral and larger, linked pairs get a small ‿ connector
   underneath. A rhythm card shows one dot per word (big dot = stressed); tapping it replays the
-  sample with the dots pulsing along. Stars weigh accuracy, fluency **and** completeness together
+  sample and the dots beat once per word while the sample plays — the card loads the clip itself
+  and takes the tempo from its duration (duration ÷ word count, ~420 ms a word if the browser
+  reports no duration). Stars weigh accuracy, fluency **and** completeness together
   (`starsForSentence`): all three ≥ 80 → 3★, accuracy and completeness ≥ 60 → 2★, else 1★. The
-  result also shows a "Nhịp: 🐢 chậm / 🎵 tốt" line off the fluency score. Stars live at
+  result also shows a rhythm line off the fluency score in three bands — ≥ 80 "Nhịp: 🎵 tốt",
+  60–79 "Nhịp: 🙂 khá — nói liền hơi hơn nhé", below 60 "Nhịp: 🐢 chậm". Stars live at
   `sstar:<id>`.
 - **🎭 Story Voice (`/level/story-voice` → `/voice/:id`)** — 8 short passages
   (`client/src/content/story-voice.json`), each tagged with a `mood` (happy, surprised, question,
-  sad, excited, calm) and read with a mood tips card ("🎭 Gợi ý giọng") before the mic opens.
-  Scoring is prosody-first: a big "Ngữ điệu NN" chip toned by `result.prosody` (falling back to
-  accuracy when a run has no prosody score) leads the result, ahead of the usual score bars. Stars
+  sad, excited, calm) and read with a mood tips card ("🎭 Gợi ý giọng") before the mic opens — the
+  mood's three shared tips, or the passage's own `tips` when it has them. The mic stays open 13 s
+  here (every other bậc uses 6 s), long enough for three sentences read slowly and with feeling.
+  Scoring is prosody-first: a big "Ngữ điệu NN" chip toned by `result.prosody` leads the result,
+  ahead of the usual score bars. Prosody is never faked from accuracy: when a run has no prosody
+  score the chip says so and the fourth score bar stays empty, labelled "Ngữ điệu —". Stars
   (`starsForVoice`) need prosody ≥ 80 **and** accuracy ≥ 70 for 3★, prosody ≥ 60 for 2★, else 1★ —
   and when the engine is Web Speech (no prosody at all) the chip reads "Chưa chấm được ngữ điệu"
   and the run is capped at 2★, the same "can't measure it, don't credit it" rule Tập âm uses for
@@ -467,12 +473,12 @@ sample audio" above for the exact command and output folders (`client/public/aud
 | 27 | `/levels` stairs | "Nghe & chọn" step shows unlocked (not the 🔒 "Sắp có" placeholder) | ⏳ pending |
 | 28 | Turn Wi-Fi off (header shows "chế độ đơn giản") → Tập âm → say all 3 words of a sound | Chip reads "Chưa chấm được âm — cần kết nối Azure" with no number, the word's own score still shows, and the run awards at most 2 stars | ⏳ pending |
 | 29 | Học từ mới → "Ôn tập hôm nay" → open a due word | No 🔊 on the hidden front face; it appears only after "Gợi ý" is tapped | ⏳ pending |
-| 30 | Sentence Stars → open a sentence with a linked pair (e.g. ss1 "an apple") | Stressed words render coral and larger; the linked pair shows a small ‿ connector underneath | ⏳ pending |
-| 31 | Sentence Stars practice → tap the rhythm card | Dots pulse in rhythm while the sample plays; the dot for each stressed word is visibly bigger | ⏳ pending |
-| 32 | Sentence Stars → score a sentence | Result shows a "Nhịp: 🐢 chậm" or "Nhịp: 🎵 tốt" line under the stars, driven by the fluency score | ⏳ pending |
+| 30 | Sentence Stars → open a sentence with a linked pair (e.g. ss1 "red apple") | Stressed words render coral and larger; the linked pair shows a small ‿ connector underneath | ⏳ pending |
+| 31 | Sentence Stars practice → tap the rhythm card | The dots beat once per word while the sample plays, in step with the voice; the dot for each stressed word is visibly bigger | ⏳ pending |
+| 32 | Sentence Stars → score a sentence | Result shows a "Nhịp: 🐢 chậm" / "Nhịp: 🙂 khá — nói liền hơi hơn nhé" / "Nhịp: 🎵 tốt" line under the stars, driven by the fluency score | ⏳ pending |
 | 33 | Story Voice → open any passage | Mood badge (emoji + "Đọc với giọng: …") and the "🎭 Gợi ý giọng" tips card show before the mic opens | ⏳ pending |
 | 34 | Story Voice → score a passage over Wi-Fi (Azure) | A big "Ngữ điệu NN" chip leads the result, toned by the prosody score, ahead of the score bars | ⏳ pending |
-| 35 | Turn Wi-Fi off (header shows "chế độ đơn giản") → Story Voice → score a passage | Chip reads "Chưa chấm được ngữ điệu" instead of a number, and the run is capped at 2 stars | ⏳ pending |
+| 35 | Turn Wi-Fi off (header shows "chế độ đơn giản") → Story Voice → score a passage | Chip reads "Chưa chấm được ngữ điệu" instead of a number, the fourth score bar is empty and labelled "Ngữ điệu —", and the run is capped at 2 stars | ⏳ pending |
 | 36 | `/levels` stairs | All 5 steps show as playable links — Sentence Stars and Story Voice have no 🔒 "Sắp có" placeholder left | ⏳ pending |
 | 37 | Story Voice → tap the mic and read a whole passage slowly, with feeling | The countdown ticks 13→1 and the mic stays open to the end of the third sentence — it must not cut off mid-passage | ⏳ pending |
 

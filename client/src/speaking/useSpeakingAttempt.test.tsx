@@ -1,11 +1,12 @@
 import { renderHook, act, waitFor } from '@testing-library/react'
 import { useState } from 'react'
 
-const recorderControl = vi.hoisted(() => ({ shouldFailStart: false, start: vi.fn() }))
+const recorderControl = vi.hoisted(() => ({ shouldFailStart: false, start: vi.fn(), opts: undefined as { maxMs?: number } | undefined }))
 const scorerControl = vi.hoisted(() => ({ queue: [] as { engine: string; scorer: unknown }[] }))
 
 vi.mock('../audio/recorder', () => ({
-  useRecorder: () => {
+  useRecorder: (opts: { maxMs?: number } = {}) => {
+    recorderControl.opts = opts
     const [state, setState] = useState<'idle' | 'recording' | 'processing'>('idle')
     return {
       state,
@@ -36,6 +37,7 @@ import { useSpeakingAttempt } from './useSpeakingAttempt'
 afterEach(() => {
   recorderControl.shouldFailStart = false
   recorderControl.start.mockClear()
+  recorderControl.opts = undefined
   scorerControl.queue.length = 0
   delete (window as any).webkitSpeechRecognition
   vi.useRealTimers()
@@ -54,6 +56,19 @@ it('records and scores an attempt, then reset() clears the result', async () => 
 
   act(() => { result.current.reset() })
   expect(result.current.result).toBeNull()
+})
+
+/** The recorder has its own hard cap, and if it fires first the MediaRecorder is already closed
+ * when the auto-stop tries to read the blob — the attempt scores silence. It must always outlast
+ * the screen's window, including Story Voice's long 13 s one. */
+it('always gives the recorder a second longer than the screen’s auto-stop', async () => {
+  const long = renderHook(() => useSpeakingAttempt({ targetText: 'cat', autoStopMs: 13000 }))
+  await waitFor(() => expect(long.result.current.micState).toBe('idle'))
+  expect(recorderControl.opts).toEqual({ maxMs: 14000 })
+
+  const short = renderHook(() => useSpeakingAttempt({ targetText: 'cat', autoStopMs: 6000 }))
+  await waitFor(() => expect(short.result.current.micState).toBe('idle'))
+  expect(recorderControl.opts).toEqual({ maxMs: 8000 })
 })
 
 it('shows a friendly error when mic permission is denied', async () => {

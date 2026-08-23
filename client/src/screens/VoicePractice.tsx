@@ -64,14 +64,16 @@ const MOOD_TIPS: Record<VoicePassage['mood'], string[]> = {
 }
 
 /** Only the sentence-final ❗❓ are tinted: they are what the voice has to *do* at the end of the
- * line. The paragraph carries one aria-label so a screen reader hears the passage, not fragments. */
-function Passage({ text }: { text: string }) {
+ * line, and a ! that closes a quote or sits mid-sentence is not that instruction. "Sentence-final"
+ * is "followed by a space or the end of the passage" — enough to tell `look!` from `"stop!"`.
+ * The paragraph carries one aria-label so a screen reader hears the passage, not fragments. */
+export function Passage({ text }: { text: string }) {
   return (
     <p
       aria-label={text}
       className="max-w-3xl text-center font-display text-[34px] font-extrabold leading-snug text-ink-900"
     >
-      {text.split(/([!?])/).map((part, i) =>
+      {text.split(/([!?](?=\s|$))/).map((part, i) =>
         part === '!' || part === '?' ? (
           <span key={i} data-testid="voice-punct" className="text-coral-text">{part}</span>
         ) : (

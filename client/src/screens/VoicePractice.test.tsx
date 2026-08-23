@@ -32,7 +32,7 @@ vi.mock('../audio/player', () => ({ playUrl: playerControl.playUrl, playBlob: pl
 const store = vi.hoisted(() => ({ saveRecording: vi.fn() }))
 vi.mock('../progress/recordings', () => ({ saveRecording: store.saveRecording }))
 
-import { VoicePractice } from './VoicePractice'
+import { VoicePractice, Passage } from './VoicePractice'
 import { STORY_VOICE } from '../content'
 
 const SV1 = STORY_VOICE[0]
@@ -104,6 +104,19 @@ it('tints the sentence-final ❗❓ and leaves the words alone', () => {
   cleanupAndRender('sv3')
   const qs = screen.getAllByTestId('voice-punct')
   expect(qs.map(q => q.textContent)).toEqual(['?', '?', '!'])
+})
+
+/** A ! that closes a quote inside a sentence is not an instruction to the voice — the sentence
+ * keeps going. Only a mark with a space (or nothing) after it ends a line. */
+it('tints only the marks that actually end a sentence', () => {
+  render(<Passage text={'Wow, look! He said "stop!" and ran. Is it here?'} />)
+
+  const marks = screen.getAllByTestId('voice-punct')
+  expect(marks.map(m => m.textContent)).toEqual(['!', '?'])
+  // The whole passage still reads as one line to a screen reader, mid-sentence ! included.
+  expect(screen.getByLabelText('Wow, look! He said "stop!" and ran. Is it here?')).toHaveTextContent(
+    'Wow, look! He said "stop!" and ran. Is it here?',
+  )
 })
 
 it('coaches the mood with three tips, different per mood', () => {
