@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { PAIRS, findPair } from '../content'
-import { mulberry32, seedFromId } from '../content/shuffle'
+import { seededSide } from '../content/shuffle'
 import type { PairItem } from '../content/types'
 import type { PronunciationResult } from '../scoring/types'
 import { playBlob, playUrl } from '../audio/player'
@@ -27,21 +27,15 @@ const NEEDED = 2
 
 type Side = 'a' | 'b'
 
+const SIDES = ['a', 'b'] as const
+
 /**
- * Which of the two words 🔊 plays, decided from the number of listens so far.
- *
- * It has to be *unpredictable*: a strict a/b alternation is a pattern a child picks up within two
- * rounds, after which they stop listening and just take turns tapping. And it has to be
- * *deterministic*, or the screen would be untestable and a pair would open differently on every
- * reload. So the pair's id seeds a PRNG stream and the `listens`-th draw of it picks the side —
- * the same pair always plays the same sequence, but one with runs and repeats in it rather than a
- * beat the child can count.
+ * Which of the two words 🔊 plays, decided from the number of listens so far: the `listens`-th
+ * draw of a PRNG stream seeded by the pair's id. Unpredictable to the child (no alternation to
+ * count) but fixed per pair — see `seededSide`.
  */
-export function targetFor(pair: PairItem, listens: number): Side {
-  const rand = mulberry32(seedFromId(pair.id))
-  let draw = rand()
-  for (let i = 0; i < listens; i++) draw = rand()
-  return draw < 0.5 ? 'a' : 'b'
+function targetFor(pair: PairItem, listens: number): Side {
+  return seededSide(pair.id, listens, SIDES)
 }
 
 const OPTION =

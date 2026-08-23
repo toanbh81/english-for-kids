@@ -1,8 +1,6 @@
 // Deterministic per-id PRNG (mulberry32) so the same sentence always shuffles into the same tile
 // order — tests stay reproducible and a kid re-opening a sentence sees the same layout.
-// Exported as a pair because other screens need the same "unpredictable but fixed per id" trick:
-// Minimal Pairs draws its 🔊 target from a stream seeded by the pair's id.
-export function mulberry32(seed: number): () => number {
+function mulberry32(seed: number): () => number {
   let t = seed
   return function next() {
     t |= 0
@@ -13,7 +11,7 @@ export function mulberry32(seed: number): () => number {
   }
 }
 
-export function seedFromId(id: string): number {
+function seedFromId(id: string): number {
   let h = 0
   for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) | 0
   return h
@@ -35,4 +33,20 @@ export function shuffleTiles<T>(items: T[], seed: string): T[] {
     arr.push(arr.shift() as T)
   }
   return arr
+}
+
+/**
+ * One of two `sides`, chosen by the `turn`-th draw (0-based) of the stream seeded by `id`.
+ *
+ * The same seeded-PRNG trick as `shuffleTiles`, but for a choice made over and over rather than a
+ * one-off layout: Minimal Pairs picks which of a pair's two words 🔊 plays with it. A strict
+ * alternation is a pattern a child spots within two rounds and then stops listening for, while a
+ * real random draw would make the screen untestable — this gives a sequence with runs and repeats
+ * in it that is nonetheless identical every time that id is opened.
+ */
+export function seededSide<T>(id: string, turn: number, sides: readonly [T, T]): T {
+  const rand = mulberry32(seedFromId(id))
+  let draw = rand()
+  for (let i = 0; i < turn; i++) draw = rand()
+  return draw < 0.5 ? sides[0] : sides[1]
 }

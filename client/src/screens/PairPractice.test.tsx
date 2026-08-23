@@ -21,15 +21,16 @@ vi.mock('../speaking/useSpeakingAttempt', () => ({
 const playerControl = vi.hoisted(() => ({ playUrl: vi.fn() }))
 vi.mock('../audio/player', () => ({ playUrl: playerControl.playUrl, playBlob: vi.fn().mockResolvedValue(undefined) }))
 
-import { PairPractice, targetFor } from './PairPractice'
+import { PairPractice } from './PairPractice'
 import { findPair } from '../content'
+import { seededSide } from '../content/shuffle'
 
 const SHIP_SHEEP = findPair('pair-ship-sheep')!
 
-/** The word 🔊 plays on listen number `n` (0-based) — computed with the screen's own seeded
+/** The word 🔊 plays on listen number `n` (0-based) — computed from the screen's own seeded
  * stream, so the flow tests below read as "tap the word that was played" instead of pinning a
  * hard-coded order that only holds for this one pair. */
-const played = (n: number) => SHIP_SHEEP[targetFor(SHIP_SHEEP, n)].word
+const played = (n: number) => SHIP_SHEEP[seededSide(SHIP_SHEEP.id, n, ['a', 'b'] as const)].word
 /** The word that was *not* played — the wrong card, whichever side that happens to be. */
 const other = (word: string) => (word === SHIP_SHEEP.a.word ? SHIP_SHEEP.b.word : SHIP_SHEEP.a.word)
 
