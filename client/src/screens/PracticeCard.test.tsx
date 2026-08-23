@@ -38,6 +38,7 @@ import { PracticeCard } from './PracticeCard'
 import { LEVELS } from '../content'
 
 const soundZooCards = LEVELS.find(l => l.id === 'sound-zoo')!.cards
+const wordPopCards = LEVELS.find(l => l.id === 'word-pop')!.cards
 
 /** The level route is stubbed rather than pulling in LevelSelect: these tests only care that
  * "Hoàn thành 🎉" lands back on the level the card belongs to. */
@@ -61,8 +62,29 @@ async function scoreOnce() {
   await waitFor(() => expect(screen.getAllByTestId('star-filled')).toHaveLength(3))
 }
 
+/** Records one Word Pop attempt and waits for `expectedStreak` slots to be filled. The result
+ * lands in one render (feedback becomes non-null) and the streak effect chained off it commits
+ * a second, separate render — the streak-star count alone can coincidentally already match after
+ * the first render (`Math.min(2, feedback.stars)` does not depend on the streak), so waiting on
+ * both slots together is what actually pins down the settled, post-effect state. */
+async function recordOnce(expectedStreak: 0 | 1 | 2) {
+  await waitFor(() => expect(screen.getByRole('button', { name: /bấm để nói/i })).toBeEnabled())
+  fireEvent.click(screen.getByRole('button', { name: /bấm để nói/i }))
+  await waitFor(() => expect(screen.getByRole('button', { name: /dừng/i })).toBeInTheDocument())
+  fireEvent.click(screen.getByRole('button', { name: /dừng/i }))
+  await waitFor(() => {
+    expect(screen.getByLabelText('Lần 1/2')).toHaveTextContent(expectedStreak >= 1 ? '●' : '○')
+    expect(screen.getByLabelText('Lần 2/2')).toHaveTextContent(expectedStreak >= 2 ? '●' : '○')
+  })
+}
+
+function azureResult(overall: number, word = 'cat') {
+  return { overall, accuracy: overall, fluency: overall, completeness: 100, engine: 'azure' as const, words: [{ word, score: overall, errorType: 'None' as const, phonemes: [] }] }
+}
+
 beforeEach(() => {
   playerControl.playUrl.mockReset().mockResolvedValue(undefined)
+  localStorage.removeItem('speakup.stars')
 })
 
 afterEach(() => {
@@ -253,5 +275,65 @@ describe('expired Azure token', () => {
     await recordAndStop()
     await screen.findByText('Không nghe rõ, bé thử lại nhé!')
     expect(wsScore).not.toHaveBeenCalled()
+  })
+})
+
+describe('Word Pop: hidden IPA + two-in-a-row streak', () => {
+  const card = wordPopCards[0] // wp-cat
+
+  it('hides the IPA behind "Xem phiên âm" until tapped', async () => {
+    renderCard(card.id)
+    expect(screen.queryByText(card.ipa)).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Xem phiên âm' }))
+
+    expect(screen.getByText(card.ipa)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Xem phiên âm' })).not.toBeInTheDocument()
+  })
+
+  it('two consecutive ≥80 results award 3 stars and fill both streak slots', async () => {
+    const score = vi.fn().mockResolvedValueOnce(azureResult(85)).mockResolvedValueOnce(azureResult(90))
+    scorerControl.queue.push({ engine: 'azure', scorer: { score } })
+    renderCard(card.id)
+
+    await recordOnce(1) // first hit: streak 1/2, capped at 2 stars
+    expect(screen.getByLabelText('Lần 1/2')).toHaveTextContent('●')
+    expect(screen.getByLabelText('Lần 2/2')).toHaveTextContent('○')
+    expect(screen.getAllByTestId('star-filled')).toHaveLength(2)
+
+    fireEvent.click(screen.getByRole('button', { name: /thử lại/i }))
+    await recordOnce(2) // second hit: streak 2/2, wins 3 stars
+
+    expect(screen.getByLabelText('Lần 1/2')).toHaveTextContent('●')
+    expect(screen.getByLabelText('Lần 2/2')).toHaveTextContent('●')
+    expect(screen.getByText('Nói đúng 2 lần liên tiếp! 🎉')).toBeInTheDocument()
+    expect(screen.getAllByTestId('star-filled')).toHaveLength(3)
+    const stars = JSON.parse(localStorage.getItem('speakup.stars') ?? '{}')
+    expect(stars[card.id]).toBe(3)
+  })
+
+  it('an 80 then a 50 clears the streak and keeps stored stars capped at 2', async () => {
+    const score = vi.fn().mockResolvedValueOnce(azureResult(85)).mockResolvedValueOnce(azureResult(50))
+    scorerControl.queue.push({ engine: 'azure', scorer: { score } })
+    renderCard(card.id)
+
+    await recordOnce(1) // first hit: streak 1/2, capped at 2 stars
+    expect(screen.getByLabelText('Lần 1/2')).toHaveTextContent('●')
+
+    fireEvent.click(screen.getByRole('button', { name: /thử lại/i }))
+    await recordOnce(0) // sub-80: streak clears, single-attempt stars (1) are stored
+
+    expect(screen.getByLabelText('Lần 1/2')).toHaveTextContent('○')
+    expect(screen.getByLabelText('Lần 2/2')).toHaveTextContent('○')
+    const stars = JSON.parse(localStorage.getItem('speakup.stars') ?? '{}')
+    expect(stars[card.id] ?? 0).toBeLessThanOrEqual(2)
+  })
+
+  it('leaves Sound Zoo cards unchanged: IPA visible, no streak slots', async () => {
+    renderCard() // default sz-th-three
+    expect(screen.getByText(soundZooCards[0].ipa)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Xem phiên âm' })).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('Lần 1/2')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('Lần 2/2')).not.toBeInTheDocument()
   })
 })
