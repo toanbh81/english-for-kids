@@ -21,7 +21,25 @@ vi.mock('../speaking/useSpeakingAttempt', () => ({
   useSpeakingAttempt: () => attemptControl.current,
 }))
 
+const playerMock = vi.hoisted(() => ({ playUrl: vi.fn(() => Promise.resolve()), playBlob: vi.fn(() => Promise.resolve()) }))
+vi.mock('../audio/player', () => playerMock)
+
 import { StoryRetell } from './StoryRetell'
+import { findStory } from '../content/stories'
+import type { StoryWord } from '../content/stories/types'
+
+/** Strip generated timings from the retell scene so the speech-synthesis fallback path is exercised. */
+function withoutRetellTimings<T>(fn: () => T): T {
+  const story = findStory('little-fox')!
+  const scene = story.scenes.find(s => s.text.includes(story.retell.text))!
+  const saved: StoryWord[] = scene.words
+  scene.words = saved.map(w => ({ w: w.w }))
+  try {
+    return fn()
+  } finally {
+    scene.words = saved
+  }
+}
 
 function renderRetell(id = 'little-fox') {
   render(
@@ -86,6 +104,15 @@ it('shows a simple-mode label for the webspeech engine', () => {
   expect(screen.getByText('chế độ đơn giản')).toBeInTheDocument()
 })
 
+it('plays the recorded scene narration when the retell scene has word timings', () => {
+  playerMock.playUrl.mockClear()
+  renderRetell()
+  fireEvent.click(screen.getByRole('button', { name: '🔊' }))
+  const story = findStory('little-fox')!
+  const scene = story.scenes.find(s => s.text.includes(story.retell.text))!
+  expect(playerMock.playUrl).toHaveBeenCalledWith(scene.audio)
+})
+
 describe('speech synthesis sample fallback', () => {
   const originalSpeechSynthesis = window.speechSynthesis
   const originalUtterance = (window as unknown as { SpeechSynthesisUtterance?: unknown }).SpeechSynthesisUtterance
@@ -106,11 +133,12 @@ describe('speech synthesis sample fallback', () => {
         this.text = text
       }
     }
-    renderRetell()
-
-    const playButton = screen.getByRole('button', { name: '🔊' })
-    fireEvent.click(playButton)
-    fireEvent.click(playButton)
+    withoutRetellTimings(() => {
+      renderRetell()
+      const playButton = screen.getByRole('button', { name: '🔊' })
+      fireEvent.click(playButton)
+      fireEvent.click(playButton)
+    })
 
     expect(synth.cancel).toHaveBeenCalledTimes(2)
     // speakText() defers speak() one task past cancel() (WebKit drops same-task utterances).

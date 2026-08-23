@@ -17,7 +17,8 @@ it('every story has at least 6 scenes', () => {
 it('every scene words array matches splitWords(text)', () => {
   for (const story of STORIES) {
     for (const scene of story.scenes) {
-      expect(scene.words).toEqual(splitWords(scene.text).map(w => ({ w })))
+      // Generated timings add start/end per word; the word list itself must still mirror the text.
+      expect(scene.words.map(x => x.w)).toEqual(splitWords(scene.text))
     }
   }
 })
