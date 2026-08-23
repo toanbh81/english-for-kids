@@ -64,6 +64,16 @@ AZURE_SPEECH_KEY=your-key AZURE_SPEECH_REGION=southeastasia node scripts/gen-aud
 `gen-audio.mjs` accepts `--out <dir>` (default `client/public/audio`) and `--voice <name>` (default
 `en-US-JennyNeural`, a clear neutral voice good for single words).
 
+Sentence Builder audio (Phase 3) is generated with the Emma HD voice, same as story narration:
+
+```bash
+AZURE_SPEECH_KEY=your-key AZURE_SPEECH_REGION=southeastasia node scripts/gen-sentences.mjs
+```
+
+This writes `client/public/audio/sentences/<id>.mp3` for every sentence in
+`client/src/content/sentences.json` (or, given ids as extra args, only those sentences). Run it
+whenever you add or change a sentence; the mp3s are gitignored like the other generated audio.
+
 ## Phase 2 — Listening (Nghe kể chuyện)
 
 A listening module that engages kids in illustrated stories with synchronized karaoke-style text. Kids listen to a 60–120 s story (6–7 scenes), see words light up in sync with narration, can slow playback, tap words to replay, toggle Vietnamese subtitles, then answer 3 picture questions and retell one target sentence.

@@ -9,6 +9,8 @@ import { StoryRetell } from './screens/StoryRetell'
 import { WordTopics } from './screens/WordTopics'
 import { WordList } from './screens/WordList'
 import { WordCard } from './screens/WordCard'
+import { SentenceList } from './screens/SentenceList'
+import { SentenceBuilder } from './screens/SentenceBuilder'
 
 export default function App() {
   return (
@@ -23,6 +25,8 @@ export default function App() {
       <Route path="/words" element={<WordTopics />} />
       <Route path="/words/:topic" element={<WordList />} />
       <Route path="/words/:topic/:wordId" element={<WordCard />} />
+      <Route path="/sentences" element={<SentenceList />} />
+      <Route path="/sentence/:id" element={<SentenceBuilder />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   )

@@ -2,3 +2,6 @@
 @tailwind base; @tailwind components; @tailwind utilities;
 html, body, #root { height: 100%; }
 body { @apply bg-cream font-sans text-slate-800; -webkit-user-select: none; }
+
+@keyframes shake { 0%,100%{transform:translateX(0)} 25%{transform:translateX(-8px)} 75%{transform:translateX(8px)} }
+.animate-shake{animation:shake .4s}
