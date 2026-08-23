@@ -11,3 +11,4 @@ dist
 client/public/audio/*
 !client/public/audio/.gitkeep
 samples/
+.claude/launch.json
