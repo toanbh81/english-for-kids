@@ -10,11 +10,11 @@ beforeEach(() => localStorage.clear())
 
 it('links the two playable levels and shows the other three as locked', () => {
   renderStairs()
-  expect(screen.getByRole('link', { name: /Sound Zoo/ })).toHaveAttribute('href', '/level/sound-zoo')
-  expect(screen.getByRole('link', { name: /Word Pop/ })).toHaveAttribute('href', '/level/word-pop')
+  expect(screen.getByRole('link', { name: /Tập âm/ })).toHaveAttribute('href', '/level/sound-zoo')
+  expect(screen.getByRole('link', { name: /Đọc từ/ })).toHaveAttribute('href', '/level/word-pop')
 
   expect(screen.getAllByText('Sắp có')).toHaveLength(3)
-  for (const name of ['Minimal Pairs', 'Sentence Stars', 'Story Voice']) {
+  for (const name of ['Nghe & chọn', 'Sentence Stars', 'Story Voice']) {
     expect(screen.getByText(name)).toBeInTheDocument()
     expect(screen.queryByRole('link', { name: new RegExp(name) })).not.toBeInTheDocument()
   }
@@ -23,7 +23,7 @@ it('links the two playable levels and shows the other three as locked', () => {
 it('stands Foxy on the first step that is not finished yet', () => {
   localStorage.setItem('speakup.stars', JSON.stringify({ 'sz-th-three': 3 }))
   renderStairs()
-  // Sound Zoo has 3 stars on a card, so it is done and Foxy moves on to Word Pop.
+  // Tập âm has 3 stars on a card, so it is done and Foxy moves on to Đọc từ.
   expect(within(screen.getByTestId('step-word-pop')).getByTestId('foxy')).toBeInTheDocument()
 })
 

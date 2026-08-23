@@ -12,9 +12,9 @@ type Step = { key: string; emoji: string; name: string; to?: string; lift: strin
  * games read as a staircase the child climbs. The lifts only apply from `lg` up — below that the
  * steps stack into a plain list. */
 const STEPS: Step[] = [
-  { key: 'sound-zoo', emoji: '🦁', name: 'Sound Zoo', to: '/level/sound-zoo', lift: 'lg:mt-[240px]' },
-  { key: 'word-pop', emoji: '🎈', name: 'Word Pop', to: '/level/word-pop', lift: 'lg:mt-[180px]' },
-  { key: 'minimal-pairs', emoji: '👯', name: 'Minimal Pairs', lift: 'lg:mt-[120px]' },
+  { key: 'sound-zoo', emoji: '🦁', name: 'Tập âm', to: '/level/sound-zoo', lift: 'lg:mt-[240px]' },
+  { key: 'word-pop', emoji: '🎈', name: 'Đọc từ', to: '/level/word-pop', lift: 'lg:mt-[180px]' },
+  { key: 'minimal-pairs', emoji: '👯', name: 'Nghe & chọn', lift: 'lg:mt-[120px]' },
   { key: 'sentence-stars', emoji: '⭐', name: 'Sentence Stars', lift: 'lg:mt-[60px]' },
   { key: 'story-voice', emoji: '🎭', name: 'Story Voice', lift: 'lg:mt-0' },
 ]

@@ -5,6 +5,7 @@ import { MissionComplete } from './screens/MissionComplete'
 import { LevelStairs } from './screens/LevelStairs'
 import { LevelSelect } from './screens/LevelSelect'
 import { PracticeCard } from './screens/PracticeCard'
+import { SoundPractice } from './screens/SoundPractice'
 import { StoryList } from './screens/StoryList'
 import { StoryPlayer } from './screens/StoryPlayer'
 import { StoryQuiz } from './screens/StoryQuiz'
@@ -25,6 +26,7 @@ export default function App() {
       <Route path="/levels" element={<LevelStairs />} />
       <Route path="/level/:levelId" element={<LevelSelect />} />
       <Route path="/practice/:cardId" element={<PracticeCard />} />
+      <Route path="/sound/:ph" element={<SoundPractice />} />
       <Route path="/stories" element={<StoryList />} />
       <Route path="/story/:id" element={<StoryPlayer />} />
       <Route path="/story/:id/quiz" element={<StoryQuiz />} />

@@ -153,9 +153,9 @@ it('puts the five islands on the map and links each to its module', () => {
   renderHome()
 
   expect(screen.getByRole('link', { name: /Nghe kể chuyện/ })).toHaveAttribute('href', '/stories')
-  expect(screen.getByRole('link', { name: /Sound Zoo/ })).toHaveAttribute('href', '/level/sound-zoo')
-  expect(screen.getByRole('link', { name: /Word Pop/ })).toHaveAttribute('href', '/level/word-pop')
-  expect(screen.getByRole('link', { name: /Từ vựng/ })).toHaveAttribute('href', '/words')
+  expect(screen.getByRole('link', { name: /Tập âm/ })).toHaveAttribute('href', '/level/sound-zoo')
+  expect(screen.getByRole('link', { name: /Đọc từ/ })).toHaveAttribute('href', '/level/word-pop')
+  expect(screen.getByRole('link', { name: /Học từ mới/ })).toHaveAttribute('href', '/words')
   expect(screen.getByRole('link', { name: /Ghép câu/ })).toHaveAttribute('href', '/sentences')
   expect(screen.getByRole('link', { name: /Phụ huynh/ })).toHaveAttribute('href', '/parent')
 })
@@ -168,19 +168,19 @@ it('shows each island the best stars earned inside that module', () => {
 
   const stories = screen.getByRole('link', { name: /Nghe kể chuyện/ })
   expect(within(stories).getAllByTestId('star-filled')).toHaveLength(2)
-  const soundZoo = screen.getByRole('link', { name: /Sound Zoo/ })
+  const soundZoo = screen.getByRole('link', { name: /Tập âm/ })
   expect(within(soundZoo).getAllByTestId('star-filled')).toHaveLength(3)
-  const wordPop = screen.getByRole('link', { name: /Word Pop/ })
+  const wordPop = screen.getByRole('link', { name: /Đọc từ/ })
   expect(within(wordPop).queryAllByTestId('star-filled')).toHaveLength(0)
 })
 
-it('turns unlocked vocabulary cards into stars on the Từ vựng island', () => {
+it('turns unlocked vocabulary cards into stars on the Học từ mới island', () => {
   localStorage.setItem('speakup.leitner', JSON.stringify(
     Object.fromEntries(Array.from({ length: 9 }, (_, i) => [`w-${i}`, { box: 1, due: 0 }])),
   ))
 
   renderHome()
 
-  const words = screen.getByRole('link', { name: /Từ vựng/ })
+  const words = screen.getByRole('link', { name: /Học từ mới/ })
   expect(within(words).getAllByTestId('star-filled')).toHaveLength(2)
 })

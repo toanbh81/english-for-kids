@@ -2,7 +2,7 @@ import { render, screen } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { LevelSelect } from './LevelSelect'
 
-function renderLevel(levelId = 'sound-zoo') {
+function renderLevel(levelId = 'word-pop') {
   render(
     <MemoryRouter initialEntries={[`/level/${levelId}`]}>
       <Routes>
@@ -16,8 +16,17 @@ beforeEach(() => localStorage.clear())
 
 it('shows the level title and one card per practice card', () => {
   renderLevel()
-  expect(screen.getByRole('heading', { name: /Sound Zoo/ })).toBeInTheDocument()
-  expect(screen.getByRole('link', { name: /three/ })).toHaveAttribute('href', '/practice/sz-th-three')
+  expect(screen.getByRole('heading', { name: /Word Pop/ })).toBeInTheDocument()
+  expect(screen.getByRole('link', { name: /cat/ })).toHaveAttribute('href', '/practice/wp-cat')
+})
+
+it('hands Tập âm over to the sound-tile screen instead of listing its 27 cards', () => {
+  renderLevel('sound-zoo')
+  expect(screen.getByRole('heading', { name: /Tập âm/ })).toBeInTheDocument()
+  expect(screen.getByRole('link', { name: /Âm θ/ })).toHaveAttribute('href', '/sound/th')
+  // 9 sound tiles, not the 27 word cards: nothing here links straight into `/practice`.
+  expect(screen.getAllByRole('link', { name: /^Âm / })).toHaveLength(9)
+  expect(screen.queryAllByRole('link').filter(a => a.getAttribute('href')?.startsWith('/practice'))).toHaveLength(0)
 })
 
 it('goes back to the map, the entry point the child actually came from', () => {
