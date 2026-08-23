@@ -2,10 +2,7 @@ import { Link, useParams } from 'react-router-dom'
 import type { Word } from '../content/words/types'
 import { findTopic, findWord } from '../content/words'
 import { getBox, dueWords } from '../progress/leitner'
-import { BackButton, Chip } from '../components/ui'
-
-const CARD =
-  'flex flex-col items-center gap-2 rounded-xl3 bg-white p-5 shadow-card transition-transform active:scale-95'
+import { BackButton, CARD_LINK, Chip } from '../components/ui'
 
 export function WordList() {
   const { topic = '' } = useParams()
@@ -41,7 +38,7 @@ export function WordList() {
             {words.map(w => {
               const unlocked = getBox(w.id) > 0
               return (
-                <Link key={w.id} to={`/words/${topic}/${w.id}`} className={CARD}>
+                <Link key={w.id} to={`/words/${topic}/${w.id}`} className={CARD_LINK}>
                   <span aria-hidden="true" className="text-[64px] leading-none">{w.emoji}</span>
                   <span className="font-display text-[24px] font-extrabold text-ink-900">{w.word}</span>
                   <Chip tone={unlocked ? 'sun' : 'neutral'}>{unlocked ? '🔓' : '🔒'}</Chip>

@@ -3,12 +3,9 @@ import { Link } from 'react-router-dom'
 import { TOPICS, ALL_WORDS } from '../content/words'
 import { getBox, dueWords } from '../progress/leitner'
 import { getActivity, missionStatus } from '../progress/activity'
-import { BackButton, Chip } from '../components/ui'
+import { BackButton, CARD_LINK, Chip } from '../components/ui'
 
 const WORD_GOAL = 3
-
-const CARD =
-  'flex flex-col items-center gap-2 rounded-xl3 bg-white p-6 shadow-card transition-transform active:scale-95'
 
 export function WordTopics() {
   const dueCount = dueWords().filter(id => ALL_WORDS.some(w => w.id === id)).length
@@ -30,7 +27,7 @@ export function WordTopics() {
         </header>
 
         <div className="grid grid-cols-3 gap-6">
-          <Link to="/words/review" className={CARD}>
+          <Link to="/words/review" className={CARD_LINK}>
             <span aria-hidden="true" className="text-[64px] leading-none">📚</span>
             {/* The count rides inside the chip's own text so the label reads as one phrase. */}
             <Chip tone="sun" className="text-[22px]">Ôn tập hôm nay ({dueCount})</Chip>
@@ -38,7 +35,7 @@ export function WordTopics() {
           {TOPICS.map(t => {
             const unlocked = t.words.filter(w => getBox(w.id) > 0).length
             return (
-              <Link key={t.id} to={`/words/${t.id}`} className={CARD}>
+              <Link key={t.id} to={`/words/${t.id}`} className={CARD_LINK}>
                 <span aria-hidden="true" className="text-[64px] leading-none">{t.emoji}</span>
                 <span className="font-display text-[26px] font-extrabold text-ink-900">{t.title}</span>
                 <span className="text-lg font-bold text-ink-500">{unlocked}/{t.words.length} đã mở khoá</span>

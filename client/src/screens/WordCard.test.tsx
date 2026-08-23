@@ -83,6 +83,20 @@ it('shows the front face by default and flips to the Vietnamese/example face on 
   expect(screen.getByText('apple')).toBeInTheDocument()
 })
 
+it('Enter on the card flips it, but Enter aimed at an audio button on a face does not', () => {
+  renderCard('food', 'food-apple')
+  const card = screen.getByRole('button', { name: 'Lật thẻ' })
+  const FLIPPED = '[transform:rotateY(180deg)]'
+
+  // A key press on a nested button bubbles to the card — it must not be swallowed as a flip,
+  // or the button never gets to play its sound for a keyboard user.
+  fireEvent.keyDown(screen.getByRole('button', { name: '🔊' }), { key: 'Enter' })
+  expect(card).not.toHaveClass(FLIPPED)
+
+  fireEvent.keyDown(card, { key: 'Enter' })
+  expect(card).toHaveClass(FLIPPED)
+})
+
 it('plays the sample audio and clears the missing-audio notice on success', async () => {
   renderCard('food', 'food-apple')
   fireEvent.click(screen.getByRole('button', { name: '🔊' }))

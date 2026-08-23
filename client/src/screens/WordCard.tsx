@@ -97,7 +97,11 @@ function WordCardInner({ word, topic, isReview, list }: { word: Word; topic: str
     run()
   }
 
+  /** Only the card itself flips on Enter/Space: a key press aimed at one of the audio buttons
+   * riding on a face bubbles up here, and swallowing it would flip the card instead of playing
+   * the sound for anyone using a keyboard. */
   function onCardKey(e: KeyboardEvent<HTMLDivElement>) {
+    if (e.target !== e.currentTarget) return
     if (e.key !== 'Enter' && e.key !== ' ') return
     e.preventDefault()
     flip()
