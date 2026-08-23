@@ -172,12 +172,12 @@ The client dev server uses HTTPS because Safari on iOS/iPadOS only allows microp
 ## Testing
 
 ```bash
-pnpm test        # client (Vitest, 309 tests) + server (Vitest, 2 tests)
+pnpm test        # client (Vitest, 350 tests) + server (Vitest, 2 tests)
 pnpm lint        # oxlint on the client
 pnpm typecheck   # tsc -b (client) + tsc --noEmit (server)
 ```
 
-`pnpm test` runs `pnpm -r test`, which executes the client suite (`vitest run`, 309 tests in 41
+`pnpm test` runs `pnpm -r test`, which executes the client suite (`vitest run`, 350 tests in 45
 files) and the server suite (`vitest run`, 2 tests). `pnpm lint` and `pnpm typecheck` fan out the
 same way.
 
@@ -278,6 +278,63 @@ Dev tip: to preview the app over plain HTTP (e.g. for automated DOM checks or a 
 pnpm --filter client exec vite --mode nossl --port 5174
 ```
 
+## Phase 5 — Learning path (Tập âm · Đọc từ · Học từ mới · Nghe & chọn)
+
+Sound Zoo, Word Pop and Từ vựng used to all present "a word + a mic", so a child (and a parent
+watching) could not tell the four speaking games apart. Phase 5 gives each bậc a visibly different
+skill, on top of the same scoring engine (`useSpeakingAttempt` + `toFeedback`) and the same
+`speak` activity logging (all four count toward the daily mission's "5 thẻ" step: Tập âm, Đọc từ,
+Minimal Pairs; Học từ mới logs `word` events instead).
+
+- **🦁 Tập âm (Sound Zoo)** — organised **by sound, not by word**: 9 target sounds (th /θ/, dh /ð/,
+  v, f, z, sh /ʃ/, ch /tʃ/, r, l), each with 3 words (27 cards total). The level screen
+  (`/level/sound-zoo`) shows 9 sound tiles — big IPA symbol, one example word, stars = the best
+  score across that sound's 3 words. Tapping a tile opens `/sound/:ph`: a 72 px IPA header + tip
+  text, a "🔊 Nghe âm lẻ" button that plays the sound in isolation (generated via SSML
+  `<phoneme>`, see `gen-sounds.mjs` below), and the 3 words as a "Từ 1/3" mini-carousel. Scoring
+  shows only the target sound — a chip like "/θ/ ✓ 92" — with the word itself shown small
+  underneath; 3 stars once all 3 words score ≥ 80 on the target phoneme.
+- **🎈 Đọc từ (Word Pop)** — whole-word fluency on the same 12 animal words (`/practice/:cardId`).
+  IPA is hidden by default (tap "Xem phiên âm" to reveal). A streak challenge replaces a single
+  attempt: two slots ○○ ("Lần 1/2 · Lần 2/2 ✓"); an attempt ≥ 80 fills the next slot, one < 80
+  clears both; 2 consecutive ≥ 80 attempts award 3 stars, otherwise stars come from the single
+  attempt as before (capped at 2).
+- **🧩 Học từ mới (Từ vựng)** — meaning first, at `/words/...`. New cards start with **Đoán nghĩa**:
+  emoji + English word shown, child picks 1 of 3 Vietnamese meanings (distractors from the same
+  topic); a wrong pick shakes the card. Then the card flips and "🎤 Nói để mở khoá" works as before.
+  In the **Ôn tập** (review) deck the front face hides the English word — only emoji + Vietnamese
+  meaning show, so the child has to recall and say the word — with a "Gợi ý" button to reveal it.
+  Leitner unlock/spacing rules are unchanged.
+- **👯 Nghe & chọn (Minimal Pairs)** — a new level, `/level/minimal-pairs` (`PairLevel`) →
+  `/pair/:id` (`PairPractice`): 8 contrastive pairs (ship/sheep, bat/bad, three/tree, fan/van,
+  sit/seat, thin/tin, rice/lice, cap/cup). 🔊 plays one of the two words at random; the child taps
+  the matching picture/word card (✅/🙈 + Foxy); after 2 correct listens a mic step asks the child
+  to read both words in one go ("ship, sheep"), scored the normal way.
+
+**Routes:**
+
+| Route | Screen |
+|---|---|
+| `/level/sound-zoo` | Tập âm sound tiles (`SoundLevel`, rendered by `LevelSelect` for that one level id) |
+| `/sound/:ph` | Tập âm practice — one sound, 3-word carousel (`SoundPractice`) |
+| `/practice/:cardId` | Đọc từ (Word Pop) practice card — unchanged path, new streak UI |
+| `/words`, `/words/:topic`, `/words/:topic/:wordId` | Học từ mới — topic list, word list, flashcard (Đoán nghĩa → flip → say-to-unlock; review hides the word) |
+| `/level/minimal-pairs` | Nghe & chọn level (`PairLevel`) |
+| `/pair/:id` | Nghe & chọn practice — listen, choose, then read both words (`PairPractice`) |
+
+**Storage keys:**
+- `sound:<ph>` — Tập âm stars, one per sound (not per word/card); the Tập âm island on Home and
+  the "Tập âm" step on `/levels` both show `best` over the 9 `sound:<ph>` keys.
+- `pair:<id>` — Nghe & chọn stars, one per pair (not per word).
+- Word Pop keeps its stars per card (`c.id`, e.g. `wp-cat`); Học từ mới keeps using the Leitner
+  deck (`speakup.leitner`), not a star key, for its island/step.
+
+**Audio generation:** new Sound Zoo words, Minimal Pairs words and the 9 isolated-sound samples
+are produced by the same `gen-audio.mjs` / `gen-sounds.mjs` scripts documented above under
+"Generating sample audio" — see that section for the exact commands and output folders
+(`client/public/audio`, `client/public/audio/pairs`, `client/public/audio/sounds`). Unlike Phase
+2–4 audio, these mp3s are committed (tracked in git), not gitignored.
+
 ## iPad setup & testing (Thiết lập trên iPad)
 
 1. Make sure your iPad and PC are on the same Wi-Fi network.
@@ -326,6 +383,13 @@ pnpm --filter client exec vite --mode nossl --port 5174
 | 18 | Sentence Builder → any sentence | Tiles are colored by role (who/does/what), with the legend between the tray and the tile pool | ⏳ pending |
 | 19 | Parent Dashboard → tap "Khoá lại" | Immediately re-locks and shows a fresh math question, without leaving `/parent` | ⏳ pending |
 | 20 | Story player → tap the subtitle switch | Toggle switch flips state and announces it (e.g. "Phụ đề bật") | ⏳ pending |
+| 21 | Tập âm → `/level/sound-zoo` → open a sound tile → tap "🔊 Nghe âm lẻ" | Plays the isolated-sound sample (just the phoneme, not a full word) | ⏳ pending |
+| 22 | Tập âm practice → tap a word's sound chip | Chip plays a short tone distinct from the word's own audio | ⏳ pending |
+| 23 | Đọc từ (Word Pop) → say a word twice in a row scoring ≥ 80 | Streak fills ●●, then awards 3 stars ("Lần 1/2 · Lần 2/2 ✓") | ⏳ pending |
+| 24 | Học từ mới → new card → tap a wrong meaning in "Đoán nghĩa" | Card shakes and lets the child try again | ⏳ pending |
+| 25 | Học từ mới → "Ôn tập hôm nay" → open a due word | English word is hidden (emoji + Vietnamese only) until "Gợi ý" is tapped | ⏳ pending |
+| 26 | Nghe & chọn (`/level/minimal-pairs`) → open a pair → listen, choose, then read both words | 🔊 plays one word, tapping the matching card gives ✅/🙈 + Foxy; after 2 correct listens the mic step appears for reading both words | ⏳ pending |
+| 27 | `/levels` stairs | "Nghe & chọn" step shows unlocked (not the 🔒 "Sắp có" placeholder) | ⏳ pending |
 
 ## Architecture
 

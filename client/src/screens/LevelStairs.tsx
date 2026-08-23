@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import { LEVELS, PAIRS } from '../content'
+import { LEVELS, PAIRS, SOUNDS } from '../content'
 import { getStars } from '../progress/store'
 import { Foxy } from '../components/Foxy'
 import { BackButton, Chip, StarRow } from '../components/ui'
@@ -27,6 +27,15 @@ function levelStars(id: string): Stars {
   return cards.reduce<Stars>((best, c) => (getStars(c.id) > best ? getStars(c.id) : best), 0)
 }
 
+/** Tập âm keeps its stars per *sound*, not per card — a card only clears once all 3 of its
+ * sound's words score high, so the step's stars are the best across the 9 `sound:<ph>` keys. */
+function soundStars(): Stars {
+  return SOUNDS.reduce<Stars>((best, s) => {
+    const stars = getStars(`sound:${s.ph}`)
+    return stars > best ? stars : best
+  }, 0)
+}
+
 /** Minimal Pairs keeps its stars per *pair*, not per card, so it needs its own reducer. */
 function pairStars(): Stars {
   return PAIRS.reduce<Stars>((best, p) => {
@@ -37,7 +46,7 @@ function pairStars(): Stars {
 
 export function LevelStairs() {
   const stars: Record<string, Stars> = {
-    'sound-zoo': levelStars('sound-zoo'),
+    'sound-zoo': soundStars(),
     'word-pop': levelStars('word-pop'),
     'minimal-pairs': pairStars(),
   }

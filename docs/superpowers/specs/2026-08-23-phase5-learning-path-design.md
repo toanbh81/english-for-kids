@@ -2,6 +2,8 @@
 
 Refines §2.2B–C of `docs/2026-08-22-giai-phap-va-design-brief.md`. Phases 1–4 are on `main`.
 
+Status: implemented 2026-08-23 on branch phase5-learning-path (tasks 1–6).
+
 ## Problem
 Sound Zoo, Word Pop and Từ vựng all present "a word + a mic", so a 9-year-old (and the parent) cannot tell them apart. Each bậc must teach a visibly different skill.
 

@@ -33,24 +33,30 @@ it('reads the Nghe & chọn stars off the pair keys, not off any word card', () 
 })
 
 it('stands Foxy on the first step that is not finished yet', () => {
-  localStorage.setItem('speakup.stars', JSON.stringify({ 'sz-th-three': 3 }))
+  localStorage.setItem('speakup.stars', JSON.stringify({ 'sound:th': 3 }))
   renderStairs()
-  // Tập âm has 3 stars on a card, so it is done and Foxy moves on to Đọc từ.
+  // Tập âm has 3 stars on its th sound, so it is done and Foxy moves on to Đọc từ.
   expect(within(screen.getByTestId('step-word-pop')).getByTestId('foxy')).toBeInTheDocument()
 })
 
 it('moves Foxy on to Nghe & chọn once the two word levels are done', () => {
-  localStorage.setItem('speakup.stars', JSON.stringify({ 'sz-th-three': 3, 'wp-cat': 3 }))
+  localStorage.setItem('speakup.stars', JSON.stringify({ 'sound:th': 3, 'wp-cat': 3 }))
   renderStairs()
   expect(within(screen.getByTestId('step-minimal-pairs')).getByTestId('foxy')).toBeInTheDocument()
 })
 
 it('keeps Foxy off the locked steps once every playable level is finished', () => {
-  localStorage.setItem('speakup.stars', JSON.stringify({ 'sz-th-three': 3, 'wp-cat': 3, 'pair:pair-ship-sheep': 3 }))
+  localStorage.setItem('speakup.stars', JSON.stringify({ 'sound:th': 3, 'wp-cat': 3, 'pair:pair-ship-sheep': 3 }))
   renderStairs()
   // Nothing is left to climb, so he waits on a level he can actually play.
   expect(within(screen.getByTestId('step-word-pop')).getByTestId('foxy')).toBeInTheDocument()
   for (const key of ['sentence-stars', 'story-voice']) {
     expect(within(screen.getByTestId(`step-${key}`)).queryByTestId('foxy')).not.toBeInTheDocument()
   }
+})
+
+it('ignores the old per-card sz- key now that Tập âm stars live under sound:<ph>', () => {
+  localStorage.setItem('speakup.stars', JSON.stringify({ 'sz-th-three': 3 }))
+  renderStairs()
+  expect(within(screen.getByTestId('step-sound-zoo')).queryAllByTestId('star-filled')).toHaveLength(0)
 })

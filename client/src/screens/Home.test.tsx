@@ -162,7 +162,7 @@ it('puts the five islands on the map and links each to its module', () => {
 
 it('shows each island the best stars earned inside that module', () => {
   setStars('story:little-fox', 2)
-  setStars('sz-th-three', 3)
+  setStars('sound:th', 3)
 
   renderHome()
 
@@ -172,6 +172,15 @@ it('shows each island the best stars earned inside that module', () => {
   expect(within(soundZoo).getAllByTestId('star-filled')).toHaveLength(3)
   const wordPop = screen.getByRole('link', { name: /Đọc từ/ })
   expect(within(wordPop).queryAllByTestId('star-filled')).toHaveLength(0)
+})
+
+it('ignores the old per-card sz- key now that Tập âm stars live under sound:<ph>', () => {
+  setStars('sz-th-three', 3)
+
+  renderHome()
+
+  const soundZoo = screen.getByRole('link', { name: /Tập âm/ })
+  expect(within(soundZoo).queryAllByTestId('star-filled')).toHaveLength(0)
 })
 
 it('turns unlocked vocabulary cards into stars on the Học từ mới island', () => {

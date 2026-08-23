@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { LEVELS, SENTENCES } from '../content'
+import { LEVELS, SENTENCES, SOUNDS } from '../content'
 import { STORIES } from '../content/stories'
 import { getStars, totalStars } from '../progress/store'
 import { unlockedCount } from '../progress/leitner'
@@ -74,7 +74,7 @@ export function Home() {
 
   const stars: Record<string, Stars> = {
     '/stories': best(STORIES.map(s => getStars(`story:${s.id}`))),
-    '/level/sound-zoo': best((LEVELS.find(l => l.id === 'sound-zoo')?.cards ?? []).map(c => getStars(c.id))),
+    '/level/sound-zoo': best(SOUNDS.map(s => getStars(`sound:${s.ph}`))),
     '/level/word-pop': best((LEVELS.find(l => l.id === 'word-pop')?.cards ?? []).map(c => getStars(c.id))),
     '/words': wordStars(),
     '/sentences': best(SENTENCES.map(s => getStars(`sentence:${s.id}`))),
