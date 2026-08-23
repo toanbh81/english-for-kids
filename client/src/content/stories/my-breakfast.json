@@ -13,35 +13,43 @@
       "words": [
         {
           "w": "It",
-          "start": 56,
-          "end": 222
+          "start": 57,
+          "end": 227
         },
         {
           "w": "is",
-          "start": 236,
-          "end": 375
+          "start": 241,
+          "end": 383
         },
         {
           "w": "morning.",
-          "start": 389,
-          "end": 1000
+          "start": 398,
+          "end": 952
         },
         {
           "w": "I",
-          "start": 1958,
-          "end": 2153
+          "start": 2282,
+          "end": 2481
         },
         {
           "w": "am",
-          "start": 2167,
-          "end": 2292
+          "start": 2495,
+          "end": 2637
         },
         {
           "w": "hungry.",
-          "start": 2306,
-          "end": 2986
+          "start": 2651,
+          "end": 3262
         }
-      ]
+      ],
+      "voice": {
+        "style": "friendly",
+        "rate": "-12%",
+        "emphasis": [
+          2,
+          5
+        ]
+      }
     },
     {
       "text": "I eat eggs and bread.",
@@ -52,30 +60,37 @@
       "words": [
         {
           "w": "I",
-          "start": 56,
-          "end": 250
+          "start": 54,
+          "end": 285
         },
         {
           "w": "eat",
-          "start": 264,
-          "end": 458
+          "start": 299,
+          "end": 639
         },
         {
           "w": "eggs",
-          "start": 472,
-          "end": 792
+          "start": 652,
+          "end": 1005
         },
         {
           "w": "and",
-          "start": 806,
-          "end": 931
+          "start": 1019,
+          "end": 1168
         },
         {
           "w": "bread.",
-          "start": 944,
-          "end": 1431
+          "start": 1182,
+          "end": 1671
         }
-      ]
+      ],
+      "voice": {
+        "style": "cheerful",
+        "emphasis": [
+          2,
+          4
+        ]
+      }
     },
     {
       "text": "I drink milk. Milk is white.",
@@ -86,35 +101,42 @@
       "words": [
         {
           "w": "I",
-          "start": 56,
-          "end": 222
+          "start": 54,
+          "end": 217
         },
         {
           "w": "drink",
-          "start": 236,
-          "end": 569
+          "start": 231,
+          "end": 543
         },
         {
           "w": "milk.",
-          "start": 583,
-          "end": 1069
+          "start": 557,
+          "end": 1019
         },
         {
           "w": "Milk",
-          "start": 2028,
-          "end": 2361
+          "start": 2307,
+          "end": 2646
         },
         {
           "w": "is",
-          "start": 2375,
-          "end": 2528
+          "start": 2660,
+          "end": 2796
         },
         {
           "w": "white.",
-          "start": 2542,
-          "end": 3083
+          "start": 2809,
+          "end": 3298
         }
-      ]
+      ],
+      "voice": {
+        "style": "friendly",
+        "emphasis": [
+          2,
+          5
+        ]
+      }
     },
     {
       "text": "My sister eats a banana.",
@@ -125,30 +147,37 @@
       "words": [
         {
           "w": "My",
-          "start": 56,
-          "end": 264
+          "start": 54,
+          "end": 326
         },
         {
           "w": "sister",
-          "start": 278,
-          "end": 667
+          "start": 340,
+          "end": 815
         },
         {
           "w": "eats",
-          "start": 681,
-          "end": 861
+          "start": 829,
+          "end": 1046
         },
         {
           "w": "a",
-          "start": 875,
-          "end": 931
+          "start": 1060,
+          "end": 1141
         },
         {
           "w": "banana.",
-          "start": 944,
-          "end": 1583
+          "start": 1155,
+          "end": 1807
         }
-      ]
+      ],
+      "voice": {
+        "style": "cheerful",
+        "emphasis": [
+          1,
+          4
+        ]
+      }
     },
     {
       "text": "My dad drinks coffee. It is hot.",
@@ -159,40 +188,47 @@
       "words": [
         {
           "w": "My",
-          "start": 56,
-          "end": 250
+          "start": 54,
+          "end": 272
         },
         {
           "w": "dad",
-          "start": 264,
-          "end": 556
+          "start": 285,
+          "end": 598
         },
         {
           "w": "drinks",
-          "start": 569,
-          "end": 903
+          "start": 611,
+          "end": 924
         },
         {
           "w": "coffee.",
-          "start": 917,
-          "end": 1528
+          "start": 938,
+          "end": 1495
         },
         {
           "w": "It",
-          "start": 2486,
-          "end": 2653
+          "start": 2782,
+          "end": 2945
         },
         {
           "w": "is",
-          "start": 2667,
-          "end": 2819
+          "start": 2959,
+          "end": 3081
         },
         {
           "w": "hot.",
-          "start": 2833,
-          "end": 3375
+          "start": 3095,
+          "end": 3584
         }
-      ]
+      ],
+      "voice": {
+        "style": "friendly",
+        "emphasis": [
+          3,
+          6
+        ]
+      }
     },
     {
       "text": "Breakfast is yummy!",
@@ -203,20 +239,27 @@
       "words": [
         {
           "w": "Breakfast",
-          "start": 56,
-          "end": 597
+          "start": 51,
+          "end": 628
         },
         {
           "w": "is",
-          "start": 611,
-          "end": 736
+          "start": 641,
+          "end": 769
         },
         {
           "w": "yummy!",
-          "start": 750,
-          "end": 1250
+          "start": 782,
+          "end": 1320
         }
-      ]
+      ],
+      "voice": {
+        "style": "excited",
+        "degree": 1.6,
+        "emphasis": [
+          2
+        ]
+      }
     }
   ],
   "quiz": [

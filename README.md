@@ -88,6 +88,22 @@ For narration timings, see **"Generating sample audio"** above (`scripts/gen-sto
 | 11 | Retell → record once, go back to the player, tap a word | speechSynthesis word replay works after a mic recording | ⏳ pending |
 | 12 | Play with 🎵 on → lock the iPad → unlock and tap ▶ / 🎵 | Music resumes after lock/unlock instead of staying silent | ⏳ pending |
 
+### Expressive narration (giọng kể có cảm xúc)
+
+Each scene in `client/src/content/stories/*.json` carries optional acting hints under `voice`:
+`style` (Azure express-as: cheerful, excited, sad, whispering, friendly…), `degree` (0.01–2), `rate`, `pitch`,
+`emphasis` (indexes of words read with strong emphasis) and `pauseMs` (pause between sentences, default 350 ms).
+`scripts/story-ssml.mjs` turns them into SSML (questions lift pitch, exclamations brighten, commas add a short breath).
+Default voice is `en-US-AriaNeural`; override with `STORY_VOICE=en-US-JennyNeural`.
+
+To compare voices on one scene before regenerating everything:
+
+```bash
+node scripts/audition-voices.mjs little-fox 3
+```
+
+then listen at `https://localhost:5173/audio/audition/<voice>.mp3` (files are git-ignored).
+
 ## Running
 
 ```bash

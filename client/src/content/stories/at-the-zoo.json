@@ -13,50 +13,56 @@
       "words": [
         {
           "w": "Today",
-          "start": 56,
-          "end": 417
+          "start": 54,
+          "end": 516
         },
         {
           "w": "I",
-          "start": 431,
-          "end": 542
+          "start": 530,
+          "end": 652
         },
         {
           "w": "go",
-          "start": 556,
-          "end": 694
+          "start": 666,
+          "end": 829
         },
         {
           "w": "to",
-          "start": 708,
-          "end": 819
+          "start": 842,
+          "end": 924
         },
         {
           "w": "the",
-          "start": 833,
-          "end": 944
+          "start": 938,
+          "end": 1060
         },
         {
           "w": "zoo",
-          "start": 958,
-          "end": 1139
+          "start": 1073,
+          "end": 1318
         },
         {
           "w": "with",
-          "start": 1153,
-          "end": 1319
+          "start": 1332,
+          "end": 1481
         },
         {
           "w": "my",
-          "start": 1333,
-          "end": 1472
+          "start": 1495,
+          "end": 1644
         },
         {
           "w": "mom.",
-          "start": 1486,
-          "end": 2000
+          "start": 1658,
+          "end": 2188
         }
-      ]
+      ],
+      "voice": {
+        "style": "cheerful",
+        "emphasis": [
+          5
+        ]
+      }
     },
     {
       "text": "I see a big lion. The lion is sleeping.",
@@ -67,50 +73,59 @@
       "words": [
         {
           "w": "I",
-          "start": 56,
-          "end": 208
+          "start": 59,
+          "end": 235
         },
         {
           "w": "see",
-          "start": 222,
-          "end": 458
+          "start": 250,
+          "end": 529
         },
         {
           "w": "a",
-          "start": 472,
-          "end": 542
+          "start": 544,
+          "end": 618
         },
         {
           "w": "big",
-          "start": 556,
-          "end": 806
+          "start": 632,
+          "end": 926
         },
         {
           "w": "lion.",
-          "start": 819,
-          "end": 1333
+          "start": 941,
+          "end": 1529
         },
         {
           "w": "The",
-          "start": 2292,
-          "end": 2444
+          "start": 2879,
+          "end": 3026
         },
         {
           "w": "lion",
-          "start": 2458,
-          "end": 2833
+          "start": 3041,
+          "end": 3482
         },
         {
           "w": "is",
-          "start": 2847,
-          "end": 2972
+          "start": 3497,
+          "end": 3644
         },
         {
           "w": "sleeping.",
-          "start": 2986,
-          "end": 3639
+          "start": 3659,
+          "end": 4335
         }
-      ]
+      ],
+      "voice": {
+        "style": "whispering",
+        "rate": "-15%",
+        "emphasis": [
+          3,
+          4,
+          8
+        ]
+      }
     },
     {
       "text": "The monkeys are funny. They jump and play.",
@@ -121,45 +136,54 @@
       "words": [
         {
           "w": "The",
-          "start": 56,
-          "end": 194
+          "start": 54,
+          "end": 217
         },
         {
           "w": "monkeys",
-          "start": 208,
-          "end": 681
+          "start": 231,
+          "end": 747
         },
         {
           "w": "are",
-          "start": 694,
-          "end": 806
+          "start": 761,
+          "end": 883
         },
         {
           "w": "funny.",
-          "start": 819,
-          "end": 1389
+          "start": 897,
+          "end": 1440
         },
         {
           "w": "They",
-          "start": 2347,
-          "end": 2542
+          "start": 2728,
+          "end": 2945
         },
         {
           "w": "jump",
-          "start": 2556,
-          "end": 2861
+          "start": 2959,
+          "end": 3258
         },
         {
           "w": "and",
-          "start": 2875,
-          "end": 3000
+          "start": 3271,
+          "end": 3380
         },
         {
           "w": "play.",
-          "start": 3014,
-          "end": 3556
+          "start": 3393,
+          "end": 3855
         }
-      ]
+      ],
+      "voice": {
+        "style": "excited",
+        "degree": 1.3,
+        "emphasis": [
+          3,
+          5,
+          7
+        ]
+      }
     },
     {
       "text": "The elephant is grey. It has a long nose.",
@@ -170,50 +194,57 @@
       "words": [
         {
           "w": "The",
-          "start": 56,
-          "end": 208
+          "start": 54,
+          "end": 217
         },
         {
           "w": "elephant",
-          "start": 222,
-          "end": 722
+          "start": 231,
+          "end": 734
         },
         {
           "w": "is",
-          "start": 736,
-          "end": 889
+          "start": 747,
+          "end": 870
         },
         {
           "w": "grey.",
-          "start": 903,
-          "end": 1403
+          "start": 883,
+          "end": 1345
         },
         {
           "w": "It",
-          "start": 2361,
-          "end": 2514
+          "start": 2646,
+          "end": 2809
         },
         {
           "w": "has",
-          "start": 2528,
-          "end": 2722
+          "start": 2823,
+          "end": 3027
         },
         {
           "w": "a",
-          "start": 2736,
-          "end": 2806
+          "start": 3040,
+          "end": 3108
         },
         {
           "w": "long",
-          "start": 2819,
-          "end": 3139
+          "start": 3122,
+          "end": 3434
         },
         {
           "w": "nose.",
-          "start": 3153,
-          "end": 3750
+          "start": 3448,
+          "end": 4032
         }
-      ]
+      ],
+      "voice": {
+        "style": "friendly",
+        "emphasis": [
+          1,
+          7
+        ]
+      }
     },
     {
       "text": "I eat ice cream. It is cold and sweet.",
@@ -224,50 +255,59 @@
       "words": [
         {
           "w": "I",
-          "start": 56,
-          "end": 236
+          "start": 54,
+          "end": 299
         },
         {
           "w": "eat",
-          "start": 250,
-          "end": 444
+          "start": 313,
+          "end": 652
         },
         {
           "w": "ice",
-          "start": 458,
-          "end": 736
+          "start": 666,
+          "end": 924
         },
         {
           "w": "cream.",
-          "start": 750,
-          "end": 1236
+          "start": 938,
+          "end": 1427
         },
         {
           "w": "It",
-          "start": 2194,
-          "end": 2361
+          "start": 2714,
+          "end": 2891
         },
         {
           "w": "is",
-          "start": 2375,
-          "end": 2528
+          "start": 2904,
+          "end": 3054
         },
         {
           "w": "cold",
-          "start": 2542,
-          "end": 2875
+          "start": 3067,
+          "end": 3489
         },
         {
           "w": "and",
-          "start": 2889,
-          "end": 3014
+          "start": 3502,
+          "end": 3638
         },
         {
           "w": "sweet.",
-          "start": 3028,
-          "end": 3611
+          "start": 3652,
+          "end": 4209
         }
-      ]
+      ],
+      "voice": {
+        "style": "cheerful",
+        "emphasis": [
+          2,
+          3,
+          6,
+          8
+        ]
+      }
     },
     {
       "text": "I love the zoo!",
@@ -278,25 +318,32 @@
       "words": [
         {
           "w": "I",
-          "start": 56,
-          "end": 194
+          "start": 51,
+          "end": 231
         },
         {
           "w": "love",
-          "start": 208,
-          "end": 472
+          "start": 244,
+          "end": 602
         },
         {
           "w": "the",
-          "start": 486,
-          "end": 611
+          "start": 615,
+          "end": 718
         },
         {
           "w": "zoo!",
-          "start": 625,
-          "end": 1153
+          "start": 731,
+          "end": 1205
         }
-      ]
+      ],
+      "voice": {
+        "style": "excited",
+        "degree": 1.6,
+        "emphasis": [
+          1
+        ]
+      }
     }
   ],
   "quiz": [
