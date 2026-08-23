@@ -5,7 +5,7 @@
     "words": ["I", "have", "a", "red", "apple."],
     "stress": [1, 3, 4],
     "link": [[3, 4]],
-    "vi": "Tôi có một quả táo đỏ.",
+    "vi": "Con có một quả táo đỏ.",
     "audio": "/audio/stars/ss1.mp3"
   },
   {
@@ -14,7 +14,7 @@
     "words": ["My", "mom", "is", "in", "the", "kitchen."],
     "stress": [1, 5],
     "link": [[2, 3]],
-    "vi": "Mẹ tôi đang ở trong bếp.",
+    "vi": "Mẹ con đang ở trong bếp.",
     "audio": "/audio/stars/ss2.mp3"
   },
   {
@@ -31,7 +31,7 @@
     "text": "We go to school by bus.",
     "words": ["We", "go", "to", "school", "by", "bus."],
     "stress": [1, 3, 5],
-    "vi": "Chúng tôi đi học bằng xe buýt.",
+    "vi": "Chúng con đi học bằng xe buýt.",
     "audio": "/audio/stars/ss4.mp3"
   },
   {
@@ -40,7 +40,7 @@
     "words": ["Can", "I", "have", "some", "water?"],
     "stress": [2, 4],
     "link": [[0, 1]],
-    "vi": "Tôi xin một ít nước được không?",
+    "vi": "Con xin một ít nước được không ạ?",
     "audio": "/audio/stars/ss5.mp3"
   },
   {
@@ -49,7 +49,7 @@
     "words": ["My", "brother", "likes", "ice", "cream."],
     "stress": [1, 2, 3],
     "link": [[2, 3]],
-    "vi": "Anh trai tôi thích kem.",
+    "vi": "Anh trai con thích kem.",
     "audio": "/audio/stars/ss6.mp3"
   },
   {
@@ -67,7 +67,7 @@
     "words": ["Where", "is", "my", "blue", "bag?"],
     "stress": [0, 3, 4],
     "link": [[0, 1]],
-    "vi": "Túi màu xanh của tôi đâu rồi?",
+    "vi": "Túi màu xanh của con đâu rồi?",
     "audio": "/audio/stars/ss8.mp3"
   },
   {
@@ -75,8 +75,7 @@
     "text": "I can run very fast!",
     "words": ["I", "can", "run", "very", "fast!"],
     "stress": [2, 3, 4],
-    "link": [[2, 3]],
-    "vi": "Tôi chạy rất nhanh!",
+    "vi": "Con chạy rất nhanh!",
     "audio": "/audio/stars/ss9.mp3"
   },
   {

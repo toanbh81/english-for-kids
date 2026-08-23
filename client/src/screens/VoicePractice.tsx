@@ -27,31 +27,33 @@ const AUTO_STOP_MS = 13000
 const COUNTDOWN_FROM = AUTO_STOP_MS / 1000
 
 /** What "reading with this feeling" actually means, in three things a child can do on purpose.
- * Each mood gets its own three: the card is the only coaching before the attempt. */
+ * Each mood gets its own three. These are shared by every passage of that mood, so they name no
+ * words — a word named here is wrong on the other passages; a passage that needs one carries its
+ * own `tips` instead. */
 const MOOD_TIPS: Record<VoicePassage['mood'], string[]> = {
   happy: [
     'Mỉm cười khi đọc — giọng sẽ tươi hơn',
     'Đọc hơi nhanh và nhẹ nhàng',
-    'Nhấn vào từ vui (love, best, play)',
+    'Nhấn mạnh vào những từ vui',
   ],
   surprised: [
-    'Mở to giọng ở từ đầu (Wow, Look)',
+    'Mở to giọng ngay ở từ đầu câu',
     'Nghỉ một nhịp trước từ bất ngờ',
     'Lên giọng thật cao ở cuối câu cảm thán',
   ],
   question: [
     'Lên giọng ở cuối câu hỏi',
-    'Nhấn vào từ để hỏi (Where, Is)',
+    'Nhấn vào từ để hỏi',
     'Đọc chậm hơn một chút',
   ],
   sad: [
     'Đọc chậm và nhỏ giọng lại',
     'Hạ giọng xuống ở cuối câu',
-    'Kéo dài từ buồn (sad, fell)',
+    'Kéo dài những từ buồn ra một chút',
   ],
   excited: [
     'Đọc to và nhanh hơn bình thường',
-    'Nhấn mạnh vào từ quan trọng (birthday, big)',
+    'Nhấn mạnh vào những từ quan trọng',
     'Kết câu bằng giọng đi lên, thật hào hứng',
   ],
   calm: [
@@ -131,6 +133,8 @@ function VoiceRun({ passage }: { passage: VoicePassage }) {
 
   const index = STORY_VOICE.findIndex(v => v.id === passage.id)
   const next = STORY_VOICE[index + 1]
+  // A passage that hinges on a particular word says so itself; otherwise the mood's own three.
+  const tips = passage.tips ?? MOOD_TIPS[passage.mood]
 
   /** Sample audio is generated locally and may simply not be there yet — say so, never throw. */
   function playSample() {
@@ -166,7 +170,7 @@ function VoiceRun({ passage }: { passage: VoicePassage }) {
         <Card className="flex w-full max-w-2xl flex-col gap-2 px-6 py-4">
           <p className="font-display text-xl font-extrabold text-ink-900">🎭 Gợi ý giọng</p>
           <ul className="flex flex-col gap-1">
-            {MOOD_TIPS[passage.mood].map(tip => (
+            {tips.map(tip => (
               <li key={tip} data-testid="mood-tip" className="text-lg font-bold text-ink-500">• {tip}</li>
             ))}
           </ul>

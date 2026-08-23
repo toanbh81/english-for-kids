@@ -5,7 +5,7 @@
     "moodVi": "vui vẻ",
     "emoji": "😊",
     "text": "I love my dog! He is my best friend. We play every day.",
-    "vi": "Tôi yêu chú chó của tôi! Nó là người bạn thân nhất của tôi. Chúng tôi chơi cùng nhau mỗi ngày.",
+    "vi": "Con yêu chú chó của con! Nó là người bạn thân nhất của con. Chúng con chơi cùng nhau mỗi ngày.",
     "audio": "/audio/voice/sv1.mp3"
   },
   {
@@ -14,7 +14,7 @@
     "moodVi": "ngạc nhiên",
     "emoji": "😲",
     "text": "Wow, look at that! The elephant is so big. I can't believe it!",
-    "vi": "Ồ, nhìn kìa! Con voi to quá! Tôi không thể tin được!",
+    "vi": "Ồ, nhìn kìa! Con voi to quá! Con không thể tin được!",
     "audio": "/audio/voice/sv2.mp3"
   },
   {
@@ -23,7 +23,7 @@
     "moodVi": "hỏi",
     "emoji": "🤔",
     "text": "Where is my hat? Is it under the bed? Oh, here it is!",
-    "vi": "Mũ của tôi đâu rồi? Nó ở dưới giường à? Ồ, nó đây rồi!",
+    "vi": "Mũ của con đâu rồi? Nó ở dưới giường à? Ồ, nó đây rồi!",
     "audio": "/audio/voice/sv3.mp3"
   },
   {
@@ -41,7 +41,7 @@
     "moodVi": "háo hức",
     "emoji": "🤩",
     "text": "Today is my birthday! I have a big cake. Let's eat it together!",
-    "vi": "Hôm nay là sinh nhật của tôi! Tôi có một chiếc bánh to. Cùng ăn nào!",
+    "vi": "Hôm nay là sinh nhật của con! Con có một chiếc bánh to. Cùng ăn nào!",
     "audio": "/audio/voice/sv5.mp3"
   },
   {
@@ -60,6 +60,11 @@
     "emoji": "🙌",
     "text": "I did it! I can ride my bike. Look at me, Mom!",
     "vi": "Con làm được rồi! Con có thể đi xe đạp. Nhìn con này, Mẹ ơi!",
+    "tips": [
+      "Nhấn vào 'did it' và 'bike'",
+      "Reo lên thật to ở 'I did it!'",
+      "Gọi 'Mom' bằng giọng đi lên, thật vui"
+    ],
     "audio": "/audio/voice/sv7.mp3"
   },
   {
@@ -69,6 +74,11 @@
     "emoji": "😅",
     "text": "What is that noise? Oh, it is only the cat. Phew!",
     "vi": "Tiếng gì vậy nhỉ? À, chỉ là con mèo thôi. Hú hồn!",
+    "tips": [
+      "Hỏi 'What is that noise?' bằng giọng hơi lo",
+      "Hạ giọng ở 'only the cat'",
+      "Thở phào nhẹ nhõm ở 'Phew!'"
+    ],
     "audio": "/audio/voice/sv8.mp3"
   }
 ]

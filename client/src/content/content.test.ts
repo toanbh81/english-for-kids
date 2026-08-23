@@ -117,6 +117,12 @@ it('every sentence star has audio under /audio/stars/', () => {
   }
 })
 
+/** ‿ promises the two words run together as one sound ("red‿apple", "can‿I"). "run very" simply
+ * does not — a consonant into a consonant — and marking it teaches a liaison that isn't there. */
+it('marks no link across a pair that does not actually run together', () => {
+  expect(findSentenceStar('ss9')?.link).toBeUndefined()
+})
+
 it('findSentenceStar resolves a known id and returns undefined for an unknown one', () => {
   expect(findSentenceStar('ss1')?.text).toBe('I have a red apple.')
   expect(findSentenceStar('nope')).toBeUndefined()
@@ -144,4 +150,22 @@ it('every story-voice passage has audio under /audio/voice/', () => {
 it('findVoice resolves a known id and returns undefined for an unknown one', () => {
   expect(findVoice('sv1')?.mood).toBe('happy')
   expect(findVoice('nope')).toBeUndefined()
+})
+
+/** These lines are what the child would say out loud, so they carry the child's own register:
+ * "Con", the pronoun a Vietnamese kid uses talking to a parent — never the adult, distant "Tôi". */
+it('writes every Vietnamese line in the child voice, never "tôi"', () => {
+  const lines = [...SENTENCE_STARS.map(s => s.vi), ...STORY_VOICE.map(v => v.vi)]
+  for (const vi of lines) {
+    const words = vi.toLowerCase().split(/[^\p{L}]+/u)
+    expect(words, vi).not.toContain('tôi')
+  }
+})
+
+/** Generic mood tips cannot name words they cannot see; a passage that needs one says so itself. */
+it('gives the passages that need them their own tips, and leaves the rest on the mood tips', () => {
+  expect(findVoice('sv7')?.tips).toEqual(expect.arrayContaining([expect.stringContaining('did it')]))
+  expect(findVoice('sv8')?.tips).toEqual(expect.arrayContaining([expect.stringContaining('only the cat')]))
+  expect(findVoice('sv1')?.tips).toBeUndefined()
+  for (const v of STORY_VOICE) if (v.tips) expect(v.tips).toHaveLength(3)
 })

@@ -21,7 +21,9 @@ export type SentenceStar = {
   audio: string
 }
 
-/** A Story Voice passage: 2–3 sentences read with a target mood/intonation. */
+/** A Story Voice passage: 2–3 sentences read with a target mood/intonation. `tips` overrides the
+ * screen's shared mood tips: those are written for every passage of a mood at once and so cannot
+ * name a word, while a passage that hinges on one ("Hạ giọng ở 'only the cat'") can name it. */
 export type VoicePassage = {
   id: string
   mood: 'happy' | 'surprised' | 'question' | 'sad' | 'excited' | 'calm'
@@ -29,5 +31,6 @@ export type VoicePassage = {
   emoji: string
   text: string
   vi: string
+  tips?: string[]
   audio: string
 }

@@ -119,6 +119,22 @@ it('coaches the mood with three tips, different per mood', () => {
   expect(screen.getByText(/Nhấn vào từ để hỏi/)).toBeInTheDocument()
 })
 
+/** The shared tips are used by several passages at once, so they can only talk about *how* to
+ * read; a passage that needs a word named brings its own tips and those win outright. */
+it('prefers the passage’s own tips over the shared mood tips when it has them', () => {
+  // sv7 and sv5 are both "excited": the shared tips cannot name a word that fits both.
+  renderVoice('sv7')
+  const tips = screen.getAllByTestId('mood-tip').map(t => t.textContent)
+  expect(tips).toHaveLength(3)
+  expect(tips.join(' ')).toContain('did it')
+
+  // sv5 has no tips of its own, so the mood's generic ones still show — and name no words.
+  cleanupAndRender('sv5')
+  const shared = screen.getAllByTestId('mood-tip').map(t => t.textContent ?? '')
+  expect(shared).toHaveLength(3)
+  expect(shared.join(' ')).not.toMatch(/birthday|big/)
+})
+
 it('plays the sample, and says so when it is missing', async () => {
   renderVoice()
   fireEvent.click(screen.getByRole('button', { name: /nghe mẫu/i }))
