@@ -307,7 +307,9 @@ Minimal Pairs; Học từ mới logs `word` events instead).
   Leitner unlock/spacing rules are unchanged.
 - **👯 Nghe & chọn (Minimal Pairs)** — a new level, `/level/minimal-pairs` (`PairLevel`) →
   `/pair/:id` (`PairPractice`): 8 contrastive pairs (ship/sheep, bat/bad, three/tree, fan/van,
-  sit/seat, thin/tin, rice/lice, cap/cup). 🔊 plays one of the two words at random; the child taps
+  sit/seat, thin/tin, rice/lice, cap/cup). 🔊 plays one of the two words, picked **seeded
+  pseudo-random per pair** (a PRNG stream seeded by the pair id, so the order has no beat the child
+  can count but is identical every time that pair is opened); the child taps
   the matching picture/word card (✅/🙈 + Foxy); after 2 correct listens a mic step asks the child
   to read both words in one go ("ship, sheep"), scored the normal way.
 

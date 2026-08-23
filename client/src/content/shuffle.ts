@@ -1,6 +1,8 @@
 // Deterministic per-id PRNG (mulberry32) so the same sentence always shuffles into the same tile
 // order — tests stay reproducible and a kid re-opening a sentence sees the same layout.
-function mulberry32(seed: number): () => number {
+// Exported as a pair because other screens need the same "unpredictable but fixed per id" trick:
+// Minimal Pairs draws its 🔊 target from a stream seeded by the pair's id.
+export function mulberry32(seed: number): () => number {
   let t = seed
   return function next() {
     t |= 0
@@ -11,7 +13,7 @@ function mulberry32(seed: number): () => number {
   }
 }
 
-function seedFromId(id: string): number {
+export function seedFromId(id: string): number {
   let h = 0
   for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) | 0
   return h

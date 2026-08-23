@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, act } from '@testing-library/react'
+import { render, screen, fireEvent, act, cleanup } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { useEffect, useState } from 'react'
 import type { PronunciationResult } from '../scoring/types'
@@ -21,7 +21,17 @@ vi.mock('../speaking/useSpeakingAttempt', () => ({
 const playerControl = vi.hoisted(() => ({ playUrl: vi.fn() }))
 vi.mock('../audio/player', () => ({ playUrl: playerControl.playUrl, playBlob: vi.fn().mockResolvedValue(undefined) }))
 
-import { PairPractice } from './PairPractice'
+import { PairPractice, targetFor } from './PairPractice'
+import { findPair } from '../content'
+
+const SHIP_SHEEP = findPair('pair-ship-sheep')!
+
+/** The word 🔊 plays on listen number `n` (0-based) — computed with the screen's own seeded
+ * stream, so the flow tests below read as "tap the word that was played" instead of pinning a
+ * hard-coded order that only holds for this one pair. */
+const played = (n: number) => SHIP_SHEEP[targetFor(SHIP_SHEEP, n)].word
+/** The word that was *not* played — the wrong card, whichever side that happens to be. */
+const other = (word: string) => (word === SHIP_SHEEP.a.word ? SHIP_SHEEP.b.word : SHIP_SHEEP.a.word)
 
 /** One attempt on "ship, sheep" — both words scored the same, which is all the screen reads. */
 function result(overall = 85): PronunciationResult {
@@ -67,12 +77,12 @@ it('opens on the two options, locked until the child has listened', () => {
   expect(screen.getByRole('link', { name: 'Quay lại' })).toHaveAttribute('href', '/level/minimal-pairs')
 })
 
-/** The order is seeded by the pair id (odd length → `b` first), so it is the same every run. */
+/** The order is a PRNG stream seeded by the pair id, so it is the same every run. */
 it('plays one of the two words and unlocks the cards', () => {
   renderPair()
   listen()
 
-  expect(playerControl.playUrl).toHaveBeenCalledWith('/audio/pairs/sheep.mp3')
+  expect(playerControl.playUrl).toHaveBeenCalledWith(`/audio/pairs/${played(0)}.mp3`)
   expect(screen.getByRole('button', { name: 'ship' })).toBeEnabled()
   expect(screen.getByRole('button', { name: 'sheep' })).toBeEnabled()
 })
@@ -81,7 +91,7 @@ it('cheers the matching card and locks up again after it', () => {
   renderPair()
 
   listen()
-  pick('sheep') // "sheep" was played
+  pick(played(0))
   expect(screen.getByText('Đúng rồi! 🎉')).toBeInTheDocument()
   expect(screen.getByText('Đúng 1/2')).toBeInTheDocument()
   // A finished round locks the cards again until the next 🔊.
@@ -95,32 +105,52 @@ it('makes a wrong pick cost a listen instead of handing over the answer', () => 
   renderPair()
 
   listen()
-  pick('ship') // "sheep" was played
+  pick(other(played(0)))
   expect(screen.getByText('Nghe lại nhé')).toBeInTheDocument()
   expect(screen.getByText('Bấm 🔊 nghe lại nhé')).toBeInTheDocument()
   expect(screen.getByText('Đúng 0/2')).toBeInTheDocument()
 
   // The other card is locked, so tapping it changes nothing.
-  expect(screen.getByRole('button', { name: 'sheep' })).toBeDisabled()
-  pick('sheep')
+  expect(screen.getByRole('button', { name: played(0) })).toBeDisabled()
+  pick(played(0))
   expect(screen.getByText('Đúng 0/2')).toBeInTheDocument()
   expect(screen.queryByText('Đúng rồi! 🎉')).not.toBeInTheDocument()
 
-  // A fresh listen moves on to the next deterministic target — "ship" this time.
+  // A fresh listen moves on to the next draw of the pair's seeded stream.
   listen()
-  expect(playerControl.playUrl).toHaveBeenLastCalledWith('/audio/pairs/ship.mp3')
-  pick('ship')
+  expect(playerControl.playUrl).toHaveBeenLastCalledWith(`/audio/pairs/${played(1)}.mp3`)
+  pick(played(1))
   expect(screen.getByText('Đúng rồi! 🎉')).toBeInTheDocument()
   expect(screen.getByText('Đúng 1/2')).toBeInTheDocument()
 })
 
-it('alternates the played word between listens', () => {
+/** Every 🔊 url played over `n` listens on a freshly mounted screen. */
+function playedUrls(n: number): string[] {
   renderPair()
-  listen()
-  pick('sheep')
-  listen()
+  for (let i = 0; i < n; i++) listen()
+  const urls = playerControl.playUrl.mock.calls.map(c => c[0] as string)
+  cleanup()
+  playerControl.playUrl.mockClear()
+  return urls
+}
 
-  expect(playerControl.playUrl).toHaveBeenLastCalledWith('/audio/pairs/ship.mp3')
+/** A strict a/b alternation is a pattern a child spots in two rounds and then stops listening
+ * for, so the side is drawn from a PRNG — but one seeded by the pair, so the same pair always
+ * plays the same sequence and the screen stays testable. */
+it('draws the same sequence for a pair every time it is opened', () => {
+  const first = playedUrls(8)
+  const second = playedUrls(8)
+
+  expect(first).toHaveLength(8)
+  expect(second).toEqual(first)
+})
+
+it('does not simply alternate: both words come up over the first 12 listens', () => {
+  const urls = playedUrls(12)
+
+  expect(new Set(urls)).toEqual(new Set(['/audio/pairs/ship.mp3', '/audio/pairs/sheep.mp3']))
+  // At least one listen repeats the previous word — an alternation never does.
+  expect(urls.some((u, i) => i > 0 && u === urls[i - 1])).toBe(true)
 })
 
 it('says so when the pair audio is missing', async () => {
@@ -134,10 +164,10 @@ it('says so when the pair audio is missing', async () => {
 it('opens the mic step after two correct listens', () => {
   renderPair()
 
-  listen(); pick('sheep')
+  listen(); pick(played(0))
   expect(screen.queryByRole('button', { name: /bấm để nói/i })).not.toBeInTheDocument()
 
-  listen(); pick('ship')
+  listen(); pick(played(1))
 
   expect(screen.getByText('Giờ đọc cả hai từ nào!')).toBeInTheDocument()
   expect(screen.getByText('ship, sheep')).toBeInTheDocument()
@@ -149,8 +179,8 @@ it('opens the mic step after two correct listens', () => {
 
 function reachMic() {
   renderPair()
-  listen(); pick('sheep')
-  listen(); pick('ship')
+  listen(); pick(played(0))
+  listen(); pick(played(1))
 }
 
 it('turns a good attempt into 3 stars stored on the pair key', () => {

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { PAIRS, findPair } from '../content'
+import { mulberry32, seedFromId } from '../content/shuffle'
 import type { PairItem } from '../content/types'
 import type { PronunciationResult } from '../scoring/types'
 import { playBlob, playUrl } from '../audio/player'
@@ -29,16 +30,18 @@ type Side = 'a' | 'b'
 /**
  * Which of the two words 🔊 plays, decided from the number of listens so far.
  *
- * It has to alternate (a child who always hears the same word learns nothing) and it has to be
- * *deterministic* — a random draw would make the screen untestable and would let the same pair
- * open with the same word only by luck. So the listens alternate a/b, and the pair's id seeds
- * which side goes first: an even-length id starts on `a`, an odd-length one on `b`. Every pair
- * therefore has its own fixed order that is stable across reloads.
+ * It has to be *unpredictable*: a strict a/b alternation is a pattern a child picks up within two
+ * rounds, after which they stop listening and just take turns tapping. And it has to be
+ * *deterministic*, or the screen would be untestable and a pair would open differently on every
+ * reload. So the pair's id seeds a PRNG stream and the `listens`-th draw of it picks the side —
+ * the same pair always plays the same sequence, but one with runs and repeats in it rather than a
+ * beat the child can count.
  */
-function targetFor(pair: PairItem, listens: number): Side {
-  const firstIsA = pair.id.length % 2 === 0
-  const evenTurn = listens % 2 === 0
-  return evenTurn === firstIsA ? 'a' : 'b'
+export function targetFor(pair: PairItem, listens: number): Side {
+  const rand = mulberry32(seedFromId(pair.id))
+  let draw = rand()
+  for (let i = 0; i < listens; i++) draw = rand()
+  return draw < 0.5 ? 'a' : 'b'
 }
 
 const OPTION =
