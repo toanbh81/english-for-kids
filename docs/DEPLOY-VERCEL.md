@@ -10,7 +10,7 @@ Repo: https://github.com/toanbh81/english-for-kids
 ## Cấu hình 1 lần trên Vercel
 1. https://vercel.com/new → **Import Git Repository** → chọn `toanbh81/english-for-kids`.
 2. Màn **Configure Project**:
-   - Framework Preset: **Other** (Vercel đọc `vercel.json` trong repo: install `pnpm install --frozen-lockfile`, build `pnpm --filter client build`, output `client/dist`).
+   - Framework Preset: **Other** (Vercel đọc `vercel.json` trong repo: install `pnpm install --frozen-lockfile`, build `pnpm --filter client build` rồi copy sang `dist` ở gốc, output `dist` (khớp cả khi Vercel dùng mặc định)).
    - Root Directory: để trống (root của repo).
    - **Environment Variables** (bắt buộc, áp dụng cho Production + Preview):
      - `AZURE_SPEECH_KEY` = key trong `server/.env` của bạn
