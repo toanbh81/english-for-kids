@@ -66,6 +66,18 @@ describe('ParentGate', () => {
     expect(sessionStorage.getItem(FLAG_KEY)).toBe('1')
   })
 
+  it('submits and opens the dashboard when Enter is pressed with the right answer', async () => {
+    vi.spyOn(Math, 'random').mockReturnValue(0) // a = 3, b = 3 -> product 9
+    renderWithRouter(<ParentGate />)
+
+    const input = screen.getByLabelText('Đáp án')
+    fireEvent.change(input, { target: { value: '9' } })
+    fireEvent.submit(input.closest('form')!)
+
+    await screen.findByText('Phút luyện mỗi ngày (14 ngày)')
+    expect(sessionStorage.getItem(FLAG_KEY)).toBe('1')
+  })
+
   it('skips the gate and shows the dashboard when the session flag is already set', async () => {
     sessionStorage.setItem(FLAG_KEY, '1')
     renderWithRouter(<ParentGate />)
@@ -122,13 +134,26 @@ describe('ParentDashboard', () => {
     expect(playerMock.playBlob).toHaveBeenCalledWith(blob)
   })
 
-  it('persists a daily limit change to localStorage', async () => {
+  it('persists a daily limit change to localStorage, clamped to the 5-60 range', async () => {
     renderWithRouter(<ParentDashboard />)
     await flush()
 
-    fireEvent.change(screen.getByRole('spinbutton'), { target: { value: '45' } })
+    const input = screen.getByRole('spinbutton')
+    fireEvent.change(input, { target: { value: '999' } })
 
-    expect(localStorage.getItem('speakup.limit.minutes')).toBe('45')
+    expect(localStorage.getItem('speakup.limit.minutes')).toBe('60')
+  })
+
+  it('re-syncs the displayed limit to the clamped stored value on blur', async () => {
+    renderWithRouter(<ParentDashboard />)
+    await flush()
+
+    const input = screen.getByRole('spinbutton')
+    fireEvent.change(input, { target: { value: '999' } })
+    expect(input).toHaveValue(999)
+
+    fireEvent.blur(input)
+    expect(input).toHaveValue(60)
   })
 
   it('resets progress and clears speakup.stars after the confirm dialog is accepted', async () => {

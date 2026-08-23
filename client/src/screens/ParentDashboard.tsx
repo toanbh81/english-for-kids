@@ -6,29 +6,11 @@ import { clearLeitner } from '../progress/leitner'
 import { listRecordings, clearRecordings } from '../progress/recordings'
 import type { Recording } from '../progress/recordings'
 import { clearStars } from '../progress/store'
+import { getLimitMinutes, setLimitMinutes } from '../progress/limit'
 import { PHONEME_TIPS } from '../scoring/feedback'
 import { playBlob } from '../audio/player'
 
-const LIMIT_KEY = 'speakup.limit.minutes'
-const DEFAULT_LIMIT_MINUTES = 20
-
 const KIND_LABEL = { speak: 'Nói', word: 'Từ vựng', sentence: 'Ghép câu' } as const
-
-/** Corrupt or missing storage (private mode, hand-edited value) must not crash the app — fall back to the default. */
-function readLimit(): number {
-  try {
-    const raw = localStorage.getItem(LIMIT_KEY)
-    const n = raw != null ? Number(raw) : NaN
-    return Number.isFinite(n) && n > 0 ? n : DEFAULT_LIMIT_MINUTES
-  } catch {
-    return DEFAULT_LIMIT_MINUTES
-  }
-}
-
-function writeLimit(n: number): void {
-  try { localStorage.setItem(LIMIT_KEY, String(n)) }
-  catch { /* ignore: storage unavailable */ }
-}
 
 function formatDayLabel(day: string): string {
   const [, m, d] = day.split('-')
@@ -47,7 +29,7 @@ function formatTs(ts: number): string {
 export function ParentDashboard() {
   const [recordings, setRecordings] = useState<Recording[]>([])
   const [reloadKey, setReloadKey] = useState(0)
-  const [limit, setLimit] = useState(readLimit)
+  const [limit, setLimit] = useState<string>(() => String(getLimitMinutes()))
 
   const days = minutesPerDay(14)
   const maxMinutes = Math.max(1, ...days.map(d => d.minutes))
@@ -64,9 +46,13 @@ export function ParentDashboard() {
   }, [reloadKey])
 
   function handleLimitChange(e: ChangeEvent<HTMLInputElement>) {
-    const n = Number(e.target.value)
-    setLimit(n)
-    writeLimit(n)
+    const raw = e.target.value
+    setLimit(raw)
+    setLimitMinutes(Number(raw))
+  }
+
+  function handleLimitBlur() {
+    setLimit(String(getLimitMinutes()))
   }
 
   async function handleReset() {
@@ -75,7 +61,7 @@ export function ParentDashboard() {
     clearActivity()
     clearLeitner()
     await clearRecordings()
-    setLimit(readLimit())
+    setLimit(String(getLimitMinutes()))
     setReloadKey(k => k + 1)
   }
 
@@ -165,6 +151,7 @@ export function ParentDashboard() {
             step={5}
             value={limit}
             onChange={handleLimitChange}
+            onBlur={handleLimitBlur}
             className="min-h-[64px] border-2 border-slate-300 rounded-xl px-3 w-24"
           />
           <span>phút / ngày</span>

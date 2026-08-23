@@ -2,24 +2,11 @@ import { Link } from 'react-router-dom'
 import { LEVELS } from '../content'
 import { totalStars } from '../progress/store'
 import { missionStatus, streak, weekDots, minutesToday } from '../progress/activity'
+import { getLimitMinutes } from '../progress/limit'
 import { Foxy } from '../components/Foxy'
 import type { FoxyMood } from '../components/Foxy'
 import { MissionCard } from '../components/MissionCard'
 import { StreakWeek } from '../components/StreakWeek'
-
-const DEFAULT_LIMIT_MINUTES = 20
-const LIMIT_KEY = 'speakup.limit.minutes'
-
-/** Corrupt or missing storage (private mode, hand-edited value) must not crash the app — fall back to the default. */
-function limitMinutes(): number {
-  try {
-    const raw = localStorage.getItem(LIMIT_KEY)
-    const n = raw != null ? Number(raw) : NaN
-    return Number.isFinite(n) && n > 0 ? n : DEFAULT_LIMIT_MINUTES
-  } catch {
-    return DEFAULT_LIMIT_MINUTES
-  }
-}
 
 const MODULE_CARDS = [
   { to: '/stories', emoji: '🎧', label: 'Nghe kể chuyện', bg: 'bg-coral text-white' },
@@ -37,7 +24,7 @@ export function Home() {
     : hasProgress
       ? 'Giỏi lắm, tiếp tục nhé!'
       : 'Chào bé! Hôm nay mình học gì nào?'
-  const overLimit = minutesToday() >= limitMinutes()
+  const overLimit = minutesToday() >= getLimitMinutes()
 
   return (
     <main className="h-full overflow-y-auto flex flex-col items-center gap-6 p-6 relative">
