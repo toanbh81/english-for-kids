@@ -13,10 +13,13 @@ export type ActivityEvent = {
   phonemes?: { phoneme: string; score: number }[]
 }
 
-// Corrupt or unavailable storage (private mode, hand-edited value) must not crash the app.
+// Corrupt or unavailable storage (private mode, hand-edited value) must not crash the app —
+// including valid JSON of the wrong shape, e.g. '{}', which would break every array query.
 const read = (): ActivityEvent[] => {
-  try { return JSON.parse(localStorage.getItem(KEY) ?? '[]') as ActivityEvent[] }
-  catch { return [] }
+  try {
+    const parsed: unknown = JSON.parse(localStorage.getItem(KEY) ?? '[]')
+    return Array.isArray(parsed) ? (parsed as ActivityEvent[]) : []
+  } catch { return [] }
 }
 const write = (events: ActivityEvent[]) => {
   try { localStorage.setItem(KEY, JSON.stringify(events)) }
@@ -61,15 +64,17 @@ function isDone(counts: { story: number; speak: number; word: number }): boolean
   return counts.story >= MISSION_TARGET.story && counts.speak >= MISSION_TARGET.speak && counts.word >= MISSION_TARGET.word
 }
 
-export function missionStatus(now = Date.now()): { story: number; speak: number; word: number; done: boolean } {
+// Every query takes the event log as an optional trailing argument so a screen can read storage
+// once per render and share the same array across all of its queries.
+export function missionStatus(now = Date.now(), events = getActivity()): { story: number; speak: number; word: number; done: boolean } {
   const key = dayKey(now)
-  const counts = countsForDay(read().filter(e => dayKey(e.ts) === key))
+  const counts = countsForDay(events.filter(e => dayKey(e.ts) === key))
   return { ...counts, done: isDone(counts) }
 }
 
-export function completedDays(): Set<string> {
+export function completedDays(events = getActivity()): Set<string> {
   const byDay = new Map<string, ActivityEvent[]>()
-  for (const e of read()) {
+  for (const e of events) {
     const key = dayKey(e.ts)
     const list = byDay.get(key)
     if (list) list.push(e)
@@ -82,8 +87,8 @@ export function completedDays(): Set<string> {
   return done
 }
 
-export function streak(now = Date.now()): number {
-  const done = completedDays()
+export function streak(now = Date.now(), events = getActivity()): number {
+  const done = completedDays(events)
   let cursor = now
   if (!done.has(dayKey(cursor))) {
     cursor -= DAY_MS
@@ -97,11 +102,11 @@ export function streak(now = Date.now()): number {
   return count
 }
 
-export function weekDots(now = Date.now()): { day: string; done: boolean; isToday: boolean }[] {
+export function weekDots(now = Date.now(), events = getActivity()): { day: string; done: boolean; isToday: boolean }[] {
   const d = new Date(now)
   const mondayOffset = (d.getDay() + 6) % 7 // 0=Mon ... 6=Sun
   const monday = new Date(d.getFullYear(), d.getMonth(), d.getDate() - mondayOffset)
-  const done = completedDays()
+  const done = completedDays(events)
   const todayKey = dayKey(now)
   const dots: { day: string; done: boolean; isToday: boolean }[] = []
   for (let i = 0; i < 7; i++) {
@@ -135,9 +140,9 @@ function sessionMinutes(events: ActivityEvent[]): number {
   return total
 }
 
-export function minutesPerDay(days: number, now = Date.now()): { day: string; minutes: number }[] {
+export function minutesPerDay(days: number, now = Date.now(), events = getActivity()): { day: string; minutes: number }[] {
   const byDay = new Map<string, ActivityEvent[]>()
-  for (const e of read()) {
+  for (const e of events) {
     const key = dayKey(e.ts)
     const list = byDay.get(key)
     if (list) list.push(e)
@@ -153,13 +158,13 @@ export function minutesPerDay(days: number, now = Date.now()): { day: string; mi
   return result
 }
 
-export function minutesToday(now = Date.now()): number {
-  return minutesPerDay(1, now)[0].minutes
+export function minutesToday(now = Date.now(), events = getActivity()): number {
+  return minutesPerDay(1, now, events)[0].minutes
 }
 
-export function weakPhonemes(n = 5): { phoneme: string; avg: number; count: number }[] {
+export function weakPhonemes(n = 5, events = getActivity()): { phoneme: string; avg: number; count: number }[] {
   const agg = new Map<string, { sum: number; count: number }>()
-  for (const e of read()) {
+  for (const e of events) {
     if (!e.phonemes) continue
     for (const p of e.phonemes) {
       const cur = agg.get(p.phoneme) ?? { sum: 0, count: 0 }
@@ -175,9 +180,8 @@ export function weakPhonemes(n = 5): { phoneme: string; avg: number; count: numb
     .slice(0, n)
 }
 
-export function averageScoreByKind(): Record<ActivityKind, number | null> {
+export function averageScoreByKind(events = getActivity()): Record<ActivityKind, number | null> {
   const kinds: ActivityKind[] = ['story', 'speak', 'word', 'sentence']
-  const events = read()
   const result = {} as Record<ActivityKind, number | null>
   for (const kind of kinds) {
     const scored = events.filter((e): e is ActivityEvent & { score: number } => e.kind === kind && typeof e.score === 'number')

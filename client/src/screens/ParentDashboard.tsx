@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { ChangeEvent } from 'react'
 import { Link } from 'react-router-dom'
-import { minutesPerDay, averageScoreByKind, weakPhonemes, clearActivity } from '../progress/activity'
+import { getActivity, minutesPerDay, averageScoreByKind, weakPhonemes, clearActivity } from '../progress/activity'
 import { clearLeitner } from '../progress/leitner'
 import { listRecordings, clearRecordings } from '../progress/recordings'
 import type { Recording } from '../progress/recordings'
@@ -28,14 +28,17 @@ function formatTs(ts: number): string {
 
 export function ParentDashboard() {
   const [recordings, setRecordings] = useState<Recording[]>([])
-  const [reloadKey, setReloadKey] = useState(0)
+  // One read of the activity log per mount (and per reset), shared by every query below; the
+  // snapshot doubles as the reload key for the recordings list.
+  const [snapshot, setSnapshot] = useState(() => ({ events: getActivity(), now: Date.now() }))
   const [limit, setLimit] = useState<string>(() => String(getLimitMinutes()))
 
-  const days = minutesPerDay(14)
+  const { events, now } = snapshot
+  const days = minutesPerDay(14, now, events)
   const maxMinutes = Math.max(1, ...days.map(d => d.minutes))
   const totalMinutes = days.reduce((sum, d) => sum + d.minutes, 0)
-  const averages = averageScoreByKind()
-  const weak = weakPhonemes(5)
+  const averages = averageScoreByKind(events)
+  const weak = weakPhonemes(5, events)
 
   useEffect(() => {
     let cancelled = false
@@ -43,7 +46,7 @@ export function ParentDashboard() {
       if (!cancelled) setRecordings(list)
     })
     return () => { cancelled = true }
-  }, [reloadKey])
+  }, [snapshot])
 
   function handleLimitChange(e: ChangeEvent<HTMLInputElement>) {
     const raw = e.target.value
@@ -62,7 +65,7 @@ export function ParentDashboard() {
     clearLeitner()
     await clearRecordings()
     setLimit(String(getLimitMinutes()))
-    setReloadKey(k => k + 1)
+    setSnapshot({ events: getActivity(), now: Date.now() })
   }
 
   return (

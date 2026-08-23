@@ -54,3 +54,10 @@ it('treats a corrupt stored value as empty progress', () => {
   expect(getBox('apple')).toBe(0)
   expect(dueWords(BASE)).toEqual([])
 })
+
+it('treats valid JSON of the wrong shape as empty progress', () => {
+  localStorage.setItem('speakup.leitner', '[1,2]')
+  expect(getBox('apple')).toBe(0)
+  expect(dueWords(BASE)).toEqual([])
+  expect(unlockedCount()).toBe(0)
+})

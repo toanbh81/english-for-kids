@@ -1,7 +1,8 @@
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { LEVELS } from '../content'
 import { totalStars } from '../progress/store'
-import { missionStatus, streak, weekDots, minutesToday } from '../progress/activity'
+import { getActivity, missionStatus, streak, weekDots, minutesToday } from '../progress/activity'
 import { getLimitMinutes } from '../progress/limit'
 import { Foxy } from '../components/Foxy'
 import type { FoxyMood } from '../components/Foxy'
@@ -16,7 +17,10 @@ const MODULE_CARDS = [
 ]
 
 export function Home() {
-  const status = missionStatus()
+  // One read of the activity log per mount, shared by every query below — the log is a single
+  // localStorage entry, and each query used to parse it again.
+  const [{ events, now }] = useState(() => ({ events: getActivity(), now: Date.now() }))
+  const status = missionStatus(now, events)
   const hasProgress = status.story > 0 || status.speak > 0 || status.word > 0
   const mood: FoxyMood = status.done ? 'cheer' : hasProgress ? 'happy' : 'idle'
   const say = status.done
@@ -24,7 +28,7 @@ export function Home() {
     : hasProgress
       ? 'Giỏi lắm, tiếp tục nhé!'
       : 'Chào bé! Hôm nay mình học gì nào?'
-  const overLimit = minutesToday() >= getLimitMinutes()
+  const overLimit = minutesToday(now, events) >= getLimitMinutes()
 
   return (
     <main className="h-full overflow-y-auto flex flex-col items-center gap-6 p-6 relative">
@@ -32,7 +36,7 @@ export function Home() {
 
       <section className="flex flex-col items-center gap-3">
         <Foxy mood={mood} size="lg" say={say} />
-        <StreakWeek dots={weekDots()} streak={streak()} />
+        <StreakWeek dots={weekDots(now, events)} streak={streak(now, events)} />
         <div className="text-2xl font-extrabold">⭐ {totalStars()} sao</div>
       </section>
 

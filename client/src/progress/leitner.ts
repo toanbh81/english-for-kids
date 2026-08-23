@@ -6,10 +6,13 @@ export const INTERVAL_DAYS = { 1: 1, 2: 3, 3: 7, 4: 14 } as const
 
 type LeitnerMap = Record<string, LeitnerEntry>
 
-// Corrupt or unavailable storage (private mode, hand-edited value) must not crash the app.
+// Corrupt or unavailable storage (private mode, hand-edited value) must not crash the app —
+// including valid JSON of the wrong shape, e.g. an array, which would break the map lookups.
 const read = (): LeitnerMap => {
-  try { return JSON.parse(localStorage.getItem(KEY) ?? '{}') as LeitnerMap }
-  catch { return {} }
+  try {
+    const parsed: unknown = JSON.parse(localStorage.getItem(KEY) ?? '{}')
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? (parsed as LeitnerMap) : {}
+  } catch { return {} }
 }
 const write = (m: LeitnerMap) => {
   try { localStorage.setItem(KEY, JSON.stringify(m)) }
