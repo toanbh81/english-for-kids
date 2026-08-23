@@ -63,7 +63,7 @@ describe('ParentGate', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Vào' }))
 
     await screen.findByText('Phút luyện mỗi ngày (14 ngày)')
-    expect(sessionStorage.getItem(FLAG_KEY)).toBe('1')
+    expect(Number(sessionStorage.getItem(FLAG_KEY))).toBeGreaterThan(Date.now() - 1000)
   })
 
   it('submits and opens the dashboard when Enter is pressed with the right answer', async () => {
@@ -75,15 +75,40 @@ describe('ParentGate', () => {
     fireEvent.submit(input.closest('form')!)
 
     await screen.findByText('Phút luyện mỗi ngày (14 ngày)')
-    expect(sessionStorage.getItem(FLAG_KEY)).toBe('1')
+    expect(Number(sessionStorage.getItem(FLAG_KEY))).toBeGreaterThan(Date.now() - 1000)
   })
 
-  it('skips the gate and shows the dashboard when the session flag is already set', async () => {
-    sessionStorage.setItem(FLAG_KEY, '1')
+  it('skips the gate and shows the dashboard when the session flag is fresh', async () => {
+    sessionStorage.setItem(FLAG_KEY, String(Date.now()))
     renderWithRouter(<ParentGate />)
 
     await screen.findByText('Phút luyện mỗi ngày (14 ngày)')
     expect(screen.queryByLabelText('Đáp án')).not.toBeInTheDocument()
+  })
+
+  it('asks the question again when the session flag is older than 10 minutes', () => {
+    sessionStorage.setItem(FLAG_KEY, String(Date.now() - 10 * 60 * 1000 - 1))
+    renderWithRouter(<ParentGate />)
+
+    expect(screen.getByLabelText('Đáp án')).toBeInTheDocument()
+    expect(screen.queryByText('Phút luyện mỗi ngày (14 ngày)')).not.toBeInTheDocument()
+  })
+
+  it('asks the question again when the session flag is not a timestamp', () => {
+    sessionStorage.setItem(FLAG_KEY, '1')
+    renderWithRouter(<ParentGate />)
+
+    expect(screen.getByLabelText('Đáp án')).toBeInTheDocument()
+  })
+
+  it('clears the session flag on unmount so leaving /parent re-locks the gate', async () => {
+    sessionStorage.setItem(FLAG_KEY, String(Date.now()))
+    const { unmount } = renderWithRouter(<ParentGate />)
+    await screen.findByText('Phút luyện mỗi ngày (14 ngày)')
+
+    unmount()
+
+    expect(sessionStorage.getItem(FLAG_KEY)).toBeNull()
   })
 })
 

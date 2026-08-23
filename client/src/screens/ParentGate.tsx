@@ -1,9 +1,10 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { ChangeEvent, FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { ParentDashboard } from './ParentDashboard'
 
 const FLAG_KEY = 'speakup.parent'
+const MAX_AGE_MS = 10 * 60 * 1000
 
 function randInt(min: number, max: number): number {
   return min + Math.floor(Math.random() * (max - min + 1))
@@ -13,9 +14,17 @@ function newQuestion(): { a: number; b: number } {
   return { a: randInt(3, 9), b: randInt(3, 9) }
 }
 
+/** The flag stores when the gate was passed; anything older than 10 minutes asks again, so a
+ * tab left open on /parent does not stay unlocked for the rest of the session. */
 function isUnlocked(): boolean {
-  try { return sessionStorage.getItem(FLAG_KEY) === '1' }
-  catch { return false }
+  try {
+    const ts = Number(sessionStorage.getItem(FLAG_KEY))
+    return Number.isFinite(ts) && ts > 0 && Date.now() - ts < MAX_AGE_MS
+  } catch { return false }
+}
+
+function clearFlag() {
+  try { sessionStorage.removeItem(FLAG_KEY) } catch { /* ignore: storage unavailable */ }
 }
 
 export function ParentGate() {
@@ -23,6 +32,9 @@ export function ParentGate() {
   const [question, setQuestion] = useState(newQuestion)
   const [value, setValue] = useState('')
   const [wrong, setWrong] = useState(false)
+
+  // Leaving /parent re-locks: the flag never outlives the screen that owns it.
+  useEffect(() => clearFlag, [])
 
   if (unlocked) return <ParentDashboard />
 
@@ -33,7 +45,7 @@ export function ParentGate() {
   function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault()
     if (Number(value.trim()) === question.a * question.b) {
-      try { sessionStorage.setItem(FLAG_KEY, '1') } catch { /* ignore: storage unavailable */ }
+      try { sessionStorage.setItem(FLAG_KEY, String(Date.now())) } catch { /* ignore: storage unavailable */ }
       setUnlocked(true)
       return
     }
