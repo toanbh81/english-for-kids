@@ -76,7 +76,7 @@ function WordCardInner({ word, topic, isReview, list }: { word: Word; topic: str
   const say = outcome === 'unlocked' ? '🔓 Mở khoá!' : outcome === 'retry' ? 'Thử lại nhé' : undefined
 
   return (
-    <main className="h-full flex flex-col items-center justify-between p-6 gap-3">
+    <main className="h-full overflow-y-auto flex flex-col items-center p-6 gap-4">
       <div className="w-full flex justify-between text-xl">
         <Link to={backTo} className={`${TAP_TARGET} px-4`}>← {isReview ? 'Ôn tập' : 'Từ vựng'}</Link>
         <span className="text-slate-400">{attempt.engine === 'webspeech' ? 'chế độ đơn giản' : ''}</span>

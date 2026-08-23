@@ -73,7 +73,7 @@ function StoryRetellInner({ story, id }: { story: Story; id: string }) {
     : stars === 3 ? 'cheer' : stars === 2 ? 'happy' : 'idle'
 
   return (
-    <main className="h-full flex flex-col items-center justify-between p-6 gap-4">
+    <main className="h-full overflow-y-auto flex flex-col items-center p-6 gap-4">
       <div className="w-full flex justify-between text-xl">
         <Link to="/stories" className={`${TAP_TARGET} px-4`}>← Truyện</Link>
         <span className="text-slate-400">{a.engine === 'webspeech' ? 'chế độ đơn giản' : ''}</span>

@@ -60,7 +60,7 @@ export function PracticeCard() {
   }
 
   return (
-    <main className="h-full flex flex-col items-center justify-between p-6">
+    <main className="h-full overflow-y-auto flex flex-col items-center p-6 gap-4">
       <div className="w-full flex justify-between text-xl">
         <Link to={`/level/${LEVELS.find(l => l.cards.includes(card))!.id}`} className="inline-flex items-center min-h-[64px] px-4">← Quay lại</Link>
         <span className="text-slate-400">{isWebSpeech ? 'chế độ đơn giản' : ''}</span>
