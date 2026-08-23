@@ -6,6 +6,9 @@ import { StoryList } from './screens/StoryList'
 import { StoryPlayer } from './screens/StoryPlayer'
 import { StoryQuiz } from './screens/StoryQuiz'
 import { StoryRetell } from './screens/StoryRetell'
+import { WordTopics } from './screens/WordTopics'
+import { WordList } from './screens/WordList'
+import { WordCard } from './screens/WordCard'
 
 export default function App() {
   return (
@@ -17,6 +20,9 @@ export default function App() {
       <Route path="/story/:id" element={<StoryPlayer />} />
       <Route path="/story/:id/quiz" element={<StoryQuiz />} />
       <Route path="/story/:id/retell" element={<StoryRetell />} />
+      <Route path="/words" element={<WordTopics />} />
+      <Route path="/words/:topic" element={<WordList />} />
+      <Route path="/words/:topic/:wordId" element={<WordCard />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   )

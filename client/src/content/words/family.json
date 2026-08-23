@@ -1,0 +1,15 @@
+{
+  "id": "family",
+  "title": "Gia đình",
+  "emoji": "👨‍👩‍👧",
+  "words": [
+    { "id": "family-mother", "topic": "family", "word": "mother", "ipa": "/ˈmʌðər/", "emoji": "👩", "audio": "/audio/words/mother.mp3", "vi": "mẹ", "example": "I love my mother." },
+    { "id": "family-father", "topic": "family", "word": "father", "ipa": "/ˈfɑːðər/", "emoji": "👨", "audio": "/audio/words/father.mp3", "vi": "bố", "example": "I love my father." },
+    { "id": "family-sister", "topic": "family", "word": "sister", "ipa": "/ˈsɪstər/", "emoji": "👧", "audio": "/audio/words/sister.mp3", "vi": "chị gái", "example": "I have one sister." },
+    { "id": "family-brother", "topic": "family", "word": "brother", "ipa": "/ˈbrʌðər/", "emoji": "👦", "audio": "/audio/words/brother.mp3", "vi": "anh trai", "example": "I have one brother." },
+    { "id": "family-baby", "topic": "family", "word": "baby", "ipa": "/ˈbeɪbi/", "emoji": "👶", "audio": "/audio/words/baby.mp3", "vi": "em bé", "example": "The baby is cute." },
+    { "id": "family-grandma", "topic": "family", "word": "grandma", "ipa": "/ˈɡrænmɑː/", "emoji": "👵", "audio": "/audio/words/grandma.mp3", "vi": "bà", "example": "I love my grandma." },
+    { "id": "family-grandpa", "topic": "family", "word": "grandpa", "ipa": "/ˈɡrænpɑː/", "emoji": "👴", "audio": "/audio/words/grandpa.mp3", "vi": "ông", "example": "I love my grandpa." },
+    { "id": "family-home", "topic": "family", "word": "home", "ipa": "/hoʊm/", "emoji": "🏠", "audio": "/audio/words/home.mp3", "vi": "nhà", "example": "I go home now." }
+  ]
+}

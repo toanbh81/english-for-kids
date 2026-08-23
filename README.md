@@ -54,6 +54,16 @@ writes to the same places whatever your current directory is. If Azure's word bo
 line up with a scene's `words` array, the script exits with a message instead of writing shifted
 timings; fix the scene's `text`/`words` split and re-run.
 
+Vocabulary word audio (Phase 3) goes in its own folder via `--out`, since it is generated one clear
+word at a time rather than as full narration:
+
+```bash
+AZURE_SPEECH_KEY=your-key AZURE_SPEECH_REGION=southeastasia node scripts/gen-audio.mjs --out client/public/audio/words apple banana bread milk egg rice water cake book pen teacher desk bag friend ruler clock mother father sister brother baby grandma grandpa home
+```
+
+`gen-audio.mjs` accepts `--out <dir>` (default `client/public/audio`) and `--voice <name>` (default
+`en-US-JennyNeural`, a clear neutral voice good for single words).
+
 ## Phase 2 — Listening (Nghe kể chuyện)
 
 A listening module that engages kids in illustrated stories with synchronized karaoke-style text. Kids listen to a 60–120 s story (6–7 scenes), see words light up in sync with narration, can slow playback, tap words to replay, toggle Vietnamese subtitles, then answer 3 picture questions and retell one target sentence.
