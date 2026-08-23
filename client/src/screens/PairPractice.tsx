@@ -12,6 +12,7 @@ import { MicButton } from '../components/MicButton'
 import { Stars } from '../components/Stars'
 import { ScoredWords } from '../components/ScoredWords'
 import { HintCard } from '../components/HintCard'
+import { Confetti } from '../components/Confetti'
 import { Foxy } from '../components/Foxy'
 import { BackButton, Button, Card, Chip } from '../components/ui'
 import { useSpeakingAttempt } from '../speaking/useSpeakingAttempt'
@@ -107,16 +108,16 @@ function PairRun({ pair }: { pair: PairItem }) {
     playUrl(pair[side].audio).then(() => setAudioMissing(false), () => setAudioMissing(true))
   }
 
+  /**
+   * Either answer closes the round and locks the cards until the next 🔊. Leaving a missed round
+   * armed would hand the child a free win — with only two cards, "not that one" is the answer —
+   * and the exercise would stop being about listening at all.
+   */
   function choose(side: Side) {
     if (!target) return
-    if (side === target) {
-      setAnswer('right')
-      setCorrect(c => c + 1)
-      // The next round starts from silence, so the cards lock again until 🔊 is pressed.
-      setTarget(null)
-    } else {
-      setAnswer('wrong')
-    }
+    setAnswer(side === target ? 'right' : 'wrong')
+    if (side === target) setCorrect(c => c + 1)
+    setTarget(null)
   }
 
   function option(side: Side) {
@@ -178,10 +179,13 @@ function PairRun({ pair }: { pair: PairItem }) {
                 </div>
               )}
               {answer === 'wrong' && (
-                <div className="flex items-end gap-3">
-                  <span aria-hidden="true" className="text-[44px] leading-none">🙈</span>
-                  <Foxy mood="surprised" size="sm" say="Nghe lại nhé" />
-                </div>
+                <>
+                  <div className="flex items-end gap-3">
+                    <span aria-hidden="true" className="text-[44px] leading-none">🙈</span>
+                    <Foxy mood="surprised" size="sm" say="Nghe lại nhé" />
+                  </div>
+                  <p className="font-display text-xl font-extrabold text-ink-300">Bấm 🔊 nghe lại nhé</p>
+                </>
               )}
               {answer === null && target === null && (
                 <p className="font-display text-xl font-extrabold text-ink-300">Bấm 🔊 trước nhé</p>
@@ -200,6 +204,7 @@ function PairRun({ pair }: { pair: PairItem }) {
 
             {feedback ? (
               <section className="flex flex-col items-center gap-4 pb-2">
+                {feedback.stars === 3 && <Confetti />}
                 <Stars value={feedback.stars} animate={feedback.stars === 3} />
                 <p className="font-display text-3xl font-extrabold text-ink-900">{feedback.message}</p>
                 <ScoredWords words={feedback.words} />

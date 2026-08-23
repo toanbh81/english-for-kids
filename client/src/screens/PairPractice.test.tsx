@@ -77,19 +77,41 @@ it('plays one of the two words and unlocks the cards', () => {
   expect(screen.getByRole('button', { name: 'sheep' })).toBeEnabled()
 })
 
-it('cheers the matching card and shrugs at the wrong one', () => {
+it('cheers the matching card and locks up again after it', () => {
+  renderPair()
+
+  listen()
+  pick('sheep') // "sheep" was played
+  expect(screen.getByText('Đúng rồi! 🎉')).toBeInTheDocument()
+  expect(screen.getByText('Đúng 1/2')).toBeInTheDocument()
+  // A finished round locks the cards again until the next 🔊.
+  expect(screen.getByRole('button', { name: 'ship' })).toBeDisabled()
+  expect(screen.getByRole('button', { name: 'sheep' })).toBeDisabled()
+})
+
+/** With only two cards, "not that one" would otherwise be a free win, so a miss ends the round
+ * and the child has to listen again before they may answer. */
+it('makes a wrong pick cost a listen instead of handing over the answer', () => {
   renderPair()
 
   listen()
   pick('ship') // "sheep" was played
   expect(screen.getByText('Nghe lại nhé')).toBeInTheDocument()
+  expect(screen.getByText('Bấm 🔊 nghe lại nhé')).toBeInTheDocument()
   expect(screen.getByText('Đúng 0/2')).toBeInTheDocument()
 
+  // The other card is locked, so tapping it changes nothing.
+  expect(screen.getByRole('button', { name: 'sheep' })).toBeDisabled()
   pick('sheep')
+  expect(screen.getByText('Đúng 0/2')).toBeInTheDocument()
+  expect(screen.queryByText('Đúng rồi! 🎉')).not.toBeInTheDocument()
+
+  // A fresh listen moves on to the next deterministic target — "ship" this time.
+  listen()
+  expect(playerControl.playUrl).toHaveBeenLastCalledWith('/audio/pairs/ship.mp3')
+  pick('ship')
   expect(screen.getByText('Đúng rồi! 🎉')).toBeInTheDocument()
   expect(screen.getByText('Đúng 1/2')).toBeInTheDocument()
-  // A finished round locks the cards again until the next 🔊.
-  expect(screen.getByRole('button', { name: 'ship' })).toBeDisabled()
 })
 
 it('alternates the played word between listens', () => {
@@ -137,6 +159,7 @@ it('turns a good attempt into 3 stars stored on the pair key', () => {
 
   expect(screen.getAllByTestId('star-filled')).toHaveLength(3)
   expect(screen.getByText('Tuyệt vời!')).toBeInTheDocument()
+  expect(screen.getByTestId('confetti')).toBeInTheDocument()
   expect(JSON.parse(localStorage.getItem('speakup.stars') ?? '{}')).toMatchObject({ 'pair:pair-ship-sheep': 3 })
   expect(JSON.parse(localStorage.getItem('speakup.activity') ?? '[]'))
     .toContainEqual(expect.objectContaining({ kind: 'speak', id: 'pair-ship-sheep' }))
@@ -151,6 +174,7 @@ it('offers a hint and a retry when the attempt was weak', () => {
 
   expect(screen.getAllByTestId('star-filled')).toHaveLength(1)
   expect(screen.getByText(/Sửa từ này/)).toBeInTheDocument()
+  expect(screen.queryByTestId('confetti')).not.toBeInTheDocument()
 
   fireEvent.click(screen.getByRole('button', { name: /thử lại/i }))
   expect(screen.getByText('Giờ đọc cả hai từ nào!')).toBeInTheDocument()
