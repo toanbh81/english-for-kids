@@ -27,3 +27,7 @@ Out of scope: accounts/sync, AI illustrations, true drag-and-drop, push notifica
 
 ## Routes
 `/words` (topics + review deck), `/words/:topic`, `/words/:topic/:wordId` (card), `/sentences`, `/sentence/:id`, `/parent`.
+
+---
+
+**Status: implemented 2026-08-23 on branch phase3-words-mission (tasks 1–7).**

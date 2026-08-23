@@ -148,12 +148,12 @@ The client dev server uses HTTPS because Safari on iOS/iPadOS only allows microp
 ## Testing
 
 ```bash
-pnpm test        # client (Vitest, 132 tests) + server (Vitest, 2 tests)
+pnpm test        # client (Vitest, 241 tests) + server (Vitest, 2 tests)
 pnpm lint        # oxlint on the client
 pnpm typecheck   # tsc -b (client) + tsc --noEmit (server)
 ```
 
-`pnpm test` runs `pnpm -r test`, which executes the client suite (`vitest run`, 132 tests in 21
+`pnpm test` runs `pnpm -r test`, which executes the client suite (`vitest run`, 241 tests in 36
 files) and the server suite (`vitest run`, 2 tests). `pnpm lint` and `pnpm typecheck` fan out the
 same way.
 
@@ -185,6 +185,29 @@ bash scripts/check-secrets.sh tree
 ```
 
 Never bypass with `--no-verify`; fix the pattern instead if it false-positives.
+
+## Phase 3 — Words, Sentence Builder, Daily Mission, Parent Dashboard
+
+A daily habit loop: kids complete a 3-step mission (listen to a story, try 5 words/sentences, unlock or review vocabulary), earn a weekly streak, and see Foxy the mascot celebrate progress. Parents can view pronunciation practice time, weak sounds, and recordings (behind a math gate).
+
+**Routes:** `/words`, `/words/:topic`, `/words/:topic/:wordId`, `/words/review`, `/sentences`, `/sentence/:id`, `/parent`.
+
+**Features:**
+
+- **Words (Từ vựng)** — 3 topics (Food 🍎, School 🏫, Family 👨‍👩‍👧) × 8 words each. Flashcard with emoji/IPA front, Vietnamese + example sentence back. Sample audio: `node scripts/gen-audio.mjs --out client/public/audio/words <24-words>` (already generated). "Nói để mở khoá" (say ≥60 to unlock). Spaced repetition: Leitner boxes 1/3/7/14 days; "Ôn tập hôm nay" deck shows due words.
+
+- **Sentence Builder (Ghép câu)** — 12 sentences (4 per topic). Tap tiles in order to build the sentence. Wrong order → shake + Foxy hint. Correct → reads the sentence (pre-generated Emma HD mp3). Then child reads it back (scores like other modules). Audio: `node scripts/gen-sentences.mjs` (already generated).
+
+- **Daily Mission + Streak** — Home shows "Nhiệm vụ hôm nay": 🎧 1 story (quiz done) → 🗣️ 5 attempts (scored) → 🧩 3 words (unlocked or reviewed). Streak counts consecutive days with mission complete; Home shows 7 dots (★ done / ○ not) + "🔥 N ngày". Activity log (`speakup.activity`, capped 2000 entries) tracks all attempts.
+
+- **Foxy Moods** — 5 moods (idle, listening, happy, cheer, surprised). Home: greeting + mood from mission state. Practice screens: listens while recording, happy/cheer on stars. Mission complete → confetti + cheer.
+
+- **Parent Dashboard** (`/parent`) — Gated by random single-digit math question (e.g., "7 × 8?"). Shows: 14-day bar chart of minutes/day, pronunciation averages per level, top 5 weak phonemes, recent attempts (date, text, score) with playback of last 20 recordings (IndexedDB `speakup-recordings`, FIFO), daily time limit setting (`speakup.limit.minutes`, default 20). Gentle banner on Home if limit exceeded (not a hard block).
+
+**Storage keys:**
+- `speakup.activity` — activity log (timestamp, kind, id, score, duration)
+- `speakup.leitner` — word boxes and due dates
+- `speakup-recordings` — IndexedDB for audio blobs (cap 20)
 
 ## iPad setup & testing (Thiết lập trên iPad)
 
@@ -219,6 +242,13 @@ Never bypass with `--no-verify`; fix the pattern instead if it false-positives.
 | 3 | "Nghe mình" (listen to self) | Plays back the recording | ⏳ pending |
 | 4 | Turn Wi-Fi off → reload | Header shows "chế độ đơn giản"; scoring still returns stars (Web Speech fallback) | ⏳ pending |
 | 5 | Close and reopen the app | Stars persist | ⏳ pending |
+| 6 | Words → Food → "apple": tap 🔊 → say "apple" | Say-to-unlock flow: mic → record → stars; ≥60 unlocks word (🔒→🔓); ≤3 attempts show first unlock attempt | ⏳ pending |
+| 7 | Unlock same word again next day (or change date) → Words → Food → "apple" | Appears in review deck ("Ôn tập hôm nay") if due; re-attempt gives higher box | ⏳ pending |
+| 8 | Sentences → pick a sentence; tap tiles in wrong order, then right order | Wrong order: tray shakes + Foxy hint. Correct: sentence reads, then mic to record response | ⏳ pending |
+| 9 | Home → complete all 3 mission steps (quiz + 5 attempts + 3 words) | Mission bar fills; completion → confetti + Foxy cheer + "Nhiệm vụ hôm nay" resets | ⏳ pending |
+| 10 | Complete mission on 2 consecutive days | Streak shows "🔥 2 ngày"; week dot changes ★ to ○ per day | ⏳ pending |
+| 11 | Home (parent) → tap Foxy/gear icon → enter "7 × 8" | Parent Dashboard unlocks: 14-day chart, weak phonemes, last 20 recordings (play button works) | ⏳ pending |
+| 12 | Parent Dashboard → set limit to 5 minutes → go back to Home → spend 6 minutes → Home | Gentle banner: "Hôm nay bé học đủ rồi 🦊" (not a hard block; dismiss allowed) | ⏳ pending |
 
 ## Architecture
 
