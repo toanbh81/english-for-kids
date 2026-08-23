@@ -21,8 +21,13 @@ vi.mock('../speaking/useSpeakingAttempt', () => ({
     }
   },
 }))
-const playerControl = vi.hoisted(() => ({ playUrl: vi.fn(), playBlob: vi.fn() }))
-vi.mock('../audio/player', () => ({ playUrl: playerControl.playUrl, playBlob: playerControl.playBlob }))
+const playerControl = vi.hoisted(() => ({ playUrl: vi.fn(), playBlob: vi.fn(), stopCurrentAudio: vi.fn(), trackAudio: vi.fn() }))
+vi.mock('../audio/player', () => ({
+  playUrl: playerControl.playUrl,
+  playBlob: playerControl.playBlob,
+  stopCurrentAudio: playerControl.stopCurrentAudio,
+  trackAudio: playerControl.trackAudio,
+}))
 
 /** The rhythm card loads the sample itself rather than going through `playUrl`, because the beat
  * of the dots comes from the file's own duration — which only an Audio element it holds can tell
@@ -76,6 +81,8 @@ beforeEach(() => {
   vi.stubGlobal('Audio', FakeAudio)
   playerControl.playUrl.mockReset().mockResolvedValue(undefined)
   playerControl.playBlob.mockReset().mockResolvedValue(undefined)
+  playerControl.stopCurrentAudio.mockReset()
+  playerControl.trackAudio.mockReset()
   store.saveRecording.mockReset().mockResolvedValue(undefined)
 })
 
@@ -121,9 +128,10 @@ it('beats the dots only while the sample is actually sounding', async () => {
   expect(screen.getAllByTestId('rhythm-dot')[0]).not.toHaveClass('animate-beat')
 })
 
-/** The beat is the point: one pulse per word, spaced by the sample's *own* tempo, so the dots
- * march along with the voice instead of blinking at some invented rate. */
-it('beats once per word at the tempo the sample itself reports', async () => {
+/** The beat travels: each dot pops ONCE, exactly when its word is spoken, and then holds still.
+ * A repeating animation would put every dot back in phase after the first pass and they would all
+ * pulse in unison — the opposite of a rhythm. */
+it('pops each dot once, in turn, at the tempo the sample itself reports', async () => {
   renderStar()
   tapRhythm()
 
@@ -133,13 +141,34 @@ it('beats once per word at the tempo the sample itself reports', async () => {
   // 2 s of audio across the 5 words of "I have a red apple." = one 400 ms beat per word…
   const card = screen.getByRole('button', { name: 'Nghe nhịp của câu' })
   expect(card.style.getPropertyValue('--beat')).toBe('400ms')
-  // …and each dot starts one whole beat after the one before it.
+  // …each dot starting one whole beat after the one before it…
   const dots = screen.getAllByTestId('rhythm-dot')
   expect(dots).toHaveLength(5)
   expect(dots.map(d => d.style.animationDelay)).toEqual(['0ms', '400ms', '800ms', '1200ms', '1600ms'])
+  // …popping for 60% of its beat, exactly once.
+  expect(dots.map(d => d.style.animationDuration)).toEqual(['240ms', '240ms', '240ms', '240ms', '240ms'])
+  expect(dots.map(d => d.style.animationIterationCount)).toEqual(['1', '1', '1', '1', '1'])
 
   await act(async () => { audio.onended?.() })
   expect(screen.getAllByTestId('rhythm-dot')[0]).not.toHaveClass('animate-beat')
+})
+
+/** A one-shot animation has already finished by the second play, so the dots must be re-armed
+ * (fresh nodes) or the rhythm would only ever play through once. */
+it('re-arms the beat on every play', async () => {
+  renderStar()
+  tapRhythm()
+  await act(async () => { lastAudio().duration = 2; lastAudio().onloadedmetadata?.() })
+  const first = screen.getAllByTestId('rhythm-dot')
+
+  await act(async () => { lastAudio().onended?.() })
+  tapRhythm()
+  await act(async () => { lastAudio().duration = 2; lastAudio().onloadedmetadata?.() })
+
+  const second = screen.getAllByTestId('rhythm-dot')
+  expect(second[0]).not.toBe(first[0])
+  expect(second[0]).toHaveClass('animate-beat')
+  expect(second.map(d => d.style.animationDelay)).toEqual(['0ms', '400ms', '800ms', '1200ms', '1600ms'])
 })
 
 /** No metadata (file missing, decode blocked) must not freeze the dots mid-beat. */
@@ -149,7 +178,10 @@ it('falls back to an estimated tempo when the browser reports no duration', () =
 
   const card = screen.getByRole('button', { name: 'Nghe nhịp của câu' })
   expect(card.style.getPropertyValue('--beat')).toBe('420ms')
-  expect(screen.getAllByTestId('rhythm-dot')[0]).toHaveClass('animate-beat')
+  const dots = screen.getAllByTestId('rhythm-dot')
+  expect(dots[0]).toHaveClass('animate-beat')
+  expect(dots.map(d => d.style.animationDelay)).toEqual(['0ms', '420ms', '840ms', '1260ms', '1680ms'])
+  expect(dots[0].style.animationDuration).toBe('252ms')
 })
 
 it('says so when the sample audio is missing', async () => {
@@ -172,6 +204,22 @@ it('stops a sample already playing before starting another', () => {
   expect(first.paused).toBe(true)
   expect(lastAudio()).not.toBe(first)
   expect(lastAudio().paused).toBe(false)
+})
+
+/** The rhythm card owns its element, but the app still only ever sounds one clip: it silences
+ * whatever else is playing before it starts, and hands its own element over so the next `playUrl`
+ * (a "Nghe mình" playback, say) silences this one in turn. */
+it('silences any other clip before starting, and hands its own element to the player', () => {
+  renderStar()
+  playerControl.stopCurrentAudio.mockImplementation(() => {
+    // Called before the card's own element exists, so nothing of ours is stopped by it.
+    expect(FakeAudio.instances).toHaveLength(0)
+  })
+
+  tapRhythm()
+
+  expect(playerControl.stopCurrentAudio).toHaveBeenCalledTimes(1)
+  expect(playerControl.trackAudio).toHaveBeenCalledWith(lastAudio(), expect.any(Function))
 })
 
 it('turns an accurate, fluent, complete attempt into 3 stars on the sentence key', () => {

@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { SENTENCE_STARS, findSentenceStar } from '../content'
 import type { SentenceStar } from '../content/types'
 import type { PronunciationResult } from '../scoring/types'
-import { playBlob } from '../audio/player'
+import { playBlob, stopCurrentAudio, trackAudio } from '../audio/player'
 import { toFeedback } from '../scoring/feedback'
 import { starsForSentence } from '../scoring/levelStars'
 import { setStars } from '../progress/store'
@@ -39,6 +39,10 @@ function rhythmLine(fluency: number): string {
  * stands in for a real measurement when the browser never reports the file's duration. */
 const ESTIMATED_WORD_MS = 420
 
+/** How much of its beat a dot spends popping. Short of the full beat, so each dot is visibly
+ * back down before the next one goes up and the eye can follow the beat travelling along. */
+const POP_FRACTION = 0.6
+
 export function StarPractice() {
   const { id = '' } = useParams()
   const star = findSentenceStar(id)
@@ -56,6 +60,9 @@ function StarRun({ star }: { star: SentenceStar }) {
   // One beat = one word of the sample. Measured from the file itself, so the dots keep the
   // sample's real tempo rather than a rate someone typed in.
   const [beatMs, setBeatMs] = useState(ESTIMATED_WORD_MS)
+  // Each dot's pop is a one-shot animation, so it has already finished by the next play. Bumping
+  // this re-keys the dots into fresh nodes, which is what re-arms them.
+  const [run, setRun] = useState(0)
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const [secondsLeft, setSecondsLeft] = useState(COUNTDOWN_FROM)
 
@@ -118,12 +125,18 @@ function StarRun({ star }: { star: SentenceStar }) {
    */
   function playSample() {
     stopSample()
+    // The card drives its own element, but the app still only ever sounds one clip: silence
+    // anything the player has going before adding to it.
+    stopCurrentAudio()
     const a = new Audio(star.audio)
     audioRef.current = a
     const live = () => audioRef.current === a
     const failed = () => { if (live()) { stopSample(); setAudioMissing(true) } }
+    // …and hand this element over, so the next playUrl (a "Nghe mình" playback, say) stops it.
+    trackAudio(a, () => { if (live()) stopSample() })
 
     setBeatMs(ESTIMATED_WORD_MS)
+    setRun(r => r + 1)
     a.onloadedmetadata = () => {
       if (!live()) return
       setAudioMissing(false)
@@ -176,12 +189,18 @@ function StarRun({ star }: { star: SentenceStar }) {
           >
             {star.words.map((_w, i) => (
               <span
-                key={i}
+                // Re-keyed per play (and when a measured tempo replaces the estimate) so the
+                // one-shot pop is re-armed instead of staying spent from the last time.
+                key={`${run}:${Math.round(beatMs)}:${i}`}
                 data-testid="rhythm-dot"
                 data-stress={stressed.has(i) ? 'on' : 'off'}
                 aria-hidden="true"
                 className={`shrink-0 rounded-full ${stressed.has(i) ? 'h-6 w-6 bg-coral-500' : 'h-3 w-3 bg-teal-500'} ${playing ? 'animate-beat' : ''}`}
-                style={playing ? { animationDelay: `${Math.round(i * beatMs)}ms` } : undefined}
+                style={playing ? {
+                  animationDelay: `${Math.round(i * beatMs)}ms`,
+                  animationDuration: `${Math.round(beatMs * POP_FRACTION)}ms`,
+                  animationIterationCount: 1,
+                } : undefined}
               />
             ))}
           </button>

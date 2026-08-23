@@ -1,4 +1,4 @@
-import { playUrl } from './player'
+import { playUrl, stopCurrentAudio, trackAudio } from './player'
 
 /** jsdom has no media stack — `play()` is not implemented and no media event ever fires — so the
  * element is faked outright and the events are delivered by hand. */
@@ -21,7 +21,11 @@ beforeEach(() => {
   FakeAudio.playRejects = false
   vi.stubGlobal('Audio', FakeAudio)
 })
-afterEach(() => { vi.unstubAllGlobals() })
+afterEach(() => {
+  // The module holds one clip across calls, so a test must not leave one registered for the next.
+  stopCurrentAudio()
+  vi.unstubAllGlobals()
+})
 
 it('resolves when the clip reaches its end', async () => {
   const p = playUrl('/audio/cat.mp3')
@@ -60,6 +64,47 @@ it('stops and settles the previous clip when a new one starts', async () => {
   // …and the clip that superseded it still settles on its own events.
   last().onended?.()
   await expect(second).resolves.toBeUndefined()
+})
+
+/** Screens that need a clip's *duration* (Sentence Stars' rhythm card) drive their own Audio
+ * element rather than going through `playUrl`. `trackAudio` hands that element the same
+ * one-clip-at-a-time rule, in both directions. */
+it('stops a playUrl clip when a screen starts its own tracked element', async () => {
+  const p = playUrl('/audio/sample.mp3')
+  const sample = last()
+
+  const own = new (globalThis.Audio as unknown as typeof FakeAudio)('/audio/stars/ss1.mp3')
+  trackAudio(own as unknown as HTMLAudioElement, () => {})
+
+  expect(sample.paused).toBe(true)
+  await expect(settled(p)).resolves.toBe('resolved')
+})
+
+it('stops a screen’s tracked element when a playUrl clip starts', () => {
+  const own = new (globalThis.Audio as unknown as typeof FakeAudio)('/audio/stars/ss1.mp3')
+  own.play()
+  const superseded = vi.fn()
+  trackAudio(own as unknown as HTMLAudioElement, superseded)
+
+  void playUrl('/audio/sample.mp3')
+
+  expect(own.paused).toBe(true)
+  expect(superseded).toHaveBeenCalledTimes(1)
+})
+
+it('stopCurrentAudio silences whichever of the two is sounding', () => {
+  const own = new (globalThis.Audio as unknown as typeof FakeAudio)('/audio/stars/ss1.mp3')
+  own.play()
+  const superseded = vi.fn()
+  trackAudio(own as unknown as HTMLAudioElement, superseded)
+
+  stopCurrentAudio()
+  expect(own.paused).toBe(true)
+  expect(superseded).toHaveBeenCalledTimes(1)
+
+  // …and it is safe to call with nothing sounding.
+  stopCurrentAudio()
+  expect(superseded).toHaveBeenCalledTimes(1)
 })
 
 /** A stopped element must be deaf: its late `ended` cannot settle a promise a second time, nor

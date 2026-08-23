@@ -4,6 +4,25 @@
  * that flag stuck on for the rest of the screen's life. */
 let current: { audio: HTMLAudioElement; settle: () => void } | null = null
 
+/**
+ * Silence whatever the app has sounding, whether `playUrl` started it or a screen registered its
+ * own element with `trackAudio`. Safe to call when nothing is playing.
+ */
+export function stopCurrentAudio(): void {
+  stopCurrent()
+}
+
+/**
+ * Hand an element a screen drives itself under the same one-clip-at-a-time rule. Sentence Stars'
+ * rhythm card needs the clip's `duration` to time its dots, which only an element it holds can
+ * give it — but it must still stop when anything else starts, and stop anything else when it
+ * starts. `onSuperseded` runs when another clip takes over, so the screen can clear its own state.
+ */
+export function trackAudio(audio: HTMLAudioElement, onSuperseded: () => void): void {
+  stopCurrent()
+  current = { audio, settle: onSuperseded }
+}
+
 /** Silence whatever is sounding and settle its promise — superseded, not failed. */
 function stopCurrent() {
   const c = current

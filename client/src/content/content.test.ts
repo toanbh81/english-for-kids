@@ -1,4 +1,4 @@
-import { LEVELS, PAIRS, findPair, SENTENCE_STARS, findSentenceStar, STORY_VOICE, findVoice } from './index'
+import { LEVELS, PAIRS, findPair, SENTENCES, SENTENCE_STARS, findSentenceStar, STORY_VOICE, findVoice } from './index'
 import { SOUNDS, findSound } from './sounds'
 import { PHONEME_TIPS } from '../scoring/feedback'
 
@@ -153,9 +153,10 @@ it('findVoice resolves a known id and returns undefined for an unknown one', () 
 })
 
 /** These lines are what the child would say out loud, so they carry the child's own register:
- * "Con", the pronoun a Vietnamese kid uses talking to a parent — never the adult, distant "Tôi". */
+ * "Con", the pronoun a Vietnamese kid uses talking to a parent — never the adult, distant "Tôi".
+ * One register across the whole app: the same child is speaking on every screen. */
 it('writes every Vietnamese line in the child voice, never "tôi"', () => {
-  const lines = [...SENTENCE_STARS.map(s => s.vi), ...STORY_VOICE.map(v => v.vi)]
+  const lines = [...SENTENCES.map(s => s.vi), ...SENTENCE_STARS.map(s => s.vi), ...STORY_VOICE.map(v => v.vi)]
   for (const vi of lines) {
     const words = vi.toLowerCase().split(/[^\p{L}]+/u)
     expect(words, vi).not.toContain('tôi')

@@ -66,8 +66,10 @@ export default {
         ring: 'ring 1.4s ease-out infinite',
         fall: 'fall 3.2s linear forwards',
         'star-drop': 'star-drop .6s ease-out both',
-        // `--beat` is written per sample by StarPractice (sample length ÷ word count).
-        beat: 'beat var(--beat) ease-out infinite',
+        // One shot, never repeating: the beat has to *travel* along the dots, and a repeating
+        // animation would put them all back in phase after the first pass. StarPractice writes
+        // each dot's own duration and delay; `--beat` (sample length ÷ word count) is the fallback.
+        beat: 'beat var(--beat) ease-out 1',
         bob: 'bob 3s ease-in-out infinite',
         wiggle: 'wiggle 1.8s ease-in-out infinite',
       },
