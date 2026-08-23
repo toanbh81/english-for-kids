@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import { LEVELS } from '../content'
+import { LEVELS, PAIRS } from '../content'
 import { getStars } from '../progress/store'
 import { Foxy } from '../components/Foxy'
 import { BackButton, Chip, StarRow } from '../components/ui'
@@ -14,7 +14,7 @@ type Step = { key: string; emoji: string; name: string; to?: string; lift: strin
 const STEPS: Step[] = [
   { key: 'sound-zoo', emoji: '🦁', name: 'Tập âm', to: '/level/sound-zoo', lift: 'lg:mt-[240px]' },
   { key: 'word-pop', emoji: '🎈', name: 'Đọc từ', to: '/level/word-pop', lift: 'lg:mt-[180px]' },
-  { key: 'minimal-pairs', emoji: '👯', name: 'Nghe & chọn', lift: 'lg:mt-[120px]' },
+  { key: 'minimal-pairs', emoji: '👯', name: 'Nghe & chọn', to: '/level/minimal-pairs', lift: 'lg:mt-[120px]' },
   { key: 'sentence-stars', emoji: '⭐', name: 'Sentence Stars', lift: 'lg:mt-[60px]' },
   { key: 'story-voice', emoji: '🎭', name: 'Story Voice', lift: 'lg:mt-0' },
 ]
@@ -27,8 +27,20 @@ function levelStars(id: string): Stars {
   return cards.reduce<Stars>((best, c) => (getStars(c.id) > best ? getStars(c.id) : best), 0)
 }
 
+/** Minimal Pairs keeps its stars per *pair*, not per card, so it needs its own reducer. */
+function pairStars(): Stars {
+  return PAIRS.reduce<Stars>((best, p) => {
+    const s = getStars(`pair:${p.id}`)
+    return s > best ? s : best
+  }, 0)
+}
+
 export function LevelStairs() {
-  const stars: Record<string, Stars> = { 'sound-zoo': levelStars('sound-zoo'), 'word-pop': levelStars('word-pop') }
+  const stars: Record<string, Stars> = {
+    'sound-zoo': levelStars('sound-zoo'),
+    'word-pop': levelStars('word-pop'),
+    'minimal-pairs': pairStars(),
+  }
   // Foxy waits on the first *playable* step that is not finished yet — never on a locked one,
   // which is where he ended up once both open levels were done.
   const foxyOn = (STEPS.find(s => s.to && stars[s.key] < 3) ?? STEPS[1]).key
