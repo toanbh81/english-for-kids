@@ -48,6 +48,14 @@ it('missionStatus counts only today and flips done at 1 story, 5 speak, 3 word',
   expect(missionStatus(BASE)).toEqual({ story: 1, speak: 5, word: 3, done: true })
 })
 
+it('missionStatus counts a word only when it was said well enough (score >= 60)', () => {
+  logActivity({ ts: BASE, kind: 'word', id: 'w-fail', score: 40 })
+  logActivity({ ts: BASE + 1, kind: 'word', id: 'w-pass', score: 70 })
+  logActivity({ ts: BASE + 2, kind: 'word', id: 'w-unscored' }) // web speech / no score
+
+  expect(missionStatus(BASE).word).toBe(2)
+})
+
 it('completedDays only includes days meeting the mission thresholds', () => {
   logMissionDay(BASE - DAY)
   logActivity({ ts: BASE, kind: 'story', id: 'incomplete' })

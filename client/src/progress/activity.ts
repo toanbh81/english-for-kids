@@ -1,6 +1,7 @@
 const KEY = 'speakup.activity'
 const CAP = 2000
 const MISSION_TARGET = { story: 1, speak: 5, word: 3 } as const
+const WORD_MISSION_SCORE = 60 // same bar as the Leitner unlock in WordCard
 const SESSION_GAP_MS = 10 * 60 * 1000
 const DAY_MS = 24 * 60 * 60 * 1000
 
@@ -50,12 +51,15 @@ export function dayKey(ts: number): string {
   return `${y}-${m}-${day}`
 }
 
+// The "3 từ" mission step means three words actually learned, so a word attempt only counts once
+// it clears the same score that unlocks the card. Unscored attempts (Web Speech fallback, which
+// returns no number) still count — the child did the work either way.
 function countsForDay(events: ActivityEvent[]): { story: number; speak: number; word: number } {
   const counts = { story: 0, speak: 0, word: 0 }
   for (const e of events) {
     if (e.kind === 'story') counts.story++
     else if (e.kind === 'speak') counts.speak++
-    else if (e.kind === 'word') counts.word++
+    else if (e.kind === 'word' && (e.score === undefined || e.score >= WORD_MISSION_SCORE)) counts.word++
   }
   return counts
 }
