@@ -148,12 +148,12 @@ The client dev server uses HTTPS because Safari on iOS/iPadOS only allows microp
 ## Testing
 
 ```bash
-pnpm test        # client (Vitest, 257 tests) + server (Vitest, 2 tests)
+pnpm test        # client (Vitest, 309 tests) + server (Vitest, 2 tests)
 pnpm lint        # oxlint on the client
 pnpm typecheck   # tsc -b (client) + tsc --noEmit (server)
 ```
 
-`pnpm test` runs `pnpm -r test`, which executes the client suite (`vitest run`, 257 tests in 36
+`pnpm test` runs `pnpm -r test`, which executes the client suite (`vitest run`, 309 tests in 41
 files) and the server suite (`vitest run`, 2 tests). `pnpm lint` and `pnpm typecheck` fan out the
 same way.
 
@@ -194,6 +194,7 @@ A daily habit loop: kids complete a 3-step mission (listen to a story, try 5 wor
 
 | Route | Screen |
 |---|---|
+| `/levels` | Speak Lab stairs — reached from the "🗣️ Xem các bậc" chip on `/level/:levelId` (the map links levels directly) |
 | `/words` | topic list + the "Ôn tập hôm nay" review deck |
 | `/words/:topic` | word list — `topic` is `food`, `school`, `family` or `review` |
 | `/words/:topic/:wordId` | flashcard + say-to-unlock |
@@ -230,16 +231,21 @@ A full visual re-skin to the Claude Design handoff — routes, stores, scoring, 
 **What changed:**
 
 - **Design tokens** (Tailwind theme) — warm cream canvas, the `ink`/`coral`/`teal`/`sun`/`good`/`ok`/`fix` color scale, Baloo 2 (display) + Nunito (body) via Google Fonts, chunky hard-offset shadows (`shadow-card`, `shadow-chunky-*`), and a shared press feedback (`active:translate-y-[2px]`). The old single-word aliases (`cream`, `coral`, `teal`, `star`, `good`, `ok`, `fix`) still work.
-- **Foxy** — the fox mascot is now an SVG component (`client/src/components/ui/Foxy.tsx`) with 5 moods (idle, listening, happy, cheer, surprised), replacing the old emoji stand-in.
-- **UI kit** (`client/src/components/ui/`) — `Button`, `Card`, `BackButton`, `Toggle`, `Chip`, `ProgressBar`, `Toast`, `Foxy`, `SpeechBubble`, `StarRow`, `SceneDots`, shared across screens.
-- **Home** (`/`) is now an island map: a dotted SVG path connects circular, color-shadowed islands (one per Speak Lab level), with a greeting bubble, week/star pills, and a mission card. Landscape uses the path layout; portrait stacks the islands in a grid.
+- **Foxy** — the fox mascot is now an SVG component (`client/src/components/Foxy.tsx` — it is a screen-level mascot, not part of the `ui/` barrel) with 5 moods (idle, listening, happy, cheer, surprised), replacing the old emoji stand-in. The drawing itself is `aria-hidden`: his mood repeats what the surrounding copy already says.
+- **UI kit** (`client/src/components/ui/`) — `Button`, `Card`, `BackButton`, `Toggle`, `Chip`, `ProgressBar`, `Toast`, `SpeechBubble`, `StarRow`, `SceneDots`, shared across screens.
+- **Home** (`/`) is now an island map: a dotted SVG path threads through five circular, color-shadowed islands — 🎧 Nghe kể chuyện, 🧩 Từ vựng and 🧱 Ghép câu are whole modules, only 🦁 Sound Zoo and 🎈 Word Pop are Speak Lab levels — with a greeting bubble, week/star pills, and a mission card. Landscape uses the path layout; portrait stacks the islands in a grid.
 - **Daily Mission** (`/mission`) and **Mission Complete** (`/mission/done`) are new screens the design adds — Home's mission card now hands off to `/mission` (today's 3 steps, one at a time) instead of celebrating inline; finishing the mission routes to `/mission/done` for the confetti + Foxy cheer.
-- **Speak Lab** levels moved to `/levels` (a stairs layout, `LevelStairs.tsx`) with restyled level-select cards at `/level/:levelId`.
-- **Speak card** (`/practice/:cardId`) — restyled state chips (idle/listening/scored) and a recording countdown ring around the mic button.
-- **Story player/quiz** — restyled to the same card/token system; the player's speed, music, and subtitle switches use the new `Toggle` component.
-- **Words** (`/words/:topic/:wordId`) — flip card (front: emoji/IPA, back: Vietnamese + example sentence) replaces the old two-pane layout.
-- **Sentence Builder** (`/sentence/:id`) — tiles are colored by grammatical role (who/does/what), with a legend.
+- **Speak Lab** levels moved to `/levels` (a stairs layout, `LevelStairs.tsx`) with restyled level-select cards at `/level/:levelId`. The map links the two playable levels directly, so `/levels` is reached from the "🗣️ Xem các bậc" chip in the level-select header; that screen's back button goes to the map.
+- **Speak card** (`/practice/:cardId`) — restyled state chips (idle/listening/scored) and a countdown **number** under the word while recording, mirroring the 6 s auto-stop. "Tiếp theo →" stays inside the current level; the level's last card ends with "Hoàn thành 🎉" back at the level list.
+- **Story player/quiz** — restyled to the same card/token system; the player's speed, music, and subtitle switches use the new `Toggle` component. The quiz link under the controls is "Tiếp tục ▸" (coral, pulsing) once the story has ended and a quiet dashed "Bỏ qua ▸" before that, so the quiz is always one tap away.
+- **Words** (`/words/:topic/:wordId`) — "Từ mới hôm nay 🧩 n/3" header over a flip card (front: emoji/IPA, back: Vietnamese + example sentence), replacing the old two-pane layout. Each face carries its own "Lật thẻ" button; the face turned away is `inert` + `aria-hidden`, so only the face the child is looking at is focusable.
+- **Sentence Builder** (`/sentence/:id`) — tiles are colored by grammatical role (who/does/what), with the legend between the tray and the tile pool.
 - **Parent Gate + Dashboard** (`/parent`) — the gate is a centered card with a 44px question and a 64px input; the dashboard header adds a weekly summary line ("Tuần này: N phút luyện · điểm phát âm trung bình N/100"), a "Khoá lại" control that re-locks without leaving the screen, a 14-day chart with a dashed target line at the daily limit, pronunciation averages as three cards, weak-phoneme tips in a highlighted note, and daily-limit quick-pick chips (15/20/30) alongside the existing number input.
+
+  The parent area is still drawn in the kid palette (cream canvas, Baloo 2, chunky shadows). A quieter adult palette for `/parent` is deferred — it was not part of the handoff.
+
+- **Motion** — a `prefers-reduced-motion: reduce` block in `client/src/styles.css` collapses every animation and transition to .01 ms (one iteration), so the bobbing, wiggling and confetti stand still for a child who asked the system for less motion.
+- **Offline fonts** — Baloo 2 and Nunito are cached at runtime by the service worker (`fonts.googleapis.com` stale-while-revalidate, `fonts.gstatic.com` cache-first for a year), since the precache glob only covers files in `dist/`.
 
 Design reference: `docs/design/` — `speak-up-screens.dc.html` is the static screen/component reference (search it for a screen's Vietnamese heading, e.g. "Góc phụ huynh"), and `docs/design/README.md` documents the tokens.
 
@@ -284,16 +290,16 @@ pnpm --filter client exec vite --mode nossl --port 5174
 | 6 | Words → Food → "apple": tap 🔊 → say "apple" | Say-to-unlock flow: mic → record → stars; ≥60 unlocks word (🔒→🔓); ≤3 attempts show first unlock attempt | ⏳ pending |
 | 7 | Unlock same word again next day (or change date) → Words → Food → "apple" | Appears in review deck ("Ôn tập hôm nay") if due; re-attempt gives higher box | ⏳ pending |
 | 8 | Sentences → pick a sentence; tap tiles in wrong order, then right order | Wrong order: tray shakes + Foxy hint. Correct: sentence reads, then mic to record response | ⏳ pending |
-| 9 | Home → complete all 3 mission steps (quiz + 5 attempts + 3 words ≥ 60) | Mission rows fill; completing it → confetti + Foxy cheer (the mission stays complete, it does not reset) | ⏳ pending |
+| 9 | Home → complete all 3 mission steps (quiz + 5 attempts + 3 words ≥ 60) | Mission rows fill; the next visit to Home redirects once that day to `/mission/done` for the confetti + Foxy cheer — there is no confetti overlay on Home itself (the mission stays complete, it does not reset) | ⏳ pending |
 | 10 | Complete mission on 2 consecutive days | Streak shows "🔥 2 ngày"; week dot changes ★ to ○ per day | ⏳ pending |
 | 11 | Home → tap the "👨‍👩‍👧 Phụ huynh" link → answer the math question | Parent Dashboard unlocks: 14-day chart, weak phonemes, last 20 recordings (play button works) | ⏳ pending |
 | 12 | Parent Dashboard → set limit to 5 minutes → go back to Home → spend 6 minutes → Home | Gentle banner: "Hôm nay bé học đủ rồi 🦊" — a notice only, with no dismiss control and no block on practising | ⏳ pending |
 | 13 | Home in landscape, then rotate to portrait | Landscape: island map on the dotted path. Portrait: islands stack into a scrollable 2-column grid, mission card and parent link stay reachable | ⏳ pending |
 | 14 | Home → mission card → "Bắt đầu ▸" | Opens `/mission` on the first not-yet-done step | ⏳ pending |
 | 15 | Complete the 3rd mission step | Routes to `/mission/done` with confetti + Foxy cheer | ⏳ pending |
-| 16 | Speak card (`/practice/:cardId`) → tap mic | Countdown ring animates around the mic button while recording, mirroring the auto-stop timer | ⏳ pending |
-| 17 | Words → Food → any word card → tap the card | Card flips (emoji/IPA face ↔ Vietnamese/example face) | ⏳ pending |
-| 18 | Sentence Builder → any sentence | Tiles are colored by role (who/does/what) with a legend above the tray | ⏳ pending |
+| 16 | Speak card (`/practice/:cardId`) → tap mic | A countdown number under the word ticks 6→1 while recording, mirroring the auto-stop timer | ⏳ pending |
+| 17 | Words → Food → any word card → tap the card (or the "Lật thẻ" button on the face) | Card flips (emoji/IPA face ↔ Vietnamese/example face) | ⏳ pending |
+| 18 | Sentence Builder → any sentence | Tiles are colored by role (who/does/what), with the legend between the tray and the tile pool | ⏳ pending |
 | 19 | Parent Dashboard → tap "Khoá lại" | Immediately re-locks and shows a fresh math question, without leaving `/parent` | ⏳ pending |
 | 20 | Story player → tap the music and subtitle switches | Toggle switches flip state and announce it (e.g. "Nhạc nền bật") | ⏳ pending |
 
