@@ -1,29 +1,222 @@
-{ "id": "sound-zoo", "title": "Sound Zoo", "cards": [
-  { "id": "sz-th-three", "text": "three", "ipa": "/θriː/", "emoji": "3️⃣", "audio": "/audio/three.mp3", "targetPhoneme": "th" },
-  { "id": "sz-th-thank", "text": "thank", "ipa": "/θæŋk/", "emoji": "🙏", "audio": "/audio/thank.mp3", "targetPhoneme": "th" },
-  { "id": "sz-th-think", "text": "think", "ipa": "/θɪŋk/", "emoji": "🤔", "audio": "/audio/think.mp3", "targetPhoneme": "th" },
-  { "id": "sz-dh-this", "text": "this", "ipa": "/ðɪs/", "emoji": "👉", "audio": "/audio/this.mp3", "targetPhoneme": "dh" },
-  { "id": "sz-dh-that", "text": "that", "ipa": "/ðæt/", "emoji": "👈", "audio": "/audio/that.mp3", "targetPhoneme": "dh" },
-  { "id": "sz-dh-mother", "text": "mother", "ipa": "/ˈmʌðər/", "emoji": "👩", "audio": "/audio/mother.mp3", "targetPhoneme": "dh" },
-  { "id": "sz-v-very", "text": "very", "ipa": "/ˈveri/", "emoji": "💯", "audio": "/audio/very.mp3", "targetPhoneme": "v" },
-  { "id": "sz-v-van", "text": "van", "ipa": "/væn/", "emoji": "🚐", "audio": "/audio/van.mp3", "targetPhoneme": "v" },
-  { "id": "sz-v-seven", "text": "seven", "ipa": "/ˈsevən/", "emoji": "7️⃣", "audio": "/audio/seven.mp3", "targetPhoneme": "v" },
-  { "id": "sz-f-fish", "text": "fish", "ipa": "/fɪʃ/", "emoji": "🐟", "audio": "/audio/fish.mp3", "targetPhoneme": "f" },
-  { "id": "sz-f-fox", "text": "fox", "ipa": "/fɒks/", "emoji": "🦊", "audio": "/audio/fox.mp3", "targetPhoneme": "f" },
-  { "id": "sz-f-five", "text": "five", "ipa": "/faɪv/", "emoji": "5️⃣", "audio": "/audio/five.mp3", "targetPhoneme": "f" },
-  { "id": "sz-z-zoo", "text": "zoo", "ipa": "/zuː/", "emoji": "🦓", "audio": "/audio/zoo.mp3", "targetPhoneme": "z" },
-  { "id": "sz-z-zip", "text": "zip", "ipa": "/zɪp/", "emoji": "🤐", "audio": "/audio/zip.mp3", "targetPhoneme": "z" },
-  { "id": "sz-z-zebra", "text": "zebra", "ipa": "/ˈziːbrə/", "emoji": "🦓", "audio": "/audio/zebra.mp3", "targetPhoneme": "z" },
-  { "id": "sz-sh-ship", "text": "ship", "ipa": "/ʃɪp/", "emoji": "🚢", "audio": "/audio/ship.mp3", "targetPhoneme": "sh" },
-  { "id": "sz-sh-shoe", "text": "shoe", "ipa": "/ʃuː/", "emoji": "👟", "audio": "/audio/shoe.mp3", "targetPhoneme": "sh" },
-  { "id": "sz-sh-sheep", "text": "sheep", "ipa": "/ʃiːp/", "emoji": "🐑", "audio": "/audio/sheep.mp3", "targetPhoneme": "sh" },
-  { "id": "sz-ch-chair", "text": "chair", "ipa": "/tʃer/", "emoji": "🪑", "audio": "/audio/chair.mp3", "targetPhoneme": "ch" },
-  { "id": "sz-ch-cheese", "text": "cheese", "ipa": "/tʃiːz/", "emoji": "🧀", "audio": "/audio/cheese.mp3", "targetPhoneme": "ch" },
-  { "id": "sz-ch-chicken", "text": "chicken", "ipa": "/ˈtʃɪkɪn/", "emoji": "🐔", "audio": "/audio/chicken.mp3", "targetPhoneme": "ch" },
-  { "id": "sz-r-red", "text": "red", "ipa": "/red/", "emoji": "🔴", "audio": "/audio/red.mp3", "targetPhoneme": "r" },
-  { "id": "sz-r-rabbit", "text": "rabbit", "ipa": "/ˈræbɪt/", "emoji": "🐰", "audio": "/audio/rabbit.mp3", "targetPhoneme": "r" },
-  { "id": "sz-r-run", "text": "run", "ipa": "/rʌn/", "emoji": "🏃", "audio": "/audio/run.mp3", "targetPhoneme": "r" },
-  { "id": "sz-l-lion", "text": "lion", "ipa": "/ˈlaɪən/", "emoji": "🦁", "audio": "/audio/lion.mp3", "targetPhoneme": "l" },
-  { "id": "sz-l-leg", "text": "leg", "ipa": "/leɡ/", "emoji": "🦵", "audio": "/audio/leg.mp3", "targetPhoneme": "l" },
-  { "id": "sz-l-lamp", "text": "lamp", "ipa": "/læmp/", "emoji": "🪔", "audio": "/audio/lamp.mp3", "targetPhoneme": "l" }
-] }
+{
+  "id": "sound-zoo",
+  "title": "Sound Zoo",
+  "cards": [
+    {
+      "id": "sz-th-three",
+      "text": "three",
+      "ipa": "/θriː/",
+      "emoji": "3️⃣",
+      "audio": "/audio/three.mp3",
+      "targetPhoneme": "th"
+    },
+    {
+      "id": "sz-th-thank",
+      "text": "thank",
+      "ipa": "/θæŋk/",
+      "emoji": "🙏",
+      "audio": "/audio/thank.mp3",
+      "targetPhoneme": "th"
+    },
+    {
+      "id": "sz-th-think",
+      "text": "think",
+      "ipa": "/θɪŋk/",
+      "emoji": "🤔",
+      "audio": "/audio/think.mp3",
+      "targetPhoneme": "th"
+    },
+    {
+      "id": "sz-dh-this",
+      "text": "this",
+      "ipa": "/ðɪs/",
+      "emoji": "👉",
+      "audio": "/audio/this.mp3",
+      "targetPhoneme": "dh"
+    },
+    {
+      "id": "sz-dh-that",
+      "text": "that",
+      "ipa": "/ðæt/",
+      "emoji": "👈",
+      "audio": "/audio/that.mp3",
+      "targetPhoneme": "dh"
+    },
+    {
+      "id": "sz-dh-mother",
+      "text": "mother",
+      "ipa": "/ˈmʌðər/",
+      "emoji": "👩",
+      "audio": "/audio/mother.mp3",
+      "targetPhoneme": "dh"
+    },
+    {
+      "id": "sz-v-very",
+      "text": "very",
+      "ipa": "/ˈveri/",
+      "emoji": "💯",
+      "audio": "/audio/very.mp3",
+      "targetPhoneme": "v"
+    },
+    {
+      "id": "sz-v-van",
+      "text": "van",
+      "ipa": "/væn/",
+      "emoji": "🚐",
+      "audio": "/audio/van.mp3",
+      "targetPhoneme": "v"
+    },
+    {
+      "id": "sz-v-seven",
+      "text": "seven",
+      "ipa": "/ˈsevən/",
+      "emoji": "7️⃣",
+      "audio": "/audio/seven.mp3",
+      "targetPhoneme": "v"
+    },
+    {
+      "id": "sz-f-fish",
+      "text": "fish",
+      "ipa": "/fɪʃ/",
+      "emoji": "🐟",
+      "audio": "/audio/fish.mp3",
+      "targetPhoneme": "f"
+    },
+    {
+      "id": "sz-f-fox",
+      "text": "fox",
+      "ipa": "/fɒks/",
+      "emoji": "🦊",
+      "audio": "/audio/fox.mp3",
+      "targetPhoneme": "f"
+    },
+    {
+      "id": "sz-f-five",
+      "text": "five",
+      "ipa": "/faɪv/",
+      "emoji": "5️⃣",
+      "audio": "/audio/five.mp3",
+      "targetPhoneme": "f"
+    },
+    {
+      "id": "sz-z-zoo",
+      "text": "zoo",
+      "ipa": "/zuː/",
+      "emoji": "🎪",
+      "audio": "/audio/zoo.mp3",
+      "targetPhoneme": "z"
+    },
+    {
+      "id": "sz-z-zip",
+      "text": "zip",
+      "ipa": "/zɪp/",
+      "emoji": "🤐",
+      "audio": "/audio/zip.mp3",
+      "targetPhoneme": "z"
+    },
+    {
+      "id": "sz-z-zebra",
+      "text": "zebra",
+      "ipa": "/ˈziːbrə/",
+      "emoji": "🦓",
+      "audio": "/audio/zebra.mp3",
+      "targetPhoneme": "z"
+    },
+    {
+      "id": "sz-sh-ship",
+      "text": "ship",
+      "ipa": "/ʃɪp/",
+      "emoji": "🚢",
+      "audio": "/audio/ship.mp3",
+      "targetPhoneme": "sh"
+    },
+    {
+      "id": "sz-sh-shoe",
+      "text": "shoe",
+      "ipa": "/ʃuː/",
+      "emoji": "👟",
+      "audio": "/audio/shoe.mp3",
+      "targetPhoneme": "sh"
+    },
+    {
+      "id": "sz-sh-sheep",
+      "text": "sheep",
+      "ipa": "/ʃiːp/",
+      "emoji": "🐑",
+      "audio": "/audio/sheep.mp3",
+      "targetPhoneme": "sh"
+    },
+    {
+      "id": "sz-ch-chair",
+      "text": "chair",
+      "ipa": "/tʃer/",
+      "emoji": "🪑",
+      "audio": "/audio/chair.mp3",
+      "targetPhoneme": "ch"
+    },
+    {
+      "id": "sz-ch-cheese",
+      "text": "cheese",
+      "ipa": "/tʃiːz/",
+      "emoji": "🧀",
+      "audio": "/audio/cheese.mp3",
+      "targetPhoneme": "ch"
+    },
+    {
+      "id": "sz-ch-chicken",
+      "text": "chicken",
+      "ipa": "/ˈtʃɪkɪn/",
+      "emoji": "🐔",
+      "audio": "/audio/chicken.mp3",
+      "targetPhoneme": "ch"
+    },
+    {
+      "id": "sz-r-red",
+      "text": "red",
+      "ipa": "/red/",
+      "emoji": "🔴",
+      "audio": "/audio/red.mp3",
+      "targetPhoneme": "r"
+    },
+    {
+      "id": "sz-r-rabbit",
+      "text": "rabbit",
+      "ipa": "/ˈræbɪt/",
+      "emoji": "🐰",
+      "audio": "/audio/rabbit.mp3",
+      "targetPhoneme": "r"
+    },
+    {
+      "id": "sz-r-run",
+      "text": "run",
+      "ipa": "/rʌn/",
+      "emoji": "🏃",
+      "audio": "/audio/run.mp3",
+      "targetPhoneme": "r"
+    },
+    {
+      "id": "sz-l-lion",
+      "text": "lion",
+      "ipa": "/ˈlaɪən/",
+      "emoji": "🦁",
+      "audio": "/audio/lion.mp3",
+      "targetPhoneme": "l"
+    },
+    {
+      "id": "sz-l-leg",
+      "text": "leg",
+      "ipa": "/leɡ/",
+      "emoji": "🦵",
+      "audio": "/audio/leg.mp3",
+      "targetPhoneme": "l"
+    },
+    {
+      "id": "sz-l-lamp",
+      "text": "lamp",
+      "ipa": "/læmp/",
+      "emoji": "💡",
+      "audio": "/audio/lamp.mp3",
+      "targetPhoneme": "l"
+    }
+  ]
+}
