@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { findCard, LEVELS } from '../content'
 import type { PronunciationResult } from '../scoring/types'
@@ -25,10 +25,20 @@ const COUNTDOWN_FROM = AUTO_STOP_MS / 1000
 const SAMPLE_CHIP =
   'inline-flex min-h-[64px] items-center gap-2 rounded-full bg-teal-50 px-7 font-display text-xl font-extrabold text-teal-600 shadow-[0_5px_0_#C4E8E1] active:translate-y-[2px]'
 
+/** How many cards a level may have before the header's progress dots are dropped for the
+ * "Thẻ n/N" counter alone — see the header below. */
+const DOT_LIMIT = 12
+
 export function PracticeCard() {
   const { cardId = '' } = useParams()
   const nav = useNavigate()
   const card = findCard(cardId)
+  // Computed above the `!card` early return rather than after it, because every hook below has to
+  // run unconditionally and the result effect branches on `isWordPop`. It is computed exactly
+  // once: past the guard the card is known to be real, which is all the `level!` assertions
+  // further down are asserting — nothing is recomputed there.
+  const level = card ? LEVELS.find(l => l.cards.includes(card)) : undefined
+  const isWordPop = level?.id === 'word-pop'
 
   function handleResult(result: PronunciationResult, blob: Blob | null) {
     logActivity({ ts: Date.now(), kind: 'speak', id: cardId, score: result.overall, phonemes: result.words.flatMap(w => w.phonemes) })
@@ -39,15 +49,31 @@ export function PracticeCard() {
   const [attempts, setAttempts] = useState(0)
   const [audioMissing, setAudioMissing] = useState(false)
   const [secondsLeft, setSecondsLeft] = useState(COUNTDOWN_FROM)
+  const [ipaRevealed, setIpaRevealed] = useState(false)
+  /** Word Pop only: consecutive ≥80 attempts on this card, capped at 2 (the win condition). A
+   * sub-80 attempt clears it; "Thử lại" re-scores the same card without touching it. */
+  const [streak, setStreak] = useState(0)
 
   const feedback = useMemo(() => (attempt.result ? toFeedback(attempt.result) : null), [attempt.result])
 
   useEffect(() => {
-    setAttempts(0); setAudioMissing(false)
+    setAttempts(0); setAudioMissing(false); setIpaRevealed(false); setStreak(0)
   }, [cardId])
 
-  useEffect(() => {
-    if (feedback) { setAttempts(a => a + 1); setStars(cardId, feedback.stars) }
+  // `useLayoutEffect`, not `useEffect`: the render that first sees the result still has the old
+  // streak, so it draws 2 stars, and this effect is what turns them into 3. Run after paint, that
+  // is a visible 2★ flash on the winning attempt; run before it, the child only ever sees 3★.
+  useLayoutEffect(() => {
+    if (!feedback) return
+    setAttempts(a => a + 1)
+    if (isWordPop) {
+      const hit = (attempt.result?.overall ?? 0) >= 80
+      const nextStreak = hit ? Math.min(2, streak + 1) : 0
+      setStreak(nextStreak)
+      setStars(cardId, nextStreak >= 2 ? 3 : (Math.min(2, feedback.stars) as 1 | 2))
+    } else {
+      setStars(cardId, feedback.stars)
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [attempt.result])
 
@@ -62,15 +88,22 @@ export function PracticeCard() {
   }, [recording])
 
   if (!card) return <p>Không tìm thấy thẻ</p>
-  const level = LEVELS.find(l => l.cards.includes(card))!
-  const cardIndex = level.cards.findIndex(c => c.id === cardId)
+  const cardIndex = level!.cards.findIndex(c => c.id === cardId)
   // "Tiếp theo" stays inside this level, so it agrees with the "Thẻ n/N" counter above it: on
   // card N of N there is no next card, and the run ends with "Hoàn thành 🎉" back at the level.
-  const next = level.cards[cardIndex + 1]
+  const next = level!.cards[cardIndex + 1]
+
+  // For Word Pop this is the "two in a row" streak's stars, capped at 2 until the streak lands;
+  // for every other level it is simply `feedback.stars`, so this is a no-op there.
+  const effectiveStars: 0 | 1 | 2 | 3 = !feedback
+    ? 0
+    : isWordPop
+      ? (streak >= 2 ? 3 : (Math.min(2, feedback.stars) as 1 | 2))
+      : feedback.stars
 
   const mood: FoxyMood = recording
     ? 'listening'
-    : feedback?.stars === 3 ? 'cheer' : feedback?.stars === 2 ? 'happy' : 'idle'
+    : effectiveStars === 3 ? 'cheer' : effectiveStars === 2 ? 'happy' : 'idle'
 
   const isWebSpeech = attempt.engine === 'webspeech'
 
@@ -85,30 +118,39 @@ export function PracticeCard() {
     <main className="h-full overflow-y-auto bg-cream-50 px-6 py-5">
       <div className="mx-auto flex min-h-full w-full max-w-5xl flex-col items-center gap-5">
         <header className="flex w-full items-center justify-between gap-4">
-          <BackButton to={`/level/${level.id}`} label="Quay lại" />
-          <div className="flex flex-col items-center gap-2">
-            <span className="font-display text-xl font-extrabold text-ink-500">Thẻ {cardIndex + 1}/{level.cards.length}</span>
-            <div className="flex gap-2">
-              {level.cards.map((c, i) => (
-                <span
-                  key={c.id}
-                  aria-hidden="true"
-                  className={`h-4 w-4 rounded-full ${i < cardIndex ? 'bg-teal-500' : i === cardIndex ? 'bg-coral-500' : 'bg-line-200'}`}
-                />
-              ))}
-            </div>
+          <BackButton to={`/level/${level!.id}`} label="Quay lại" />
+          <div className="flex min-w-0 flex-col items-center gap-2 overflow-hidden">
+            <span className="font-display text-xl font-extrabold text-ink-500">Thẻ {cardIndex + 1}/{level!.cards.length}</span>
+            {/* The dots are a nicety, the counter above them is the real read-out. Past a dozen
+                cards they stop fitting: the legacy `/practice/sz-*` route walks all 27 Sound Zoo
+                cards, and 27 of them made the header wider than a portrait iPad, squeezing the
+                66 px back button under the 64 px tap-target floor. So they wrap, and beyond
+                DOT_LIMIT they simply do not render. */}
+            {level!.cards.length <= DOT_LIMIT && (
+              <div data-testid="card-dots" className="flex flex-wrap justify-center gap-2">
+                {level!.cards.map((c, i) => (
+                  <span
+                    key={c.id}
+                    aria-hidden="true"
+                    className={`h-4 w-4 rounded-full ${i < cardIndex ? 'bg-teal-500' : i === cardIndex ? 'bg-coral-500' : 'bg-line-200'}`}
+                  />
+                ))}
+              </div>
+            )}
           </div>
           <span className="min-w-[66px] text-right text-base font-bold text-ink-300">{isWebSpeech ? 'chế độ đơn giản' : ''}</span>
         </header>
 
         {feedback ? (
           <>
-            {feedback.stars === 3 && <Confetti />}
+            {effectiveStars === 3 && <Confetti />}
             <section className="flex flex-col items-center gap-4 pb-2">
-              <Stars value={feedback.stars} animate />
+              <Stars value={effectiveStars} animate />
               <div className="flex items-end gap-3">
                 <Foxy mood={mood} size="sm" />
-                <p className="font-display text-3xl font-extrabold text-ink-900">{feedback.message}</p>
+                <p className="font-display text-3xl font-extrabold text-ink-900">
+                  {isWordPop && streak >= 2 ? 'Nói đúng 2 lần liên tiếp! 🎉' : feedback.message}
+                </p>
               </div>
               <ScoredWords words={feedback.words} onWordTap={playSample} />
               {feedback.hint && <HintCard hint={feedback.hint} />}
@@ -122,10 +164,10 @@ export function PracticeCard() {
               {attempt.result && <ScoreBars result={attempt.result} />}
               <div className="flex flex-wrap justify-center gap-4 pt-1">
                 <Button variant="outline" onClick={retry}>↻ Thử lại</Button>
-                {(feedback.stars === 3 || attempts >= 3) && (
+                {(effectiveStars === 3 || attempts >= 3) && (
                   next
                     ? <Button size="lg" pulse onClick={() => nav(`/practice/${next.id}`)}>Tiếp theo →</Button>
-                    : <Button size="lg" pulse onClick={() => nav(`/level/${level.id}`)}>Hoàn thành 🎉</Button>
+                    : <Button size="lg" pulse onClick={() => nav(`/level/${level!.id}`)}>Hoàn thành 🎉</Button>
                 )}
               </div>
             </section>
@@ -147,7 +189,11 @@ export function PracticeCard() {
               <div className={`font-display font-extrabold leading-none text-ink-900 ${card.text.length > 12 ? 'text-[46px]' : 'text-[64px]'}`}>
                 {card.text}
               </div>
-              <div className="text-[22px] font-bold text-ink-300">{card.ipa}</div>
+              {isWordPop && !ipaRevealed ? (
+                <Button variant="ghost" onClick={() => setIpaRevealed(true)}>Xem phiên âm</Button>
+              ) : (
+                <div className="text-[22px] font-bold text-ink-300">{card.ipa}</div>
+              )}
               <button onClick={playSample} className={SAMPLE_CHIP}>🔊 Nghe mẫu</button>
               {audioMissing && <p className="text-lg font-bold text-ink-300">Chưa có audio mẫu</p>}
             </div>
@@ -157,6 +203,16 @@ export function PracticeCard() {
               <span className="text-base font-bold text-ink-500">Khẩu hình miệng</span>
             </div>
           </section>
+        )}
+
+        {isWordPop && (
+          <div className="flex flex-col items-center gap-1">
+            <div className="flex gap-3 text-3xl leading-none">
+              <span aria-label="Lần 1/2" className={streak >= 1 ? 'text-coral-500' : 'text-line-200'}>{streak >= 1 ? '●' : '○'}</span>
+              <span aria-label="Lần 2/2" className={streak >= 2 ? 'text-coral-500' : 'text-line-200'}>{streak >= 2 ? '●' : '○'}</span>
+            </div>
+            <p className="text-base font-bold text-ink-300">Nói đúng 2 lần liên tiếp để được 3 sao</p>
+          </div>
         )}
 
         {attempt.error && <p className="font-display text-2xl font-extrabold text-fix-700">{attempt.error}</p>}

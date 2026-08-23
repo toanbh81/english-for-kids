@@ -153,34 +153,56 @@ it('puts the five islands on the map and links each to its module', () => {
   renderHome()
 
   expect(screen.getByRole('link', { name: /Nghe kể chuyện/ })).toHaveAttribute('href', '/stories')
-  expect(screen.getByRole('link', { name: /Sound Zoo/ })).toHaveAttribute('href', '/level/sound-zoo')
-  expect(screen.getByRole('link', { name: /Word Pop/ })).toHaveAttribute('href', '/level/word-pop')
-  expect(screen.getByRole('link', { name: /Từ vựng/ })).toHaveAttribute('href', '/words')
+  expect(screen.getByRole('link', { name: /Tập âm/ })).toHaveAttribute('href', '/level/sound-zoo')
+  expect(screen.getByRole('link', { name: /Đọc từ/ })).toHaveAttribute('href', '/level/word-pop')
+  expect(screen.getByRole('link', { name: /Học từ mới/ })).toHaveAttribute('href', '/words')
   expect(screen.getByRole('link', { name: /Ghép câu/ })).toHaveAttribute('href', '/sentences')
   expect(screen.getByRole('link', { name: /Phụ huynh/ })).toHaveAttribute('href', '/parent')
 })
 
 it('shows each island the best stars earned inside that module', () => {
   setStars('story:little-fox', 2)
-  setStars('sz-th-three', 3)
+  setStars('sound:th', 3)
 
   renderHome()
 
   const stories = screen.getByRole('link', { name: /Nghe kể chuyện/ })
   expect(within(stories).getAllByTestId('star-filled')).toHaveLength(2)
-  const soundZoo = screen.getByRole('link', { name: /Sound Zoo/ })
+  const soundZoo = screen.getByRole('link', { name: /Tập âm/ })
   expect(within(soundZoo).getAllByTestId('star-filled')).toHaveLength(3)
-  const wordPop = screen.getByRole('link', { name: /Word Pop/ })
+  const wordPop = screen.getByRole('link', { name: /Đọc từ/ })
   expect(within(wordPop).queryAllByTestId('star-filled')).toHaveLength(0)
 })
 
-it('turns unlocked vocabulary cards into stars on the Từ vựng island', () => {
+/** Phase 5 moved Tập âm's stars from per-card `sz-*` keys to per-sound `sound:<ph>` keys. A child
+ * who practised before that still has only the old keys in storage, and reading just the new ones
+ * showed them an empty island — as if the app had wiped what they had earned. */
+it('still counts the legacy per-card sz- keys so returning children keep their stars', () => {
+  setStars('sz-th-three', 2)
+
+  renderHome()
+
+  const soundZoo = screen.getByRole('link', { name: /Tập âm/ })
+  expect(within(soundZoo).getAllByTestId('star-filled')).toHaveLength(2)
+})
+
+it('shows the best of the new sound key and the legacy card key', () => {
+  setStars('sz-th-three', 2)
+  setStars('sound:v', 3)
+
+  renderHome()
+
+  const soundZoo = screen.getByRole('link', { name: /Tập âm/ })
+  expect(within(soundZoo).getAllByTestId('star-filled')).toHaveLength(3)
+})
+
+it('turns unlocked vocabulary cards into stars on the Học từ mới island', () => {
   localStorage.setItem('speakup.leitner', JSON.stringify(
     Object.fromEntries(Array.from({ length: 9 }, (_, i) => [`w-${i}`, { box: 1, due: 0 }])),
   ))
 
   renderHome()
 
-  const words = screen.getByRole('link', { name: /Từ vựng/ })
+  const words = screen.getByRole('link', { name: /Học từ mới/ })
   expect(within(words).getAllByTestId('star-filled')).toHaveLength(2)
 })

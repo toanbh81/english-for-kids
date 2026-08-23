@@ -34,3 +34,36 @@ export function shuffleTiles<T>(items: T[], seed: string): T[] {
   }
   return arr
 }
+
+/** Longest run of the same side `seededSide` will produce. */
+const MAX_RUN = 2
+
+/**
+ * One of two `sides`, chosen by the `turn`-th draw (0-based) of the stream seeded by `id`.
+ *
+ * The same seeded-PRNG trick as `shuffleTiles`, but for a choice made over and over rather than a
+ * one-off layout: Minimal Pairs picks which of a pair's two words 🔊 plays with it. A strict
+ * alternation is a pattern a child spots within two rounds and then stops listening for, while a
+ * real random draw would make the screen untestable — this gives a sequence with runs and repeats
+ * in it that is nonetheless identical every time that id is opened.
+ *
+ * With one guard rail: a free stream sooner or later plays the same word five times running, and
+ * a child who does not hear the other side has no contrast left to hear. So a draw that would
+ * make a third identical side in a row is flipped, which also puts both sides inside any four
+ * consecutive turns. The sequence has to be walked from the start for that — the flip depends on
+ * what was actually played, not on the raw draws — which is cheap at these lengths and keeps the
+ * result a pure function of `(id, turn)`.
+ */
+export function seededSide<T>(id: string, turn: number, sides: readonly [T, T]): T {
+  const rand = mulberry32(seedFromId(id))
+  let side = 0
+  let prev = -1
+  let run = 0
+  for (let i = 0; i <= turn; i++) {
+    const draw = rand() < 0.5 ? 0 : 1
+    side = run >= MAX_RUN && draw === prev ? 1 - draw : draw
+    run = side === prev ? run + 1 : 1
+    prev = side
+  }
+  return sides[side]
+}

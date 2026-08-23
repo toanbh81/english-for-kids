@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { LEVELS, SENTENCES } from '../content'
+import { LEVELS, SENTENCES, SOUNDS } from '../content'
 import { STORIES } from '../content/stories'
 import { getStars, totalStars } from '../progress/store'
 import { unlockedCount } from '../progress/leitner'
@@ -30,6 +30,11 @@ type Stars = 0 | 1 | 2 | 3
 
 const best = (values: number[]): Stars => Math.max(0, ...values) as Stars
 
+/** Phase 5 moved Tập âm's stars from per-card `sz-*` keys to per-sound `sound:<ph>` keys. The old
+ * keys are still in a returning child's storage, and reading only the new ones showed them an
+ * empty island — so the island takes the best of both. */
+const SOUND_ZOO_CARDS = LEVELS.find(l => l.id === 'sound-zoo')?.cards ?? []
+
 /** The vocabulary island has no per-card star, so the Leitner deck stands in for it: the more
  * words the child has unlocked, the more stars the island shows. */
 function wordStars(): Stars {
@@ -44,9 +49,9 @@ function wordStars(): Stars {
  * handoff, so the map scales with the viewport instead of drifting on a narrower iPad. */
 const ISLANDS = [
   { to: '/stories', emoji: '🎧', name: 'Nghe kể chuyện', left: '9%', top: '47%', size: 'h-[104px] w-[104px] text-[44px] lg:h-[128px] lg:w-[128px] lg:text-[54px]', color: 'bg-coral-500 shadow-[0_8px_0_#E05A3A,0_0_0_8px_#FFE9DF]' },
-  { to: '/level/sound-zoo', emoji: '🦁', name: 'Sound Zoo', left: '28%', top: '32%', size: 'h-[104px] w-[104px] text-[44px] lg:h-[120px] lg:w-[120px] lg:text-[50px]', color: 'bg-teal-500 shadow-[0_8px_0_#1FA396,0_0_0_8px_#D3F1EC]' },
-  { to: '/level/word-pop', emoji: '🎈', name: 'Word Pop', left: '47%', top: '48%', size: 'h-[104px] w-[104px] text-[44px] lg:h-[120px] lg:w-[120px] lg:text-[50px]', color: 'bg-peach-400 shadow-[0_8px_0_#E07A42,0_0_0_8px_#FFE7D2]' },
-  { to: '/words', emoji: '🧩', name: 'Từ vựng', left: '67%', top: '26%', size: 'h-[104px] w-[104px] text-[44px] lg:h-[120px] lg:w-[120px] lg:text-[50px]', color: 'bg-sky-400 shadow-[0_8px_0_#5BA7D4,0_0_0_8px_#DDF0FB]' },
+  { to: '/level/sound-zoo', emoji: '🦁', name: 'Tập âm', left: '28%', top: '32%', size: 'h-[104px] w-[104px] text-[44px] lg:h-[120px] lg:w-[120px] lg:text-[50px]', color: 'bg-teal-500 shadow-[0_8px_0_#1FA396,0_0_0_8px_#D3F1EC]' },
+  { to: '/level/word-pop', emoji: '🎈', name: 'Đọc từ', left: '47%', top: '48%', size: 'h-[104px] w-[104px] text-[44px] lg:h-[120px] lg:w-[120px] lg:text-[50px]', color: 'bg-peach-400 shadow-[0_8px_0_#E07A42,0_0_0_8px_#FFE7D2]' },
+  { to: '/words', emoji: '🧩', name: 'Học từ mới', left: '67%', top: '26%', size: 'h-[104px] w-[104px] text-[44px] lg:h-[120px] lg:w-[120px] lg:text-[50px]', color: 'bg-sky-400 shadow-[0_8px_0_#5BA7D4,0_0_0_8px_#DDF0FB]' },
   { to: '/sentences', emoji: '🧱', name: 'Ghép câu', left: '84%', top: '40%', size: 'h-[104px] w-[104px] text-[44px] lg:h-[118px] lg:w-[118px] lg:text-[48px]', color: 'bg-sun-400 shadow-[0_8px_0_#E0A61A,0_0_0_8px_#FFF1C9]' },
 ] as const
 
@@ -74,7 +79,10 @@ export function Home() {
 
   const stars: Record<string, Stars> = {
     '/stories': best(STORIES.map(s => getStars(`story:${s.id}`))),
-    '/level/sound-zoo': best((LEVELS.find(l => l.id === 'sound-zoo')?.cards ?? []).map(c => getStars(c.id))),
+    '/level/sound-zoo': best([
+      ...SOUNDS.map(s => getStars(`sound:${s.ph}`)),
+      ...SOUND_ZOO_CARDS.map(c => getStars(c.id)),
+    ]),
     '/level/word-pop': best((LEVELS.find(l => l.id === 'word-pop')?.cards ?? []).map(c => getStars(c.id))),
     '/words': wordStars(),
     '/sentences': best(SENTENCES.map(s => getStars(`sentence:${s.id}`))),

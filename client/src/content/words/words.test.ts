@@ -16,6 +16,12 @@ it('every word has an audio path under /audio/words/', () => {
   for (const w of ALL_WORDS) expect(w.audio).toBe(`/audio/words/${w.word}.mp3`)
 })
 
+/** The samples are generated with an American voice, so a British-only /ɒ/ under the word would
+ * contradict the audio the child is copying — General American uses /ɑː/ there. */
+it('transcribes every word in the same American accent as its audio', () => {
+  for (const w of ALL_WORDS) expect(w.ipa).not.toContain('ɒ')
+})
+
 it('every word has a non-empty Vietnamese meaning and an English example sentence', () => {
   for (const w of ALL_WORDS) {
     expect(w.vi.length).toBeGreaterThan(0)

@@ -2,6 +2,7 @@ import { Link, useParams } from 'react-router-dom'
 import { LEVELS } from '../content'
 import { getStars } from '../progress/store'
 import { BackButton, StarRow } from '../components/ui'
+import { SoundLevel } from './SoundLevel'
 
 /** 64 px pill — a tap target, not just a label, so it is a chip in look only. */
 const STAIRS_LINK =
@@ -9,6 +10,9 @@ const STAIRS_LINK =
 
 export function LevelSelect() {
   const { levelId } = useParams()
+  // Tập âm is taught by sound, so `/level/sound-zoo` shows the 9 sound tiles instead of the
+  // 27 word cards. Every other level keeps the card grid below.
+  if (levelId === 'sound-zoo') return <SoundLevel />
   const level = LEVELS.find(l => l.id === levelId)
   if (!level) return <p>Không tìm thấy</p>
   return (

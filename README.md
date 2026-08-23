@@ -35,7 +35,11 @@ needed. If you serve the built client from somewhere the proxy does not cover, c
 
 ## Generating sample audio (Nghe mình / Nghe cô)
 
-Sample word audio (Jenny's voice) is generated locally and saved to `client/public/audio/`. It is **not** committed — run this once after setup, or whenever you add new words:
+Sample word audio (Jenny's voice) is generated locally and saved to `client/public/audio/`. The
+generated mp3s **are committed** (deploys need sound, and regenerating them costs an Azure call per
+word) — the one exception is `client/public/audio/audition/`, the voice-audition scratch folder,
+which is the only audio path in `.gitignore`. Run this once after setup, or whenever you add new
+words, and commit what it writes:
 
 ```bash
 AZURE_SPEECH_KEY=your-key AZURE_SPEECH_REGION=southeastasia node scripts/gen-audio.mjs three thank this very fish zoo ship chair red lion cat dog elephant monkey rabbit tiger bird horse sheep frog snake giraffe
@@ -48,7 +52,7 @@ AZURE_SPEECH_KEY=your-key AZURE_SPEECH_REGION=southeastasia node scripts/gen-sto
 ```
 
 This writes mp3s to `client/public/audio/stories/<id>/` and fills word timings (start/end ms) into
-each story's JSON; commit the updated JSON files afterwards (the mp3s themselves are gitignored).
+each story's JSON; commit both the updated JSON files and the mp3s.
 Run the commands from the repo root — the script resolves every path against the repo root, so it
 writes to the same places whatever your current directory is. If Azure's word boundaries do not
 line up with a scene's `words` array, the script exits with a message instead of writing shifted
@@ -72,7 +76,34 @@ AZURE_SPEECH_KEY=your-key AZURE_SPEECH_REGION=southeastasia node scripts/gen-sen
 
 This writes `client/public/audio/sentences/<id>.mp3` for every sentence in
 `client/src/content/sentences.json` (or, given ids as extra args, only those sentences). Run it
-whenever you add or change a sentence; the mp3s are gitignored like the other generated audio.
+whenever you add or change a sentence, and commit the mp3s like the other generated audio.
+
+Tập âm's 27 sound-zoo words (Phase 5) added 17 new words beyond the original 10 (`rabbit` and
+`sheep` were already generated for Word Pop, so they are not repeated below):
+
+```bash
+AZURE_SPEECH_KEY=your-key AZURE_SPEECH_REGION=southeastasia node scripts/gen-audio.mjs think that mother van seven fox five zip zebra shoe cheese chicken run leg lamp
+```
+
+Minimal Pairs (Phase 5) words go in their own folder, same as vocabulary words:
+
+```bash
+AZURE_SPEECH_KEY=your-key AZURE_SPEECH_REGION=southeastasia node scripts/gen-audio.mjs --out client/public/audio/pairs ship sheep bat bad three tree fan van sit seat thin tin rice lice cap cup
+```
+
+Isolated sound samples for Tập âm's "🔊 Nghe âm lẻ" button (the 9 target sounds on their own, not
+inside a word) are generated with `scripts/gen-sounds.mjs`, which speaks each phoneme via SSML
+`<phoneme alphabet="ipa">`:
+
+```bash
+AZURE_SPEECH_KEY=your-key AZURE_SPEECH_REGION=southeastasia node scripts/gen-sounds.mjs
+```
+
+This writes `client/public/audio/sounds/<ph>.mp3` for each of `th dh v f z sh ch r l`. Most single
+consonants sound clipped or wrong when Azure is asked to say the bare IPA symbol on its own, so the
+script appends a light schwa (`ə`) to the phoneme value it sends (e.g. `θ` becomes `θə`) — Jenny
+then articulates a clean, isolated consonant sound rather than a garbled fragment, while the output
+still reads to a child as "just the /θ/ sound".
 
 ## Phase 2 — Listening (Nghe kể chuyện)
 
@@ -145,12 +176,12 @@ The client dev server uses HTTPS because Safari on iOS/iPadOS only allows microp
 ## Testing
 
 ```bash
-pnpm test        # client (Vitest, 309 tests) + server (Vitest, 2 tests)
+pnpm test        # client (Vitest, 350 tests) + server (Vitest, 2 tests)
 pnpm lint        # oxlint on the client
 pnpm typecheck   # tsc -b (client) + tsc --noEmit (server)
 ```
 
-`pnpm test` runs `pnpm -r test`, which executes the client suite (`vitest run`, 309 tests in 41
+`pnpm test` runs `pnpm -r test`, which executes the client suite (`vitest run`, 350 tests in 45
 files) and the server suite (`vitest run`, 2 tests). `pnpm lint` and `pnpm typecheck` fan out the
 same way.
 
@@ -251,6 +282,75 @@ Dev tip: to preview the app over plain HTTP (e.g. for automated DOM checks or a 
 pnpm --filter client exec vite --mode nossl --port 5174
 ```
 
+## Phase 5 — Learning path (Tập âm · Đọc từ · Học từ mới · Nghe & chọn)
+
+Sound Zoo, Word Pop and Từ vựng used to all present "a word + a mic", so a child (and a parent
+watching) could not tell the four speaking games apart. Phase 5 gives each bậc a visibly different
+skill, on top of the same scoring engine (`useSpeakingAttempt` + `toFeedback`) and the same
+`speak` activity logging — three of the four log `speak` and so count toward the daily mission's
+"5 thẻ" step (Tập âm, Đọc từ, Nghe & chọn); Học từ mới logs `word` events instead.
+
+- **🦁 Tập âm (Sound Zoo)** — organised **by sound, not by word**: 9 target sounds (th /θ/, dh /ð/,
+  v, f, z, sh /ʃ/, ch /tʃ/, r, l), each with 3 words (27 cards total). The level screen
+  (`/level/sound-zoo`) shows 9 sound tiles — big IPA symbol, one example word, stars = the best
+  score across that sound's 3 words. Tapping a tile opens `/sound/:ph`: a 72 px IPA header + tip
+  text, a "🔊 Nghe âm lẻ" button that plays the sound in isolation (generated via SSML
+  `<phoneme>`, see `gen-sounds.mjs` below), and the 3 words as a "Từ 1/3" mini-carousel. Scoring
+  shows only the target sound — a chip like "/θ/ ✓ 92" — with the word itself shown small
+  underneath; 3 stars once all 3 words score ≥ 80 on the target phoneme. When nothing measured the
+  sound — Web Speech's "chế độ đơn giản" reports no phonemes, and an Azure result can drop one —
+  the chip goes neutral ("Chưa chấm được âm — cần kết nối Azure", no number) instead of borrowing
+  the word's accuracy, and a run containing such a word is capped at 2 stars.
+- **🎈 Đọc từ (Word Pop)** — whole-word fluency on the same 12 animal words (`/practice/:cardId`).
+  IPA is hidden by default (tap "Xem phiên âm" to reveal). A streak challenge replaces a single
+  attempt: two slots ○○ ("Lần 1/2 · Lần 2/2 ✓"); an attempt ≥ 80 fills the next slot, one < 80
+  clears both; 2 consecutive ≥ 80 attempts award 3 stars, otherwise stars come from the single
+  attempt as before (capped at 2).
+- **🧩 Học từ mới (Từ vựng)** — meaning first, at `/words/...`. New cards start with **Đoán nghĩa**:
+  emoji + English word shown, child picks 1 of 3 Vietnamese meanings (distractors from the same
+  topic); a wrong pick shakes the card. Then the card flips and "🎤 Nói để mở khoá" works as before.
+  In the **Ôn tập** (review) deck the front face hides the English word — only emoji + Vietnamese
+  meaning show, so the child has to recall and say the word — with a "Gợi ý" button to reveal it.
+  The front-face 🔊 is withheld until that hint is tapped: it speaks the word, so leaving it there
+  would be a one-tap bypass of the whole recall step.
+  Leitner unlock/spacing rules are unchanged.
+- **👯 Nghe & chọn (Minimal Pairs)** — a new level, `/level/minimal-pairs` (`PairLevel`) →
+  `/pair/:id` (`PairPractice`): 8 contrastive pairs (ship/sheep, bat/bad, three/tree, fan/van,
+  sit/seat, thin/tin, rice/lice, cap/cup). 🔊 plays one of the two words, picked **seeded
+  pseudo-random per pair** (a PRNG stream seeded by the pair id, so the order has no beat the child
+  can count but is identical every time that pair is opened); the child taps
+  the matching picture/word card (✅/🙈 + Foxy). The scoreboard is one tick per **word** ("ship ✓ ·
+  sheep ○"), and the mic step opens only once **each** word has been picked correctly at least
+  once — two right answers on the same word prove nothing about the contrast. The draw never plays
+  the same word more than twice running, so both sides come up within any four listens. The mic
+  step then asks the child to read both words in one go ("ship, sheep"), scored the normal way.
+
+**Routes:**
+
+| Route | Screen |
+|---|---|
+| `/level/sound-zoo` | Tập âm sound tiles (`SoundLevel`, rendered by `LevelSelect` for that one level id) |
+| `/sound/:ph` | Tập âm practice — one sound, 3-word carousel (`SoundPractice`) |
+| `/practice/:cardId` | Đọc từ (Word Pop) practice card — unchanged path, new streak UI |
+| `/words`, `/words/:topic`, `/words/:topic/:wordId` | Học từ mới — topic list, word list, flashcard (Đoán nghĩa → flip → say-to-unlock; review hides the word) |
+| `/level/minimal-pairs` | Nghe & chọn level (`PairLevel`) |
+| `/pair/:id` | Nghe & chọn practice — listen, choose, then read both words (`PairPractice`) |
+
+**Storage keys:**
+- `sound:<ph>` — Tập âm stars, one per sound (not per word/card); the Tập âm island on Home and
+  the "Tập âm" step on `/levels` both show `best` over the 9 `sound:<ph>` keys.
+- `pair:<id>` — Nghe & chọn stars, one per pair (not per word).
+- Word Pop keeps its stars per card (`c.id`, e.g. `wp-cat`); Học từ mới keeps using the Leitner
+  deck (`speakup.leitner`), not a star key, for its island/step.
+
+**Audio generation:** new Sound Zoo words, Minimal Pairs words and the 9 isolated-sound samples
+are produced by the same `gen-audio.mjs` / `gen-sounds.mjs` scripts documented above under
+"Generating sample audio" — see that section for the exact commands and output folders
+(`client/public/audio`, `client/public/audio/pairs`, `client/public/audio/sounds`). Like the Phase
+2–4 audio, these mp3s are committed: every folder under `client/public/audio/` is tracked in git
+except `audio/audition/`, the voice-audition scratch folder, which is the only one `.gitignore`
+excludes.
+
 ## iPad setup & testing (Thiết lập trên iPad)
 
 1. Make sure your iPad and PC are on the same Wi-Fi network.
@@ -299,6 +399,15 @@ pnpm --filter client exec vite --mode nossl --port 5174
 | 18 | Sentence Builder → any sentence | Tiles are colored by role (who/does/what), with the legend between the tray and the tile pool | ⏳ pending |
 | 19 | Parent Dashboard → tap "Khoá lại" | Immediately re-locks and shows a fresh math question, without leaving `/parent` | ⏳ pending |
 | 20 | Story player → tap the subtitle switch | Toggle switch flips state and announces it (e.g. "Phụ đề bật") | ⏳ pending |
+| 21 | Tập âm → `/level/sound-zoo` → open a sound tile → tap "🔊 Nghe âm lẻ" | Plays the isolated-sound sample (just the phoneme, not a full word) | ⏳ pending |
+| 22 | Tập âm practice → score a word, then tap "🔊 Nghe mẫu" under the result | Replays that word's own sample (the same audio as before the attempt). The /θ/ chip next to it is a read-out, not a button — nothing happens when it is tapped | ⏳ pending |
+| 23 | Đọc từ (Word Pop) → say a word twice in a row scoring ≥ 80 | Streak fills ●●, then awards 3 stars ("Lần 1/2 · Lần 2/2 ✓") | ⏳ pending |
+| 24 | Học từ mới → new card → tap a wrong meaning in "Đoán nghĩa" | Card shakes and lets the child try again | ⏳ pending |
+| 25 | Học từ mới → "Ôn tập hôm nay" → open a due word | English word is hidden (emoji + Vietnamese only) until "Gợi ý" is tapped | ⏳ pending |
+| 26 | Nghe & chọn (`/level/minimal-pairs`) → open a pair → listen, choose, then read both words | 🔊 plays one word, tapping the matching card gives ✅/🙈 + Foxy. The line under the cards ticks off one word at a time ("ship ✓ · sheep ○") and the mic step appears only after BOTH words have been picked correctly — deliberately getting the same word right twice must not open it | ⏳ pending |
+| 27 | `/levels` stairs | "Nghe & chọn" step shows unlocked (not the 🔒 "Sắp có" placeholder) | ⏳ pending |
+| 28 | Turn Wi-Fi off (header shows "chế độ đơn giản") → Tập âm → say all 3 words of a sound | Chip reads "Chưa chấm được âm — cần kết nối Azure" with no number, the word's own score still shows, and the run awards at most 2 stars | ⏳ pending |
+| 29 | Học từ mới → "Ôn tập hôm nay" → open a due word | No 🔊 on the hidden front face; it appears only after "Gợi ý" is tapped | ⏳ pending |
 
 ## Architecture
 

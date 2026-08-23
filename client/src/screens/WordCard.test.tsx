@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, act, waitFor } from '@testing-library/react'
+import { render, screen, fireEvent, act, waitFor, within } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import type { SpeakingAttempt } from '../speaking/useSpeakingAttempt'
 import type { PronunciationResult } from '../scoring/types'
@@ -60,6 +60,13 @@ function renderCard(topic: string, wordId: string) {
   )
 }
 
+/** A locked new word opens on the meaning-guess step now, not the flip card — tests that exercise
+ * the card/mic directly answer the guess correctly first, exactly as a child tapping the right
+ * Vietnamese meaning would. */
+function passGuess(vi: string) {
+  fireEvent.click(screen.getByRole('button', { name: vi }))
+}
+
 beforeEach(() => {
   localStorage.clear()
   attemptControl.current = baseAttempt()
@@ -91,6 +98,7 @@ it('caps the header counter at the mission target', () => {
 
 it('shows the front face by default and flips to the Vietnamese/example face on tap', () => {
   renderCard('food', 'food-apple')
+  passGuess('quả táo')
   expect(screen.getByText('apple')).toBeInTheDocument()
   expect(screen.getByText('/ˈæpəl/')).toBeInTheDocument()
   fireEvent.click(screen.getByRole('button', { name: 'Lật thẻ' }))
@@ -102,6 +110,7 @@ it('shows the front face by default and flips to the Vietnamese/example face on 
 
 it('the Lật thẻ button flips the card, but Enter aimed at an audio button on a face does not', () => {
   renderCard('food', 'food-apple')
+  passGuess('quả táo')
   const shell = screen.getByTestId('flip-card')
   const FLIPPED = '[transform:rotateY(180deg)]'
 
@@ -117,6 +126,7 @@ it('the Lật thẻ button flips the card, but Enter aimed at an audio button on
 
 it('hides the face turned away from the accessibility tree and from the tab order', () => {
   renderCard('food', 'food-apple')
+  passGuess('quả táo')
 
   // Only the face the child is actually looking at is reachable: the other one is inert (no
   // focus, no clicks) and aria-hidden, so its buttons cannot be tabbed into through the card.
@@ -137,6 +147,7 @@ it('hides the face turned away from the accessibility tree and from the tab orde
 
 it('the card container is no longer a button itself', () => {
   renderCard('food', 'food-apple')
+  passGuess('quả táo')
   const shell = screen.getByTestId('flip-card')
   expect(shell).not.toHaveAttribute('role')
   expect(shell).not.toHaveAttribute('tabindex')
@@ -144,6 +155,7 @@ it('the card container is no longer a button itself', () => {
 
 it('plays the sample audio and clears the missing-audio notice on success', async () => {
   renderCard('food', 'food-apple')
+  passGuess('quả táo')
   fireEvent.click(screen.getByRole('button', { name: 'Nghe mẫu' }))
   expect(playerMock.playUrl).toHaveBeenCalledWith('/audio/words/apple.mp3')
   await waitFor(() => expect(screen.queryByText('Chưa có audio mẫu')).not.toBeInTheDocument())
@@ -152,6 +164,7 @@ it('plays the sample audio and clears the missing-audio notice on success', asyn
 it('shows the missing-audio notice when sample playback fails', async () => {
   playerMock.playUrl.mockImplementationOnce(() => Promise.reject(new Error('no audio')))
   renderCard('food', 'food-apple')
+  passGuess('quả táo')
   fireEvent.click(screen.getByRole('button', { name: 'Nghe mẫu' }))
   await waitFor(() => expect(screen.getByText('Chưa có audio mẫu')).toBeInTheDocument())
 })
@@ -159,6 +172,7 @@ it('shows the missing-audio notice when sample playback fails', async () => {
 it('unlocks a locked word at score >= 60, logs the activity event, and saves the recording', () => {
   attemptControl.current = { ...baseAttempt(), result: resultHigh }
   renderCard('food', 'food-apple')
+  passGuess('quả táo')
   const blob = new Blob(['x'])
 
   act(() => { attemptControl.onResult?.(resultHigh, blob) })
@@ -179,6 +193,7 @@ it('unlocks a locked word at score >= 60, logs the activity event, and saves the
 it('does not save a recording when no blob is available (web speech engine)', () => {
   attemptControl.current = { ...baseAttempt(), result: resultHigh }
   renderCard('food', 'food-apple')
+  passGuess('quả táo')
 
   act(() => { attemptControl.onResult?.(resultHigh, null) })
 
@@ -204,6 +219,7 @@ it('demotes an already-unlocked word (box 2) back to box 1 on a low score, and s
 it('a low score on a still-locked word stays locked (no box entry created)', () => {
   attemptControl.current = { ...baseAttempt(), result: resultLow }
   renderCard('food', 'food-apple')
+  passGuess('quả táo')
 
   act(() => { attemptControl.onResult?.(resultLow, null) })
 
@@ -214,6 +230,7 @@ it('a low score on a still-locked word stays locked (no box entry created)', () 
 it('Thử lại clears the outcome so the child can record the word again', () => {
   attemptControl.current = { ...baseAttempt(), result: resultHigh }
   renderCard('food', 'food-apple')
+  passGuess('quả táo')
 
   act(() => { attemptControl.onResult?.(resultHigh, null) })
   expect(screen.getByText('🔓 Mở khoá!')).toBeInTheDocument()
@@ -228,6 +245,7 @@ it('Thử lại clears the outcome so the child can record the word again', () =
 it('Tiếp theo goes to the next word in topic order', () => {
   attemptControl.current = { ...baseAttempt(), result: resultHigh }
   renderCard('food', 'food-apple')
+  passGuess('quả táo')
 
   act(() => { attemptControl.onResult?.(resultHigh, null) })
   fireEvent.click(screen.getByRole('button', { name: /Tiếp theo/ }))
@@ -238,6 +256,7 @@ it('Tiếp theo goes to the next word in topic order', () => {
 it('Tiếp theo goes back to the topic list from the last word', () => {
   attemptControl.current = { ...baseAttempt(), result: resultHigh }
   renderCard('food', 'food-cake')
+  passGuess('bánh ngọt')
 
   act(() => { attemptControl.onResult?.(resultHigh, null) })
   fireEvent.click(screen.getByRole('button', { name: /Tiếp theo/ }))
@@ -249,4 +268,79 @@ it('shows a simple-mode label for the webspeech engine', () => {
   attemptControl.current = { ...baseAttempt(), engine: 'webspeech' }
   renderCard('food', 'food-apple')
   expect(screen.getByText('chế độ đơn giản')).toBeInTheDocument()
+})
+
+it('a locked new word opens on a meaning-guess step: a wrong option shakes and invites another try, the right one reveals the card and mic', () => {
+  renderCard('food', 'food-apple')
+
+  expect(screen.getByText('Từ này nghĩa là gì?')).toBeInTheDocument()
+  expect(screen.getAllByRole('button')).toHaveLength(3) // the 3 meaning options, nothing else
+  expect(screen.queryByRole('button', { name: 'Lật thẻ' })).not.toBeInTheDocument()
+  expect(screen.queryByText('🎤 Nói để mở khoá')).not.toBeInTheDocument()
+
+  const options = screen.getAllByRole('button')
+  const correct = options.find(b => b.textContent === 'quả táo')!
+  const wrong = options.find(b => b.textContent !== 'quả táo')!
+
+  fireEvent.click(wrong)
+  expect(screen.getByText('Thử lại nhé')).toBeInTheDocument()
+  expect(wrong).toHaveClass('animate-shake')
+  // Still on the guess step — a wrong pick does not skip ahead.
+  expect(screen.getByText('Từ này nghĩa là gì?')).toBeInTheDocument()
+
+  fireEvent.click(correct)
+  expect(screen.queryByText('Từ này nghĩa là gì?')).not.toBeInTheDocument()
+  expect(screen.getByText('Đúng rồi! 🎉')).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: 'Lật thẻ' })).toBeInTheDocument()
+  expect(screen.getByText('🎤 Nói để mở khoá')).toBeInTheDocument()
+})
+
+it('an already-unlocked word skips the meaning-guess step', () => {
+  promote('food-apple') // box 1 — no longer a brand-new word
+  renderCard('food', 'food-apple')
+
+  expect(screen.queryByText('Từ này nghĩa là gì?')).not.toBeInTheDocument()
+  expect(screen.getByRole('button', { name: 'Lật thẻ' })).toBeInTheDocument()
+  expect(screen.getByText('🎤 Nói để mở khoá')).toBeInTheDocument()
+})
+
+it('review mode hides the English word behind emoji + Vietnamese meaning until Gợi ý is pressed', () => {
+  const past = Date.now() - 2 * 24 * 60 * 60 * 1000
+  promote('food-apple', past) // due in the past, so it is a due review word
+  renderCard('review', 'food-apple')
+
+  // No guess step in review mode — recall is the point, not multiple choice.
+  expect(screen.queryByText('Từ này nghĩa là gì?')).not.toBeInTheDocument()
+
+  const front = within(screen.getByTestId('face-front'))
+  expect(front.getByText('quả táo')).toBeInTheDocument()
+  expect(front.getByText('?')).toBeInTheDocument()
+  expect(screen.queryByText('apple')).not.toBeInTheDocument()
+
+  fireEvent.click(front.getByRole('button', { name: 'Gợi ý' }))
+
+  expect(front.getByText('apple')).toBeInTheDocument()
+  expect(front.queryByText('?')).not.toBeInTheDocument()
+})
+
+/** 🔊 says the word out loud, so on a hidden review card it *is* the answer — leaving it on the
+ * front face made "Gợi ý" pointless: one tap and the recall step is over. */
+it('review mode withholds the front-face 🔊 until the hint is revealed', () => {
+  const past = Date.now() - 2 * 24 * 60 * 60 * 1000
+  promote('food-apple', past)
+  renderCard('review', 'food-apple')
+
+  const front = within(screen.getByTestId('face-front'))
+  expect(front.queryByRole('button', { name: 'Nghe mẫu' })).not.toBeInTheDocument()
+
+  fireEvent.click(front.getByRole('button', { name: 'Gợi ý' }))
+
+  expect(front.getByRole('button', { name: 'Nghe mẫu' })).toBeInTheDocument()
+})
+
+it('keeps 🔊 on the front face outside the review deck', () => {
+  promote('food-apple') // unlocked, so the card opens straight on the flip card
+  renderCard('food', 'food-apple')
+
+  expect(within(screen.getByTestId('face-front')).getByRole('button', { name: 'Nghe mẫu' })).toBeInTheDocument()
 })
