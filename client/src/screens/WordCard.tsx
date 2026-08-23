@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
+import type { KeyboardEvent, MouseEvent } from 'react'
 import type { Word } from '../content/words/types'
 import type { PronunciationResult } from '../scoring/types'
 import { findTopic, findWord } from '../content/words'
@@ -7,15 +8,23 @@ import { getBox, promote, demote, dueWords } from '../progress/leitner'
 import { logActivity } from '../progress/activity'
 import { saveRecording } from '../progress/recordings'
 import { playUrl } from '../audio/player'
+import { speakText } from '../story/speak'
 import { toFeedback } from '../scoring/feedback'
 import { useSpeakingAttempt } from '../speaking/useSpeakingAttempt'
 import { MicButton } from '../components/MicButton'
 import { Foxy } from '../components/Foxy'
 import type { FoxyMood } from '../components/Foxy'
 import { HintCard } from '../components/HintCard'
+import { BackButton, Button, Chip } from '../components/ui'
 
-const TAP_TARGET = 'min-h-[64px] min-w-[64px] flex items-center'
 const UNLOCK_SCORE = 60
+
+/** Both faces sit on top of each other inside the rotating shell; only the one facing the
+ * child is painted (`backface-visibility`). */
+const FACE = 'absolute inset-0 flex flex-col items-center justify-center gap-3 rounded-xl4 p-6 [backface-visibility:hidden]'
+
+const SPEAK_CHIP =
+  'inline-flex min-h-[64px] items-center gap-2 rounded-full bg-white px-6 font-display text-lg font-extrabold text-teal-600 shadow-[0_4px_0_#F2DFC9] active:translate-y-[2px]'
 
 export function WordCard() {
   const { topic = '', wordId = '' } = useParams()
@@ -23,9 +32,9 @@ export function WordCard() {
 
   if (!word) {
     return (
-      <main className="p-8">
-        <p className="text-2xl mb-4">Không tìm thấy từ</p>
-        <Link to="/words" className={`text-2xl px-4 ${TAP_TARGET}`}>← Từ vựng</Link>
+      <main className="h-full overflow-y-auto bg-cream-50 p-6">
+        <p className="mb-4 font-display text-2xl font-extrabold text-ink-900">Không tìm thấy từ</p>
+        <BackButton to="/words" label="Từ vựng" />
       </main>
     )
   }
@@ -80,62 +89,104 @@ function WordCardInner({ word, topic, isReview, list }: { word: Word; topic: str
     playUrl(word.audio).then(() => setAudioMissing(false), () => setAudioMissing(true))
   }
 
+  function flip() { setFlipped(f => !f) }
+
+  /** The card is the flip target, so the audio buttons riding on its faces must not flip it too. */
+  function onFaceButton(e: MouseEvent, run: () => void) {
+    e.stopPropagation()
+    run()
+  }
+
+  function onCardKey(e: KeyboardEvent<HTMLDivElement>) {
+    if (e.key !== 'Enter' && e.key !== ' ') return
+    e.preventDefault()
+    flip()
+  }
+
   const mood: FoxyMood = attempt.micState === 'recording'
     ? 'listening'
-    : outcome === 'unlocked' ? 'cheer' : 'idle'
-  const say = outcome === 'unlocked' ? '🔓 Mở khoá!' : outcome === 'retry' ? 'Thử lại nhé' : undefined
+    : outcome === 'unlocked' ? 'cheer' : outcome === 'retry' ? 'surprised' : 'idle'
 
   return (
-    <main className="h-full overflow-y-auto flex flex-col items-center p-6 gap-4">
-      <div className="w-full flex justify-between text-xl">
-        <Link to={backTo} className={`${TAP_TARGET} px-4`}>← {isReview ? 'Ôn tập' : 'Từ vựng'}</Link>
-        <span className="text-slate-400">{attempt.engine === 'webspeech' ? 'chế độ đơn giản' : ''}</span>
-      </div>
+    <main className="h-full overflow-y-auto bg-cream-50 px-6 py-5">
+      <div className="mx-auto flex min-h-full w-full max-w-4xl flex-col items-center gap-4">
+        <header className="flex w-full items-center justify-between gap-4">
+          <BackButton to={backTo} label={isReview ? 'Ôn tập' : 'Từ vựng'} />
+          <p className="font-display text-xl font-extrabold text-ink-500">Chạm thẻ để lật</p>
+          <span className="min-w-[66px] text-right text-base font-bold text-ink-300">
+            {attempt.engine === 'webspeech' ? 'chế độ đơn giản' : ''}
+          </span>
+        </header>
 
-      <button
-        type="button"
-        aria-label="Lật thẻ"
-        onClick={() => setFlipped(f => !f)}
-        className="rounded-3xl bg-white shadow p-8 flex flex-col items-center justify-center gap-2 active:scale-95 min-w-[260px] min-h-[260px]"
-      >
-        {!flipped ? (
-          <>
-            <span className="text-8xl">{word.emoji}</span>
-            <span className="text-5xl font-extrabold">{word.word}</span>
-            <span className="text-2xl text-slate-500">{word.ipa}</span>
-          </>
-        ) : (
-          <>
-            <span className="text-4xl font-extrabold text-center">{word.vi}</span>
-            <span className="text-2xl text-slate-500 text-center">{word.example}</span>
-          </>
-        )}
-      </button>
-
-      <div className="flex flex-col items-center gap-1">
-        <button onClick={playSample} className="w-16 h-16 rounded-full bg-teal text-white text-3xl active:scale-95">🔊</button>
-        {audioMissing && <p className="text-lg text-slate-400">Chưa có audio mẫu</p>}
-      </div>
-
-      <Foxy mood={mood} say={say} />
-
-      {attempt.error && <p className="text-2xl text-fix">{attempt.error}</p>}
-
-      {outcome === 'retry' && feedback?.hint && <HintCard hint={feedback.hint} />}
-
-      {outcome && (
-        <div className="flex gap-4 text-xl flex-wrap justify-center">
-          <button onClick={retry} className={`px-6 rounded-2xl bg-white shadow ${TAP_TARGET}`}>Thử lại</button>
-          <button
-            onClick={() => nav(next ? `/words/${topic}/${next.id}` : backTo)}
-            className={`px-6 rounded-2xl bg-coral text-white font-extrabold justify-center ${TAP_TARGET}`}
+        <div className="h-[360px] w-[320px] shrink-0 [perspective:1200px]">
+          <div
+            role="button"
+            tabIndex={0}
+            aria-label="Lật thẻ"
+            onClick={flip}
+            onKeyDown={onCardKey}
+            className={`relative h-full w-full cursor-pointer transition-transform duration-500 [transform-style:preserve-3d] ${
+              flipped ? '[transform:rotateY(180deg)]' : ''
+            }`}
           >
-            Tiếp theo →
-          </button>
-        </div>
-      )}
+            <div className={`${FACE} bg-white shadow-card`}>
+              <span aria-hidden="true" className="text-[96px] leading-none">{word.emoji}</span>
+              <span className="font-display text-[44px] font-extrabold leading-none text-ink-900">{word.word}</span>
+              <span className="text-xl font-bold text-ink-300">{word.ipa}</span>
+              {/* 58 px circle inside a 64 px tap target — the handoff's size without shrinking the
+                  area a small finger has to hit. */}
+              <button
+                type="button"
+                onClick={e => onFaceButton(e, playSample)}
+                className="flex h-16 w-16 items-center justify-center active:translate-y-[2px]"
+              >
+                <span className="flex h-[58px] w-[58px] items-center justify-center rounded-full bg-teal-500 text-3xl text-white shadow-chunky-teal">
+                  🔊
+                </span>
+              </button>
+              <Chip className="absolute bottom-4">MẶT TRƯỚC</Chip>
+            </div>
 
-      <MicButton state={attempt.micState} level={attempt.level} onPress={attempt.onMic} />
+            <div className={`${FACE} bg-[#FFF1E6] shadow-[0_8px_0_#F2DFC9] [transform:rotateY(180deg)]`}>
+              <span className="text-center font-display text-[36px] font-extrabold leading-tight text-coral-600">{word.vi}</span>
+              <span className="text-center text-[22px] font-bold leading-snug text-ink-500">{word.example}</span>
+              <button type="button" onClick={e => onFaceButton(e, () => speakText(word.example))} className={SPEAK_CHIP}>
+                🔊 Nghe câu ví dụ
+              </button>
+              <Chip className="absolute bottom-4">MẶT SAU</Chip>
+            </div>
+          </div>
+        </div>
+
+        {audioMissing && <p className="text-lg font-bold text-ink-300">Chưa có audio mẫu</p>}
+
+        {outcome === 'unlocked' && (
+          <span className="inline-flex items-center gap-2 rounded-xl2 bg-sun-50 px-6 py-3 font-display text-2xl font-extrabold text-sun-700 shadow-chunky-sun">
+            🔓 Mở khoá!
+          </span>
+        )}
+
+        {attempt.error && <p className="font-display text-2xl font-extrabold text-fix-700">{attempt.error}</p>}
+
+        {outcome === 'retry' && feedback?.hint && <HintCard hint={feedback.hint} />}
+
+        <div className="flex items-end gap-6">
+          <Foxy mood={mood} size="sm" say={outcome === 'retry' ? 'Thử lại nhé' : undefined} />
+          <div className="flex flex-col items-center gap-2">
+            <MicButton state={attempt.micState} level={attempt.level} onPress={attempt.onMic} />
+            <p className="font-display text-xl font-extrabold text-ink-500">🎤 Nói để mở khoá</p>
+          </div>
+        </div>
+
+        {outcome && (
+          <div className="flex flex-wrap justify-center gap-4 pb-2">
+            <Button variant="outline" onClick={retry}>Thử lại</Button>
+            <Button size="lg" pulse onClick={() => nav(next ? `/words/${topic}/${next.id}` : backTo)}>
+              Tiếp theo →
+            </Button>
+          </div>
+        )}
+      </div>
     </main>
   )
 }

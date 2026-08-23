@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 import type { Sentence } from '../content'
 import { SENTENCES, findSentence } from '../content'
 import type { PronunciationResult } from '../scoring/types'
@@ -14,12 +14,37 @@ import { Foxy } from '../components/Foxy'
 import type { FoxyMood } from '../components/Foxy'
 import { HintCard } from '../components/HintCard'
 import { Stars } from '../components/Stars'
+import { ScoredWords } from '../components/ScoredWords'
+import { ScoreBars } from '../components/ScoreBars'
+import { BackButton, Button } from '../components/ui'
 import { shuffleTiles } from '../content/shuffle'
 
-const TAP_TARGET = 'min-h-[64px] min-w-[64px] flex items-center justify-center'
 const SHAKE_MS = 400 // matches the .animate-shake keyframe duration in styles.css
 
-const TILE = `px-5 rounded-2xl shadow text-2xl font-extrabold active:scale-95 ${TAP_TARGET}`
+const TILE =
+  'flex min-h-[64px] min-w-[64px] items-center justify-center rounded-xl2 border-[3px] px-5 font-display text-[26px] font-extrabold text-ink-900 transition-transform active:scale-95'
+
+/** The three sentence roles, keyed by which third of the sentence a tile belongs to. Colours are
+ * written out per role (never concatenated) so Tailwind keeps them in the build. */
+type Role = 'who' | 'doing' | 'thing'
+const ROLE_TILE: Record<Role, string> = {
+  who: 'bg-sky-400/30 border-sky-400',
+  doing: 'bg-peach-400/30 border-peach-400',
+  thing: 'bg-sun-400/40 border-sun-400',
+}
+const LEGEND: { role: Role; label: string }[] = [
+  { role: 'who', label: '🟦 Ai?' },
+  { role: 'doing', label: '🟧 Làm gì?' },
+  { role: 'thing', label: '🟨 Cái gì?' },
+]
+
+/** A tile keeps its colour wherever it sits, so the role comes from the word's place in the
+ * target sentence — not from where the child has put it. */
+function roleOf(index: number, total: number): Role {
+  if (index < total / 3) return 'who'
+  if (index < (total * 2) / 3) return 'doing'
+  return 'thing'
+}
 
 export function SentenceBuilder() {
   const { id = '' } = useParams()
@@ -27,9 +52,9 @@ export function SentenceBuilder() {
 
   if (!sentence) {
     return (
-      <main className="p-8">
-        <p className="text-2xl mb-4">Không tìm thấy câu</p>
-        <Link to="/sentences" className={`text-2xl px-4 ${TAP_TARGET}`}>← Ghép câu</Link>
+      <main className="h-full overflow-y-auto bg-cream-50 p-6">
+        <p className="mb-4 font-display text-2xl font-extrabold text-ink-900">Không tìm thấy câu</p>
+        <BackButton to="/sentences" label="Ghép câu" />
       </main>
     )
   }
@@ -112,69 +137,110 @@ function SentenceBuilderInner({ sentence }: { sentence: Sentence }) {
     if (wrong) return
     setTrayIndices(prev => prev.filter((_, i) => i !== pos))
   }
+  function playSample() {
+    playUrl(sentence.audio).then(() => setAudioMissing(false), () => setAudioMissing(true))
+  }
 
   const index = SENTENCES.findIndex(s => s.id === sentence.id)
   const next = index >= 0 ? SENTENCES[index + 1] : undefined
+  const total = sentence.words.length
 
   const mood: FoxyMood = attempt.micState === 'recording' ? 'listening' : correct ? 'cheer' : 'idle'
   const say = correct ? 'Đúng rồi! 🎉' : wrong ? 'Thử lại nhé' : undefined
 
   return (
-    <main className="h-full flex flex-col items-center justify-between p-6 gap-3 overflow-y-auto">
-      <div className="w-full flex justify-between text-xl">
-        <Link to="/sentences" className={`${TAP_TARGET} px-4`}>← Ghép câu</Link>
-        <span className="text-slate-400">{attempt.engine === 'webspeech' ? 'chế độ đơn giản' : ''}</span>
-      </div>
+    <main className="h-full overflow-y-auto bg-cream-50 px-6 py-5">
+      <div className="mx-auto flex min-h-full w-full max-w-4xl flex-col items-center gap-4">
+        <header className="flex w-full items-center justify-between gap-4">
+          <BackButton to="/sentences" label="Ghép câu" />
+          <div className="text-center">
+            <h1 className="font-display text-[36px] font-extrabold leading-tight text-ink-900">Ghép câu nào! 🧱</h1>
+            <p className="mt-1 text-lg font-bold text-ink-500">Chạm các khối từ để xếp vào khay câu</p>
+          </div>
+          <span className="min-w-[66px] text-right text-base font-bold text-ink-300">
+            {attempt.engine === 'webspeech' ? 'chế độ đơn giản' : ''}
+          </span>
+        </header>
 
-      <p className="text-2xl text-slate-500 text-center">{sentence.vi}</p>
+        <p className="text-center text-xl font-bold text-ink-500">{sentence.vi}</p>
 
-      <div
-        data-testid="tray"
-        className={`min-h-[80px] w-full max-w-2xl flex flex-wrap gap-3 justify-center items-center rounded-3xl bg-white shadow p-4 ${shaking ? 'animate-shake' : ''}`}
-      >
-        {trayIndices.map((idx, pos) => (
-          <button key={pos} type="button" onClick={() => tapTray(pos)} className={`${TILE} bg-teal text-white`}>
-            {sentence.words[idx]}
-          </button>
-        ))}
-      </div>
-
-      <div data-testid="pool" className="w-full max-w-2xl flex flex-wrap gap-3 justify-center">
-        {poolIndices.map(idx => (
-          <button key={idx} type="button" onClick={() => tapPool(idx)} className={`${TILE} bg-white`}>
-            {sentence.words[idx]}
-          </button>
-        ))}
-      </div>
-
-      <Foxy mood={mood} say={say} />
-
-      {correct && (
-        <>
-          {audioMissing && <p className="text-lg text-slate-400">Chưa có audio mẫu</p>}
-
-          {attempt.error && <p className="text-2xl text-fix">{attempt.error}</p>}
-
-          {feedback && (
-            <section className="flex flex-col items-center gap-4">
-              <Stars value={feedback.stars} animate={feedback.stars === 3} />
-              <p className="text-3xl font-extrabold">{feedback.message}</p>
-              {feedback.hint && <HintCard hint={feedback.hint} />}
-              <div className="flex gap-4 text-xl flex-wrap justify-center">
-                <button onClick={attempt.reset} className={`px-6 rounded-2xl bg-white shadow ${TAP_TARGET}`}>Thử lại</button>
-                <button
-                  onClick={() => nav(next ? `/sentence/${next.id}` : '/sentences')}
-                  className={`px-6 rounded-2xl bg-coral text-white font-extrabold justify-center ${TAP_TARGET}`}
-                >
-                  Tiếp theo →
-                </button>
-              </div>
-            </section>
+        {/* The placeholder lives outside the tray so the tray's children stay tiles-only. */}
+        <div className="relative w-full max-w-3xl">
+          <div
+            data-testid="tray"
+            className={`flex min-h-[96px] flex-wrap items-center justify-center gap-3 rounded-[24px] border-[3px] border-dashed border-line-200 bg-white p-4 ${shaking ? 'animate-shake' : ''}`}
+          >
+            {trayIndices.map((idx, pos) => (
+              <button
+                key={pos}
+                type="button"
+                onClick={() => tapTray(pos)}
+                className={`${TILE} ${ROLE_TILE[roleOf(idx, total)]}`}
+              >
+                {sentence.words[idx]}
+              </button>
+            ))}
+          </div>
+          {trayIndices.length === 0 && (
+            <span className="pointer-events-none absolute inset-0 flex items-center justify-center font-display text-xl font-extrabold text-ink-300">
+              thả vào đây
+            </span>
           )}
+        </div>
 
-          <MicButton state={attempt.micState} level={attempt.level} onPress={attempt.onMic} />
-        </>
-      )}
+        <div className="flex flex-wrap justify-center gap-3">
+          {LEGEND.map(l => (
+            <span key={l.role} className={`rounded-xl2 border-[3px] px-4 py-1 font-display text-base font-extrabold text-ink-500 ${ROLE_TILE[l.role]}`}>
+              {l.label}
+            </span>
+          ))}
+        </div>
+
+        <div data-testid="pool" className="flex w-full max-w-3xl flex-wrap justify-center gap-4">
+          {poolIndices.map(idx => (
+            <button
+              key={idx}
+              type="button"
+              onClick={() => tapPool(idx)}
+              className={`${TILE} ${ROLE_TILE[roleOf(idx, total)]}`}
+            >
+              {sentence.words[idx]}
+            </button>
+          ))}
+        </div>
+
+        {correct ? (
+          <>
+            {audioMissing && <p className="text-lg font-bold text-ink-300">Chưa có audio mẫu</p>}
+
+            {attempt.error && <p className="font-display text-2xl font-extrabold text-fix-700">{attempt.error}</p>}
+
+            {feedback && (
+              <section className="flex flex-col items-center gap-4">
+                <Stars value={feedback.stars} animate={feedback.stars === 3} />
+                <p className="font-display text-3xl font-extrabold text-ink-900">{feedback.message}</p>
+                <ScoredWords words={feedback.words} onWordTap={playSample} />
+                {feedback.hint && <HintCard hint={feedback.hint} />}
+                {attempt.result && <ScoreBars result={attempt.result} />}
+                <div className="flex flex-wrap justify-center gap-4">
+                  <Button variant="outline" onClick={attempt.reset}>Thử lại</Button>
+                  <Button size="lg" pulse onClick={() => nav(next ? `/sentence/${next.id}` : '/sentences')}>
+                    Tiếp theo →
+                  </Button>
+                </div>
+              </section>
+            )}
+
+            <div className="flex flex-wrap items-end justify-center gap-6 pb-2">
+              <Button variant="outline" onClick={playSample}>🔊 Đọc câu cho bé nghe</Button>
+              <MicButton state={attempt.micState} level={attempt.level} onPress={attempt.onMic} />
+              <Foxy mood={mood} size="sm" say={say} />
+            </div>
+          </>
+        ) : (
+          <Foxy mood={mood} size="sm" say={say} />
+        )}
+      </div>
     </main>
   )
 }

@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { useParams } from 'react-router-dom'
 import type { Story } from '../content/stories/types'
 import type { PronunciationResult } from '../scoring/types'
 import { findStory } from '../content/stories'
@@ -12,19 +12,18 @@ import { MicButton } from '../components/MicButton'
 import { Stars } from '../components/Stars'
 import { Foxy } from '../components/Foxy'
 import type { FoxyMood } from '../components/Foxy'
+import { BackButton, Button, Card } from '../components/ui'
 import { retellStars, RETELL_MESSAGE } from '../story/retellStars'
 import { speakText } from '../story/speak'
-
-const TAP_TARGET = 'min-h-[64px] min-w-[64px] flex items-center'
 
 export function StoryRetell() {
   const { id = '' } = useParams()
   const story = findStory(id)
   if (!story) {
     return (
-      <main className="p-8">
-        <p className="text-2xl mb-4">Không tìm thấy truyện</p>
-        <Link to="/stories" className={`text-2xl px-4 ${TAP_TARGET}`}>← Truyện</Link>
+      <main className="h-full overflow-y-auto bg-cream-50 p-6">
+        <p className="mb-4 font-display text-2xl font-extrabold text-ink-900">Không tìm thấy truyện</p>
+        <BackButton to="/stories" label="Truyện" />
       </main>
     )
   }
@@ -73,56 +72,49 @@ function StoryRetellInner({ story, id }: { story: Story; id: string }) {
     : stars === 3 ? 'cheer' : stars === 2 ? 'happy' : 'idle'
 
   return (
-    <main className="h-full overflow-y-auto flex flex-col items-center p-6 gap-4">
-      <div className="w-full flex justify-between text-xl">
-        <Link to="/stories" className={`${TAP_TARGET} px-4`}>← Truyện</Link>
-        <span className="text-slate-400">{a.engine === 'webspeech' ? 'chế độ đơn giản' : ''}</span>
+    <main className="h-full overflow-y-auto bg-cream-50 px-6 py-5">
+      <div className="mx-auto flex min-h-full w-full max-w-4xl flex-col items-center gap-4">
+        <header className="flex w-full items-center justify-between gap-4">
+          <BackButton to="/stories" label="Truyện" />
+          <h1 className="font-display text-[36px] font-extrabold leading-tight text-ink-900">Bé kể lại nhé</h1>
+          <span className="min-w-[66px] text-right text-base font-bold text-ink-300">
+            {a.engine === 'webspeech' ? 'chế độ đơn giản' : ''}
+          </span>
+        </header>
+
+        <Card className="flex w-full max-w-2xl flex-col items-center gap-3 px-8 py-7">
+          <p className="text-center font-display text-[40px] font-extrabold leading-tight text-ink-900">{story.retell.text}</p>
+          <p className="text-center text-xl font-bold text-ink-500">{story.retell.textVi}</p>
+          <button
+            type="button"
+            onClick={() => playSample(story)}
+            className="flex h-[64px] w-[64px] items-center justify-center rounded-full bg-teal-500 text-3xl text-white shadow-chunky-teal active:translate-y-[2px]"
+          >
+            🔊
+          </button>
+        </Card>
+
+        {a.error && <p className="font-display text-2xl font-extrabold text-fix-700">{a.error}</p>}
+
+        {stars !== null && (
+          <section className="flex flex-col items-center gap-4">
+            <Stars value={stars} animate={stars === 3} />
+            <p className="font-display text-3xl font-extrabold text-ink-900">{RETELL_MESSAGE[stars]}</p>
+            <div className="flex flex-wrap justify-center gap-4">
+              {a.lastBlob && (
+                <Button variant="outline" onClick={() => playBlob(a.lastBlob!).catch(() => {})}>🎧 Nghe mình</Button>
+              )}
+              <Button variant="outline" onClick={a.reset}>Thử lại</Button>
+              <Button size="lg" pulse to="/stories">Về danh sách truyện</Button>
+            </div>
+          </section>
+        )}
+
+        <div className="flex items-end gap-6 pb-2">
+          <Foxy mood={mood} size="sm" />
+          <MicButton state={a.micState} level={a.level} onPress={a.onMic} />
+        </div>
       </div>
-
-      <p className="text-3xl font-extrabold text-center">Bé kể lại nhé</p>
-
-      <div className="flex flex-col items-center gap-3">
-        <p className="text-5xl font-extrabold text-center">{story.retell.text}</p>
-        <p className="text-2xl text-slate-500 text-center">{story.retell.textVi}</p>
-        <button
-          type="button"
-          onClick={() => playSample(story)}
-          className="w-16 h-16 rounded-full bg-teal text-white text-3xl active:scale-95"
-        >
-          🔊
-        </button>
-      </div>
-
-      {a.error && <p className="text-2xl text-fix">{a.error}</p>}
-
-      {stars !== null && (
-        <section className="flex flex-col items-center gap-4">
-          <Stars value={stars} animate={stars === 3} />
-          <p className="text-3xl font-extrabold">{RETELL_MESSAGE[stars]}</p>
-          <div className="flex gap-4 text-xl flex-wrap justify-center">
-            {a.lastBlob && (
-              <button
-                onClick={() => playBlob(a.lastBlob!).catch(() => {})}
-                className={`px-6 rounded-2xl bg-white shadow ${TAP_TARGET}`}
-              >
-                🎧 Nghe mình
-              </button>
-            )}
-            <button onClick={a.reset} className={`px-6 rounded-2xl bg-white shadow ${TAP_TARGET}`}>
-              Thử lại
-            </button>
-            <Link
-              to="/stories"
-              className={`px-6 rounded-2xl bg-coral text-white font-extrabold justify-center ${TAP_TARGET}`}
-            >
-              Về danh sách truyện
-            </Link>
-          </div>
-        </section>
-      )}
-
-      <Foxy mood={mood} />
-      <MicButton state={a.micState} level={a.level} onPress={a.onMic} />
     </main>
   )
 }

@@ -95,7 +95,7 @@ it('shows the hook error in the fix color', () => {
   attemptControl.current = { ...baseAttempt(), error: 'Không nghe rõ, bé thử lại nhé!' }
   renderRetell()
   const err = screen.getByText('Không nghe rõ, bé thử lại nhé!')
-  expect(err).toHaveClass('text-fix')
+  expect(err).toHaveClass('text-fix-700')
 })
 
 it('shows a simple-mode label for the webspeech engine', () => {

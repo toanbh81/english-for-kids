@@ -38,5 +38,5 @@ it('links each topic card to /words/:topic and the review card to /words/review'
 
 it('offers a way back home', () => {
   renderTopics()
-  expect(screen.getByRole('link', { name: '← Về nhà' })).toHaveAttribute('href', '/')
+  expect(screen.getByRole('link', { name: 'Về nhà' })).toHaveAttribute('href', '/')
 })
