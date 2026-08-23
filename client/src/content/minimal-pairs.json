@@ -19,7 +19,7 @@
     "b": { "word": "tin", "ipa": "/tɪn/", "emoji": "🥫", "audio": "/audio/pairs/tin.mp3" } },
   { "id": "pair-rice-lice", "contrast": "r/l",
     "a": { "word": "rice", "ipa": "/raɪs/", "emoji": "🍚", "audio": "/audio/pairs/rice.mp3" },
-    "b": { "word": "lice", "ipa": "/laɪs/", "emoji": "🐛", "audio": "/audio/pairs/lice.mp3" } },
+    "b": { "word": "lice", "ipa": "/laɪs/", "emoji": "🐜", "audio": "/audio/pairs/lice.mp3" } },
   { "id": "pair-cap-cup", "contrast": "æ/ʌ",
     "a": { "word": "cap", "ipa": "/kæp/", "emoji": "🧢", "audio": "/audio/pairs/cap.mp3" },
     "b": { "word": "cup", "ipa": "/kʌp/", "emoji": "☕", "audio": "/audio/pairs/cup.mp3" } }

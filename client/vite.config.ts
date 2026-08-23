@@ -23,6 +23,9 @@ export default defineConfig(({ mode }) => ({
       workbox: {
         // The sample word audio is .mp3 and must be precached, or offline practice has no "Nghe mẫu".
         globPatterns: ['**/*.{js,css,html,svg,png,mp3}'],
+        // …but not the voice-audition scratch files: they are alternate takes nothing routes to,
+        // and precaching them would push megabytes of dead audio onto the iPad on first launch.
+        globIgnores: ['**/audio/audition/**'],
         // Baloo 2 / Nunito come from Google Fonts, which precaching cannot reach: without these
         // two routes an offline launch falls back to the system font and the whole app reflows.
         runtimeCaching: [

@@ -10,6 +10,6 @@
     { "id": "school-bag", "topic": "school", "word": "bag", "ipa": "/bæɡ/", "emoji": "🎒", "audio": "/audio/words/bag.mp3", "vi": "cái cặp sách", "example": "I carry my bag." },
     { "id": "school-friend", "topic": "school", "word": "friend", "ipa": "/frend/", "emoji": "🧑‍🤝‍🧑", "audio": "/audio/words/friend.mp3", "vi": "người bạn", "example": "She is my friend." },
     { "id": "school-ruler", "topic": "school", "word": "ruler", "ipa": "/ˈruːlər/", "emoji": "📏", "audio": "/audio/words/ruler.mp3", "vi": "cây thước kẻ", "example": "I use a ruler." },
-    { "id": "school-clock", "topic": "school", "word": "clock", "ipa": "/klɒk/", "emoji": "⏰", "audio": "/audio/words/clock.mp3", "vi": "đồng hồ", "example": "The clock is big." }
+    { "id": "school-clock", "topic": "school", "word": "clock", "ipa": "/klɑːk/", "emoji": "⏰", "audio": "/audio/words/clock.mp3", "vi": "đồng hồ", "example": "The clock is big." }
   ]
 }

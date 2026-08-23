@@ -40,6 +40,15 @@ it('every sound-zoo card has an audio path matching /audio/<text>.mp3', () => {
   }
 })
 
+/** Every sample is generated with an American voice (en-US-JennyNeural), so a British-only
+ * transcription under the word contradicts the audio the child is copying. /ɒ/ is the giveaway:
+ * it exists in RP and not in General American, where the same words take /ɑː/. */
+it('transcribes every sound-zoo word in the same American accent as its audio', () => {
+  for (const card of soundZooCards()) {
+    expect(card.ipa).not.toContain('ɒ')
+  }
+})
+
 it('SOUNDS mirrors the spec order with the right IPA and example word', () => {
   expect(SOUNDS.map(s => s.ph)).toEqual(SOUND_ORDER)
   const expectedIpa: Record<string, string> = { th: 'θ', dh: 'ð', v: 'v', f: 'f', z: 'z', sh: 'ʃ', ch: 'tʃ', r: 'r', l: 'l' }

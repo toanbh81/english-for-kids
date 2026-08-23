@@ -85,7 +85,7 @@
     {
       "id": "sz-f-fox",
       "text": "fox",
-      "ipa": "/fɒks/",
+      "ipa": "/fɑːks/",
       "emoji": "🦊",
       "audio": "/audio/fox.mp3",
       "targetPhoneme": "f"
@@ -102,7 +102,7 @@
       "id": "sz-z-zoo",
       "text": "zoo",
       "ipa": "/zuː/",
-      "emoji": "🎪",
+      "emoji": "🐨",
       "audio": "/audio/zoo.mp3",
       "targetPhoneme": "z"
     },
