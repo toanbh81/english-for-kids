@@ -50,9 +50,12 @@ const ISLANDS = [
   { to: '/sentences', emoji: '🧱', name: 'Ghép câu', left: '84%', top: '40%', size: 'h-[104px] w-[104px] text-[44px] lg:h-[118px] lg:w-[118px] lg:text-[48px]', color: 'bg-sun-400 shadow-[0_8px_0_#E0A61A,0_0_0_8px_#FFF1C9]' },
 ] as const
 
-// The dotted trail the islands sit on. Decorative only, and drawn in frame coordinates so it
-// stretches with the container.
-const TRAIL = 'M107 392 C 200 300, 250 250, 334 267 S 480 460, 561 400 S 700 180, 800 217 S 950 380, 1003 334'
+// The dotted trail the islands sit on. Decorative only, and drawn in the same 1194×834 frame
+// coordinates the SVG stretches over. The points are the island CENTRES, not their `left`/`top`
+// corners — the trail used to run through the corners and so passed above and left of every
+// island. Measured in the browser and smoothed into a Catmull-Rom curve through all five.
+const TRAIL =
+  'M180 503 C 216 481, 321 371, 394 371 C 468 371, 543 513, 621 505 C 699 497, 787 333, 860 321 C 934 310, 1028 417, 1062 436'
 
 export function Home() {
   const navigate = useNavigate()
