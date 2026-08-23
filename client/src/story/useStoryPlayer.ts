@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Story } from '../content/stories/types'
 import { activeWordIndex, estimateTimings, totalDuration } from './timing'
-import { BackgroundMusic, getMusicPref, setMusicPref } from './music'
 import { speakText } from './speak'
 
 export type PlayerState = {
@@ -13,7 +12,6 @@ export type PlayerState = {
   /** The scene ships real per-word timings, i.e. narration exists to be played at all. */
   hasTimings: boolean
   hasAudio: boolean
-  musicOn: boolean
   subtitles: boolean
 }
 
@@ -26,7 +24,6 @@ export type StoryPlayer = PlayerState & {
   prevScene(): void
   goScene(i: number): void
   replayWord(i: number): void
-  toggleMusic(): void
   toggleSubtitles(): void
   timings: { start: number; end: number }[]
   ended: boolean
@@ -71,7 +68,6 @@ export function useStoryPlayer(story: Story): StoryPlayer {
   const [rate, setRateState] = useState<0.75 | 1>(1)
   const [tMs, setTMs] = useState(NOT_STARTED)
   const [hasAudio, setHasAudio] = useState(false)
-  const [musicOn, setMusicOn] = useState(getMusicPref)
   const [subtitles, setSubtitles] = useState(true)
   const [ended, setEnded] = useState(false)
 
@@ -85,7 +81,6 @@ export function useStoryPlayer(story: Story): StoryPlayer {
   const loadTokenRef = useRef(0) // bumped per scene load; stale async callbacks compare against it
   const rafRef = useRef<number | null>(null)
   const clockRef = useRef(createClock())
-  const musicRef = useRef<BackgroundMusic | null>(null)
   const replayUntilRef = useRef<number | null>(null)
   const hasAudioRef = useRef(false)
   const rateRef = useRef<0.75 | 1>(1)
@@ -96,7 +91,6 @@ export function useStoryPlayer(story: Story): StoryPlayer {
   const metadataReadyRef = useRef(false) // 'loadedmetadata'/'canplaythrough' fired for the current audio
   const playResolvedRef = useRef(false) // audio.play() actually resolved (not blocked by iOS gesture rules)
   const advancedRef = useRef(false) // guards against tick() and the audio 'ended' event double-advancing
-  if (!musicRef.current) musicRef.current = new BackgroundMusic()
   timingsRef.current = timings
   sceneIndexRef.current = sceneIndex
   sceneCountRef.current = story.scenes.length
@@ -255,7 +249,7 @@ export function useStoryPlayer(story: Story): StoryPlayer {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [story, sceneIndex])
 
-  // True unmount only: release the shared element and stop music. Declared after the scene effect
+  // True unmount only: release the shared element. Declared after the scene effect
   // so React runs that cleanup (listener removal + pause) first.
   useEffect(() => () => {
     const audio = audioElRef.current
@@ -266,13 +260,11 @@ export function useStoryPlayer(story: Story): StoryPlayer {
     }
     audioElRef.current = null
     audioActiveRef.current = false
-    musicRef.current?.stop()
   }, [])
 
   function play() {
     // Not cleared here: pause() (and the scene-change effect) already own clearing
     // replayUntilRef, so this stays the single, testable source of truth for that reset.
-    if (musicOn) musicRef.current?.start() // only place that starts music (iOS gesture rule)
     if (complete) ensureAudio() // gesture-time creation, in case the scene effect has not yet run
     if (ended) {
       // Fix 5: ▶ on a finished story replays it, rather than doing nothing at tMs === total.
@@ -319,18 +311,10 @@ export function useStoryPlayer(story: Story): StoryPlayer {
     }
   }
 
-  function toggleMusic() {
-    const next = !musicOn // computed outside the setter: no side effects inside a state updater
-    setMusicOn(next)
-    setMusicPref(next)
-    // Turning it back on mid-story used to do nothing until the next ▶. The toggle tap is itself a
-    // user gesture, so starting Web Audio here is allowed on iOS.
-    if (next) { if (playing) musicRef.current?.start() } else musicRef.current?.stop()
-  }
   function toggleSubtitles() { setSubtitles(s => !s) }
 
   return {
-    sceneIndex, playing, rate, tMs, wordIndex, hasTimings: complete, hasAudio, musicOn, subtitles, ended, timings,
-    play, pause, toggle, setRate, nextScene, prevScene, goScene, replayWord, toggleMusic, toggleSubtitles,
+    sceneIndex, playing, rate, tMs, wordIndex, hasTimings: complete, hasAudio, subtitles, ended, timings,
+    play, pause, toggle, setRate, nextScene, prevScene, goScene, replayWord, toggleSubtitles,
   }
 }

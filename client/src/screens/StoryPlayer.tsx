@@ -69,7 +69,6 @@ function StoryPlayerInner({ story, id }: { story: Story; id: string }) {
       <PlayerControls
         playing={p.playing}
         rate={p.rate}
-        musicOn={p.musicOn}
         subtitles={p.subtitles}
         sceneIndex={p.sceneIndex}
         sceneCount={story.scenes.length}
@@ -78,7 +77,6 @@ function StoryPlayerInner({ story, id }: { story: Story; id: string }) {
         onRate={() => p.setRate(p.rate === 1 ? 0.75 : 1)}
         onPrev={p.prevScene}
         onNext={p.nextScene}
-        onMusic={p.toggleMusic}
         onSubtitles={p.toggleSubtitles}
       />
 

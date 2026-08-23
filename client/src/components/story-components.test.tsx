@@ -55,9 +55,9 @@ describe('Karaoke', () => {
 
 describe('PlayerControls', () => {
   const baseProps = {
-    playing: false, rate: 1 as 0.75 | 1, musicOn: true, subtitles: true,
+    playing: false, rate: 1 as 0.75 | 1, subtitles: true,
     sceneIndex: 1, sceneCount: 3,
-    onToggle: vi.fn(), onRate: vi.fn(), onPrev: vi.fn(), onNext: vi.fn(), onMusic: vi.fn(), onSubtitles: vi.fn(),
+    onToggle: vi.fn(), onRate: vi.fn(), onPrev: vi.fn(), onNext: vi.fn(), onSubtitles: vi.fn(),
   }
 
   it('shows "Phát" when paused and "Tạm dừng" when playing', () => {
@@ -86,9 +86,8 @@ describe('PlayerControls', () => {
     expect(screen.getByText('🐢')).toHaveClass('bg-coral-50')
   })
 
-  it('music and subtitles buttons reflect on/off state in their labels', () => {
-    render(<PlayerControls {...baseProps} musicOn={true} subtitles={false} />)
-    expect(screen.getByRole('button', { name: 'Nhạc nền bật' })).toBeInTheDocument()
+  it('subtitles button reflects on/off state in its label', () => {
+    render(<PlayerControls {...baseProps} subtitles={false} />)
     expect(screen.getByRole('button', { name: 'Phụ đề tắt' })).toBeInTheDocument()
   })
 
@@ -112,7 +111,6 @@ describe('PlayerControls', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Phát' })); expect(baseProps.onToggle).toHaveBeenCalled()
     fireEvent.click(screen.getByRole('button', { name: 'Cảnh sau' })); expect(baseProps.onNext).toHaveBeenCalled()
     fireEvent.click(screen.getByRole('button', { name: 'Tốc độ 0.75' })); expect(baseProps.onRate).toHaveBeenCalled()
-    fireEvent.click(screen.getByRole('button', { name: 'Nhạc nền bật' })); expect(baseProps.onMusic).toHaveBeenCalled()
     fireEvent.click(screen.getByRole('button', { name: 'Phụ đề bật' })); expect(baseProps.onSubtitles).toHaveBeenCalled()
   })
 })

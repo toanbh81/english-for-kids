@@ -2,7 +2,7 @@
  * tap target stays child-sized.
  *
  * `role="button"` + `ariaLabel` is there for callers whose accessible name already says the
- * state ("Nhạc nền bật"): a switch would announce that state twice, and the player's controls
+ * state ("Phụ đề bật"): a switch would announce that state twice, and the player's controls
  * are addressed as buttons by their tests. */
 export function Toggle({ on, onChange, emoji, label, role = 'switch', ariaLabel, className = '' }: {
   on: boolean

@@ -9,7 +9,6 @@ const state = vi.hoisted(() => ({
   wordIndex: 1,
   hasTimings: false,
   hasAudio: false,
-  musicOn: true,
   subtitles: false,
   ended: false,
   timings: [] as { start: number; end: number }[],
@@ -23,7 +22,6 @@ const actions = vi.hoisted(() => ({
   prevScene: vi.fn(),
   goScene: vi.fn(),
   replayWord: vi.fn(),
-  toggleMusic: vi.fn(),
   toggleSubtitles: vi.fn(),
 }))
 
@@ -47,7 +45,7 @@ function renderPlayer(id = 'little-fox') {
 beforeEach(() => {
   Object.assign(state, {
     sceneIndex: 0, playing: false, rate: 1, tMs: 0, wordIndex: 1, hasTimings: false,
-    hasAudio: false, musicOn: true, subtitles: false, ended: false, timings: [],
+    hasAudio: false, subtitles: false, ended: false, timings: [],
   })
   Object.values(actions).forEach(fn => fn.mockClear())
 })

@@ -8,7 +8,6 @@ const SPEED_ACTIVE = 'bg-coral-50 ring-[3px] ring-inset ring-peach-400'
 type Props = {
   playing: boolean
   rate: 0.75 | 1
-  musicOn: boolean
   subtitles: boolean
   sceneIndex: number
   sceneCount: number
@@ -16,18 +15,17 @@ type Props = {
   onRate: () => void
   onPrev: () => void
   onNext: () => void
-  onMusic: () => void
   onSubtitles: () => void
   /** The player draws its own dots over the picture; standalone uses keep them here. */
   dots?: boolean
 }
 
-/** Speed pill · scene steps around the 104 px play button · music and subtitle switches.
+/** Speed pill · scene steps around the 104 px play button · subtitle switch.
  * Every control keeps the state in its accessible name, so a screen reader hears
- * "Nhạc nền bật" rather than an unlabelled emoji. */
+ * "Phụ đề bật" rather than an unlabelled emoji. */
 export function PlayerControls({
-  playing, rate, musicOn, subtitles, sceneIndex, sceneCount,
-  onToggle, onRate, onPrev, onNext, onMusic, onSubtitles, dots = true,
+  playing, rate, subtitles, sceneIndex, sceneCount,
+  onToggle, onRate, onPrev, onNext, onSubtitles, dots = true,
 }: Props) {
   return (
     <div className="flex flex-col items-center gap-3">
@@ -60,14 +58,6 @@ export function PlayerControls({
         </button>
 
         <div className="flex flex-col">
-          <Toggle
-            role="button"
-            ariaLabel={musicOn ? 'Nhạc nền bật' : 'Nhạc nền tắt'}
-            on={musicOn}
-            onChange={onMusic}
-            emoji="🎵"
-            label="Nhạc nền"
-          />
           <Toggle
             role="button"
             ariaLabel={subtitles ? 'Phụ đề bật' : 'Phụ đề tắt'}

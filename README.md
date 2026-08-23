@@ -85,7 +85,6 @@ Features:
 - **Speed control:** a single 🐢/🐇 button toggles between 0.75× and 1× (both the audio and the karaoke)
 - **Tap-word replay:** tap any word to hear it in isolation — from the narration once it exists, otherwise spoken by the browser's own voice (`speechSynthesis`)
 - **Subtitles toggle:** 🇻🇳 Vietnamese subtitles
-- **Background music:** procedural ambient pad (Web Audio, toggle remembered in `localStorage`)
 - **Quiz:** 3 picture-choice questions, Foxy says right/wrong, retry allowed; stars stored in `story:<id>`
 - **Retell:** speak one target sentence; lenient scoring (≥60 → 3★, ≥35 → 2★, else 1★) with encouragement, no phoneme hint; stars stored in `retell:<id>`
 
@@ -100,13 +99,11 @@ For narration timings, see **"Generating sample audio"** above (`scripts/gen-sto
 | 3 | "Nghe mình" (listen to self) | Plays back the recording | ⏳ pending |
 | 4 | Turn Wi-Fi off → reload | Header shows "chế độ đơn giản"; scoring still returns stars (Web Speech fallback) | ⏳ pending |
 | 5 | Close and reopen the app | Stars persist | ⏳ pending |
-| 6 | Stories → The Little Fox → play scene 1; tap 🎵 twice | Music stops, then starts again while the story keeps playing; selection persists across reload | ⏳ pending |
 | 7 | Stories → The Little Fox → play scene 1; tap the 🐢 speed button | Karaoke slows to 0.75×; the button becomes 🐇 | ⏳ pending |
 | 8 | Stories → The Little Fox → scene 1, tap the word "Foxy" | Until narration is generated, the word is spoken by the browser voice (speechSynthesis) and the karaoke pauses on it | ⏳ pending |
 | 9 | Stories → The Little Fox → finish quiz (3 questions), then Retell → speak "He wants an apple." | Lenient score (1–3 stars) appears; encouragement message shown | ⏳ pending |
 | 10 | After running `gen-story.mjs`: play scene 1 and tap 🐢 | 🐢 actually slows the audio (not just the karaoke) | ⏳ pending |
 | 11 | Retell → record once, go back to the player, tap a word | speechSynthesis word replay works after a mic recording | ⏳ pending |
-| 12 | Play with 🎵 on → lock the iPad → unlock and tap ▶ / 🎵 | Music resumes after lock/unlock instead of staying silent | ⏳ pending |
 
 ### Narration voice (giọng kể)
 
@@ -237,7 +234,7 @@ A full visual re-skin to the Claude Design handoff — routes, stores, scoring, 
 - **Daily Mission** (`/mission`) and **Mission Complete** (`/mission/done`) are new screens the design adds — Home's mission card now hands off to `/mission` (today's 3 steps, one at a time) instead of celebrating inline; finishing the mission routes to `/mission/done` for the confetti + Foxy cheer.
 - **Speak Lab** levels moved to `/levels` (a stairs layout, `LevelStairs.tsx`) with restyled level-select cards at `/level/:levelId`. The map links the two playable levels directly, so `/levels` is reached from the "🗣️ Xem các bậc" chip in the level-select header; that screen's back button goes to the map.
 - **Speak card** (`/practice/:cardId`) — restyled state chips (idle/listening/scored) and a countdown **number** under the word while recording, mirroring the 6 s auto-stop. "Tiếp theo →" stays inside the current level; the level's last card ends with "Hoàn thành 🎉" back at the level list.
-- **Story player/quiz** — restyled to the same card/token system; the player's speed, music, and subtitle switches use the new `Toggle` component. The quiz link under the controls is "Tiếp tục ▸" (coral, pulsing) once the story has ended and a quiet dashed "Bỏ qua ▸" before that, so the quiz is always one tap away.
+- **Story player/quiz** — restyled to the same card/token system; the player's speed and subtitle switches use the new `Toggle` component. The quiz link under the controls is "Tiếp tục ▸" (coral, pulsing) once the story has ended and a quiet dashed "Bỏ qua ▸" before that, so the quiz is always one tap away.
 - **Words** (`/words/:topic/:wordId`) — "Từ mới hôm nay 🧩 n/3" header over a flip card (front: emoji/IPA, back: Vietnamese + example sentence), replacing the old two-pane layout. Each face carries its own "Lật thẻ" button; the face turned away is `inert` + `aria-hidden`, so only the face the child is looking at is focusable.
 - **Sentence Builder** (`/sentence/:id`) — tiles are colored by grammatical role (who/does/what), with the legend between the tray and the tile pool.
 - **Parent Gate + Dashboard** (`/parent`) — the gate is a centered card with a 44px question and a 64px input; the dashboard header adds a weekly summary line ("Tuần này: N phút luyện · điểm phát âm trung bình N/100"), a "Khoá lại" control that re-locks without leaving the screen, a 14-day chart with a dashed target line at the daily limit, pronunciation averages as three cards, weak-phoneme tips in a highlighted note, and daily-limit quick-pick chips (15/20/30) alongside the existing number input.
@@ -301,7 +298,7 @@ pnpm --filter client exec vite --mode nossl --port 5174
 | 17 | Words → Food → any word card → tap the card (or the "Lật thẻ" button on the face) | Card flips (emoji/IPA face ↔ Vietnamese/example face) | ⏳ pending |
 | 18 | Sentence Builder → any sentence | Tiles are colored by role (who/does/what), with the legend between the tray and the tile pool | ⏳ pending |
 | 19 | Parent Dashboard → tap "Khoá lại" | Immediately re-locks and shows a fresh math question, without leaving `/parent` | ⏳ pending |
-| 20 | Story player → tap the music and subtitle switches | Toggle switches flip state and announce it (e.g. "Nhạc nền bật") | ⏳ pending |
+| 20 | Story player → tap the subtitle switch | Toggle switch flips state and announces it (e.g. "Phụ đề bật") | ⏳ pending |
 
 ## Architecture
 

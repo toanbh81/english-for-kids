@@ -82,16 +82,16 @@ describe('BackButton', () => {
 describe('Toggle', () => {
   it('is a switch that reports its state and flips on tap', () => {
     const onChange = vi.fn()
-    const { rerender } = render(<Toggle on={false} onChange={onChange} emoji="🎵" label="Nhạc nền" />)
+    const { rerender } = render(<Toggle on={false} onChange={onChange} emoji="🇻🇳" label="Phụ đề" />)
 
-    const toggle = screen.getByRole('switch', { name: /Nhạc nền/ })
+    const toggle = screen.getByRole('switch', { name: /Phụ đề/ })
     expect(toggle).toHaveAttribute('aria-checked', 'false')
-    expect(screen.getByText('Nhạc nền')).toBeInTheDocument()
+    expect(screen.getByText('Phụ đề')).toBeInTheDocument()
 
     fireEvent.click(toggle)
     expect(onChange).toHaveBeenCalledWith(true)
 
-    rerender(<Toggle on onChange={onChange} emoji="🎵" label="Nhạc nền" />)
+    rerender(<Toggle on onChange={onChange} emoji="🇻🇳" label="Phụ đề" />)
     expect(screen.getByRole('switch')).toHaveAttribute('aria-checked', 'true')
 
     fireEvent.click(screen.getByRole('switch'))
