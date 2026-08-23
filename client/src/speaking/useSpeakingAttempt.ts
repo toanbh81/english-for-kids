@@ -26,7 +26,9 @@ export function useSpeakingAttempt(opts: {
   onResult?: (result: PronunciationResult, blob: Blob | null) => void
 }): SpeakingAttempt {
   const autoStopMs = opts.autoStopMs ?? 6000
-  const rec = useRecorder({ maxMs: 8000 })
+  // The recorder must outlive the auto-stop, or a longer attempt (Story Voice opens the mic for
+  // 10 s) would find the MediaRecorder already closed and score an empty blob.
+  const rec = useRecorder({ maxMs: Math.max(8000, autoStopMs + 1000) })
   // Kept in a ref so a new callback identity (e.g. from a parent re-render) never re-fires it.
   const onResultRef = useRef(opts.onResult)
   onResultRef.current = opts.onResult
