@@ -1,0 +1,15 @@
+{
+  "id": "food",
+  "title": "Đồ ăn",
+  "emoji": "🍎",
+  "words": [
+    { "id": "food-apple", "topic": "food", "word": "apple", "ipa": "/ˈæpəl/", "emoji": "🍎", "audio": "/audio/words/apple.mp3", "vi": "quả táo", "example": "I eat an apple." },
+    { "id": "food-banana", "topic": "food", "word": "banana", "ipa": "/bəˈnænə/", "emoji": "🍌", "audio": "/audio/words/banana.mp3", "vi": "quả chuối", "example": "I like this banana." },
+    { "id": "food-bread", "topic": "food", "word": "bread", "ipa": "/bred/", "emoji": "🍞", "audio": "/audio/words/bread.mp3", "vi": "bánh mì", "example": "I eat some bread." },
+    { "id": "food-milk", "topic": "food", "word": "milk", "ipa": "/mɪlk/", "emoji": "🥛", "audio": "/audio/words/milk.mp3", "vi": "sữa", "example": "I drink milk." },
+    { "id": "food-egg", "topic": "food", "word": "egg", "ipa": "/eɡ/", "emoji": "🥚", "audio": "/audio/words/egg.mp3", "vi": "quả trứng", "example": "I eat one egg." },
+    { "id": "food-rice", "topic": "food", "word": "rice", "ipa": "/raɪs/", "emoji": "🍚", "audio": "/audio/words/rice.mp3", "vi": "cơm", "example": "I eat rice." },
+    { "id": "food-water", "topic": "food", "word": "water", "ipa": "/ˈwɔːtər/", "emoji": "💧", "audio": "/audio/words/water.mp3", "vi": "nước", "example": "I drink water." },
+    { "id": "food-cake", "topic": "food", "word": "cake", "ipa": "/keɪk/", "emoji": "🎂", "audio": "/audio/words/cake.mp3", "vi": "bánh ngọt", "example": "I like chocolate cake." }
+  ]
+}

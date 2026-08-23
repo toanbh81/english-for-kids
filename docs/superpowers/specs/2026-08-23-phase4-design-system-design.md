@@ -1,0 +1,35 @@
+# Phase 4 — Apply the Claude Design handoff (visual redesign)
+
+Source: Claude Design project `9c792842` — `Speak Up Prototype.dc.html` (interactive core flow) + `Speak Up Screens.dc.html` (remaining screens, components, tokens). Local reference: `docs/design/`. Phases 1–3 are on `main`/`phase3-words-mission` (Phase 3 merge pending; this phase branches from Phase 3).
+
+## Goal
+Re-skin every screen to the handoff's look — warm cream canvas, chunky offset shadows, Baloo 2 display type, the Foxy SVG mascot, island-map Home, and the card/state layouts of the prototype — **without changing behaviour**: routes, stores, scoring, hooks, data and the test contracts (texts, aria-labels, data-testids) stay, except where the design explicitly adds a screen (Daily Mission, Mission Complete).
+
+## Design tokens (Tailwind theme)
+- Colors: `cream-50 #FFF7EA`, `canvas #EFE5D6`, `ink-900 #4A3B33`, `ink-500 #8A7A6D`, `ink-300 #B0A18E`, `line-200 #EFE2CC`, `coral-500 #FF7A59`, `coral-600 #E05A3A`, `coral-text #F2603D`, `coral-50 #FFE9DF`, `teal-500 #2EC4B6`, `teal-600 #1FA396`, `teal-50 #E2F6F1`, `sun-400 #FFC533`, `sun-50 #FFF1C9`, `sun-700 #9A6B00`, `good-700 #2E8B4A / good-50 #E3F6E8 / good-300 #7ED99A`, `ok-700 #9A6B00 / ok-50 #FFF3D6 / ok-300 #FFD97E`, `fix-700 #C2354B / fix-50 #FFE3E6 / fix-300 #F8A3AE`, `sky-400 #7EC8F2`, `peach-400 #FF9A62`.
+- Keep the Phase-1 aliases working (`cream`, `coral`, `teal`, `star`, `good`, `ok`, `fix`) by pointing them at the new hexes, so existing class names and tests keep passing.
+- Fonts: `font-display` = "Baloo 2" (headings, buttons, practice words), `font-sans` = Nunito (body). Google Fonts import for both.
+- Shadows: `shadow-card` = `0 8px 0 #EFE2CC`; `shadow-chunky-coral` = `0 6px 0 #E05A3A`; `shadow-chunky-teal` = `0 6px 0 #1FA396`; `shadow-chunky-sun` = `0 5px 0 #EFDDA8`; `shadow-card-sm` = `0 5px 0 #EFE2CC`.
+- Radii: 16/20/24/28/34/full. Animations: `pulse`, `ring`, `fall`, `starDrop`, `bob`, `wiggle` (keyframes from the prototype).
+- Press feedback: `active:translate-y-[2px]` with reduced shadow.
+
+## Components (client/src/components/ui/)
+`Button` (variant primary coral / secondary teal / outline white-teal / ghost dashed; size md/lg; chunky shadow + press), `Card`, `BackButton` (66 px round white, "←", aria-label), `Toggle` (58×32 track + knob, label + emoji), `Chip` (pill label), `ProgressBar`, `Toast` (dark ink pill at top, auto-hide 1.4 s), `Foxy` (SVG mascot from the handoff; moods idle/listening/happy/cheer/surprised mapped to idle/listen/happy/cheer/wow; keeps `data-testid="foxy"` + `data-mood`; optional bubble), `SpeechBubble`, `StarRow` (★ filled sun-400 / empty line), `SceneDots`.
+
+## Screens (behaviour unchanged unless noted)
+1. **Home = island map** (`/`): top bar — Foxy (bob) + greeting bubble "Chào bé! 👋 / Hôm nay mình luyện nói nhé!"; week pill (7 day circles ⭐ done / dashed empty, labels T2…CN); total-stars pill. Landscape: dotted SVG path with 5 "islands" (🎧 Nghe kể chuyện, 🦁 Sound Zoo, 🎈 Word Pop, 🧩 Từ vựng, 🧱 Ghép câu) as 118–132 px circles with colored chunky shadow + name + star row; bottom-left mission card (title "🌞 Nhiệm vụ hôm nay", `n/3`, progress bar, CTA "Bắt đầu ▸" / "Hoàn thành rồi! 🎉 Chơi lại?"); bottom-right "Speak Up! 🦊" + parent link. Portrait: stacked layout per the Screens file (islands in a 2-column grid). Limit banner stays.
+2. **Daily Mission** (`/mission`, new): title "Nhiệm vụ hôm nay 🌞 / 3 bước nhỏ — khoảng 12 phút thôi!", 3 step cards (🎧 Nghe 1 truyện ≈4 phút, 🗣️ 5 thẻ phát âm ≈5 phút, 🧩 3 từ mới ≈3 phút) — the current/next step has a teal border + "Bước 1 · bắt đầu ở đây!"; done steps show ✓; Foxy cheer bottom-left; CTA "Bắt đầu 🎧" → the first incomplete step's route.
+3. **Mission Complete** (`/mission/done`, new): confetti (existing component, 44 pieces), Foxy cheer, "Nhiệm vụ hoàn thành! 🎉", "+N ⭐" (stars earned today from activity/stars), "🔥 Chuỗi N ngày liên tiếp — giỏi lắm!", button "Về bản đồ 🏝️". Home navigates here once per day when the mission becomes done (replaces the Home confetti overlay; `speakup.celebrated` guard reused).
+4. **Listening Player**: image area (SceneArt, radius 28) with overlay back button, "Cảnh ●○○○" pill, hint pill "👆 Chạm vào 1 từ để nghe lại"; karaoke words Baloo 32 px / active 44 px coral-text / read `#CDBFA9`; subtitle ink-300; controls row: speed pill (🐢/🐇 chips), 104 px teal play, toggles (🎵 Nhạc nền, 🇻🇳 Phụ đề Việt), continue button ("Tiếp tục ▸" coral pulsing when ended, else dashed ghost "Bỏ qua ▸" → quiz).
+5. **Listening Quiz**: Foxy (mood wow on wrong, happy on right) + question bubble with 🔊; three 250×270 option cards (emoji 110 px, label), selected → green/red ring + badge ✅/🙈; banner "Đúng rồi! Giỏi quá! 🎉" / "Gần đúng rồi — thử lại nhé! 💪"; after 3 questions the existing result (stars + links) restyled.
+6. **Speak Lab card**: header "Thẻ n/N" + dots; ready: meaning card (emoji 104 px + "nghĩa của từ") | word (Baloo 64/46 px) + IPA + "🔊 Nghe mẫu" teal chip | mouth card (👄 wiggle, "Khẩu hình miệng"); mic 150 px coral with halo + "Chạm để nói nào!"; recording: faded word, ring animation around mic, countdown seconds (from the 6 s auto-stop), Foxy listen "Foxy đang lắng nghe…"; result: starDrop stars, scored-word chips (✓/～/✗ with good/ok/fix tones), tip card (👅), outline buttons "🎧 Nghe mình" "🔊 Nghe mẫu", 4 bars (Chính xác/Trôi chảy/Đầy đủ/Ngữ điệu from the result), "↻ Thử lại" / "Tiếp theo ▸" ("Hoàn thành 🎉" on the last card), confetti on 3 stars.
+7. **Speak Lab level select**: stair layout of 5 levels (🦁 Sound Zoo, 🎈 Word Pop, 👯 Minimal Pairs, ⭐ Sentence Stars, 🎭 Story Voice) with stars; levels 3–5 shown locked 🔒 (not implemented yet); Foxy on the current step.
+8. **Words**: "Từ mới hôm nay 🧩 n/3" header, flip card front (emoji, word, 🔊, IPA, "MẶT TRƯỚC") / back (vi, example with 🔊 "Nghe câu ví dụ", "MẶT SAU"), "🎤 Nói để mở khoá", unlock badge "🔓", Foxy wow.
+9. **Sentence Builder**: "Ghép câu nào! 🧱", tray "thả vào đây" (tap-to-place stays; copy says "Chạm"), tiles colored by role thirds (🟦 Ai? / 🟧 Làm gì? / 🟨 Cái gì?), "🔊 Đọc câu cho bé nghe", mic.
+10. **Parent Dashboard**: "Góc phụ huynh" header with summary line (week minutes, avg score), "🔐 Đã mở khoá… · Khoá lại" button, chart with target line at the daily limit, sections restyled, limit as 3 chips (15/20/30) + number input.
+11. Story list, word topics/list, sentence list, retell, stories quiz result: card grid restyle with the same tokens.
+
+## Constraints
+Tap targets ≥ 64 px, mic ≥ 120 px; Vietnamese copy; all existing tests keep passing (update only assertions that encode old visual classes, never behaviour); lint/typecheck/build green; bundle stays under the PWA precache budget; fonts via Google Fonts (already allowed).
+
+Status: implemented 2026-08-23 on branch phase4-design (tasks 1–6).

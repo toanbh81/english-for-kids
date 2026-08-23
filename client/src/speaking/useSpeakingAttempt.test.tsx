@@ -65,3 +65,31 @@ it('shows a friendly error when mic permission is denied', async () => {
   act(() => { result.current.onMic() })
   await waitFor(() => expect(result.current.error).toMatch(/cho phép dùng mic/))
 })
+
+it('calls onResult exactly once per scored attempt, with the result and recorded blob', async () => {
+  const onResult = vi.fn()
+  const { result, rerender } = renderHook(
+    (props: { onResult: typeof onResult }) => useSpeakingAttempt({ targetText: 'cat', onResult: props.onResult }),
+    { initialProps: { onResult } },
+  )
+
+  await waitFor(() => expect(result.current.micState).toBe('idle'))
+
+  act(() => { result.current.onMic() })
+  await waitFor(() => expect(result.current.micState).toBe('recording'))
+
+  act(() => { result.current.onMic() })
+  await waitFor(() => expect(result.current.result?.overall).toBe(85))
+
+  expect(onResult).toHaveBeenCalledTimes(1)
+  expect(onResult).toHaveBeenCalledWith(expect.objectContaining({ overall: 85 }), expect.any(Blob))
+
+  // A new callback identity (e.g. a re-render) must not re-invoke onResult for the same result.
+  const onResult2 = vi.fn()
+  rerender({ onResult: onResult2 })
+  expect(onResult2).not.toHaveBeenCalled()
+
+  act(() => { result.current.reset() })
+  expect(onResult).toHaveBeenCalledTimes(1)
+  expect(onResult2).not.toHaveBeenCalled()
+})

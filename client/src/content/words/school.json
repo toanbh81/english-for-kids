@@ -1,0 +1,15 @@
+{
+  "id": "school",
+  "title": "Trường học",
+  "emoji": "🏫",
+  "words": [
+    { "id": "school-book", "topic": "school", "word": "book", "ipa": "/bʊk/", "emoji": "📖", "audio": "/audio/words/book.mp3", "vi": "quyển sách", "example": "I read a book." },
+    { "id": "school-pen", "topic": "school", "word": "pen", "ipa": "/pen/", "emoji": "🖊️", "audio": "/audio/words/pen.mp3", "vi": "cây bút mực", "example": "I write with a pen." },
+    { "id": "school-teacher", "topic": "school", "word": "teacher", "ipa": "/ˈtiːtʃər/", "emoji": "👩‍🏫", "audio": "/audio/words/teacher.mp3", "vi": "cô giáo", "example": "My teacher is kind." },
+    { "id": "school-desk", "topic": "school", "word": "desk", "ipa": "/desk/", "emoji": "🪑", "audio": "/audio/words/desk.mp3", "vi": "cái bàn học", "example": "I sit at my desk." },
+    { "id": "school-bag", "topic": "school", "word": "bag", "ipa": "/bæɡ/", "emoji": "🎒", "audio": "/audio/words/bag.mp3", "vi": "cái cặp sách", "example": "I carry my bag." },
+    { "id": "school-friend", "topic": "school", "word": "friend", "ipa": "/frend/", "emoji": "🧑‍🤝‍🧑", "audio": "/audio/words/friend.mp3", "vi": "người bạn", "example": "She is my friend." },
+    { "id": "school-ruler", "topic": "school", "word": "ruler", "ipa": "/ˈruːlər/", "emoji": "📏", "audio": "/audio/words/ruler.mp3", "vi": "cây thước kẻ", "example": "I use a ruler." },
+    { "id": "school-clock", "topic": "school", "word": "clock", "ipa": "/klɒk/", "emoji": "⏰", "audio": "/audio/words/clock.mp3", "vi": "đồng hồ", "example": "The clock is big." }
+  ]
+}

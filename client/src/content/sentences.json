@@ -1,0 +1,14 @@
+[
+  { "id": "s1", "topic": "food", "words": ["I", "eat", "an", "apple."], "vi": "Tôi ăn một quả táo.", "audio": "/audio/sentences/s1.mp3" },
+  { "id": "s2", "topic": "food", "words": ["Milk", "is", "white."], "vi": "Sữa có màu trắng.", "audio": "/audio/sentences/s2.mp3" },
+  { "id": "s3", "topic": "food", "words": ["I", "like", "bread", "and", "eggs."], "vi": "Tôi thích bánh mì và trứng.", "audio": "/audio/sentences/s3.mp3" },
+  { "id": "s4", "topic": "food", "words": ["Water", "is", "good", "for", "me."], "vi": "Nước tốt cho tôi.", "audio": "/audio/sentences/s4.mp3" },
+  { "id": "s5", "topic": "school", "words": ["This", "is", "my", "book."], "vi": "Đây là quyển sách của tôi.", "audio": "/audio/sentences/s5.mp3" },
+  { "id": "s6", "topic": "school", "words": ["My", "teacher", "is", "kind."], "vi": "Cô giáo của tôi rất hiền.", "audio": "/audio/sentences/s6.mp3" },
+  { "id": "s7", "topic": "school", "words": ["I", "have", "a", "red", "pen."], "vi": "Tôi có một cây bút màu đỏ.", "audio": "/audio/sentences/s7.mp3" },
+  { "id": "s8", "topic": "school", "words": ["My", "bag", "is", "big."], "vi": "Cặp sách của tôi to.", "audio": "/audio/sentences/s8.mp3" },
+  { "id": "s9", "topic": "family", "words": ["This", "is", "my", "mother."], "vi": "Đây là mẹ của tôi.", "audio": "/audio/sentences/s9.mp3" },
+  { "id": "s10", "topic": "family", "words": ["My", "father", "is", "tall."], "vi": "Bố của tôi cao.", "audio": "/audio/sentences/s10.mp3" },
+  { "id": "s11", "topic": "family", "words": ["I", "love", "my", "family."], "vi": "Tôi yêu gia đình của tôi.", "audio": "/audio/sentences/s11.mp3" },
+  { "id": "s12", "topic": "family", "words": ["My", "sister", "has", "a", "baby", "doll."], "vi": "Chị của tôi có một con búp bê em bé.", "audio": "/audio/sentences/s12.mp3" }
+]

@@ -19,9 +19,17 @@ export type SpeakingAttempt = {
   reset(): void
 }
 
-export function useSpeakingAttempt(opts: { targetText: string; autoStopMs?: number; resetKey?: string }): SpeakingAttempt {
+export function useSpeakingAttempt(opts: {
+  targetText: string
+  autoStopMs?: number
+  resetKey?: string
+  onResult?: (result: PronunciationResult, blob: Blob | null) => void
+}): SpeakingAttempt {
   const autoStopMs = opts.autoStopMs ?? 6000
   const rec = useRecorder({ maxMs: 8000 })
+  // Kept in a ref so a new callback identity (e.g. from a parent re-render) never re-fires it.
+  const onResultRef = useRef(opts.onResult)
+  onResultRef.current = opts.onResult
   const [scorer, setScorer] = useState<ScorerBundle | null>(null)
   const [result, setResult] = useState<PronunciationResult | null>(null)
   const [lastBlob, setLastBlob] = useState<Blob | null>(null)
@@ -75,6 +83,7 @@ export function useSpeakingAttempt(opts: { targetText: string; autoStopMs?: numb
     try {
       const r = await scoreWithTokenRefresh(scorer, blob, opts.targetText)
       setResult(r)
+      onResultRef.current?.(r, isWebSpeech ? null : blob)
     } catch (e) {
       setError('Không nghe rõ, bé thử lại nhé!'); console.error(e)
     } finally {

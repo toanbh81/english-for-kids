@@ -1,4 +1,23 @@
-@import url('https://fonts.googleapis.com/css2?family=Nunito:wght@600;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Baloo+2:wght@700;800&family=Nunito:wght@600;700;800&display=swap');
 @tailwind base; @tailwind components; @tailwind utilities;
 html, body, #root { height: 100%; }
-body { @apply bg-cream font-sans text-slate-800; -webkit-user-select: none; }
+body { @apply bg-cream-50 font-sans text-ink-900; -webkit-user-select: none; }
+
+@keyframes shake { 0%,100%{transform:translateX(0)} 25%{transform:translateX(-8px)} 75%{transform:translateX(8px)} }
+.animate-shake{animation:shake .4s}
+
+/* Mission-complete confetti: 1.6 s fall, matched by LIFETIME_MS in components/Confetti.tsx. */
+@keyframes confetti-fall { from{transform:translateY(0) rotate(0deg);opacity:1} to{transform:translateY(110vh) rotate(360deg);opacity:0} }
+.animate-confetti-fall{animation:confetti-fall 1.6s linear forwards}
+
+/* The app bobs, wiggles, pulses and throws confetti by default. A child who asked the system for
+ * less motion (vestibular trouble, motion sickness) gets the same screens, standing still: the
+ * animations still run to their end state, they just get there instantly. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

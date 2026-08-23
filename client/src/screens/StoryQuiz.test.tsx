@@ -1,10 +1,10 @@
 import { render, screen, fireEvent, act } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
-import { findStory } from '../content/stories'
+import { findStory, STORIES } from '../content/stories'
 import { StoryQuiz } from './StoryQuiz'
 
 function renderQuiz(id = 'little-fox') {
-  render(
+  return render(
     <MemoryRouter initialEntries={[`/story/${id}/quiz`]}>
       <Routes>
         <Route path="/story/:id/quiz" element={<StoryQuiz />} />
@@ -61,6 +61,24 @@ it('a wrong first attempt on one question, corrected, still passes the other two
   const saved = JSON.parse(localStorage.getItem('speakup.stars') ?? '{}')
   expect(saved['story:little-fox']).toBe(2)
   expect(screen.getByText('Bé trả lời đúng 2/3')).toBeInTheDocument()
+})
+
+it('never tints the answer keyword inside the question, in any story', () => {
+  for (const story of STORIES) {
+    const { container, unmount } = renderQuiz(story.id)
+
+    for (const q of story.quiz) {
+      // The question renders as one uninterrupted text node — no coral-tinted span giving the
+      // answer away before the child has picked a card.
+      expect(screen.getByText(q.q)).toBeInTheDocument()
+      expect(container.querySelectorAll('.text-coral-text')).toHaveLength(0)
+
+      fireEvent.click(screen.getByRole('button', { name: q.options[q.answer].label }))
+      act(() => { vi.advanceTimersByTime(900) })
+    }
+
+    unmount()
+  }
 })
 
 it('shows a not-found message for an unknown story id', () => {
