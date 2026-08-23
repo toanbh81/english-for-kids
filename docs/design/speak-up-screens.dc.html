@@ -1,0 +1,517 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <meta name="design_doc_mode" content="canvas">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;600;700;800&family=Nunito:wght@500;600;700;800&display=swap" rel="stylesheet">
+  <script src="./image-slot.js"></script>
+  <style>
+    html,body{margin:0;padding:0;background:#EFE5D6;}
+    *{box-sizing:border-box;-webkit-font-smoothing:antialiased;}
+    a{color:#F2603D;} a:hover{color:#C94E30;}
+    @keyframes pulse{0%{transform:scale(1)}50%{transform:scale(1.07)}100%{transform:scale(1)}}
+    @keyframes ring{0%{transform:scale(1);opacity:.5}100%{transform:scale(2);opacity:0}}
+    @keyframes bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-9px)}}
+  </style>
+</helmet>
+<section style="padding:50px;display:flex;flex-direction:column;gap:56px;font-family:'Nunito',sans-serif;color:#4A3B33;">
+  <div>
+    <div style="font-family:'Baloo 2',sans-serif;font-size:40px;font-weight:800;">Speak Up! — Màn hình còn lại + Components</div>
+    <div style="font-size:19px;font-weight:700;color:#8A7A6D;">Prototype flow tương tác nằm ở file riêng · các frame dưới đây là bản tĩnh</div>
+  </div>
+
+  <!-- ============ ROW: Speak Lab levels + Minimal Pairs ============ -->
+  <div style="display:flex;flex-wrap:wrap;gap:44px;align-items:flex-start;">
+
+    <div id="s5" style="display:flex;flex-direction:column;gap:12px;">
+      <div style="display:flex;align-items:center;gap:10px;"><span style="background:#4A3B33;color:#FFF7EA;font-family:'Baloo 2',sans-serif;font-size:15px;font-weight:800;padding:6px 14px;border-radius:12px;">5</span><span style="font-weight:800;color:#8A7A6D;font-size:17px;">Speak Lab – Chọn cấp · landscape 1194×834</span></div>
+      <div style="width:1194px;height:834px;background:#FFF7EA;border-radius:38px;position:relative;overflow:hidden;box-shadow:0 18px 50px rgba(74,59,51,.15);">
+        <div style="position:absolute;right:-80px;top:-100px;width:320px;height:320px;border-radius:50%;background:#E2F6F1;"></div>
+        <div style="position:absolute;left:28px;top:28px;width:66px;height:66px;border-radius:50%;background:#FFFFFF;box-shadow:0 5px 0 #EFE2CC;display:flex;align-items:center;justify-content:center;font-size:28px;color:#B0A18E;">←</div>
+        <div style="position:absolute;left:0;right:0;top:40px;text-align:center;">
+          <div style="font-family:'Baloo 2',sans-serif;font-size:40px;font-weight:800;">Speak Lab 🗣️</div>
+          <div style="font-size:20px;font-weight:700;color:#8A7A6D;margin-top:4px;">Leo từng bậc — mỗi bậc một trò mới!</div>
+        </div>
+        <div style="position:absolute;left:60px;top:560px;width:196px;height:180px;background:#FFFFFF;border-radius:28px;box-shadow:0 8px 0 #EFE2CC;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;">
+          <div style="font-size:56px;">🦁</div>
+          <div style="font-family:'Baloo 2',sans-serif;font-size:21px;font-weight:800;">Sound Zoo</div>
+          <div style="font-size:17px;letter-spacing:2px;color:#FFB020;">★★★</div>
+        </div>
+        <div style="position:absolute;left:290px;top:480px;width:196px;height:180px;background:#FFFFFF;border-radius:28px;box-shadow:0 8px 0 #EFE2CC;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;">
+          <div style="font-size:56px;">🎈</div>
+          <div style="font-family:'Baloo 2',sans-serif;font-size:21px;font-weight:800;">Word Pop</div>
+          <div style="font-size:17px;letter-spacing:2px;"><span style="color:#FFB020;">★★</span><span style="color:#E2D5C0;">★</span></div>
+        </div>
+        <div style="position:absolute;left:520px;top:400px;width:210px;height:196px;background:#FFFFFF;border-radius:28px;box-shadow:0 8px 0 #1FA396, 0 0 0 6px #2EC4B6;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;">
+          <div style="font-size:56px;">👯</div>
+          <div style="font-family:'Baloo 2',sans-serif;font-size:21px;font-weight:800;">Minimal Pairs</div>
+          <div style="background:#E2F6F1;color:#1FA396;font-weight:800;font-size:15px;border-radius:12px;padding:4px 14px;">Đang học</div>
+        </div>
+        <div style="position:absolute;left:560px;top:288px;width:110px;height:106px;animation:bob 3s ease-in-out infinite;">{{ foxCheer }}</div>
+        <div style="position:absolute;left:764px;top:330px;width:196px;height:180px;background:#F3EADA;border-radius:28px;box-shadow:0 8px 0 #E2D5C0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;opacity:.8;">
+          <div style="font-size:48px;">🔒</div>
+          <div style="font-family:'Baloo 2',sans-serif;font-size:21px;font-weight:800;color:#A79781;">Sentence Stars</div>
+        </div>
+        <div style="position:absolute;left:988px;top:250px;width:180px;height:180px;background:#F3EADA;border-radius:28px;box-shadow:0 8px 0 #E2D5C0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;opacity:.8;">
+          <div style="font-size:48px;">🔒</div>
+          <div style="font-family:'Baloo 2',sans-serif;font-size:20px;font-weight:800;color:#A79781;">Story Voice</div>
+        </div>
+        <svg style="position:absolute;left:0;bottom:0;width:1194px;height:834px;pointer-events:none;" viewBox="0 0 1194 834" fill="none"><path d="M160 550 C 240 500, 320 520, 390 470 S 560 380, 630 390 M 740 320 C 820 300, 900 320, 990 240" stroke="#EAD9BE" stroke-width="10" stroke-linecap="round" stroke-dasharray="2 22"></path></svg>
+      </div>
+    </div>
+
+    <div id="s7" style="display:flex;flex-direction:column;gap:12px;">
+      <div style="display:flex;align-items:center;gap:10px;"><span style="background:#4A3B33;color:#FFF7EA;font-family:'Baloo 2',sans-serif;font-size:15px;font-weight:800;padding:6px 14px;border-radius:12px;">7</span><span style="font-weight:800;color:#8A7A6D;font-size:17px;">Minimal Pairs · landscape 1194×834</span></div>
+      <div style="width:1194px;height:834px;background:#FFF7EA;border-radius:38px;position:relative;overflow:hidden;box-shadow:0 18px 50px rgba(74,59,51,.15);">
+        <div style="position:absolute;left:28px;top:28px;width:66px;height:66px;border-radius:50%;background:#FFFFFF;box-shadow:0 5px 0 #EFE2CC;display:flex;align-items:center;justify-content:center;font-size:28px;color:#B0A18E;">←</div>
+        <div style="position:absolute;left:0;right:0;top:44px;display:flex;flex-direction:column;align-items:center;gap:14px;">
+          <div style="font-family:'Baloo 2',sans-serif;font-size:36px;font-weight:800;">Nghe rồi chọn từ đúng nhé! 👂</div>
+          <div style="width:88px;height:88px;border-radius:50%;background:#2EC4B6;color:#FFFFFF;display:flex;align-items:center;justify-content:center;font-size:38px;box-shadow:0 7px 0 #1FA396;animation:pulse 1.8s ease-in-out infinite;">🔊</div>
+        </div>
+        <div style="position:absolute;left:0;right:0;top:250px;display:flex;justify-content:center;gap:56px;">
+          <div style="width:330px;height:340px;border-radius:34px;background:#FFFFFF;box-shadow:0 10px 0 #7ED99A, 0 0 0 7px #B9ECC8;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;">
+            <div style="font-size:110px;line-height:1;">🚢</div>
+            <div style="font-family:'Baloo 2',sans-serif;font-size:40px;font-weight:800;">ship</div>
+            <div style="font-size:20px;font-weight:700;color:#A79781;">/ʃɪp/</div>
+            <div style="font-size:32px;">✅</div>
+          </div>
+          <div style="width:330px;height:340px;border-radius:34px;background:#FFFFFF;box-shadow:0 10px 0 #EFE2CC;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;">
+            <div style="font-size:110px;line-height:1;">🐑</div>
+            <div style="font-family:'Baloo 2',sans-serif;font-size:40px;font-weight:800;">sheep</div>
+            <div style="font-size:20px;font-weight:700;color:#A79781;">/ʃiːp/</div>
+            <div style="font-size:32px;height:38px;"> </div>
+          </div>
+        </div>
+        <div style="position:absolute;left:0;right:0;bottom:56px;display:flex;justify-content:center;align-items:center;gap:24px;">
+          <div style="width:92px;height:88px;">{{ foxHappy }}</div>
+          <div style="background:#FFFFFF;border-radius:22px;border-bottom-left-radius:6px;padding:16px 24px;box-shadow:0 5px 0 #EFE2CC;font-family:'Baloo 2',sans-serif;font-size:23px;font-weight:800;">Đúng rồi! Giờ đọc <span style="color:#F2603D;">cả hai từ</span> nào!</div>
+          <div style="width:120px;height:120px;border-radius:50%;background:#FF7A59;box-shadow:0 8px 0 #E05A3A, 0 0 0 10px #FFE3D7;display:flex;align-items:center;justify-content:center;font-size:48px;">🎤</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ ROW: Words + Sentence Builder ============ -->
+  <div style="display:flex;flex-wrap:wrap;gap:44px;align-items:flex-start;">
+
+    <div id="s8" style="display:flex;flex-direction:column;gap:12px;">
+      <div style="display:flex;align-items:center;gap:10px;"><span style="background:#4A3B33;color:#FFF7EA;font-family:'Baloo 2',sans-serif;font-size:15px;font-weight:800;padding:6px 14px;border-radius:12px;">8</span><span style="font-weight:800;color:#8A7A6D;font-size:17px;">Words – Thẻ từ vựng · landscape 1194×834</span></div>
+      <div style="width:1194px;height:834px;background:#FFF7EA;border-radius:38px;position:relative;overflow:hidden;box-shadow:0 18px 50px rgba(74,59,51,.15);">
+        <div style="position:absolute;left:28px;top:28px;width:66px;height:66px;border-radius:50%;background:#FFFFFF;box-shadow:0 5px 0 #EFE2CC;display:flex;align-items:center;justify-content:center;font-size:28px;color:#B0A18E;">←</div>
+        <div style="position:absolute;left:0;right:0;top:44px;text-align:center;">
+          <div style="font-family:'Baloo 2',sans-serif;font-size:36px;font-weight:800;">Từ mới hôm nay 🧩 <span style="color:#2EA79B;">2/3</span></div>
+          <div style="font-size:19px;font-weight:700;color:#8A7A6D;margin-top:4px;">Chạm thẻ để lật — nói đúng để mở khoá ngôi sao!</div>
+        </div>
+        <div style="position:absolute;left:0;right:0;top:180px;display:flex;justify-content:center;gap:60px;">
+          <div style="display:flex;flex-direction:column;align-items:center;gap:12px;">
+            <div style="width:380px;height:400px;border-radius:34px;background:#FFFFFF;box-shadow:0 10px 0 #EFE2CC;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;">
+              <div style="font-size:130px;line-height:1;">🐰</div>
+              <div style="font-family:'Baloo 2',sans-serif;font-size:48px;font-weight:800;">rabbit</div>
+              <div style="display:flex;align-items:center;gap:8px;background:#E2F6F1;color:#1FA396;font-weight:800;font-size:19px;border-radius:16px;padding:10px 20px;">🔊 /ˈræb.ɪt/</div>
+            </div>
+            <div style="font-size:16px;font-weight:800;color:#B0A18E;">MẶT TRƯỚC</div>
+          </div>
+          <div style="display:flex;flex-direction:column;align-items:center;gap:12px;">
+            <div style="width:380px;height:400px;border-radius:34px;background:#FFF1E6;box-shadow:0 10px 0 #F2DFC9;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;padding:30px;">
+              <div style="font-family:'Baloo 2',sans-serif;font-size:44px;font-weight:800;color:#E05A3A;">con thỏ</div>
+              <div style="font-size:26px;font-weight:700;text-align:center;line-height:1.5;">"The <span style="color:#F2603D;font-weight:800;">rabbit</span> is fast!"</div>
+              <div style="display:flex;align-items:center;gap:8px;background:#FFFFFF;color:#1FA396;font-weight:800;font-size:19px;border-radius:16px;padding:10px 20px;box-shadow:0 4px 0 #F2DFC9;">🔊 Nghe câu ví dụ</div>
+            </div>
+            <div style="font-size:16px;font-weight:800;color:#B0A18E;">MẶT SAU</div>
+          </div>
+        </div>
+        <div style="position:absolute;left:0;right:0;bottom:52px;display:flex;justify-content:center;align-items:center;gap:26px;">
+          <div style="display:flex;align-items:center;gap:12px;background:#FF7A59;color:#FFFFFF;font-family:'Baloo 2',sans-serif;font-size:26px;font-weight:800;padding:18px 44px;border-radius:26px;box-shadow:0 7px 0 #E05A3A;">🎤 Nói để mở khoá</div>
+          <div style="display:flex;align-items:center;gap:10px;background:#FFF1C9;border-radius:20px;padding:14px 22px;box-shadow:0 5px 0 #EFDDA8;font-family:'Baloo 2',sans-serif;font-size:22px;font-weight:800;color:#9A6B00;">🔓 +1 ⭐</div>
+          <div style="width:86px;height:82px;">{{ foxWow }}</div>
+        </div>
+      </div>
+    </div>
+
+    <div id="s9" style="display:flex;flex-direction:column;gap:12px;">
+      <div style="display:flex;align-items:center;gap:10px;"><span style="background:#4A3B33;color:#FFF7EA;font-family:'Baloo 2',sans-serif;font-size:15px;font-weight:800;padding:6px 14px;border-radius:12px;">9</span><span style="font-weight:800;color:#8A7A6D;font-size:17px;">Sentence Builder · landscape 1194×834</span></div>
+      <div style="width:1194px;height:834px;background:#FFF7EA;border-radius:38px;position:relative;overflow:hidden;box-shadow:0 18px 50px rgba(74,59,51,.15);">
+        <div style="position:absolute;left:28px;top:28px;width:66px;height:66px;border-radius:50%;background:#FFFFFF;box-shadow:0 5px 0 #EFE2CC;display:flex;align-items:center;justify-content:center;font-size:28px;color:#B0A18E;">←</div>
+        <div style="position:absolute;left:0;right:0;top:44px;text-align:center;">
+          <div style="font-family:'Baloo 2',sans-serif;font-size:36px;font-weight:800;">Ghép câu nào! 🧱</div>
+          <div style="font-size:19px;font-weight:700;color:#8A7A6D;margin-top:4px;">Kéo các khối từ thả vào khay câu</div>
+        </div>
+        <div style="position:absolute;left:0;right:0;top:170px;display:flex;justify-content:center;">
+          <div style="display:flex;gap:16px;background:#FFFFFF;border-radius:28px;padding:24px;box-shadow:inset 0 0 0 4px #EFE2CC;">
+            <div style="background:#2EC4B6;color:#FFFFFF;font-family:'Baloo 2',sans-serif;font-size:30px;font-weight:800;padding:18px 30px;border-radius:20px;box-shadow:0 6px 0 #1FA396;">The cat</div>
+            <div style="background:#FF9A62;color:#FFFFFF;font-family:'Baloo 2',sans-serif;font-size:30px;font-weight:800;padding:18px 30px;border-radius:20px;box-shadow:0 6px 0 #E07A42;">is eating</div>
+            <div style="width:170px;border-radius:20px;border:4px dashed #E2D5C0;display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:800;color:#C9BBA8;">thả vào đây</div>
+          </div>
+        </div>
+        <div style="position:absolute;left:0;right:0;top:340px;display:flex;justify-content:center;gap:14px;font-size:15px;font-weight:800;">
+          <span style="background:#E2F6F1;color:#1FA396;border-radius:12px;padding:6px 14px;">🟦 Ai?</span>
+          <span style="background:#FFE9DF;color:#E05A3A;border-radius:12px;padding:6px 14px;">🟧 Làm gì?</span>
+          <span style="background:#FFF1C9;color:#9A6B00;border-radius:12px;padding:6px 14px;">🟨 Cái gì?</span>
+        </div>
+        <div style="position:absolute;left:0;right:0;top:410px;display:flex;justify-content:center;flex-wrap:wrap;gap:18px;padding:0 140px;">
+          <div style="background:#2EC4B6;color:#FFFFFF;font-family:'Baloo 2',sans-serif;font-size:26px;font-weight:800;padding:16px 26px;border-radius:18px;box-shadow:0 6px 0 #1FA396;opacity:.45;">The cat</div>
+          <div style="background:#2EC4B6;color:#FFFFFF;font-family:'Baloo 2',sans-serif;font-size:26px;font-weight:800;padding:16px 26px;border-radius:18px;box-shadow:0 6px 0 #1FA396;">The dog</div>
+          <div style="background:#FF9A62;color:#FFFFFF;font-family:'Baloo 2',sans-serif;font-size:26px;font-weight:800;padding:16px 26px;border-radius:18px;box-shadow:0 6px 0 #E07A42;opacity:.45;">is eating</div>
+          <div style="background:#FF9A62;color:#FFFFFF;font-family:'Baloo 2',sans-serif;font-size:26px;font-weight:800;padding:16px 26px;border-radius:18px;box-shadow:0 6px 0 #E07A42;">is running</div>
+          <div style="background:#FFC533;color:#7A5600;font-family:'Baloo 2',sans-serif;font-size:26px;font-weight:800;padding:16px 26px;border-radius:18px;box-shadow:0 6px 0 #DFA918;">fish 🐟</div>
+          <div style="background:#FFC533;color:#7A5600;font-family:'Baloo 2',sans-serif;font-size:26px;font-weight:800;padding:16px 26px;border-radius:18px;box-shadow:0 6px 0 #DFA918;">a ball ⚽</div>
+        </div>
+        <div style="position:absolute;left:0;right:0;bottom:52px;display:flex;justify-content:center;align-items:center;gap:26px;">
+          <div style="display:flex;align-items:center;gap:10px;background:#FFFFFF;border:3px solid #C4E8E1;color:#1FA396;font-family:'Baloo 2',sans-serif;font-size:24px;font-weight:800;padding:16px 32px;border-radius:24px;">🔊 Đọc câu cho bé nghe</div>
+          <div style="width:120px;height:120px;border-radius:50%;background:#FF7A59;box-shadow:0 8px 0 #E05A3A, 0 0 0 10px #FFE3D7;display:flex;align-items:center;justify-content:center;font-size:48px;">🎤</div>
+          <div style="width:90px;height:86px;">{{ foxHappy }}</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ ROW: Parent Dashboard ============ -->
+  <div id="s10" style="display:flex;flex-direction:column;gap:12px;">
+    <div style="display:flex;align-items:center;gap:10px;"><span style="background:#4A3B33;color:#FFF7EA;font-family:'Baloo 2',sans-serif;font-size:15px;font-weight:800;padding:6px 14px;border-radius:12px;">10</span><span style="font-weight:800;color:#8A7A6D;font-size:17px;">Parent Dashboard · landscape 1194×834 (mở bằng câu hỏi 7 × 8 = ?)</span></div>
+    <div style="width:1194px;height:834px;background:#F7F5F1;border-radius:38px;position:relative;overflow:hidden;box-shadow:0 18px 50px rgba(74,59,51,.15);padding:36px 40px;display:flex;flex-direction:column;gap:22px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;">
+        <div>
+          <div style="font-family:'Nunito',sans-serif;font-size:28px;font-weight:800;color:#3B342E;">Góc phụ huynh</div>
+          <div style="font-size:16px;font-weight:600;color:#8B8378;">Tuần này: 86 phút luyện · điểm phát âm trung bình 78/100</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:12px;background:#FFFFFF;border:1px solid #E5DFD5;border-radius:14px;padding:10px 18px;font-size:15px;font-weight:700;color:#8B8378;">🔐 Đã mở khoá bằng "7 × 8 = ?" · <span style="color:#3B342E;">Khoá lại</span></div>
+      </div>
+      <div style="display:flex;gap:22px;flex:1;">
+        <div style="flex:1.4;display:flex;flex-direction:column;gap:22px;">
+          <div style="background:#FFFFFF;border:1px solid #E5DFD5;border-radius:18px;padding:22px 24px;flex:1;">
+            <div style="font-size:17px;font-weight:800;color:#3B342E;margin-bottom:4px;">Phút luyện mỗi ngày · 2 tuần</div>
+            <div style="font-size:14px;font-weight:600;color:#8B8378;margin-bottom:16px;">Mục tiêu 15 phút/ngày (đường kẻ)</div>
+            <div style="position:relative;height:170px;">
+              <div style="position:absolute;left:0;right:0;top:56px;border-top:2px dashed #D9D2C6;"></div>
+              <div style="position:absolute;inset:0;display:flex;align-items:flex-end;gap:10px;">
+                <div style="flex:1;height:52%;background:#2EA79B;border-radius:6px 6px 0 0;"></div>
+                <div style="flex:1;height:70%;background:#2EA79B;border-radius:6px 6px 0 0;"></div>
+                <div style="flex:1;height:34%;background:#D9D2C6;border-radius:6px 6px 0 0;"></div>
+                <div style="flex:1;height:80%;background:#2EA79B;border-radius:6px 6px 0 0;"></div>
+                <div style="flex:1;height:62%;background:#2EA79B;border-radius:6px 6px 0 0;"></div>
+                <div style="flex:1;height:0%;background:#D9D2C6;border-radius:6px 6px 0 0;"></div>
+                <div style="flex:1;height:44%;background:#D9D2C6;border-radius:6px 6px 0 0;"></div>
+                <div style="flex:1;height:66%;background:#2EA79B;border-radius:6px 6px 0 0;"></div>
+                <div style="flex:1;height:74%;background:#2EA79B;border-radius:6px 6px 0 0;"></div>
+                <div style="flex:1;height:58%;background:#2EA79B;border-radius:6px 6px 0 0;"></div>
+                <div style="flex:1;height:88%;background:#2EA79B;border-radius:6px 6px 0 0;"></div>
+                <div style="flex:1;height:50%;background:#2EA79B;border-radius:6px 6px 0 0;"></div>
+                <div style="flex:1;height:72%;background:#2EA79B;border-radius:6px 6px 0 0;"></div>
+                <div style="flex:1;height:64%;background:#E8734F;border-radius:6px 6px 0 0;"></div>
+              </div>
+            </div>
+            <div style="display:flex;justify-content:space-between;font-size:13px;font-weight:700;color:#B3AB9E;margin-top:8px;"><span>9/8</span><span>hôm nay</span></div>
+          </div>
+          <div style="background:#FFFFFF;border:1px solid #E5DFD5;border-radius:18px;padding:22px 24px;">
+            <div style="font-size:17px;font-weight:800;color:#3B342E;margin-bottom:14px;">Điểm phát âm trung bình theo cấp</div>
+            <div style="display:flex;flex-direction:column;gap:10px;font-size:15px;font-weight:700;color:#5C544A;">
+              <div style="display:flex;align-items:center;gap:12px;"><span style="width:120px;">Sound Zoo</span><div style="flex:1;height:10px;border-radius:6px;background:#EFEAE0;"><div style="width:92%;height:100%;border-radius:6px;background:#2EA79B;"></div></div><span style="width:36px;text-align:right;">92</span></div>
+              <div style="display:flex;align-items:center;gap:12px;"><span style="width:120px;">Word Pop</span><div style="flex:1;height:10px;border-radius:6px;background:#EFEAE0;"><div style="width:81%;height:100%;border-radius:6px;background:#2EA79B;"></div></div><span style="width:36px;text-align:right;">81</span></div>
+              <div style="display:flex;align-items:center;gap:12px;"><span style="width:120px;">Minimal Pairs</span><div style="flex:1;height:10px;border-radius:6px;background:#EFEAE0;"><div style="width:64%;height:100%;border-radius:6px;background:#E8A23F;"></div></div><span style="width:36px;text-align:right;">64</span></div>
+            </div>
+          </div>
+        </div>
+        <div style="flex:1;display:flex;flex-direction:column;gap:22px;">
+          <div style="background:#FFFFFF;border:1px solid #E5DFD5;border-radius:18px;padding:22px 24px;">
+            <div style="font-size:17px;font-weight:800;color:#3B342E;margin-bottom:12px;">Âm bé hay sai</div>
+            <div style="display:flex;flex-wrap:wrap;gap:10px;">
+              <span style="background:#FBEAE4;color:#B8503A;border-radius:12px;padding:8px 16px;font-size:16px;font-weight:800;">/θ/ · 12 lần</span>
+              <span style="background:#FBEAE4;color:#B8503A;border-radius:12px;padding:8px 16px;font-size:16px;font-weight:800;">/v/ · 7 lần</span>
+              <span style="background:#FAF3E3;color:#9A7B2E;border-radius:12px;padding:8px 16px;font-size:16px;font-weight:800;">/r/ · 4 lần</span>
+            </div>
+            <div style="font-size:14px;font-weight:600;color:#8B8378;margin-top:12px;">Gợi ý: cùng bé tập "think – three – thank" 2 phút mỗi tối.</div>
+          </div>
+          <div style="background:#FFFFFF;border:1px solid #E5DFD5;border-radius:18px;padding:22px 24px;flex:1;">
+            <div style="font-size:17px;font-weight:800;color:#3B342E;margin-bottom:12px;">Bản ghi âm gần đây</div>
+            <div style="display:flex;flex-direction:column;gap:10px;font-size:15px;font-weight:700;color:#5C544A;">
+              <div style="display:flex;align-items:center;gap:12px;border:1px solid #EFEAE0;border-radius:12px;padding:10px 14px;"><span style="width:34px;height:34px;border-radius:50%;background:#2EA79B;color:#FFF;display:flex;align-items:center;justify-content:center;font-size:14px;">▶</span><span style="flex:1;">"The fox is happy."</span><span style="color:#B3AB9E;">hôm nay · ⭐⭐</span></div>
+              <div style="display:flex;align-items:center;gap:12px;border:1px solid #EFEAE0;border-radius:12px;padding:10px 14px;"><span style="width:34px;height:34px;border-radius:50%;background:#2EA79B;color:#FFF;display:flex;align-items:center;justify-content:center;font-size:14px;">▶</span><span style="flex:1;">"three"</span><span style="color:#B3AB9E;">hôm nay · ⭐</span></div>
+              <div style="display:flex;align-items:center;gap:12px;border:1px solid #EFEAE0;border-radius:12px;padding:10px 14px;"><span style="width:34px;height:34px;border-radius:50%;background:#2EA79B;color:#FFF;display:flex;align-items:center;justify-content:center;font-size:14px;">▶</span><span style="flex:1;">"rabbit"</span><span style="color:#B3AB9E;">hôm qua · ⭐⭐⭐</span></div>
+            </div>
+          </div>
+          <div style="background:#FFFFFF;border:1px solid #E5DFD5;border-radius:18px;padding:22px 24px;">
+            <div style="font-size:17px;font-weight:800;color:#3B342E;margin-bottom:12px;">Giới hạn thời gian mỗi ngày</div>
+            <div style="display:flex;gap:8px;">
+              <span style="flex:1;text-align:center;border:1px solid #E5DFD5;border-radius:12px;padding:10px 0;font-size:15px;font-weight:800;color:#8B8378;">15 phút</span>
+              <span style="flex:1;text-align:center;border-radius:12px;padding:10px 0;font-size:15px;font-weight:800;background:#2EA79B;color:#FFFFFF;">20 phút</span>
+              <span style="flex:1;text-align:center;border:1px solid #E5DFD5;border-radius:12px;padding:10px 0;font-size:15px;font-weight:800;color:#8B8378;">30 phút</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ ROW: Portrait variants ============ -->
+  <div style="display:flex;flex-wrap:wrap;gap:44px;align-items:flex-start;">
+
+    <div id="p1" style="display:flex;flex-direction:column;gap:12px;">
+      <div style="display:flex;align-items:center;gap:10px;"><span style="background:#4A3B33;color:#FFF7EA;font-family:'Baloo 2',sans-serif;font-size:15px;font-weight:800;padding:6px 14px;border-radius:12px;">1P</span><span style="font-weight:800;color:#8A7A6D;font-size:17px;">Home · portrait 834×1194</span></div>
+      <div style="width:834px;height:1194px;background:#FFF7EA;border-radius:38px;position:relative;overflow:hidden;box-shadow:0 18px 50px rgba(74,59,51,.15);">
+        <div style="position:absolute;left:-90px;top:-120px;width:300px;height:300px;border-radius:50%;background:#FFEDD6;"></div>
+        <div style="position:absolute;right:-80px;bottom:-140px;width:340px;height:340px;border-radius:50%;background:#E2F6F1;"></div>
+        <div style="position:absolute;left:0;right:0;top:0;padding:30px 32px;display:flex;flex-direction:column;gap:16px;">
+          <div style="display:flex;align-items:center;gap:14px;">
+            <div style="width:78px;height:74px;animation:bob 3s ease-in-out infinite;">{{ foxIdle }}</div>
+            <div style="background:#FFFFFF;border-radius:22px;border-bottom-left-radius:6px;padding:14px 20px;box-shadow:0 5px 0 #EFE2CC;flex:1;">
+              <div style="font-family:'Baloo 2',sans-serif;font-size:23px;font-weight:800;color:#F2603D;">Chào Su! 👋</div>
+              <div style="font-size:16px;color:#8A7A6D;font-weight:600;">Hôm nay mình luyện nói nhé!</div>
+            </div>
+          </div>
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;">
+            <div style="display:flex;align-items:center;gap:6px;background:#FFFFFF;border-radius:18px;padding:10px 14px;box-shadow:0 5px 0 #EFE2CC;font-size:15px;">⭐⭐⭐⭐<span style="opacity:.25;">⭐⭐⭐</span><span style="font-weight:800;color:#8A7A6D;font-size:13px;margin-left:4px;">tuần này</span></div>
+            <div style="display:flex;align-items:center;gap:8px;background:#FFF1C9;border-radius:18px;padding:12px 20px;box-shadow:0 5px 0 #EFDDA8;font-family:'Baloo 2',sans-serif;font-size:22px;font-weight:800;color:#9A6B00;">⭐ 128</div>
+          </div>
+        </div>
+        <svg style="position:absolute;left:0;top:210px;width:834px;height:680px;" viewBox="0 0 834 680" fill="none"><path d="M180 80 C 420 140, 560 220, 420 330 S 180 470, 380 560 S 640 620, 660 640" stroke="#EAD9BE" stroke-width="12" stroke-linecap="round" stroke-dasharray="2 24"></path></svg>
+        <div style="position:absolute;left:90px;top:240px;display:flex;flex-direction:column;align-items:center;gap:7px;">
+          <div style="width:120px;height:120px;border-radius:50%;background:#2EC4B6;display:flex;align-items:center;justify-content:center;font-size:52px;box-shadow:0 8px 0 #1FA396, 0 0 0 8px #D3F1EC;">🐘</div>
+          <div style="font-family:'Baloo 2',sans-serif;font-size:20px;font-weight:800;">Animals</div>
+          <div style="font-size:16px;letter-spacing:2px;"><span style="color:#FFB020;">★★</span><span style="color:#E2D5C0;">★</span></div>
+        </div>
+        <div style="position:absolute;left:470px;top:400px;display:flex;flex-direction:column;align-items:center;gap:7px;">
+          <div style="width:110px;height:110px;border-radius:50%;background:#FF9A62;display:flex;align-items:center;justify-content:center;font-size:48px;box-shadow:0 8px 0 #E07A42, 0 0 0 8px #FFE7D2;">🍎</div>
+          <div style="font-family:'Baloo 2',sans-serif;font-size:20px;font-weight:800;">Food</div>
+          <div style="font-size:16px;letter-spacing:2px;"><span style="color:#FFB020;">★</span><span style="color:#E2D5C0;">★★</span></div>
+        </div>
+        <div style="position:absolute;left:180px;top:600px;display:flex;flex-direction:column;align-items:center;gap:7px;">
+          <div style="width:110px;height:110px;border-radius:50%;background:#7EC8F2;display:flex;align-items:center;justify-content:center;font-size:48px;box-shadow:0 8px 0 #5BA7D4, 0 0 0 8px #DDF0FB;">🏫</div>
+          <div style="font-family:'Baloo 2',sans-serif;font-size:20px;font-weight:800;">School</div>
+          <div style="font-size:16px;letter-spacing:2px;color:#E2D5C0;">★★★</div>
+        </div>
+        <div style="position:absolute;left:520px;top:700px;display:flex;flex-direction:column;align-items:center;gap:7px;opacity:.75;">
+          <div style="width:100px;height:100px;border-radius:50%;background:#E9DEC9;display:flex;align-items:center;justify-content:center;font-size:40px;box-shadow:0 8px 0 #D4C6AA;">🔒</div>
+          <div style="font-family:'Baloo 2',sans-serif;font-size:18px;font-weight:800;color:#A79781;">Family</div>
+        </div>
+        <div style="position:absolute;left:32px;right:32px;bottom:32px;background:#FFFFFF;border-radius:28px;padding:22px 26px;box-shadow:0 8px 0 #EFE2CC;">
+          <div style="display:flex;align-items:center;justify-content:space-between;">
+            <div style="font-family:'Baloo 2',sans-serif;font-size:23px;font-weight:800;">🌞 Nhiệm vụ hôm nay</div>
+            <div style="font-family:'Baloo 2',sans-serif;font-size:19px;font-weight:800;color:#2EA79B;">1/3</div>
+          </div>
+          <div style="height:14px;border-radius:8px;background:#F1E7D4;overflow:hidden;margin:14px 0 18px;"><div style="width:33%;height:100%;border-radius:8px;background:linear-gradient(90deg,#2EC4B6,#7ED99A);"></div></div>
+          <div style="display:flex;align-items:center;justify-content:center;gap:10px;background:#FF7A59;color:#FFFFFF;font-family:'Baloo 2',sans-serif;font-size:24px;font-weight:800;padding:16px 20px;border-radius:24px;box-shadow:0 6px 0 #E05A3A;">Tiếp tục ▸</div>
+        </div>
+      </div>
+    </div>
+
+    <div id="p3" style="display:flex;flex-direction:column;gap:12px;">
+      <div style="display:flex;align-items:center;gap:10px;"><span style="background:#4A3B33;color:#FFF7EA;font-family:'Baloo 2',sans-serif;font-size:15px;font-weight:800;padding:6px 14px;border-radius:12px;">3P</span><span style="font-weight:800;color:#8A7A6D;font-size:17px;">Listening Player · portrait 834×1194</span></div>
+      <div style="width:834px;height:1194px;background:#FFF7EA;border-radius:38px;position:relative;overflow:hidden;box-shadow:0 18px 50px rgba(74,59,51,.15);display:flex;flex-direction:column;">
+        <div style="position:relative;height:520px;margin:20px 20px 0;">
+          <image-slot id="scene-animals-portrait" shape="rounded" radius="28" placeholder="🖼 Ảnh minh hoạ cảnh truyện (portrait)"></image-slot>
+          <div style="position:absolute;left:16px;top:16px;width:60px;height:60px;border-radius:50%;background:rgba(255,255,255,.94);box-shadow:0 4px 0 rgba(0,0,0,.08);display:flex;align-items:center;justify-content:center;font-size:24px;color:#B0A18E;">←</div>
+          <div style="position:absolute;right:16px;top:16px;background:rgba(255,255,255,.94);border-radius:16px;padding:10px 16px;display:flex;align-items:center;gap:8px;box-shadow:0 4px 0 rgba(0,0,0,.08);">
+            <span style="width:12px;height:12px;border-radius:50%;background:#FF7A59;"></span><span style="width:12px;height:12px;border-radius:50%;background:#EAD9BE;"></span><span style="width:12px;height:12px;border-radius:50%;background:#EAD9BE;"></span><span style="width:12px;height:12px;border-radius:50%;background:#EAD9BE;"></span>
+          </div>
+        </div>
+        <div style="flex:1;display:flex;flex-direction:column;justify-content:center;gap:10px;padding:10px 46px 0;text-align:center;">
+          <div style="display:flex;flex-wrap:wrap;justify-content:center;gap:10px;align-items:baseline;line-height:1.25;font-family:'Baloo 2',sans-serif;font-weight:800;">
+            <span style="font-size:30px;color:#CDBFA9;">The</span><span style="font-size:30px;color:#CDBFA9;">little</span><span style="font-size:42px;color:#F2603D;">elephant</span><span style="font-size:30px;">walks</span><span style="font-size:30px;">to</span><span style="font-size:30px;">the</span><span style="font-size:30px;">river.</span>
+          </div>
+          <div style="display:flex;flex-wrap:wrap;justify-content:center;gap:10px;line-height:1.25;font-family:'Baloo 2',sans-serif;font-weight:800;font-size:30px;">
+            <span>He</span><span>wants</span><span>to</span><span>say</span><span>hello</span><span>to</span><span>his</span><span>friends.</span>
+          </div>
+          <div style="font-size:17px;font-weight:800;color:#2EA79B;">👆 Chạm vào 1 từ để nghe lại</div>
+        </div>
+        <div style="display:flex;flex-direction:column;align-items:center;gap:18px;padding:14px 30px 34px;">
+          <div style="display:flex;align-items:center;gap:24px;">
+            <div style="display:flex;gap:8px;background:#FFFFFF;border-radius:20px;padding:8px;box-shadow:0 5px 0 #EFE2CC;">
+              <div style="width:50px;height:46px;border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:24px;">🐢</div>
+              <div style="width:50px;height:46px;border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:24px;background:#FFE9DF;box-shadow:inset 0 0 0 3px #FF9A62;">🐇</div>
+            </div>
+            <div style="width:112px;height:112px;border-radius:50%;background:#2EC4B6;box-shadow:0 8px 0 #1FA396;display:flex;align-items:center;justify-content:center;font-size:44px;color:#FFFFFF;">❚❚</div>
+            <div style="display:flex;flex-direction:column;gap:10px;font-weight:800;font-size:15px;color:#8A7A6D;">
+              <div style="display:flex;align-items:center;gap:8px;"><div style="width:52px;height:28px;border-radius:16px;background:#2EC4B6;position:relative;"><div style="position:absolute;top:4px;left:28px;width:20px;height:20px;border-radius:50%;background:#FFF;"></div></div>🎵 Nhạc</div>
+              <div style="display:flex;align-items:center;gap:8px;"><div style="width:52px;height:28px;border-radius:16px;background:#E2D5C0;position:relative;"><div style="position:absolute;top:4px;left:4px;width:20px;height:20px;border-radius:50%;background:#FFF;"></div></div>🇻🇳 Phụ đề</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="p6" style="display:flex;flex-direction:column;gap:12px;">
+      <div style="display:flex;align-items:center;gap:10px;"><span style="background:#4A3B33;color:#FFF7EA;font-family:'Baloo 2',sans-serif;font-size:15px;font-weight:800;padding:6px 14px;border-radius:12px;">6P</span><span style="font-weight:800;color:#8A7A6D;font-size:17px;">Speak Lab – Thẻ luyện (sẵn sàng) · portrait 834×1194</span></div>
+      <div style="width:834px;height:1194px;background:#FFF7EA;border-radius:38px;position:relative;overflow:hidden;box-shadow:0 18px 50px rgba(74,59,51,.15);">
+        <div style="position:absolute;left:26px;top:26px;width:62px;height:62px;border-radius:50%;background:#FFFFFF;box-shadow:0 5px 0 #EFE2CC;display:flex;align-items:center;justify-content:center;font-size:26px;color:#B0A18E;">←</div>
+        <div style="position:absolute;left:0;right:0;top:38px;display:flex;justify-content:center;align-items:center;gap:12px;">
+          <div style="font-family:'Baloo 2',sans-serif;font-size:22px;font-weight:800;color:#8A7A6D;">Thẻ 2/5</div>
+          <div style="display:flex;gap:7px;">
+            <div style="width:14px;height:14px;border-radius:50%;background:#2EC4B6;"></div><div style="width:14px;height:14px;border-radius:50%;background:#FF7A59;"></div><div style="width:14px;height:14px;border-radius:50%;background:#E2D5C0;"></div><div style="width:14px;height:14px;border-radius:50%;background:#E2D5C0;"></div><div style="width:14px;height:14px;border-radius:50%;background:#E2D5C0;"></div>
+          </div>
+        </div>
+        <div style="position:absolute;left:0;right:0;top:130px;display:flex;justify-content:center;gap:30px;">
+          <div style="width:200px;height:200px;border-radius:30px;background:#FFFFFF;box-shadow:0 8px 0 #EFE2CC;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;">
+            <div style="font-size:92px;line-height:1;">3️⃣</div>
+            <div style="font-size:14px;font-weight:800;color:#B0A18E;">nghĩa của từ</div>
+          </div>
+          <div style="width:200px;height:200px;border-radius:30px;background:#FFF1E6;box-shadow:0 8px 0 #F2DFC9;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;">
+            <div style="font-size:66px;">👄</div>
+            <div style="font-size:15px;font-weight:800;color:#C08457;">Khẩu hình miệng</div>
+          </div>
+        </div>
+        <div style="position:absolute;left:0;right:0;top:400px;display:flex;flex-direction:column;align-items:center;gap:14px;">
+          <div style="font-family:'Baloo 2',sans-serif;font-size:76px;font-weight:800;">three</div>
+          <div style="font-size:24px;font-weight:700;color:#A79781;">/θriː/</div>
+          <div style="display:flex;align-items:center;gap:10px;background:#E2F6F1;color:#1FA396;font-family:'Baloo 2',sans-serif;font-size:23px;font-weight:800;padding:14px 30px;border-radius:22px;box-shadow:0 5px 0 #C4E8E1;">🔊 Nghe mẫu</div>
+        </div>
+        <div style="position:absolute;left:0;right:0;bottom:70px;display:flex;flex-direction:column;align-items:center;gap:16px;">
+          <div style="width:160px;height:160px;border-radius:50%;background:#FF7A59;box-shadow:0 10px 0 #E05A3A, 0 0 0 12px #FFE3D7;display:flex;align-items:center;justify-content:center;font-size:64px;">🎤</div>
+          <div style="font-family:'Baloo 2',sans-serif;font-size:23px;font-weight:800;color:#8A7A6D;">Chạm để nói nào!</div>
+        </div>
+        <div style="position:absolute;right:44px;bottom:80px;width:96px;height:92px;animation:bob 3s ease-in-out infinite;">{{ foxIdle }}</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ COMPONENTS SHEET ============ -->
+  <div id="comp" style="display:flex;flex-direction:column;gap:12px;">
+    <div style="display:flex;align-items:center;gap:10px;"><span style="background:#4A3B33;color:#FFF7EA;font-family:'Baloo 2',sans-serif;font-size:15px;font-weight:800;padding:6px 14px;border-radius:12px;">C</span><span style="font-weight:800;color:#8A7A6D;font-size:17px;">Components</span></div>
+    <div style="width:1194px;background:#FFFFFF;border-radius:38px;box-shadow:0 18px 50px rgba(74,59,51,.12);padding:44px 48px;display:flex;flex-direction:column;gap:40px;">
+      <div>
+        <div style="font-family:'Baloo 2',sans-serif;font-size:24px;font-weight:800;margin-bottom:18px;">Nút Mic</div>
+        <div style="display:flex;gap:44px;align-items:flex-end;">
+          <div style="display:flex;flex-direction:column;align-items:center;gap:10px;"><div style="width:120px;height:120px;border-radius:50%;background:#FF7A59;box-shadow:0 8px 0 #E05A3A, 0 0 0 10px #FFE3D7;display:flex;align-items:center;justify-content:center;font-size:48px;">🎤</div><span style="font-size:15px;font-weight:800;color:#8A7A6D;">idle</span></div>
+          <div style="display:flex;flex-direction:column;align-items:center;gap:10px;"><div style="position:relative;width:140px;height:140px;display:flex;align-items:center;justify-content:center;"><div style="position:absolute;inset:0;border-radius:50%;background:#FFB89E;animation:ring 1.4s ease-out infinite;"></div><div style="position:relative;width:120px;height:120px;border-radius:50%;background:#FF7A59;box-shadow:0 8px 0 #E05A3A;display:flex;align-items:center;justify-content:center;font-size:48px;animation:pulse 1s ease-in-out infinite;">🎤</div></div><span style="font-size:15px;font-weight:800;color:#8A7A6D;">recording</span></div>
+          <div style="display:flex;flex-direction:column;align-items:center;gap:10px;"><div style="width:120px;height:120px;border-radius:50%;background:#FFD9CB;box-shadow:0 8px 0 #F2C1AE;display:flex;align-items:center;justify-content:center;font-size:44px;">⏳</div><span style="font-size:15px;font-weight:800;color:#8A7A6D;">processing</span></div>
+          <div style="display:flex;flex-direction:column;align-items:center;gap:10px;"><div style="width:120px;height:120px;border-radius:50%;background:#EDE4D3;box-shadow:0 8px 0 #DDD1BB;display:flex;align-items:center;justify-content:center;font-size:44px;opacity:.5;">🎤</div><span style="font-size:15px;font-weight:800;color:#8A7A6D;">disabled</span></div>
+        </div>
+      </div>
+      <div style="display:flex;gap:70px;flex-wrap:wrap;">
+        <div>
+          <div style="font-family:'Baloo 2',sans-serif;font-size:24px;font-weight:800;margin-bottom:18px;">Từ karaoke</div>
+          <div style="display:flex;gap:18px;align-items:baseline;font-family:'Baloo 2',sans-serif;font-weight:800;">
+            <span style="font-size:32px;">elephant</span>
+            <span style="font-size:44px;color:#F2603D;">elephant</span>
+            <span style="font-size:32px;color:#CDBFA9;">elephant</span>
+          </div>
+          <div style="display:flex;gap:52px;font-size:14px;font-weight:800;color:#B0A18E;margin-top:6px;"><span>chưa đọc</span><span>đang đọc</span><span>đã đọc</span></div>
+        </div>
+        <div>
+          <div style="font-family:'Baloo 2',sans-serif;font-size:24px;font-weight:800;margin-bottom:18px;">Từ chấm điểm</div>
+          <div style="display:flex;gap:14px;">
+            <div style="display:flex;align-items:center;gap:8px;font-family:'Baloo 2',sans-serif;font-size:26px;font-weight:800;padding:10px 20px;border-radius:18px;background:#E3F6E8;color:#2E8B4A;border:3px solid #7ED99A;">✓ fox</div>
+            <div style="display:flex;align-items:center;gap:8px;font-family:'Baloo 2',sans-serif;font-size:26px;font-weight:800;padding:10px 20px;border-radius:18px;background:#FFF3D6;color:#9A6B00;border:3px solid #FFD97E;">～ is</div>
+            <div style="display:flex;align-items:center;gap:8px;font-family:'Baloo 2',sans-serif;font-size:26px;font-weight:800;padding:10px 20px;border-radius:18px;background:#FFE3E6;color:#C2354B;border:3px solid #F8A3AE;">✗ three</div>
+          </div>
+          <div style="display:flex;gap:34px;font-size:14px;font-weight:800;color:#B0A18E;margin-top:6px;"><span>good</span><span>ok</span><span>fix + tooltip khẩu hình</span></div>
+        </div>
+      </div>
+      <div style="display:flex;gap:70px;flex-wrap:wrap;align-items:flex-start;">
+        <div>
+          <div style="font-family:'Baloo 2',sans-serif;font-size:24px;font-weight:800;margin-bottom:18px;">Foxy — 5 biểu cảm</div>
+          <div style="display:flex;gap:24px;">
+            <div style="display:flex;flex-direction:column;align-items:center;gap:8px;"><div style="width:92px;height:88px;">{{ foxIdle }}</div><span style="font-size:15px;font-weight:800;color:#8A7A6D;">chờ</span></div>
+            <div style="display:flex;flex-direction:column;align-items:center;gap:8px;"><div style="width:92px;height:88px;">{{ foxListen }}</div><span style="font-size:15px;font-weight:800;color:#8A7A6D;">lắng nghe</span></div>
+            <div style="display:flex;flex-direction:column;align-items:center;gap:8px;"><div style="width:92px;height:88px;">{{ foxHappy }}</div><span style="font-size:15px;font-weight:800;color:#8A7A6D;">vui</span></div>
+            <div style="display:flex;flex-direction:column;align-items:center;gap:8px;"><div style="width:92px;height:88px;">{{ foxCheer }}</div><span style="font-size:15px;font-weight:800;color:#8A7A6D;">cổ vũ</span></div>
+            <div style="display:flex;flex-direction:column;align-items:center;gap:8px;"><div style="width:92px;height:88px;">{{ foxWow }}</div><span style="font-size:15px;font-weight:800;color:#8A7A6D;">ngạc nhiên</span></div>
+          </div>
+        </div>
+        <div>
+          <div style="font-family:'Baloo 2',sans-serif;font-size:24px;font-weight:800;margin-bottom:18px;">Thẻ sao · Streak · Tiến trình</div>
+          <div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap;">
+            <div style="background:#FFF7EA;border-radius:16px;padding:10px 18px;font-size:22px;box-shadow:0 4px 0 #EFE2CC;"><span style="color:#E2D5C0;">★★★</span></div>
+            <div style="background:#FFF7EA;border-radius:16px;padding:10px 18px;font-size:22px;box-shadow:0 4px 0 #EFE2CC;"><span style="color:#FFB020;">★</span><span style="color:#E2D5C0;">★★</span></div>
+            <div style="background:#FFF7EA;border-radius:16px;padding:10px 18px;font-size:22px;box-shadow:0 4px 0 #EFE2CC;"><span style="color:#FFB020;">★★</span><span style="color:#E2D5C0;">★</span></div>
+            <div style="background:#FFF7EA;border-radius:16px;padding:10px 18px;font-size:22px;box-shadow:0 4px 0 #EFE2CC;"><span style="color:#FFB020;">★★★</span></div>
+            <div style="display:flex;align-items:center;gap:8px;background:#FFF1C9;border-radius:16px;padding:12px 18px;box-shadow:0 4px 0 #EFDDA8;font-family:'Baloo 2',sans-serif;font-size:19px;font-weight:800;color:#9A6B00;">🔥 5 ngày</div>
+          </div>
+          <div style="width:340px;height:14px;border-radius:8px;background:#F1E7D4;overflow:hidden;margin-top:16px;"><div style="width:66%;height:100%;border-radius:8px;background:linear-gradient(90deg,#2EC4B6,#7ED99A);"></div></div>
+        </div>
+      </div>
+      <div style="display:flex;gap:70px;flex-wrap:wrap;align-items:flex-start;">
+        <div>
+          <div style="font-family:'Baloo 2',sans-serif;font-size:24px;font-weight:800;margin-bottom:18px;">Thẻ gợi ý sửa âm</div>
+          <div style="display:flex;align-items:center;gap:16px;background:#FFF6E0;border:3px solid #FFDF9E;border-radius:24px;padding:16px 26px;max-width:560px;">
+            <div style="font-size:44px;">👅</div>
+            <div style="font-size:19px;font-weight:800;color:#9A6B00;line-height:1.4;">Sửa từ này: <span style="font-family:'Baloo 2',sans-serif;font-size:23px;">three</span> — đặt đầu lưỡi giữa hai hàm răng rồi thổi nhẹ.</div>
+          </div>
+        </div>
+        <div>
+          <div style="font-family:'Baloo 2',sans-serif;font-size:24px;font-weight:800;margin-bottom:18px;">Nút &amp; Toggle</div>
+          <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap;">
+            <div style="background:#FF7A59;color:#FFFFFF;font-family:'Baloo 2',sans-serif;font-size:23px;font-weight:800;padding:16px 36px;border-radius:24px;box-shadow:0 6px 0 #E05A3A;">Bắt đầu ▸</div>
+            <div style="background:#FFFFFF;border:3px solid #C4E8E1;color:#1FA396;font-family:'Baloo 2',sans-serif;font-size:23px;font-weight:800;padding:14px 32px;border-radius:24px;">🔊 Nghe mẫu</div>
+            <div style="background:#EDE4D3;color:#B0A18E;font-family:'Baloo 2',sans-serif;font-size:23px;font-weight:800;padding:16px 36px;border-radius:24px;opacity:.6;">Disabled</div>
+            <div style="width:58px;height:32px;border-radius:18px;background:#2EC4B6;position:relative;"><div style="position:absolute;top:4px;left:30px;width:24px;height:24px;border-radius:50%;background:#FFF;box-shadow:0 2px 4px rgba(0,0,0,.15);"></div></div>
+            <div style="width:58px;height:32px;border-radius:18px;background:#E2D5C0;position:relative;"><div style="position:absolute;top:4px;left:4px;width:24px;height:24px;border-radius:50%;background:#FFF;box-shadow:0 2px 4px rgba(0,0,0,.15);"></div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ TOKENS ============ -->
+  <div id="tokens" style="display:flex;flex-direction:column;gap:12px;">
+    <div style="display:flex;align-items:center;gap:10px;"><span style="background:#4A3B33;color:#FFF7EA;font-family:'Baloo 2',sans-serif;font-size:15px;font-weight:800;padding:6px 14px;border-radius:12px;">T</span><span style="font-weight:800;color:#8A7A6D;font-size:17px;">Design tokens (Tailwind)</span></div>
+    <div style="width:1194px;background:#FFFFFF;border-radius:38px;box-shadow:0 18px 50px rgba(74,59,51,.12);padding:44px 48px;display:flex;flex-direction:column;gap:34px;">
+      <div>
+        <div style="font-family:'Baloo 2',sans-serif;font-size:24px;font-weight:800;margin-bottom:18px;">Màu</div>
+        <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:16px;font-size:14px;font-weight:800;">
+          <div><div style="height:64px;border-radius:16px;background:#FFF7EA;border:1px solid #EFE2CC;"></div><div style="margin-top:6px;">cream-50</div><div style="color:#B0A18E;">#FFF7EA · nền</div></div>
+          <div><div style="height:64px;border-radius:16px;background:#FF7A59;"></div><div style="margin-top:6px;">coral-500</div><div style="color:#B0A18E;">#FF7A59 · primary</div></div>
+          <div><div style="height:64px;border-radius:16px;background:#E05A3A;"></div><div style="margin-top:6px;">coral-600</div><div style="color:#B0A18E;">#E05A3A · shadow/pressed</div></div>
+          <div><div style="height:64px;border-radius:16px;background:#2EC4B6;"></div><div style="margin-top:6px;">teal-500</div><div style="color:#B0A18E;">#2EC4B6 · secondary</div></div>
+          <div><div style="height:64px;border-radius:16px;background:#1FA396;"></div><div style="margin-top:6px;">teal-600</div><div style="color:#B0A18E;">#1FA396</div></div>
+          <div><div style="height:64px;border-radius:16px;background:#FFC533;"></div><div style="margin-top:6px;">sun-400</div><div style="color:#B0A18E;">#FFC533 · sao</div></div>
+          <div><div style="height:64px;border-radius:16px;background:#2E8B4A;"></div><div style="margin-top:6px;">good-700</div><div style="color:#B0A18E;">#2E8B4A trên #E3F6E8</div></div>
+          <div><div style="height:64px;border-radius:16px;background:#9A6B00;"></div><div style="margin-top:6px;">ok-700</div><div style="color:#B0A18E;">#9A6B00 trên #FFF3D6</div></div>
+          <div><div style="height:64px;border-radius:16px;background:#C2354B;"></div><div style="margin-top:6px;">fix-700</div><div style="color:#B0A18E;">#C2354B trên #FFE3E6</div></div>
+          <div><div style="height:64px;border-radius:16px;background:#4A3B33;"></div><div style="margin-top:6px;">ink-900</div><div style="color:#B0A18E;">#4A3B33 · chữ</div></div>
+          <div><div style="height:64px;border-radius:16px;background:#8A7A6D;"></div><div style="margin-top:6px;">ink-500</div><div style="color:#B0A18E;">#8A7A6D · chữ phụ</div></div>
+          <div><div style="height:64px;border-radius:16px;background:#EFE2CC;"></div><div style="margin-top:6px;">line-200</div><div style="color:#B0A18E;">#EFE2CC · shadow card</div></div>
+        </div>
+      </div>
+      <div style="display:flex;gap:70px;flex-wrap:wrap;">
+        <div>
+          <div style="font-family:'Baloo 2',sans-serif;font-size:24px;font-weight:800;margin-bottom:14px;">Chữ</div>
+          <div style="font-size:16px;font-weight:700;color:#5C544A;line-height:2;">font-display: "Baloo 2" (tiêu đề, nút, từ luyện)<br>font-body: "Nunito" (nội dung, chú thích)<br>Nội dung ≥ 20px · câu đang luyện 32–48px · IPA 20–24px</div>
+        </div>
+        <div>
+          <div style="font-family:'Baloo 2',sans-serif;font-size:24px;font-weight:800;margin-bottom:14px;">Bo góc &amp; đổ bóng</div>
+          <div style="font-size:16px;font-weight:700;color:#5C544A;line-height:2;">radius: 16 / 20 / 24 / 28 / 34 / full<br>shadow-chunky: 0 6px 0 (màu đậm hơn 1 bậc)<br>shadow-card: 0 8px 0 line-200</div>
+        </div>
+        <div>
+          <div style="font-family:'Baloo 2',sans-serif;font-size:24px;font-weight:800;margin-bottom:14px;">Khoảng cách &amp; chạm</div>
+          <div style="font-size:16px;font-weight:700;color:#5C544A;line-height:2;">spacing: 8 / 12 / 16 / 24 / 32 / 44 / 60<br>vùng chạm ≥ 64×64px · nút mic ≥ 120px<br>iPad: 1194×834 (landscape) · 834×1194 (portrait)</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  fox(x){
+    const E=React.createElement,C='#FF8A5C',D='#5B4038',IN='#FFD6BE',M='#FFF6EA',B='#FFB899';
+    const k=[
+      E('path',{key:'a',d:'M24 44 L12 6 L48 26 Z',fill:C}),E('path',{key:'b',d:'M96 44 L108 6 L72 26 Z',fill:C}),
+      E('path',{key:'a2',d:'M27 36 L21 16 L38 26 Z',fill:IN}),E('path',{key:'b2',d:'M93 36 L99 16 L82 26 Z',fill:IN}),
+      E('circle',{key:'h',cx:60,cy:68,r:44,fill:C}),E('ellipse',{key:'mz',cx:60,cy:84,rx:27,ry:19,fill:M}),
+      E('circle',{key:'n',cx:60,cy:78,r:5.5,fill:D})
+    ];
+    const eye=(cx,t)=>t==='closed'?E('path',{key:'e'+cx,d:'M'+(cx-7)+' 62 Q'+cx+' 70 '+(cx+7)+' 62',stroke:D,strokeWidth:3.5,fill:'none',strokeLinecap:'round'})
+      :t==='happy'?E('path',{key:'e'+cx,d:'M'+(cx-7)+' 64 Q'+cx+' 55 '+(cx+7)+' 64',stroke:D,strokeWidth:3.5,fill:'none',strokeLinecap:'round'})
+      :t==='wow'?E('circle',{key:'e'+cx,cx:cx,cy:61,r:7,fill:D})
+      :E('circle',{key:'e'+cx,cx:cx,cy:61,r:5,fill:D});
+    if(x==='idle'){k.push(eye(44,'n'),eye(76,'n'),E('path',{key:'m',d:'M52 90 Q60 97 68 90',stroke:D,strokeWidth:3.5,fill:'none',strokeLinecap:'round'}));}
+    if(x==='listen'){k.push(eye(44,'closed'),eye(76,'closed'),E('circle',{key:'m',cx:60,cy:91,r:4.5,fill:D}));}
+    if(x==='happy'||x==='cheer'){k.push(eye(44,'happy'),eye(76,'happy'),E('path',{key:'m',d:'M47 88 Q60 103 73 88 Z',fill:D}),E('ellipse',{key:'tg',cx:60,cy:94,rx:6,ry:4,fill:'#FF8A8A'}),E('circle',{key:'bl1',cx:27,cy:80,r:6,fill:B}),E('circle',{key:'bl2',cx:93,cy:80,r:6,fill:B}));}
+    if(x==='cheer'){k.push(E('circle',{key:'sp1',cx:12,cy:58,r:4,fill:'#FFC533'}),E('circle',{key:'sp2',cx:108,cy:52,r:5,fill:'#FFC533'}),E('circle',{key:'sp3',cx:104,cy:96,r:3.5,fill:'#2EC4B6'}));}
+    if(x==='wow'){k.push(eye(44,'wow'),eye(76,'wow'),E('ellipse',{key:'m',cx:60,cy:92,rx:5.5,ry:7,fill:D}));}
+    return E('svg',{viewBox:'0 0 120 116',style:{width:'100%',height:'100%',display:'block'}},k);
+  }
+  renderVals(){
+    return{foxIdle:this.fox('idle'),foxListen:this.fox('listen'),foxHappy:this.fox('happy'),foxCheer:this.fox('cheer'),foxWow:this.fox('wow')};
+  }
+}
+</script>
+</body>
+</html>
