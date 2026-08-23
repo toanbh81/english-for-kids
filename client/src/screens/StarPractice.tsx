@@ -1,9 +1,9 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { SENTENCE_STARS, findSentenceStar } from '../content'
 import type { SentenceStar } from '../content/types'
 import type { PronunciationResult } from '../scoring/types'
-import { playBlob, playUrl } from '../audio/player'
+import { playBlob } from '../audio/player'
 import { toFeedback } from '../scoring/feedback'
 import { starsForSentence } from '../scoring/levelStars'
 import { setStars } from '../progress/store'
@@ -35,6 +35,10 @@ function rhythmLine(fluency: number): string {
   return 'Nhịp: 🐢 chậm'
 }
 
+/** Roughly one word every 0.42 s is how these samples are read (Emma HD at rate -10%). It only
+ * stands in for a real measurement when the browser never reports the file's duration. */
+const ESTIMATED_WORD_MS = 420
+
 export function StarPractice() {
   const { id = '' } = useParams()
   const star = findSentenceStar(id)
@@ -46,9 +50,13 @@ export function StarPractice() {
 function StarRun({ star }: { star: SentenceStar }) {
   const nav = useNavigate()
   const [audioMissing, setAudioMissing] = useState(false)
-  // True only while the sample is actually sounding, so the rhythm dots pulse with it and stop
+  // True only while the sample is actually sounding, so the rhythm dots beat with it and stop
   // when it ends (or when the file turns out not to be there).
   const [playing, setPlaying] = useState(false)
+  // One beat = one word of the sample. Measured from the file itself, so the dots keep the
+  // sample's real tempo rather than a rate someone typed in.
+  const [beatMs, setBeatMs] = useState(ESTIMATED_WORD_MS)
+  const audioRef = useRef<HTMLAudioElement | null>(null)
   const [secondsLeft, setSecondsLeft] = useState(COUNTDOWN_FROM)
 
   function handleResult(result: PronunciationResult, blob: Blob | null) {
@@ -89,14 +97,49 @@ function StarRun({ star }: { star: SentenceStar }) {
   const next = SENTENCE_STARS[index + 1]
   const stressed = new Set(star.stress)
 
-  /** Sample audio is generated locally and may simply not be there yet — say so, never throw. */
-  function playSample() {
-    setPlaying(true)
-    playUrl(star.audio).then(
-      () => { setAudioMissing(false); setPlaying(false) },
-      () => { setAudioMissing(true); setPlaying(false) },
-    )
+  /** Detach and silence whatever is currently sounding. Safe to call on an already-stopped card
+   * (nothing is playing) and on unmount, so a sample can never outlive the screen. */
+  function stopSample() {
+    const a = audioRef.current
+    if (a) {
+      a.onloadedmetadata = null; a.onended = null; a.onerror = null
+      a.pause()
+      audioRef.current = null
+    }
+    setPlaying(false)
   }
+
+  /**
+   * The sample is loaded here rather than through `playUrl` because the dots need its *duration*:
+   * one beat per word only means anything if the beat is the sample's own. The estimate carries
+   * the dots until `loadedmetadata` lands (and forever, if it never does).
+   *
+   * Sample audio is generated locally and may simply not be there yet — say so, never throw.
+   */
+  function playSample() {
+    stopSample()
+    const a = new Audio(star.audio)
+    audioRef.current = a
+    const live = () => audioRef.current === a
+    const failed = () => { if (live()) { stopSample(); setAudioMissing(true) } }
+
+    setBeatMs(ESTIMATED_WORD_MS)
+    a.onloadedmetadata = () => {
+      if (!live()) return
+      setAudioMissing(false)
+      const seconds = a.duration
+      if (Number.isFinite(seconds) && seconds > 0) setBeatMs((seconds * 1000) / star.words.length)
+    }
+    a.onended = () => { if (live()) { setAudioMissing(false); stopSample() } }
+    a.onerror = failed
+
+    setPlaying(true)
+    // Safari rejects play() rather than firing `error` when it cannot start — settle both ways.
+    Promise.resolve(a.play()).catch(failed)
+  }
+
+  // A sample must not keep sounding after the child has left the sentence.
+  useEffect(() => stopSample, [])
 
   const message = stars === 3 ? 'Tuyệt vời!' : stars === 2 ? 'Hay lắm!' : 'Thử lại nhé'
 
@@ -121,12 +164,14 @@ function StarRun({ star }: { star: SentenceStar }) {
         </section>
 
         {/* The rhythm card: one dot per word, big where the beat falls. Tapping it replays the
-         * sample and the dots pulse along, so the child *sees* the shape they are aiming for. */}
+         * sample and each dot beats once as its word is said — a whole beat behind the one before
+         * it — so the child *sees* the shape they are aiming for while they hear it. */}
         <Card className="flex w-full max-w-2xl flex-col items-center gap-1 px-6 py-3">
           <button
             type="button"
             onClick={playSample}
             aria-label="Nghe nhịp của câu"
+            style={{ '--beat': `${Math.round(beatMs)}ms` } as React.CSSProperties}
             className="flex min-h-[64px] w-full items-center justify-center gap-4 transition-transform active:translate-y-[2px]"
           >
             {star.words.map((_w, i) => (
@@ -135,8 +180,8 @@ function StarRun({ star }: { star: SentenceStar }) {
                 data-testid="rhythm-dot"
                 data-stress={stressed.has(i) ? 'on' : 'off'}
                 aria-hidden="true"
-                className={`shrink-0 rounded-full ${stressed.has(i) ? 'h-6 w-6 bg-coral-500' : 'h-3 w-3 bg-teal-500'} ${playing ? 'animate-pulse-soft' : ''}`}
-                style={playing ? { animationDelay: `${i * 0.18}s` } : undefined}
+                className={`shrink-0 rounded-full ${stressed.has(i) ? 'h-6 w-6 bg-coral-500' : 'h-3 w-3 bg-teal-500'} ${playing ? 'animate-beat' : ''}`}
+                style={playing ? { animationDelay: `${Math.round(i * beatMs)}ms` } : undefined}
               />
             ))}
           </button>

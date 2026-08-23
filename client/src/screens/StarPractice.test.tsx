@@ -23,6 +23,24 @@ vi.mock('../speaking/useSpeakingAttempt', () => ({
 }))
 const playerControl = vi.hoisted(() => ({ playUrl: vi.fn(), playBlob: vi.fn() }))
 vi.mock('../audio/player', () => ({ playUrl: playerControl.playUrl, playBlob: playerControl.playBlob }))
+
+/** The rhythm card loads the sample itself rather than going through `playUrl`, because the beat
+ * of the dots comes from the file's own duration — which only an Audio element it holds can tell
+ * it. jsdom has no media stack at all, so the element is faked outright. */
+class FakeAudio {
+  static instances: FakeAudio[] = []
+  duration = NaN
+  paused = true
+  onloadedmetadata: (() => void) | null = null
+  onended: (() => void) | null = null
+  onerror: (() => void) | null = null
+  src: string
+  constructor(src: string) { this.src = src; FakeAudio.instances.push(this) }
+  play() { this.paused = false; return Promise.resolve() }
+  pause() { this.paused = true }
+}
+const lastAudio = () => FakeAudio.instances[FakeAudio.instances.length - 1]
+const tapRhythm = () => fireEvent.click(screen.getByRole('button', { name: 'Nghe nhịp của câu' }))
 const store = vi.hoisted(() => ({ saveRecording: vi.fn() }))
 vi.mock('../progress/recordings', () => ({ saveRecording: store.saveRecording }))
 
@@ -54,10 +72,14 @@ function renderStar(id = SS1.id) {
 
 beforeEach(() => {
   localStorage.clear()
+  FakeAudio.instances.length = 0
+  vi.stubGlobal('Audio', FakeAudio)
   playerControl.playUrl.mockReset().mockResolvedValue(undefined)
   playerControl.playBlob.mockReset().mockResolvedValue(undefined)
   store.saveRecording.mockReset().mockResolvedValue(undefined)
 })
+
+afterEach(() => { vi.unstubAllGlobals() })
 
 it('opens on the sentence with its stress, linking and legend', () => {
   renderStar()
@@ -86,27 +108,70 @@ it('draws one rhythm dot per word, big on the stressed ones', () => {
   }
 })
 
-it('pulses the dots only while the sample is actually sounding', async () => {
-  let finish = () => {}
-  playerControl.playUrl.mockReturnValue(new Promise<void>(res => { finish = () => res() }))
+it('beats the dots only while the sample is actually sounding', async () => {
   renderStar()
 
-  expect(screen.getAllByTestId('rhythm-dot')[0]).not.toHaveClass('animate-pulse-soft')
-  fireEvent.click(screen.getByRole('button', { name: 'Nghe nhịp của câu' }))
-  expect(playerControl.playUrl).toHaveBeenCalledWith(SS1.audio)
-  expect(screen.getAllByTestId('rhythm-dot')[0]).toHaveClass('animate-pulse-soft')
+  expect(screen.getAllByTestId('rhythm-dot')[0]).not.toHaveClass('animate-beat')
+  tapRhythm()
+  expect(lastAudio().src).toBe(SS1.audio)
+  expect(lastAudio().paused).toBe(false)
+  expect(screen.getAllByTestId('rhythm-dot')[0]).toHaveClass('animate-beat')
 
-  await act(async () => { finish() })
-  expect(screen.getAllByTestId('rhythm-dot')[0]).not.toHaveClass('animate-pulse-soft')
+  await act(async () => { lastAudio().onended?.() })
+  expect(screen.getAllByTestId('rhythm-dot')[0]).not.toHaveClass('animate-beat')
+})
+
+/** The beat is the point: one pulse per word, spaced by the sample's *own* tempo, so the dots
+ * march along with the voice instead of blinking at some invented rate. */
+it('beats once per word at the tempo the sample itself reports', async () => {
+  renderStar()
+  tapRhythm()
+
+  const audio = lastAudio()
+  await act(async () => { audio.duration = 2; audio.onloadedmetadata?.() })
+
+  // 2 s of audio across the 5 words of "I have a red apple." = one 400 ms beat per word…
+  const card = screen.getByRole('button', { name: 'Nghe nhịp của câu' })
+  expect(card.style.getPropertyValue('--beat')).toBe('400ms')
+  // …and each dot starts one whole beat after the one before it.
+  const dots = screen.getAllByTestId('rhythm-dot')
+  expect(dots).toHaveLength(5)
+  expect(dots.map(d => d.style.animationDelay)).toEqual(['0ms', '400ms', '800ms', '1200ms', '1600ms'])
+
+  await act(async () => { audio.onended?.() })
+  expect(screen.getAllByTestId('rhythm-dot')[0]).not.toHaveClass('animate-beat')
+})
+
+/** No metadata (file missing, decode blocked) must not freeze the dots mid-beat. */
+it('falls back to an estimated tempo when the browser reports no duration', () => {
+  renderStar()
+  tapRhythm()
+
+  const card = screen.getByRole('button', { name: 'Nghe nhịp của câu' })
+  expect(card.style.getPropertyValue('--beat')).toBe('420ms')
+  expect(screen.getAllByTestId('rhythm-dot')[0]).toHaveClass('animate-beat')
 })
 
 it('says so when the sample audio is missing', async () => {
-  playerControl.playUrl.mockRejectedValue(new Error('audio failed'))
   renderStar()
 
   fireEvent.click(screen.getByRole('button', { name: /nghe mẫu/i }))
-  await screen.findByText('Chưa có audio mẫu')
-  expect(screen.getAllByTestId('rhythm-dot')[0]).not.toHaveClass('animate-pulse-soft')
+  await act(async () => { lastAudio().onerror?.() })
+
+  expect(screen.getByText('Chưa có audio mẫu')).toBeInTheDocument()
+  expect(screen.getAllByTestId('rhythm-dot')[0]).not.toHaveClass('animate-beat')
+})
+
+/** Tapping twice must not leave the first sample sounding under the second. */
+it('stops a sample already playing before starting another', () => {
+  renderStar()
+  tapRhythm()
+  const first = lastAudio()
+  tapRhythm()
+
+  expect(first.paused).toBe(true)
+  expect(lastAudio()).not.toBe(first)
+  expect(lastAudio().paused).toBe(false)
 })
 
 it('turns an accurate, fluent, complete attempt into 3 stars on the sentence key', () => {
