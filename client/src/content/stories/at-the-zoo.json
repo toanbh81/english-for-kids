@@ -1,0 +1,269 @@
+{
+  "id": "at-the-zoo",
+  "title": "At the Zoo",
+  "titleVi": "Ở sở thú",
+  "emoji": "🦁",
+  "scenes": [
+    {
+      "text": "Today I go to the zoo with my mom.",
+      "textVi": "Hôm nay em đi sở thú cùng mẹ.",
+      "emoji": "🚗",
+      "bg": "linear-gradient(135deg,#A8E6CF,#56C596)",
+      "audio": "/audio/stories/at-the-zoo/scene-1.mp3",
+      "words": [
+        {
+          "w": "Today"
+        },
+        {
+          "w": "I"
+        },
+        {
+          "w": "go"
+        },
+        {
+          "w": "to"
+        },
+        {
+          "w": "the"
+        },
+        {
+          "w": "zoo"
+        },
+        {
+          "w": "with"
+        },
+        {
+          "w": "my"
+        },
+        {
+          "w": "mom."
+        }
+      ]
+    },
+    {
+      "text": "I see a big lion. The lion is sleeping.",
+      "textVi": "Em nhìn thấy một con sư tử to. Sư tử đang ngủ.",
+      "emoji": "🦁",
+      "bg": "linear-gradient(135deg,#FFE29F,#FFA99F)",
+      "audio": "/audio/stories/at-the-zoo/scene-2.mp3",
+      "words": [
+        {
+          "w": "I"
+        },
+        {
+          "w": "see"
+        },
+        {
+          "w": "a"
+        },
+        {
+          "w": "big"
+        },
+        {
+          "w": "lion."
+        },
+        {
+          "w": "The"
+        },
+        {
+          "w": "lion"
+        },
+        {
+          "w": "is"
+        },
+        {
+          "w": "sleeping."
+        }
+      ]
+    },
+    {
+      "text": "The monkeys are funny. They jump and play.",
+      "textVi": "Những chú khỉ thật ngộ nghĩnh. Chúng nhảy nhót và chơi đùa.",
+      "emoji": "🐒",
+      "bg": "linear-gradient(135deg,#D4FC79,#96E6A1)",
+      "audio": "/audio/stories/at-the-zoo/scene-3.mp3",
+      "words": [
+        {
+          "w": "The"
+        },
+        {
+          "w": "monkeys"
+        },
+        {
+          "w": "are"
+        },
+        {
+          "w": "funny."
+        },
+        {
+          "w": "They"
+        },
+        {
+          "w": "jump"
+        },
+        {
+          "w": "and"
+        },
+        {
+          "w": "play."
+        }
+      ]
+    },
+    {
+      "text": "The elephant is grey. It has a long nose.",
+      "textVi": "Con voi màu xám. Nó có cái vòi dài.",
+      "emoji": "🐘",
+      "bg": "linear-gradient(135deg,#CFD9DF,#E2EBF0)",
+      "audio": "/audio/stories/at-the-zoo/scene-4.mp3",
+      "words": [
+        {
+          "w": "The"
+        },
+        {
+          "w": "elephant"
+        },
+        {
+          "w": "is"
+        },
+        {
+          "w": "grey."
+        },
+        {
+          "w": "It"
+        },
+        {
+          "w": "has"
+        },
+        {
+          "w": "a"
+        },
+        {
+          "w": "long"
+        },
+        {
+          "w": "nose."
+        }
+      ]
+    },
+    {
+      "text": "I eat ice cream. It is cold and sweet.",
+      "textVi": "Em ăn kem. Kem lạnh và ngọt.",
+      "emoji": "🍦",
+      "bg": "linear-gradient(135deg,#FBC2EB,#A6C1EE)",
+      "audio": "/audio/stories/at-the-zoo/scene-5.mp3",
+      "words": [
+        {
+          "w": "I"
+        },
+        {
+          "w": "eat"
+        },
+        {
+          "w": "ice"
+        },
+        {
+          "w": "cream."
+        },
+        {
+          "w": "It"
+        },
+        {
+          "w": "is"
+        },
+        {
+          "w": "cold"
+        },
+        {
+          "w": "and"
+        },
+        {
+          "w": "sweet."
+        }
+      ]
+    },
+    {
+      "text": "I love the zoo!",
+      "textVi": "Em yêu sở thú!",
+      "emoji": "❤️",
+      "bg": "linear-gradient(135deg,#FFD1FF,#FAD0C4)",
+      "audio": "/audio/stories/at-the-zoo/scene-6.mp3",
+      "words": [
+        {
+          "w": "I"
+        },
+        {
+          "w": "love"
+        },
+        {
+          "w": "the"
+        },
+        {
+          "w": "zoo!"
+        }
+      ]
+    }
+  ],
+  "quiz": [
+    {
+      "q": "Who goes to the zoo with me?",
+      "qVi": "Ai đi sở thú cùng em?",
+      "options": [
+        {
+          "emoji": "👨",
+          "label": "dad"
+        },
+        {
+          "emoji": "👵",
+          "label": "grandma"
+        },
+        {
+          "emoji": "👩",
+          "label": "mom"
+        }
+      ],
+      "answer": 2
+    },
+    {
+      "q": "What is the lion doing?",
+      "qVi": "Sư tử đang làm gì?",
+      "options": [
+        {
+          "emoji": "😴",
+          "label": "sleeping"
+        },
+        {
+          "emoji": "🏃",
+          "label": "running"
+        },
+        {
+          "emoji": "🍽️",
+          "label": "eating"
+        }
+      ],
+      "answer": 0
+    },
+    {
+      "q": "What do I eat?",
+      "qVi": "Em ăn gì?",
+      "options": [
+        {
+          "emoji": "🍎",
+          "label": "apple"
+        },
+        {
+          "emoji": "🍦",
+          "label": "ice cream"
+        },
+        {
+          "emoji": "🍞",
+          "label": "bread"
+        }
+      ],
+      "answer": 1
+    }
+  ],
+  "retell": {
+    "text": "It has a long nose.",
+    "textVi": "Nó có cái vòi dài."
+  }
+}

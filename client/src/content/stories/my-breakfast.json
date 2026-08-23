@@ -1,0 +1,221 @@
+{
+  "id": "my-breakfast",
+  "title": "My Breakfast",
+  "titleVi": "Bữa sáng của em",
+  "emoji": "🥞",
+  "scenes": [
+    {
+      "text": "It is morning. I am hungry.",
+      "textVi": "Trời đã sáng. Em đói bụng.",
+      "emoji": "☀️",
+      "bg": "linear-gradient(135deg,#FFF1EB,#ACE0F9)",
+      "audio": "/audio/stories/my-breakfast/scene-1.mp3",
+      "words": [
+        {
+          "w": "It"
+        },
+        {
+          "w": "is"
+        },
+        {
+          "w": "morning."
+        },
+        {
+          "w": "I"
+        },
+        {
+          "w": "am"
+        },
+        {
+          "w": "hungry."
+        }
+      ]
+    },
+    {
+      "text": "I eat eggs and bread.",
+      "textVi": "Em ăn trứng và bánh mì.",
+      "emoji": "🍳",
+      "bg": "linear-gradient(135deg,#FFE5B4,#FFD1A9)",
+      "audio": "/audio/stories/my-breakfast/scene-2.mp3",
+      "words": [
+        {
+          "w": "I"
+        },
+        {
+          "w": "eat"
+        },
+        {
+          "w": "eggs"
+        },
+        {
+          "w": "and"
+        },
+        {
+          "w": "bread."
+        }
+      ]
+    },
+    {
+      "text": "I drink milk. Milk is white.",
+      "textVi": "Em uống sữa. Sữa có màu trắng.",
+      "emoji": "🥛",
+      "bg": "linear-gradient(135deg,#E0EAFC,#CFDEF3)",
+      "audio": "/audio/stories/my-breakfast/scene-3.mp3",
+      "words": [
+        {
+          "w": "I"
+        },
+        {
+          "w": "drink"
+        },
+        {
+          "w": "milk."
+        },
+        {
+          "w": "Milk"
+        },
+        {
+          "w": "is"
+        },
+        {
+          "w": "white."
+        }
+      ]
+    },
+    {
+      "text": "My sister eats a banana.",
+      "textVi": "Chị gái em ăn một quả chuối.",
+      "emoji": "🍌",
+      "bg": "linear-gradient(135deg,#FFF6B7,#F6416C)",
+      "audio": "/audio/stories/my-breakfast/scene-4.mp3",
+      "words": [
+        {
+          "w": "My"
+        },
+        {
+          "w": "sister"
+        },
+        {
+          "w": "eats"
+        },
+        {
+          "w": "a"
+        },
+        {
+          "w": "banana."
+        }
+      ]
+    },
+    {
+      "text": "My dad drinks coffee. It is hot.",
+      "textVi": "Bố em uống cà phê. Cà phê nóng.",
+      "emoji": "☕",
+      "bg": "linear-gradient(135deg,#D9AFD9,#97D9E1)",
+      "audio": "/audio/stories/my-breakfast/scene-5.mp3",
+      "words": [
+        {
+          "w": "My"
+        },
+        {
+          "w": "dad"
+        },
+        {
+          "w": "drinks"
+        },
+        {
+          "w": "coffee."
+        },
+        {
+          "w": "It"
+        },
+        {
+          "w": "is"
+        },
+        {
+          "w": "hot."
+        }
+      ]
+    },
+    {
+      "text": "Breakfast is yummy!",
+      "textVi": "Bữa sáng thật ngon!",
+      "emoji": "😋",
+      "bg": "linear-gradient(135deg,#FDCBF1,#E6DEE9)",
+      "audio": "/audio/stories/my-breakfast/scene-6.mp3",
+      "words": [
+        {
+          "w": "Breakfast"
+        },
+        {
+          "w": "is"
+        },
+        {
+          "w": "yummy!"
+        }
+      ]
+    }
+  ],
+  "quiz": [
+    {
+      "q": "What do I drink?",
+      "qVi": "Em uống gì?",
+      "options": [
+        {
+          "emoji": "🥛",
+          "label": "milk"
+        },
+        {
+          "emoji": "🧃",
+          "label": "juice"
+        },
+        {
+          "emoji": "☕",
+          "label": "coffee"
+        }
+      ],
+      "answer": 0
+    },
+    {
+      "q": "What does my sister eat?",
+      "qVi": "Chị gái em ăn gì?",
+      "options": [
+        {
+          "emoji": "🍎",
+          "label": "apple"
+        },
+        {
+          "emoji": "🥚",
+          "label": "egg"
+        },
+        {
+          "emoji": "🍌",
+          "label": "banana"
+        }
+      ],
+      "answer": 2
+    },
+    {
+      "q": "Is the coffee hot or cold?",
+      "qVi": "Cà phê nóng hay lạnh?",
+      "options": [
+        {
+          "emoji": "🧊",
+          "label": "cold"
+        },
+        {
+          "emoji": "🔥",
+          "label": "hot"
+        },
+        {
+          "emoji": "🌧️",
+          "label": "wet"
+        }
+      ],
+      "answer": 1
+    }
+  ],
+  "retell": {
+    "text": "I eat eggs and bread.",
+    "textVi": "Em ăn trứng và bánh mì."
+  }
+}

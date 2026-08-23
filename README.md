@@ -41,6 +41,53 @@ Sample word audio (Jenny's voice) is generated locally and saved to `client/publ
 AZURE_SPEECH_KEY=your-key AZURE_SPEECH_REGION=southeastasia node scripts/gen-audio.mjs three thank this very fish zoo ship chair red lion cat dog elephant monkey rabbit tiger bird horse sheep frog snake giraffe
 ```
 
+Story narration (full scenes with per-word timings) is generated the same way:
+
+```bash
+AZURE_SPEECH_KEY=your-key AZURE_SPEECH_REGION=southeastasia node scripts/gen-story.mjs little-fox at-the-zoo my-breakfast
+```
+
+This writes mp3s to `client/public/audio/stories/<id>/` and fills word timings (start/end ms) into
+each story's JSON; commit the updated JSON files afterwards (the mp3s themselves are gitignored).
+Run the commands from the repo root — the script resolves every path against the repo root, so it
+writes to the same places whatever your current directory is. If Azure's word boundaries do not
+line up with a scene's `words` array, the script exits with a message instead of writing shifted
+timings; fix the scene's `text`/`words` split and re-run.
+
+## Phase 2 — Listening (Nghe kể chuyện)
+
+A listening module that engages kids in illustrated stories with synchronized karaoke-style text. Kids listen to a 60–120 s story (6–7 scenes), see words light up in sync with narration, can slow playback, tap words to replay, toggle Vietnamese subtitles, then answer 3 picture questions and retell one target sentence.
+
+**No-audio fallback:** If you have not yet run `gen-story.mjs` or audio files are missing, the player still works — it drives the karaoke from an estimated word timing based on a silent clock (Chưa có giọng đọc — chữ chạy theo nhịp ước lượng). Everything is testable without Azure Speech.
+
+Features:
+- **Karaoke player** with scene art (large emoji on gradient), current word enlarged in coral, past words greyed out
+- **Speed control:** a single 🐢/🐇 button toggles between 0.75× and 1× (both the audio and the karaoke)
+- **Tap-word replay:** tap any word to hear it in isolation — from the narration once it exists, otherwise spoken by the browser's own voice (`speechSynthesis`)
+- **Subtitles toggle:** 🇻🇳 Vietnamese subtitles
+- **Background music:** procedural ambient pad (Web Audio, toggle remembered in `localStorage`)
+- **Quiz:** 3 picture-choice questions, Foxy says right/wrong, retry allowed; stars stored in `story:<id>`
+- **Retell:** speak one target sentence; lenient scoring (≥60 → 3★, ≥35 → 2★, else 1★) with encouragement, no phoneme hint; stars stored in `retell:<id>`
+
+For narration timings, see **"Generating sample audio"** above (`scripts/gen-story.mjs`). Built-in stories: *The Little Fox*, *At the Zoo*, *My Breakfast*.
+
+### Verified on iPad
+
+| # | Step | Expected result | Result |
+|---|------|------------------|--------|
+| 1 | Share → Add to Home Screen | Opens full-screen, cream background, Nunito font | ⏳ pending |
+| 2 | Sound Zoo → "three": tap 🔊 → hears Jenny; tap mic → permission prompt → accept; say "three"; tap stop | Stars appear within 3 s; word colored; hint shows if score < 80 | ⏳ pending |
+| 3 | "Nghe mình" (listen to self) | Plays back the recording | ⏳ pending |
+| 4 | Turn Wi-Fi off → reload | Header shows "chế độ đơn giản"; scoring still returns stars (Web Speech fallback) | ⏳ pending |
+| 5 | Close and reopen the app | Stars persist | ⏳ pending |
+| 6 | Stories → The Little Fox → play scene 1; tap 🎵 twice | Music stops, then starts again while the story keeps playing; selection persists across reload | ⏳ pending |
+| 7 | Stories → The Little Fox → play scene 1; tap the 🐢 speed button | Karaoke slows to 0.75×; the button becomes 🐇 | ⏳ pending |
+| 8 | Stories → The Little Fox → scene 1, tap the word "Foxy" | Until narration is generated, the word is spoken by the browser voice (speechSynthesis) and the karaoke pauses on it | ⏳ pending |
+| 9 | Stories → The Little Fox → finish quiz (3 questions), then Retell → speak "He wants an apple." | Lenient score (1–3 stars) appears; encouragement message shown | ⏳ pending |
+| 10 | After running `gen-story.mjs`: play scene 1 and tap 🐢 | 🐢 actually slows the audio (not just the karaoke) | ⏳ pending |
+| 11 | Retell → record once, go back to the player, tap a word | speechSynthesis word replay works after a mic recording | ⏳ pending |
+| 12 | Play with 🎵 on → lock the iPad → unlock and tap ▶ / 🎵 | Music resumes after lock/unlock instead of staying silent | ⏳ pending |
+
 ## Running
 
 ```bash
@@ -56,13 +103,14 @@ The client dev server uses HTTPS because Safari on iOS/iPadOS only allows microp
 ## Testing
 
 ```bash
-pnpm test        # client (Vitest, 22+ tests) + server (Vitest, 2 tests)
+pnpm test        # client (Vitest, 132 tests) + server (Vitest, 2 tests)
 pnpm lint        # oxlint on the client
 pnpm typecheck   # tsc -b (client) + tsc --noEmit (server)
 ```
 
-`pnpm test` runs `pnpm -r test`, which executes the client suite (`vitest run`, 22+ tests) and the
-server suite (`vitest run`, 2 tests). `pnpm lint` and `pnpm typecheck` fan out the same way.
+`pnpm test` runs `pnpm -r test`, which executes the client suite (`vitest run`, 132 tests in 21
+files) and the server suite (`vitest run`, 2 tests). `pnpm lint` and `pnpm typecheck` fan out the
+same way.
 
 ## Security note
 

@@ -1,0 +1,290 @@
+{
+  "id": "little-fox",
+  "title": "The Little Fox",
+  "titleVi": "Chú cáo nhỏ",
+  "emoji": "🦊",
+  "scenes": [
+    {
+      "text": "This is Foxy. Foxy is a little fox.",
+      "textVi": "Đây là Foxy. Foxy là một chú cáo nhỏ.",
+      "emoji": "🦊",
+      "bg": "linear-gradient(135deg,#FFE5B4,#FFB88C)",
+      "audio": "/audio/stories/little-fox/scene-1.mp3",
+      "words": [
+        {
+          "w": "This"
+        },
+        {
+          "w": "is"
+        },
+        {
+          "w": "Foxy."
+        },
+        {
+          "w": "Foxy"
+        },
+        {
+          "w": "is"
+        },
+        {
+          "w": "a"
+        },
+        {
+          "w": "little"
+        },
+        {
+          "w": "fox."
+        }
+      ]
+    },
+    {
+      "text": "Foxy lives in the forest.",
+      "textVi": "Foxy sống trong rừng.",
+      "emoji": "🌲",
+      "bg": "linear-gradient(135deg,#C8F2C0,#8FD9A8)",
+      "audio": "/audio/stories/little-fox/scene-2.mp3",
+      "words": [
+        {
+          "w": "Foxy"
+        },
+        {
+          "w": "lives"
+        },
+        {
+          "w": "in"
+        },
+        {
+          "w": "the"
+        },
+        {
+          "w": "forest."
+        }
+      ]
+    },
+    {
+      "text": "Foxy is hungry. He wants an apple.",
+      "textVi": "Foxy đói bụng. Cậu ấy muốn ăn một quả táo.",
+      "emoji": "😋",
+      "bg": "linear-gradient(135deg,#FFD3A5,#FD9853)",
+      "audio": "/audio/stories/little-fox/scene-3.mp3",
+      "words": [
+        {
+          "w": "Foxy"
+        },
+        {
+          "w": "is"
+        },
+        {
+          "w": "hungry."
+        },
+        {
+          "w": "He"
+        },
+        {
+          "w": "wants"
+        },
+        {
+          "w": "an"
+        },
+        {
+          "w": "apple."
+        }
+      ]
+    },
+    {
+      "text": "He sees a big red apple on a tree.",
+      "textVi": "Cậu ấy nhìn thấy một quả táo đỏ to trên cây.",
+      "emoji": "🍎",
+      "bg": "linear-gradient(135deg,#FFC1C1,#FF6B6B)",
+      "audio": "/audio/stories/little-fox/scene-4.mp3",
+      "words": [
+        {
+          "w": "He"
+        },
+        {
+          "w": "sees"
+        },
+        {
+          "w": "a"
+        },
+        {
+          "w": "big"
+        },
+        {
+          "w": "red"
+        },
+        {
+          "w": "apple"
+        },
+        {
+          "w": "on"
+        },
+        {
+          "w": "a"
+        },
+        {
+          "w": "tree."
+        }
+      ]
+    },
+    {
+      "text": "Foxy jumps, but the apple is too high.",
+      "textVi": "Foxy nhảy lên, nhưng quả táo ở quá cao.",
+      "emoji": "🤸",
+      "bg": "linear-gradient(135deg,#B4E7FF,#6EC6FF)",
+      "audio": "/audio/stories/little-fox/scene-5.mp3",
+      "words": [
+        {
+          "w": "Foxy"
+        },
+        {
+          "w": "jumps,"
+        },
+        {
+          "w": "but"
+        },
+        {
+          "w": "the"
+        },
+        {
+          "w": "apple"
+        },
+        {
+          "w": "is"
+        },
+        {
+          "w": "too"
+        },
+        {
+          "w": "high."
+        }
+      ]
+    },
+    {
+      "text": "A bird helps Foxy. The apple falls down.",
+      "textVi": "Một chú chim giúp Foxy. Quả táo rơi xuống.",
+      "emoji": "🐦",
+      "bg": "linear-gradient(135deg,#E0C3FC,#8EC5FC)",
+      "audio": "/audio/stories/little-fox/scene-6.mp3",
+      "words": [
+        {
+          "w": "A"
+        },
+        {
+          "w": "bird"
+        },
+        {
+          "w": "helps"
+        },
+        {
+          "w": "Foxy."
+        },
+        {
+          "w": "The"
+        },
+        {
+          "w": "apple"
+        },
+        {
+          "w": "falls"
+        },
+        {
+          "w": "down."
+        }
+      ]
+    },
+    {
+      "text": "Foxy says thank you. He is happy!",
+      "textVi": "Foxy nói lời cảm ơn. Cậu ấy rất vui!",
+      "emoji": "😄",
+      "bg": "linear-gradient(135deg,#FFF3B0,#FFD166)",
+      "audio": "/audio/stories/little-fox/scene-7.mp3",
+      "words": [
+        {
+          "w": "Foxy"
+        },
+        {
+          "w": "says"
+        },
+        {
+          "w": "thank"
+        },
+        {
+          "w": "you."
+        },
+        {
+          "w": "He"
+        },
+        {
+          "w": "is"
+        },
+        {
+          "w": "happy!"
+        }
+      ]
+    }
+  ],
+  "quiz": [
+    {
+      "q": "Who is Foxy?",
+      "qVi": "Foxy là con gì?",
+      "options": [
+        {
+          "emoji": "🐱",
+          "label": "cat"
+        },
+        {
+          "emoji": "🦊",
+          "label": "fox"
+        },
+        {
+          "emoji": "🐶",
+          "label": "dog"
+        }
+      ],
+      "answer": 1
+    },
+    {
+      "q": "What does Foxy want?",
+      "qVi": "Foxy muốn gì?",
+      "options": [
+        {
+          "emoji": "🍎",
+          "label": "apple"
+        },
+        {
+          "emoji": "🍌",
+          "label": "banana"
+        },
+        {
+          "emoji": "🍕",
+          "label": "pizza"
+        }
+      ],
+      "answer": 0
+    },
+    {
+      "q": "Who helps Foxy?",
+      "qVi": "Ai giúp Foxy?",
+      "options": [
+        {
+          "emoji": "🐟",
+          "label": "fish"
+        },
+        {
+          "emoji": "🐘",
+          "label": "elephant"
+        },
+        {
+          "emoji": "🐦",
+          "label": "bird"
+        }
+      ],
+      "answer": 2
+    }
+  ],
+  "retell": {
+    "text": "He wants an apple.",
+    "textVi": "Cậu ấy muốn một quả táo."
+  }
+}
