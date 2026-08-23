@@ -35,21 +35,6 @@ const CARD_STATE: Record<Exclude<Feedback, 'idle'>, string> = {
   wrong: 'shadow-[0_8px_0_#F8A3AE,0_0_0_6px_#FFD4DA]',
 }
 
-/** Splits `text` so an exact word match on `keyword` can be tinted coral. Word boundaries keep
- * "fox" from colouring half of "Foxy". */
-function highlight(text: string, keyword: string) {
-  const escaped = keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-  const match = new RegExp(`\\b${escaped}\\b`, 'i').exec(text)
-  if (!match) return text
-  return (
-    <>
-      {text.slice(0, match.index)}
-      <span className="text-coral-text">{match[0]}</span>
-      {text.slice(match.index + match[0].length)}
-    </>
-  )
-}
-
 function StoryQuizInner({ quiz, id }: { quiz: QuizQ[]; id: string }) {
   const [qIndex, setQIndex] = useState(0)
   const [selected, setSelected] = useState<number | null>(null)
@@ -132,9 +117,9 @@ function StoryQuizInner({ quiz, id }: { quiz: QuizQ[]; id: string }) {
         </div>
         <div className="flex flex-1 items-center gap-3 rounded-[22px] rounded-bl-[6px] bg-white px-5 py-4 shadow-card-sm">
           <div className="flex-1 text-center">
-            <p className="font-display text-[30px] font-extrabold leading-tight text-ink-900">
-              {highlight(q.q, q.options[q.answer].label)}
-            </p>
+            {/* The question is never keyword-tinted: highlighting the answer word inside it gave
+                the answer away before the child had picked a card. */}
+            <p className="font-display text-[30px] font-extrabold leading-tight text-ink-900">{q.q}</p>
             <p className="mt-1 text-lg font-bold text-ink-500">{q.qVi}</p>
           </div>
           {/* 58 px circle inside a 64 px tap target — the picture stays small, the finger doesn't. */}
