@@ -10,3 +10,4 @@ dist
 # whose parent directory is excluded, which would break the .gitkeep negation below.
 client/public/audio/*
 !client/public/audio/.gitkeep
+samples/
