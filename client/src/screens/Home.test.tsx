@@ -136,6 +136,19 @@ it('does not show the time-limit banner under the limit', () => {
   expect(screen.queryByTestId('limit-banner')).not.toBeInTheDocument()
 })
 
+it('keeps the stacked layout scrollable so the mission CTA is never trapped below the fold', () => {
+  renderHome()
+
+  const root = screen.getByRole('main')
+  // A fixed-height, clipped root is what hid the mission CTA and the parent link in portrait:
+  // the stacked layout is taller than the viewport, so the root has to grow and the page scroll.
+  expect(root).toHaveClass('min-h-full', 'overflow-y-auto')
+  expect(root.classList.contains('h-full')).toBe(false)
+  expect(root.classList.contains('overflow-hidden')).toBe(false)
+  // Only the landscape map frame may clip, and only from `lg` up.
+  expect(Array.from(root.classList).filter(c => c.includes('overflow-hidden'))).toEqual([])
+})
+
 it('puts the five islands on the map and links each to its module', () => {
   renderHome()
 

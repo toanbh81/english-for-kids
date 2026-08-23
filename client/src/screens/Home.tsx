@@ -43,11 +43,11 @@ function wordStars(): Stars {
 /** Islands of the landscape map. `left`/`top` are percentages of the 1194×834 frame taken from the
  * handoff, so the map scales with the viewport instead of drifting on a narrower iPad. */
 const ISLANDS = [
-  { to: '/stories', emoji: '🎧', name: 'Nghe kể chuyện', left: '9%', top: '47%', size: 'h-[128px] w-[128px] text-[54px]', color: 'bg-coral-500 shadow-[0_8px_0_#E05A3A,0_0_0_8px_#FFE9DF]' },
-  { to: '/level/sound-zoo', emoji: '🦁', name: 'Sound Zoo', left: '28%', top: '32%', size: 'h-[120px] w-[120px] text-[50px]', color: 'bg-teal-500 shadow-[0_8px_0_#1FA396,0_0_0_8px_#D3F1EC]' },
-  { to: '/level/word-pop', emoji: '🎈', name: 'Word Pop', left: '47%', top: '48%', size: 'h-[120px] w-[120px] text-[50px]', color: 'bg-peach-400 shadow-[0_8px_0_#E07A42,0_0_0_8px_#FFE7D2]' },
-  { to: '/words', emoji: '🧩', name: 'Từ vựng', left: '67%', top: '26%', size: 'h-[120px] w-[120px] text-[50px]', color: 'bg-sky-400 shadow-[0_8px_0_#5BA7D4,0_0_0_8px_#DDF0FB]' },
-  { to: '/sentences', emoji: '🧱', name: 'Ghép câu', left: '84%', top: '40%', size: 'h-[118px] w-[118px] text-[48px]', color: 'bg-sun-400 shadow-[0_8px_0_#E0A61A,0_0_0_8px_#FFF1C9]' },
+  { to: '/stories', emoji: '🎧', name: 'Nghe kể chuyện', left: '9%', top: '47%', size: 'h-[104px] w-[104px] text-[44px] lg:h-[128px] lg:w-[128px] lg:text-[54px]', color: 'bg-coral-500 shadow-[0_8px_0_#E05A3A,0_0_0_8px_#FFE9DF]' },
+  { to: '/level/sound-zoo', emoji: '🦁', name: 'Sound Zoo', left: '28%', top: '32%', size: 'h-[104px] w-[104px] text-[44px] lg:h-[120px] lg:w-[120px] lg:text-[50px]', color: 'bg-teal-500 shadow-[0_8px_0_#1FA396,0_0_0_8px_#D3F1EC]' },
+  { to: '/level/word-pop', emoji: '🎈', name: 'Word Pop', left: '47%', top: '48%', size: 'h-[104px] w-[104px] text-[44px] lg:h-[120px] lg:w-[120px] lg:text-[50px]', color: 'bg-peach-400 shadow-[0_8px_0_#E07A42,0_0_0_8px_#FFE7D2]' },
+  { to: '/words', emoji: '🧩', name: 'Từ vựng', left: '67%', top: '26%', size: 'h-[104px] w-[104px] text-[44px] lg:h-[120px] lg:w-[120px] lg:text-[50px]', color: 'bg-sky-400 shadow-[0_8px_0_#5BA7D4,0_0_0_8px_#DDF0FB]' },
+  { to: '/sentences', emoji: '🧱', name: 'Ghép câu', left: '84%', top: '40%', size: 'h-[104px] w-[104px] text-[44px] lg:h-[118px] lg:w-[118px] lg:text-[48px]', color: 'bg-sun-400 shadow-[0_8px_0_#E0A61A,0_0_0_8px_#FFF1C9]' },
 ] as const
 
 // The dotted trail the islands sit on. Decorative only, and drawn in frame coordinates so it
@@ -87,15 +87,18 @@ export function Home() {
   }, [celebrating, now, navigate])
 
   return (
-    <main className="relative h-full overflow-y-auto overflow-x-hidden bg-cream-50 p-5 sm:p-7">
+    // `min-h-full`, never `h-full`: the stacked portrait layout is taller than the viewport, and a
+    // fixed-height root would leave the mission CTA and the parent link below an unscrollable fold.
+    // The root grows with its content and the page scrolls; only the `lg` map frame is clipped.
+    <main className="relative min-h-full overflow-y-auto overflow-x-hidden bg-cream-50 p-4 sm:p-7">
       <h1 className="sr-only">Speak Up!</h1>
 
       {/* Soft background blobs of the handoff frame. */}
       <div aria-hidden="true" className="pointer-events-none absolute -left-24 -top-28 h-[300px] w-[300px] rounded-full bg-[#FFEDD6]" />
       <div aria-hidden="true" className="pointer-events-none absolute -bottom-32 -right-20 h-[340px] w-[340px] rounded-full bg-teal-50" />
 
-      <div className="relative mx-auto flex w-full max-w-[1194px] flex-col gap-4">
-        <header className="flex flex-wrap items-center justify-between gap-4">
+      <div className="relative mx-auto flex w-full max-w-[1194px] flex-col gap-3">
+        <header className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             <Foxy mood={mood} size="md" className="animate-bob" />
             <SpeechBubble title={<span className="text-coral-text">Chào bé! 👋</span>} subtitle={say} className="flex-1" />
@@ -122,33 +125,40 @@ export function Home() {
           * effect. The frame keeps the handoff's 1194×834 proportions but never grows past the
           * viewport, so on a 1024×768 iPad the whole map — mission card included — stays on
           * screen. */}
-        <div className="relative grid grid-cols-2 gap-x-4 gap-y-6 lg:block lg:aspect-[1194/834] lg:max-h-[calc(100vh-180px)]">
-          <svg
-            aria-hidden="true"
-            viewBox="0 0 1194 834"
-            preserveAspectRatio="none"
-            className="pointer-events-none absolute inset-0 hidden h-full w-full lg:block"
-          >
-            <path d={TRAIL} stroke="#EAD9BE" strokeWidth={14} strokeLinecap="round" strokeDasharray="2 26" fill="none" />
-          </svg>
-
-          {ISLANDS.map(island => (
-            <Link
-              key={island.to}
-              to={island.to}
-              aria-label={`${island.name}, ${stars[island.to]} sao`}
-              style={{ left: island.left, top: island.top }}
-              // The press is a scale, not a nudge down: on the map the island is centred on its
-              // percentage with a translate, which a `translate-y` press would cancel out.
-              className="flex flex-col items-center gap-2 transition-transform active:scale-95 lg:absolute lg:-translate-x-1/2 lg:-translate-y-1/2"
+        <div className="relative grid grid-cols-2 gap-x-4 gap-y-4 lg:block lg:aspect-[1194/834] lg:max-h-[calc(100vh-180px)]">
+          {/* `contents` in the stacked grid, so the islands stay plain grid items; from `lg` up it
+            * becomes the top band of the map and the percentages resolve against it. The band stops
+            * 200 px short of the bottom, which is the strip the mission card and the parent link
+            * occupy — that keeps the trail and the island labels clear of them at any frame size. */}
+          <div className="contents lg:absolute lg:inset-x-0 lg:bottom-[200px] lg:top-0 lg:block">
+            <svg
+              aria-hidden="true"
+              viewBox="0 0 1194 834"
+              preserveAspectRatio="none"
+              className="pointer-events-none absolute inset-0 hidden h-full w-full lg:block"
             >
-              <span aria-hidden="true" className={`flex items-center justify-center rounded-full ${island.size} ${island.color}`}>
-                {island.emoji}
-              </span>
-              <span aria-hidden="true" className="font-display text-xl font-extrabold text-ink-900">{island.name}</span>
-              <StarRow value={stars[island.to]} size="sm" />
-            </Link>
-          ))}
+              <path d={TRAIL} stroke="#EAD9BE" strokeWidth={14} strokeLinecap="round" strokeDasharray="2 26" fill="none" />
+            </svg>
+
+            {ISLANDS.map(island => (
+              <Link
+                key={island.to}
+                to={island.to}
+                aria-label={`${island.name}, ${stars[island.to]} sao`}
+                // `left`/`top` are the island's top-left corner, the same anchor the handoff frame
+                // uses. The press is a scale rather than a nudge down, which would fight the
+                // absolute `top` on the map.
+                style={{ left: island.left, top: island.top }}
+                className="flex flex-col items-center gap-1.5 transition-transform active:scale-95 lg:absolute"
+              >
+                <span aria-hidden="true" className={`flex items-center justify-center rounded-full ${island.size} ${island.color}`}>
+                  {island.emoji}
+                </span>
+                <span aria-hidden="true" className="font-display text-xl font-extrabold text-ink-900">{island.name}</span>
+                <StarRow value={stars[island.to]} size="sm" />
+              </Link>
+            ))}
+          </div>
 
           <div className="col-span-2 lg:absolute lg:bottom-2 lg:left-2 lg:w-[380px]">
             <MissionCard status={status} />
