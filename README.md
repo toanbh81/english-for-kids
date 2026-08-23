@@ -351,6 +351,17 @@ are produced by the same `gen-audio.mjs` / `gen-sounds.mjs` scripts documented a
 except `audio/audition/`, the voice-audition scratch folder, which is the only one `.gitignore`
 excludes.
 
+
+### Story illustrations via Claude Design (kho ảnh trung tâm)
+
+The Claude Design project holds a **"Story Art"** page with one `image-slot` per story scene (slot id = `story-<storyId>-scene-<n>`, 4:3) plus a style prompt per scene. Fill the slots there (drag an image in), then export the project zip and copy each image to `client/public/images/stories/<storyId>/scene-<n>.png` (jpg/webp also fine). Run:
+
+```bash
+node scripts/link-story-images.mjs
+```
+
+It sets `scenes[n].image` in the story JSON for every file found (and clears it for missing ones); scenes without an image keep the emoji art. Commit the JSON and the images. `docs/design/out/Story Art.dc.html` is the local copy of that page; regenerate it when stories are added (see the snippet in git history of this commit) so new scenes get slots.
+
 ## iPad setup & testing (Thiết lập trên iPad)
 
 1. Make sure your iPad and PC are on the same Wi-Fi network.
