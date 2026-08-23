@@ -9,9 +9,11 @@ import type { PronunciationResult } from '../scoring/types'
 const mic = vi.hoisted(() => ({
   push: (_r: PronunciationResult, _b: Blob | null = null) => {},
   engine: 'azure' as 'azure' | 'webspeech',
+  autoStopMs: undefined as number | undefined,
 }))
 vi.mock('../speaking/useSpeakingAttempt', () => ({
-  useSpeakingAttempt(opts: { resetKey?: string; onResult?: (r: PronunciationResult, b: Blob | null) => void }) {
+  useSpeakingAttempt(opts: { resetKey?: string; autoStopMs?: number; onResult?: (r: PronunciationResult, b: Blob | null) => void }) {
+    mic.autoStopMs = opts.autoStopMs
     const [state, setState] = useState<{ result: PronunciationResult | null; blob: Blob | null }>({ result: null, blob: null })
     useEffect(() => { setState({ result: null, blob: null }) }, [opts.resetKey])
     mic.push = (r: PronunciationResult, b: Blob | null = null) => {
@@ -81,6 +83,13 @@ it('opens on the passage with the mood it has to be read in', () => {
   expect(screen.getByText(SV1.vi)).toBeInTheDocument()
   expect(screen.getByRole('link', { name: 'Quay lại' })).toHaveAttribute('href', '/level/story-voice')
   expect(screen.getByRole('button', { name: /bấm để nói/i })).toBeInTheDocument()
+})
+
+/** Three sentences read *slowly, with feeling* do not fit in the 6 s every other bậc uses — and a
+ * mic that shuts mid-sentence scores the missing half as incomplete. 13 s is the measured room. */
+it('opens the mic for 13 seconds, long enough for a whole passage read with feeling', () => {
+  renderVoice()
+  expect(mic.autoStopMs).toBe(13000)
 })
 
 /** "I love my dog!" — the ❗ is what the voice actually has to do, so it is the coral bit. */

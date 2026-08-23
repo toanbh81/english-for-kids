@@ -474,6 +474,7 @@ sample audio" above for the exact command and output folders (`client/public/aud
 | 34 | Story Voice → score a passage over Wi-Fi (Azure) | A big "Ngữ điệu NN" chip leads the result, toned by the prosody score, ahead of the score bars | ⏳ pending |
 | 35 | Turn Wi-Fi off (header shows "chế độ đơn giản") → Story Voice → score a passage | Chip reads "Chưa chấm được ngữ điệu" instead of a number, and the run is capped at 2 stars | ⏳ pending |
 | 36 | `/levels` stairs | All 5 steps show as playable links — Sentence Stars and Story Voice have no 🔒 "Sắp có" placeholder left | ⏳ pending |
+| 37 | Story Voice → tap the mic and read a whole passage slowly, with feeling | The countdown ticks 13→1 and the mic stays open to the end of the third sentence — it must not cut off mid-passage | ⏳ pending |
 
 ## Architecture
 

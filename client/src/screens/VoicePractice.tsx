@@ -20,8 +20,10 @@ import { Foxy } from '../components/Foxy'
 import { BackButton, Button, Card, Chip } from '../components/ui'
 import { useSpeakingAttempt } from '../speaking/useSpeakingAttempt'
 
-/** Passages run 2–3 sentences, so the mic stays open longer here than anywhere else. */
-const AUTO_STOP_MS = 10000
+/** Passages run 2–3 sentences read *slowly, with feeling*, so the mic stays open longer here than
+ * anywhere else: at 10 s a careful reader was still mid-passage when it closed, and the unsaid
+ * half scored as incomplete. 13 s covers the longest passage with room to breathe. */
+const AUTO_STOP_MS = 13000
 const COUNTDOWN_FROM = AUTO_STOP_MS / 1000
 
 /** What "reading with this feeling" actually means, in three things a child can do on purpose.
