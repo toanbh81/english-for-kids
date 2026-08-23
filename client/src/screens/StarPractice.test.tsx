@@ -141,6 +141,18 @@ it('drops to 2 stars and names the slow rhythm when fluency is low', () => {
   expect(screen.queryByRole('button', { name: /nghe mình/i })).not.toBeInTheDocument()
 })
 
+/** A read that was nearly joined-up is not "chậm" — calling it that contradicts the 2 stars it
+ * just earned. The middle band names what is left to do instead of grading it down. */
+it('names the middle rhythm band instead of calling a near-fluent read slow', () => {
+  renderStar()
+  score(result(85, 70, 100))
+
+  expect(screen.getAllByTestId('star-filled')).toHaveLength(2)
+  expect(screen.getByText('Nhịp: 🙂 khá — nói liền hơi hơn nhé')).toBeInTheDocument()
+  expect(screen.queryByText('Nhịp: 🐢 chậm')).not.toBeInTheDocument()
+  expect(screen.queryByText('Nhịp: 🎵 tốt')).not.toBeInTheDocument()
+})
+
 it('offers a hint and a retry when the attempt was weak', () => {
   renderStar()
   score(result(40, 40, 40))

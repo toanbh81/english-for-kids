@@ -25,8 +25,15 @@ const AUTO_STOP_MS = 6000
 const COUNTDOWN_FROM = AUTO_STOP_MS / 1000
 
 /** Fluency is what "rhythm" means here: a sentence read word-by-word scores low on it however
- * accurate every single word was, and that is exactly the thing this bậc is teaching. */
-const SLOW_BELOW = 60
+ * accurate every single word was, and that is exactly the thing this bậc is teaching.
+ *
+ * Three bands, not two: a 70 is a nearly joined-up read that just earned 2 stars, and calling it
+ * "chậm" would contradict them. The middle band names the one thing left to do instead. */
+function rhythmLine(fluency: number): string {
+  if (fluency >= 80) return 'Nhịp: 🎵 tốt'
+  if (fluency >= 60) return 'Nhịp: 🙂 khá — nói liền hơi hơn nhé'
+  return 'Nhịp: 🐢 chậm'
+}
 
 export function StarPractice() {
   const { id = '' } = useParams()
@@ -142,7 +149,7 @@ function StarRun({ star }: { star: SentenceStar }) {
             <Stars value={stars} animate={stars === 3} />
             <p className="font-display text-3xl font-extrabold text-ink-900">{message}</p>
             <p className="font-display text-xl font-extrabold text-ink-500">
-              {result.fluency < SLOW_BELOW ? 'Nhịp: 🐢 chậm' : 'Nhịp: 🎵 tốt'}
+              {rhythmLine(result.fluency)}
             </p>
             <ScoredWords words={feedback.words} />
             <ScoreBars result={result} />
