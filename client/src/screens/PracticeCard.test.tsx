@@ -35,6 +35,9 @@ vi.mock('../scoring/createScorer', () => ({
   }),
 }))
 import { PracticeCard } from './PracticeCard'
+import { LEVELS } from '../content'
+
+const soundZooCards = LEVELS.find(l => l.id === 'sound-zoo')!.cards
 
 /** The level route is stubbed rather than pulling in LevelSelect: these tests only care that
  * "Hoàn thành 🎉" lands back on the level the card belongs to. */
@@ -101,19 +104,20 @@ it('Tiếp theo goes to the next card of the same level', async () => {
 
   fireEvent.click(screen.getByRole('button', { name: /tiếp theo/i }))
 
-  expect(screen.getByText('thank')).toBeInTheDocument() // sz-th-thank, the 2nd Sound Zoo card
-  expect(screen.getByText('Thẻ 2/10')).toBeInTheDocument()
+  expect(screen.getByText(soundZooCards[1].text)).toBeInTheDocument() // the 2nd Sound Zoo card
+  expect(screen.getByText(`Thẻ 2/${soundZooCards.length}`)).toBeInTheDocument()
 })
 
 it('the last card of a level finishes back at the level instead of jumping to the next level', async () => {
-  renderCard('sz-l-lion') // 10th and last Sound Zoo card
+  const total = soundZooCards.length
+  renderCard(soundZooCards.at(-1)!.id) // last Sound Zoo card
   await scoreOnce()
-  expect(screen.getByText('Thẻ 10/10')).toBeInTheDocument()
+  expect(screen.getByText(`Thẻ ${total}/${total}`)).toBeInTheDocument()
   expect(screen.queryByRole('button', { name: /tiếp theo/i })).not.toBeInTheDocument()
 
   fireEvent.click(screen.getByRole('button', { name: /hoàn thành/i }))
 
-  // Not Word Pop's first card: the counter says 10/10, so the run is over.
+  // Not Word Pop's first card: the counter says total/total, so the run is over.
   expect(screen.getByText('danh sách thẻ')).toBeInTheDocument()
 })
 
