@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import type { ChangeEvent, FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { ParentDashboard } from './ParentDashboard'
+import { Button, Card } from '../components/ui'
 
 const FLAG_KEY = 'speakup.parent'
 const MAX_AGE_MS = 10 * 60 * 1000
@@ -36,7 +37,16 @@ export function ParentGate() {
   // Leaving /parent re-locks: the flag never outlives the screen that owns it.
   useEffect(() => clearFlag, [])
 
-  if (unlocked) return <ParentDashboard />
+  // ParentDashboard owns none of the unlocked state — "Khoá lại" just hands control back here.
+  function handleLock() {
+    clearFlag()
+    setQuestion(newQuestion())
+    setValue('')
+    setWrong(false)
+    setUnlocked(false)
+  }
+
+  if (unlocked) return <ParentDashboard onLock={handleLock} />
 
   function handleAnswer(e: ChangeEvent<HTMLInputElement>) {
     setValue(e.target.value)
@@ -55,31 +65,33 @@ export function ParentGate() {
   }
 
   return (
-    <main className="h-full overflow-y-auto flex flex-col items-center justify-center gap-6 p-6 text-base text-slate-700">
-      <Link to="/" className="min-h-[64px] self-start inline-flex items-center font-semibold">← Về nhà</Link>
+    <main className="flex h-full flex-col items-center justify-center gap-6 overflow-y-auto bg-cream-50 p-6">
+      <Link
+        to="/"
+        className="inline-flex min-h-[64px] items-center gap-2 self-start rounded-full bg-white px-6 font-display text-xl font-extrabold text-ink-900 shadow-card-sm active:translate-y-[2px]"
+      >
+        ← Về nhà
+      </Link>
 
-      <h1 className="text-xl font-bold">Dành cho phụ huynh</h1>
-      <p className="text-2xl font-bold">{question.a} × {question.b} = ?</p>
+      <Card className="flex w-full max-w-md flex-col items-center gap-6 p-8 text-center">
+        <h1 className="text-base font-bold text-ink-500">Dành cho phụ huynh</h1>
+        <p className="font-display text-[44px] font-extrabold text-ink-900">{question.a} × {question.b} = ?</p>
 
-      <form onSubmit={handleSubmit} className="flex flex-col items-center gap-6">
-        <input
-          aria-label="Đáp án"
-          inputMode="numeric"
-          type="text"
-          value={value}
-          onChange={handleAnswer}
-          className="min-h-[64px] w-32 text-center text-2xl rounded-2xl border-2 border-slate-300"
-        />
+        <form onSubmit={handleSubmit} className="flex flex-col items-center gap-6">
+          <input
+            aria-label="Đáp án"
+            inputMode="numeric"
+            type="text"
+            value={value}
+            onChange={handleAnswer}
+            className="h-16 w-32 rounded-2xl border-2 border-line-200 text-center font-display text-2xl font-extrabold text-ink-900"
+          />
 
-        {wrong && <p className="text-fix font-semibold">Chưa đúng, thử lại</p>}
+          {wrong && <p className="font-bold text-fix">Chưa đúng, thử lại</p>}
 
-        <button
-          type="submit"
-          className="min-h-[64px] min-w-[64px] px-6 rounded-2xl bg-teal text-white font-bold"
-        >
-          Vào
-        </button>
-      </form>
+          <Button type="submit">Vào</Button>
+        </form>
+      </Card>
     </main>
   )
 }

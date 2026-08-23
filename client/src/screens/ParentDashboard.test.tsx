@@ -110,6 +110,21 @@ describe('ParentGate', () => {
 
     expect(sessionStorage.getItem(FLAG_KEY)).toBeNull()
   })
+
+  it('returns to the gate when "Khoá lại" is clicked', async () => {
+    vi.spyOn(Math, 'random').mockReturnValue(0) // a = 3, b = 3 -> product 9
+    renderWithRouter(<ParentGate />)
+
+    fireEvent.change(screen.getByLabelText('Đáp án'), { target: { value: '9' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Vào' }))
+    await screen.findByText('Phút luyện mỗi ngày (14 ngày)')
+
+    fireEvent.click(screen.getByRole('button', { name: /Khoá lại/ }))
+
+    expect(screen.getByLabelText('Đáp án')).toBeInTheDocument()
+    expect(screen.queryByText('Phút luyện mỗi ngày (14 ngày)')).not.toBeInTheDocument()
+    expect(sessionStorage.getItem(FLAG_KEY)).toBeNull()
+  })
 })
 
 describe('ParentDashboard', () => {
@@ -143,6 +158,40 @@ describe('ParentDashboard', () => {
     await flush()
 
     expect(screen.getByText('Chưa đủ dữ liệu')).toBeInTheDocument()
+  })
+
+  it('renders the weekly summary line from minutesPerDay(7) and averageScoreByKind', async () => {
+    vi.useFakeTimers({ now: NOW })
+    seedActivity([{ ts: NOW, kind: 'speak', id: 'w1', score: 80 }])
+
+    renderWithRouter(<ParentDashboard />)
+    await flush()
+
+    expect(screen.getByText('Tuần này: 1 phút luyện · điểm phát âm trung bình 80/100')).toBeInTheDocument()
+  })
+
+  it('shows a dash for the average score in the summary line when there is no data', async () => {
+    renderWithRouter(<ParentDashboard />)
+    await flush()
+
+    expect(screen.getByText('Tuần này: 0 phút luyện · điểm phát âm trung bình —/100')).toBeInTheDocument()
+  })
+
+  it('shows the target line label at the current daily limit', async () => {
+    renderWithRouter(<ParentDashboard />)
+    await flush()
+
+    expect(screen.getByText('Mục tiêu 20 phút/ngày')).toBeInTheDocument()
+  })
+
+  it('persists a limit chip click', async () => {
+    renderWithRouter(<ParentDashboard />)
+    await flush()
+
+    fireEvent.click(screen.getByRole('button', { name: '30 phút' }))
+
+    expect(localStorage.getItem('speakup.limit.minutes')).toBe('30')
+    expect(screen.getByText('Mục tiêu 30 phút/ngày')).toBeInTheDocument()
   })
 
   it('a recording row plays through the mocked playBlob when tapped', async () => {

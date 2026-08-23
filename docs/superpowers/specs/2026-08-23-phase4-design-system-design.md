@@ -31,3 +31,5 @@ Re-skin every screen to the handoff's look — warm cream canvas, chunky offset 
 
 ## Constraints
 Tap targets ≥ 64 px, mic ≥ 120 px; Vietnamese copy; all existing tests keep passing (update only assertions that encode old visual classes, never behaviour); lint/typecheck/build green; bundle stays under the PWA precache budget; fonts via Google Fonts (already allowed).
+
+Status: implemented 2026-08-23 on branch phase4-design (tasks 1–6).
