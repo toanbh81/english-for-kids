@@ -148,12 +148,12 @@ The client dev server uses HTTPS because Safari on iOS/iPadOS only allows microp
 ## Testing
 
 ```bash
-pnpm test        # client (Vitest, 241 tests) + server (Vitest, 2 tests)
+pnpm test        # client (Vitest, 257 tests) + server (Vitest, 2 tests)
 pnpm lint        # oxlint on the client
 pnpm typecheck   # tsc -b (client) + tsc --noEmit (server)
 ```
 
-`pnpm test` runs `pnpm -r test`, which executes the client suite (`vitest run`, 241 tests in 36
+`pnpm test` runs `pnpm -r test`, which executes the client suite (`vitest run`, 257 tests in 36
 files) and the server suite (`vitest run`, 2 tests). `pnpm lint` and `pnpm typecheck` fan out the
 same way.
 
@@ -190,23 +190,37 @@ Never bypass with `--no-verify`; fix the pattern instead if it false-positives.
 
 A daily habit loop: kids complete a 3-step mission (listen to a story, try 5 words/sentences, unlock or review vocabulary), earn a weekly streak, and see Foxy the mascot celebrate progress. Parents can view pronunciation practice time, weak sounds, and recordings (behind a math gate).
 
-**Routes:** `/words`, `/words/:topic`, `/words/:topic/:wordId`, `/words/review`, `/sentences`, `/sentence/:id`, `/parent`.
+**Routes:**
+
+| Route | Screen |
+|---|---|
+| `/words` | topic list + the "Ôn tập hôm nay" review deck |
+| `/words/:topic` | word list — `topic` is `food`, `school`, `family` or `review` |
+| `/words/:topic/:wordId` | flashcard + say-to-unlock |
+| `/sentences` | sentence list |
+| `/sentence/:id` | Sentence Builder |
+| `/parent` | Parent Dashboard (behind the math gate) |
 
 **Features:**
 
-- **Words (Từ vựng)** — 3 topics (Food 🍎, School 🏫, Family 👨‍👩‍👧) × 8 words each. Flashcard with emoji/IPA front, Vietnamese + example sentence back. Sample audio: `node scripts/gen-audio.mjs --out client/public/audio/words <24-words>` (already generated). "Nói để mở khoá" (say ≥60 to unlock). Spaced repetition: Leitner boxes 1/3/7/14 days; "Ôn tập hôm nay" deck shows due words.
+- **Words (Từ vựng)** — 3 topics (Food 🍎, School 🏫, Family 👨‍👩‍👧) × 8 words each. Flashcard with emoji/IPA front, Vietnamese + example sentence back. "Nói để mở khoá" (say ≥60 to unlock). Spaced repetition: Leitner boxes 1/3/7/14 days; "Ôn tập hôm nay" deck shows due words. Sample audio is already generated — see **"Generating sample audio"** above to regenerate it.
 
-- **Sentence Builder (Ghép câu)** — 12 sentences (4 per topic). Tap tiles in order to build the sentence. Wrong order → shake + Foxy hint. Correct → reads the sentence (pre-generated Emma HD mp3). Then child reads it back (scores like other modules). Audio: `node scripts/gen-sentences.mjs` (already generated).
+- **Sentence Builder (Ghép câu)** — 12 sentences (4 per topic). Tap tiles in order to build the sentence. Wrong order → shake + Foxy hint. Correct → reads the sentence (pre-generated Emma HD mp3). Then child reads it back (scores like other modules). Sentence audio is already generated — see **"Generating sample audio"** above.
 
-- **Daily Mission + Streak** — Home shows "Nhiệm vụ hôm nay": 🎧 1 story (quiz done) → 🗣️ 5 attempts (scored) → 🧩 3 words (unlocked or reviewed). Streak counts consecutive days with mission complete; Home shows 7 dots (★ done / ○ not) + "🔥 N ngày". Activity log (`speakup.activity`, capped 2000 entries) tracks all attempts.
+- **Daily Mission + Streak** — Home shows "Nhiệm vụ hôm nay": 🎧 1 story (quiz done) → 🗣️ 5 attempts (scored) → 🧩 3 words said well enough to count (score ≥ 60). Streak counts consecutive days with mission complete; Home shows 7 dots (★ done / ○ not) + "🔥 N ngày". Activity log (`speakup.activity`, capped 2000 entries) tracks all attempts.
 
-- **Foxy Moods** — 5 moods (idle, listening, happy, cheer, surprised). Home: greeting + mood from mission state. Practice screens: listens while recording, happy/cheer on stars. Mission complete → confetti + cheer.
+- **Foxy Moods** — 5 moods (idle, listening, happy, cheer, surprised). Home: greeting + mood from mission state. Practice screens: listens while recording, happy/cheer on stars. Mission complete → confetti (once a day) + cheer.
 
-- **Parent Dashboard** (`/parent`) — Gated by random single-digit math question (e.g., "7 × 8?"). Shows: 14-day bar chart of minutes/day, pronunciation averages per level, top 5 weak phonemes, recent attempts (date, text, score) with playback of last 20 recordings (IndexedDB `speakup-recordings`, FIFO), daily time limit setting (`speakup.limit.minutes`, default 20). Gentle banner on Home if limit exceeded (not a hard block).
+- **Parent Dashboard** (`/parent`) — Gated by random single-digit math question (e.g., "7 × 8?"); the unlock lasts 10 minutes and ends as soon as you leave the screen. Shows: 14-day bar chart of minutes/day, pronunciation averages per module (Nói / Từ vựng / Ghép câu), top 5 weak phonemes, recent attempts (date, text, score) with playback of last 20 recordings (IndexedDB `speakup-recordings`, FIFO), daily time limit setting (`speakup.limit.minutes`, default 20). Gentle banner on Home if limit exceeded (not a hard block).
+
+  The mission's "3 từ" step counts only word attempts scoring **≥ 60** (the same bar that unlocks a card); attempts with no score at all — the Web Speech fallback — still count.
 
 **Storage keys:**
-- `speakup.activity` — activity log (timestamp, kind, id, score, duration)
+- `speakup.activity` — activity log (timestamp, kind, id, score, weak phonemes); practice minutes are inferred from the timestamps, not stored
 - `speakup.leitner` — word boxes and due dates
+- `speakup.limit.minutes` — daily time limit, 5–60, default 20
+- `speakup.celebrated` — the day the mission-complete confetti last fired
+- `speakup.parent` — `sessionStorage` flag: when the parent gate was passed (valid 10 minutes)
 - `speakup-recordings` — IndexedDB for audio blobs (cap 20)
 
 ## iPad setup & testing (Thiết lập trên iPad)
@@ -245,10 +259,10 @@ A daily habit loop: kids complete a 3-step mission (listen to a story, try 5 wor
 | 6 | Words → Food → "apple": tap 🔊 → say "apple" | Say-to-unlock flow: mic → record → stars; ≥60 unlocks word (🔒→🔓); ≤3 attempts show first unlock attempt | ⏳ pending |
 | 7 | Unlock same word again next day (or change date) → Words → Food → "apple" | Appears in review deck ("Ôn tập hôm nay") if due; re-attempt gives higher box | ⏳ pending |
 | 8 | Sentences → pick a sentence; tap tiles in wrong order, then right order | Wrong order: tray shakes + Foxy hint. Correct: sentence reads, then mic to record response | ⏳ pending |
-| 9 | Home → complete all 3 mission steps (quiz + 5 attempts + 3 words) | Mission bar fills; completion → confetti + Foxy cheer + "Nhiệm vụ hôm nay" resets | ⏳ pending |
+| 9 | Home → complete all 3 mission steps (quiz + 5 attempts + 3 words ≥ 60) | Mission rows fill; completing it → confetti + Foxy cheer (the mission stays complete, it does not reset) | ⏳ pending |
 | 10 | Complete mission on 2 consecutive days | Streak shows "🔥 2 ngày"; week dot changes ★ to ○ per day | ⏳ pending |
-| 11 | Home (parent) → tap Foxy/gear icon → enter "7 × 8" | Parent Dashboard unlocks: 14-day chart, weak phonemes, last 20 recordings (play button works) | ⏳ pending |
-| 12 | Parent Dashboard → set limit to 5 minutes → go back to Home → spend 6 minutes → Home | Gentle banner: "Hôm nay bé học đủ rồi 🦊" (not a hard block; dismiss allowed) | ⏳ pending |
+| 11 | Home → tap the "👨‍👩‍👧 Phụ huynh" link → answer the math question | Parent Dashboard unlocks: 14-day chart, weak phonemes, last 20 recordings (play button works) | ⏳ pending |
+| 12 | Parent Dashboard → set limit to 5 minutes → go back to Home → spend 6 minutes → Home | Gentle banner: "Hôm nay bé học đủ rồi 🦊" — a notice only, with no dismiss control and no block on practising | ⏳ pending |
 
 ## Architecture
 
