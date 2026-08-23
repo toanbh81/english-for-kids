@@ -29,8 +29,9 @@ function levelStars(id: string): Stars {
 
 export function LevelStairs() {
   const stars: Record<string, Stars> = { 'sound-zoo': levelStars('sound-zoo'), 'word-pop': levelStars('word-pop') }
-  // Foxy waits on the first step that is not finished yet — the one to play now.
-  const foxyOn = STEPS.find(s => !s.to || stars[s.key] < 3)?.key
+  // Foxy waits on the first *playable* step that is not finished yet — never on a locked one,
+  // which is where he ended up once both open levels were done.
+  const foxyOn = (STEPS.find(s => s.to && stars[s.key] < 3) ?? STEPS[1]).key
 
   return (
     <main className="relative h-full overflow-y-auto bg-cream-50 p-6">
@@ -61,7 +62,7 @@ export function LevelStairs() {
                 <div className={`${TILE} bg-[#F3EADA] opacity-75 shadow-[0_8px_0_#E2D5C0]`}>
                   <span aria-hidden="true" className="text-[48px] leading-none">🔒</span>
                   <span className="font-display text-[21px] font-extrabold text-[#A79781]">{step.name}</span>
-                  <Chip tone="neutral" className="text-base">Sắp có</Chip>
+                  <Chip tone="neutral" size="sm">Sắp có</Chip>
                 </div>
               )}
             </div>

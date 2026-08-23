@@ -80,9 +80,10 @@ export function Foxy({ mood, size = 'md', say, className = '' }: {
   return (
     <div className={`flex items-end gap-3 ${className}`}>
       <div data-testid="foxy" data-mood={mood} className="shrink-0 select-none">
+        {/* Decorative: Foxy's mood repeats what the surrounding copy already says, so announcing
+            "Foxy" on every screen would only add noise for a screen reader. */}
         <svg
-          role="img"
-          aria-label="Foxy"
+          aria-hidden="true"
           viewBox="0 0 120 116"
           width={px}
           height={Math.round(px * ASPECT)}

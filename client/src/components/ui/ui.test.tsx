@@ -104,6 +104,15 @@ describe('Chip', () => {
     render(<Chip tone="sun">🔥 5 ngày</Chip>)
     expect(screen.getByText('🔥 5 ngày')).toHaveClass('bg-sun-50', 'text-sun-700')
   })
+
+  it('has a small size, so callers need no className override to shrink the label', () => {
+    const { rerender } = render(<Chip>Sắp có</Chip>)
+    expect(screen.getByText('Sắp có')).toHaveClass('text-lg')
+
+    rerender(<Chip size="sm">Sắp có</Chip>)
+    expect(screen.getByText('Sắp có')).toHaveClass('text-base')
+    expect(screen.getByText('Sắp có')).not.toHaveClass('text-lg')
+  })
 })
 
 describe('ProgressBar', () => {

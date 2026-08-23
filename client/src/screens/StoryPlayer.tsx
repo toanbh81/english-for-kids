@@ -38,7 +38,10 @@ function StoryPlayerInner({ story, id }: { story: Story; id: string }) {
         <SceneArt emoji={scene.emoji} bg={scene.bg} image={scene.image} />
         <BackButton to="/stories" label="Truyện" className="absolute left-4 top-4" />
         <div className="absolute right-4 top-4 flex items-center gap-2">
-          <Chip tone="neutral" className="bg-white/95 shadow-card-sm">Cảnh</Chip>
+          {/* The dots beside it are decorative, so the chip carries the position in words. */}
+          <Chip tone="neutral" className="bg-white/95 shadow-card-sm">
+            Cảnh<span className="sr-only"> {p.sceneIndex + 1}/{story.scenes.length}</span>
+          </Chip>
           <SceneDots count={story.scenes.length} active={p.sceneIndex} className="!bg-white/95" />
         </div>
         <span className="absolute bottom-4 right-4 rounded-full bg-white/95 px-4 py-2 font-display text-[17px] font-extrabold text-teal-600 shadow-card-sm">

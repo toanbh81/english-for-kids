@@ -10,8 +10,9 @@ describe('Foxy', () => {
     const { rerender } = render(<Foxy mood="happy" />)
     const foxy = screen.getByTestId('foxy')
     expect(foxy).toHaveAttribute('data-mood', 'happy')
-    expect(foxy.querySelector('svg')).toBeInTheDocument()
-    expect(screen.getByRole('img', { name: 'Foxy' })).toBeInTheDocument()
+    // The drawing is decorative — it must not turn up in the accessibility tree.
+    expect(foxy.querySelector('svg')).toHaveAttribute('aria-hidden', 'true')
+    expect(screen.queryByRole('img')).not.toBeInTheDocument()
 
     rerender(<Foxy mood="cheer" say="Giỏi quá!" />)
     expect(screen.getByTestId('foxy')).toHaveAttribute('data-mood', 'cheer')

@@ -87,10 +87,11 @@ function StoryRetellInner({ story, id }: { story: Story; id: string }) {
           <p className="text-center text-xl font-bold text-ink-500">{story.retell.textVi}</p>
           <button
             type="button"
+            aria-label="Nghe mẫu"
             onClick={() => playSample(story)}
             className="flex h-[64px] w-[64px] items-center justify-center rounded-full bg-teal-500 text-3xl text-white shadow-chunky-teal active:translate-y-[2px]"
           >
-            🔊
+            <span aria-hidden="true">🔊</span>
           </button>
         </Card>
 

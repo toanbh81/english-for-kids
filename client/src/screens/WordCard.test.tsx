@@ -107,7 +107,7 @@ it('the Lật thẻ button flips the card, but Enter aimed at an audio button on
 
   // A key press on a nested button bubbles to the card — it must not be swallowed as a flip,
   // or the button never gets to play its sound for a keyboard user.
-  fireEvent.keyDown(screen.getByRole('button', { name: '🔊' }), { key: 'Enter' })
+  fireEvent.keyDown(screen.getByRole('button', { name: 'Nghe mẫu' }), { key: 'Enter' })
   expect(shell).not.toHaveClass(FLIPPED)
 
   // The keyboard path to the flip is a real button on the face, not the card container.
@@ -144,7 +144,7 @@ it('the card container is no longer a button itself', () => {
 
 it('plays the sample audio and clears the missing-audio notice on success', async () => {
   renderCard('food', 'food-apple')
-  fireEvent.click(screen.getByRole('button', { name: '🔊' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Nghe mẫu' }))
   expect(playerMock.playUrl).toHaveBeenCalledWith('/audio/words/apple.mp3')
   await waitFor(() => expect(screen.queryByText('Chưa có audio mẫu')).not.toBeInTheDocument())
 })
@@ -152,7 +152,7 @@ it('plays the sample audio and clears the missing-audio notice on success', asyn
 it('shows the missing-audio notice when sample playback fails', async () => {
   playerMock.playUrl.mockImplementationOnce(() => Promise.reject(new Error('no audio')))
   renderCard('food', 'food-apple')
-  fireEvent.click(screen.getByRole('button', { name: '🔊' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Nghe mẫu' }))
   await waitFor(() => expect(screen.getByText('Chưa có audio mẫu')).toBeInTheDocument())
 })
 

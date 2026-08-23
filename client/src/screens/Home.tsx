@@ -93,9 +93,13 @@ export function Home() {
     <main className="relative min-h-full overflow-y-auto overflow-x-hidden bg-cream-50 p-4 sm:p-7">
       <h1 className="sr-only">Speak Up!</h1>
 
-      {/* Soft background blobs of the handoff frame. */}
-      <div aria-hidden="true" className="pointer-events-none absolute -left-24 -top-28 h-[300px] w-[300px] rounded-full bg-[#FFEDD6]" />
-      <div aria-hidden="true" className="pointer-events-none absolute -bottom-32 -right-20 h-[340px] w-[340px] rounded-full bg-teal-50" />
+      {/* Soft background blobs of the handoff frame. They hang off every edge, so they are clipped
+          by their own container rather than by the page: otherwise the bottom-right blob stretched
+          the scroll height and the child could scroll down into empty cream. */}
+      <div aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-hidden">
+        <div className="absolute -left-24 -top-28 h-[300px] w-[300px] rounded-full bg-[#FFEDD6]" />
+        <div className="absolute -bottom-32 -right-20 h-[340px] w-[340px] rounded-full bg-teal-50" />
+      </div>
 
       <div className="relative mx-auto flex w-full max-w-[1194px] flex-col gap-3">
         <header className="flex flex-wrap items-center justify-between gap-3">

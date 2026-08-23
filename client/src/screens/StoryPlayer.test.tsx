@@ -32,6 +32,7 @@ vi.mock('../story/useStoryPlayer', () => ({
 }))
 
 import { StoryPlayer } from './StoryPlayer'
+import { findStory } from '../content/stories'
 
 function renderPlayer(id = 'little-fox') {
   render(
@@ -60,6 +61,15 @@ it('shows the story title and titleVi', () => {
 it('shows the scene 0 emoji', () => {
   renderPlayer()
   expect(screen.getByText('🦊')).toBeInTheDocument()
+})
+
+it('spells the scene position out for a screen reader, since the dots beside it are decorative', () => {
+  state.sceneIndex = 2
+  renderPlayer()
+  const story = findStory('little-fox')!
+  const position = screen.getByText(`3/${story.scenes.length}`)
+  expect(position).toHaveClass('sr-only')
+  expect(position.parentElement).toHaveTextContent(`Cảnh 3/${story.scenes.length}`)
 })
 
 it('renders the words of scene 0 with wordIndex 1 active', () => {

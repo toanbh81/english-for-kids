@@ -107,7 +107,7 @@ it('shows a simple-mode label for the webspeech engine', () => {
 it('plays the recorded scene narration when the retell scene has word timings', () => {
   playerMock.playUrl.mockClear()
   renderRetell()
-  fireEvent.click(screen.getByRole('button', { name: '🔊' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Nghe mẫu' }))
   const story = findStory('little-fox')!
   const scene = story.scenes.find(s => s.text.includes(story.retell.text))!
   expect(playerMock.playUrl).toHaveBeenCalledWith(scene.audio)
@@ -135,7 +135,7 @@ describe('speech synthesis sample fallback', () => {
     }
     withoutRetellTimings(() => {
       renderRetell()
-      const playButton = screen.getByRole('button', { name: '🔊' })
+      const playButton = screen.getByRole('button', { name: 'Nghe mẫu' })
       fireEvent.click(playButton)
       fireEvent.click(playButton)
     })

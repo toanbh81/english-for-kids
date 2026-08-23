@@ -26,3 +26,13 @@ it('stands Foxy on the first step that is not finished yet', () => {
   // Sound Zoo has 3 stars on a card, so it is done and Foxy moves on to Word Pop.
   expect(within(screen.getByTestId('step-word-pop')).getByTestId('foxy')).toBeInTheDocument()
 })
+
+it('keeps Foxy off the locked steps once both playable levels are finished', () => {
+  localStorage.setItem('speakup.stars', JSON.stringify({ 'sz-th-three': 3, 'wp-cat': 3 }))
+  renderStairs()
+  // Nothing is left to climb, so he waits on the last level he can actually play.
+  expect(within(screen.getByTestId('step-word-pop')).getByTestId('foxy')).toBeInTheDocument()
+  for (const key of ['minimal-pairs', 'sentence-stars', 'story-voice']) {
+    expect(within(screen.getByTestId(`step-${key}`)).queryByTestId('foxy')).not.toBeInTheDocument()
+  }
+})

@@ -167,10 +167,11 @@ function WordCardInner({ word, topic, isReview, list }: { word: Word; topic: str
                   area a small finger has to hit. */}
               <button
                 type="button"
+                aria-label="Nghe mẫu"
                 onClick={e => onFaceButton(e, playSample)}
                 className="flex h-16 w-16 items-center justify-center active:translate-y-[2px]"
               >
-                <span className="flex h-[58px] w-[58px] items-center justify-center rounded-full bg-teal-500 text-3xl text-white shadow-chunky-teal">
+                <span aria-hidden="true" className="flex h-[58px] w-[58px] items-center justify-center rounded-full bg-teal-500 text-3xl text-white shadow-chunky-teal">
                   🔊
                 </span>
               </button>
