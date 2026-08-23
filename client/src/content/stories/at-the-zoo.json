@@ -13,48 +13,48 @@
       "words": [
         {
           "w": "Today",
-          "start": 54,
-          "end": 516
+          "start": 52,
+          "end": 495
         },
         {
           "w": "I",
-          "start": 530,
-          "end": 652
+          "start": 508,
+          "end": 625
         },
         {
           "w": "go",
-          "start": 666,
-          "end": 829
+          "start": 638,
+          "end": 794
         },
         {
           "w": "to",
-          "start": 842,
-          "end": 924
+          "start": 807,
+          "end": 885
         },
         {
           "w": "the",
-          "start": 938,
-          "end": 1060
+          "start": 898,
+          "end": 1016
         },
         {
           "w": "zoo",
-          "start": 1073,
-          "end": 1318
+          "start": 1029,
+          "end": 1497
         },
         {
           "w": "with",
-          "start": 1332,
-          "end": 1481
+          "start": 1510,
+          "end": 1654
         },
         {
           "w": "my",
-          "start": 1495,
-          "end": 1644
+          "start": 1667,
+          "end": 1810
         },
         {
           "w": "mom.",
-          "start": 1658,
-          "end": 2188
+          "start": 1823,
+          "end": 2331
         }
       ],
       "voice": {
@@ -89,32 +89,32 @@
         {
           "w": "big",
           "start": 632,
-          "end": 926
+          "end": 1265
         },
         {
           "w": "lion.",
-          "start": 941,
-          "end": 1529
+          "start": 1279,
+          "end": 2441
         },
         {
           "w": "The",
-          "start": 2879,
-          "end": 3026
+          "start": 3521,
+          "end": 3668
         },
         {
           "w": "lion",
-          "start": 3041,
-          "end": 3482
+          "start": 3683,
+          "end": 4124
         },
         {
           "w": "is",
-          "start": 3497,
-          "end": 3644
+          "start": 4139,
+          "end": 4286
         },
         {
           "w": "sleeping.",
-          "start": 3659,
-          "end": 4335
+          "start": 4301,
+          "end": 5698
         }
       ],
       "voice": {
@@ -136,43 +136,43 @@
       "words": [
         {
           "w": "The",
-          "start": 54,
-          "end": 217
+          "start": 52,
+          "end": 208
         },
         {
           "w": "monkeys",
-          "start": 231,
-          "end": 747
+          "start": 221,
+          "end": 716
         },
         {
           "w": "are",
-          "start": 761,
-          "end": 883
+          "start": 729,
+          "end": 846
         },
         {
           "w": "funny.",
-          "start": 897,
-          "end": 1440
+          "start": 859,
+          "end": 1901
         },
         {
           "w": "They",
-          "start": 2728,
-          "end": 2945
+          "start": 2880,
+          "end": 3088
         },
         {
           "w": "jump",
-          "start": 2959,
-          "end": 3258
+          "start": 3101,
+          "end": 3674
         },
         {
           "w": "and",
-          "start": 3271,
-          "end": 3380
+          "start": 3687,
+          "end": 3791
         },
         {
           "w": "play.",
-          "start": 3393,
-          "end": 3855
+          "start": 3804,
+          "end": 4689
         }
       ],
       "voice": {
@@ -194,48 +194,48 @@
       "words": [
         {
           "w": "The",
-          "start": 54,
-          "end": 217
+          "start": 52,
+          "end": 208
         },
         {
           "w": "elephant",
-          "start": 231,
-          "end": 734
+          "start": 221,
+          "end": 1185
         },
         {
           "w": "is",
-          "start": 747,
-          "end": 870
+          "start": 1198,
+          "end": 1315
         },
         {
           "w": "grey.",
-          "start": 883,
-          "end": 1345
+          "start": 1328,
+          "end": 1771
         },
         {
           "w": "It",
-          "start": 2646,
-          "end": 2809
+          "start": 2762,
+          "end": 2919
         },
         {
           "w": "has",
-          "start": 2823,
-          "end": 3027
+          "start": 2932,
+          "end": 3127
         },
         {
           "w": "a",
-          "start": 3040,
-          "end": 3108
+          "start": 3140,
+          "end": 3205
         },
         {
           "w": "long",
-          "start": 3122,
-          "end": 3434
+          "start": 3218,
+          "end": 3817
         },
         {
           "w": "nose.",
-          "start": 3448,
-          "end": 4032
+          "start": 3830,
+          "end": 4390
         }
       ],
       "voice": {
@@ -255,48 +255,48 @@
       "words": [
         {
           "w": "I",
-          "start": 54,
-          "end": 299
+          "start": 52,
+          "end": 286
         },
         {
           "w": "eat",
-          "start": 313,
-          "end": 652
+          "start": 300,
+          "end": 625
         },
         {
           "w": "ice",
-          "start": 666,
-          "end": 924
+          "start": 638,
+          "end": 1133
         },
         {
           "w": "cream.",
-          "start": 938,
-          "end": 1427
+          "start": 1146,
+          "end": 2083
         },
         {
           "w": "It",
-          "start": 2714,
-          "end": 2891
+          "start": 3062,
+          "end": 3231
         },
         {
           "w": "is",
-          "start": 2904,
-          "end": 3054
+          "start": 3244,
+          "end": 3387
         },
         {
           "w": "cold",
-          "start": 3067,
-          "end": 3489
+          "start": 3400,
+          "end": 4208
         },
         {
           "w": "and",
-          "start": 3502,
-          "end": 3638
+          "start": 4221,
+          "end": 4351
         },
         {
           "w": "sweet.",
-          "start": 3652,
-          "end": 4209
+          "start": 4364,
+          "end": 5432
         }
       ],
       "voice": {
@@ -318,23 +318,23 @@
       "words": [
         {
           "w": "I",
-          "start": 51,
-          "end": 231
+          "start": 49,
+          "end": 221
         },
         {
           "w": "love",
-          "start": 244,
-          "end": 602
+          "start": 233,
+          "end": 921
         },
         {
           "w": "the",
-          "start": 615,
-          "end": 718
+          "start": 934,
+          "end": 1032
         },
         {
           "w": "zoo!",
-          "start": 731,
-          "end": 1205
+          "start": 1044,
+          "end": 1499
         }
       ],
       "voice": {

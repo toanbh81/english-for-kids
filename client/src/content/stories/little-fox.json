@@ -13,43 +13,43 @@
       "words": [
         {
           "w": "This",
-          "start": 54,
-          "end": 326
+          "start": 52,
+          "end": 312
         },
         {
           "w": "is",
-          "start": 340,
-          "end": 476
+          "start": 326,
+          "end": 456
         },
         {
           "w": "Foxy.",
-          "start": 489,
-          "end": 1114
+          "start": 469,
+          "end": 1667
         },
         {
           "w": "Foxy",
-          "start": 2402,
-          "end": 2945
+          "start": 2645,
+          "end": 3166
         },
         {
           "w": "is",
-          "start": 2959,
-          "end": 3067
+          "start": 3179,
+          "end": 3283
         },
         {
           "w": "a",
-          "start": 3081,
-          "end": 3149
+          "start": 3296,
+          "end": 3361
         },
         {
           "w": "little",
-          "start": 3163,
-          "end": 3421
+          "start": 3374,
+          "end": 3869
         },
         {
           "w": "fox.",
-          "start": 3434,
-          "end": 4073
+          "start": 3882,
+          "end": 4494
         }
       ],
       "voice": {
@@ -90,7 +90,7 @@
         {
           "w": "forest.",
           "start": 1151,
-          "end": 1847
+          "end": 2543
         }
       ],
       "voice": {
@@ -121,27 +121,27 @@
         {
           "w": "hungry.",
           "start": 938,
-          "end": 1676
+          "end": 2415
         },
         {
           "w": "He",
-          "start": 3006,
-          "end": 3234
+          "start": 3475,
+          "end": 3702
         },
         {
           "w": "wants",
-          "start": 3248,
-          "end": 3674
+          "start": 3716,
+          "end": 4143
         },
         {
           "w": "an",
-          "start": 3688,
-          "end": 3887
+          "start": 4157,
+          "end": 4356
         },
         {
           "w": "apple.",
-          "start": 3901,
-          "end": 4484
+          "start": 4370,
+          "end": 5535
         }
       ],
       "voice": {
@@ -163,48 +163,48 @@
       "words": [
         {
           "w": "He",
-          "start": 54,
-          "end": 272
+          "start": 52,
+          "end": 260
         },
         {
           "w": "sees",
-          "start": 285,
-          "end": 571
+          "start": 273,
+          "end": 547
         },
         {
           "w": "a",
-          "start": 584,
-          "end": 679
+          "start": 560,
+          "end": 651
         },
         {
           "w": "big",
-          "start": 693,
-          "end": 978
+          "start": 664,
+          "end": 1211
         },
         {
           "w": "red",
-          "start": 992,
-          "end": 1236
+          "start": 1224,
+          "end": 1693
         },
         {
           "w": "apple",
-          "start": 1250,
-          "end": 1603
+          "start": 1706,
+          "end": 2044
         },
         {
           "w": "on",
-          "start": 1617,
-          "end": 1739
+          "start": 2057,
+          "end": 2174
         },
         {
           "w": "a",
-          "start": 1753,
-          "end": 1807
+          "start": 2188,
+          "end": 2240
         },
         {
           "w": "tree.",
-          "start": 1821,
-          "end": 2283
+          "start": 2253,
+          "end": 2695
         }
       ],
       "voice": {
@@ -224,43 +224,43 @@
       "words": [
         {
           "w": "Foxy",
-          "start": 54,
-          "end": 571
+          "start": 52,
+          "end": 547
         },
         {
           "w": "jumps,",
-          "start": 584,
-          "end": 1019
+          "start": 560,
+          "end": 1393
         },
         {
           "w": "but",
-          "start": 1273,
-          "end": 1396
+          "start": 1632,
+          "end": 1749
         },
         {
           "w": "the",
-          "start": 1409,
-          "end": 1532
+          "start": 1763,
+          "end": 1880
         },
         {
           "w": "apple",
-          "start": 1545,
-          "end": 1926
+          "start": 1893,
+          "end": 2257
         },
         {
           "w": "is",
-          "start": 1939,
-          "end": 2102
+          "start": 2270,
+          "end": 2427
         },
         {
           "w": "too",
-          "start": 2116,
-          "end": 2347
+          "start": 2440,
+          "end": 2882
         },
         {
           "w": "high.",
-          "start": 2360,
-          "end": 2836
+          "start": 2895,
+          "end": 3351
         }
       ],
       "voice": {
@@ -281,43 +281,43 @@
       "words": [
         {
           "w": "A",
-          "start": 54,
-          "end": 217
+          "start": 52,
+          "end": 208
         },
         {
           "w": "bird",
-          "start": 231,
-          "end": 584
+          "start": 221,
+          "end": 898
         },
         {
           "w": "helps",
-          "start": 598,
-          "end": 951
+          "start": 911,
+          "end": 1250
         },
         {
           "w": "Foxy.",
-          "start": 965,
-          "end": 1617
+          "start": 1263,
+          "end": 1888
         },
         {
           "w": "The",
-          "start": 2918,
-          "end": 3122
+          "start": 2880,
+          "end": 3075
         },
         {
           "w": "apple",
-          "start": 3135,
-          "end": 3543
+          "start": 3088,
+          "end": 3478
         },
         {
           "w": "falls",
-          "start": 3557,
-          "end": 3910
+          "start": 3491,
+          "end": 3830
         },
         {
           "w": "down.",
-          "start": 3923,
-          "end": 4413
+          "start": 3843,
+          "end": 4781
         }
       ],
       "voice": {
@@ -337,38 +337,38 @@
       "words": [
         {
           "w": "Foxy",
-          "start": 54,
-          "end": 652
+          "start": 52,
+          "end": 625
         },
         {
           "w": "says",
-          "start": 666,
-          "end": 1019
+          "start": 638,
+          "end": 977
         },
         {
           "w": "thank",
-          "start": 1033,
-          "end": 1345
+          "start": 990,
+          "end": 1589
         },
         {
           "w": "you.",
-          "start": 1359,
-          "end": 1712
+          "start": 1602,
+          "end": 2279
         },
         {
           "w": "He",
-          "start": 3010,
-          "end": 3228
+          "start": 3267,
+          "end": 3476
         },
         {
           "w": "is",
-          "start": 3241,
-          "end": 3407
+          "start": 3488,
+          "end": 3648
         },
         {
           "w": "happy!",
-          "start": 3420,
-          "end": 3958
+          "start": 3660,
+          "end": 4692
         }
       ],
       "voice": {

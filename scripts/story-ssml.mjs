@@ -23,7 +23,9 @@ export function buildSceneSsml(scene, opts = {}) {
   const voice = opts.voice ?? 'en-US-AriaNeural'
   const hints = scene.voice ?? {}
   const emphasis = new Set(hints.emphasis ?? [])
-  const pause = hints.pauseMs ?? 350
+  // Azure already leaves ~900 ms after a full stop; the reference narration pauses 350–500 ms,
+  // so add only a hair rather than stacking another long break on top.
+  const pause = hints.pauseMs ?? 80
   const sentences = splitSentences(scene.words)
   let idx = 0
   const body = sentences.map((sentence, si) => {
@@ -33,7 +35,10 @@ export function buildSceneSsml(scene, opts = {}) {
     const tokens = sentence.map(w => {
       const i = idx++
       let t = esc(w.w)
-      if (emphasis.has(i)) t = `<emphasis level="strong">${t}</emphasis>`
+      // Key words in the reference are stretched to ~1.7× and clearly louder, not just stressed.
+      // Measured against samples/: a rise-fall contour + x-slow stretches key words to 500–1000 ms
+      // and widens the pitch range; <emphasis> alone barely changed duration.
+      if (emphasis.has(i)) t = `<prosody rate="x-slow" volume="+20%" contour="(0%,-4%) (40%,+22%) (100%,-16%)">${t}</prosody>`
       // A short breath after a comma makes "Foxy jumps, but…" read like a storyteller, not a ticker.
       if (/,$/.test(w.w)) t += '<break time="200ms"/>'
       return t
@@ -41,8 +46,10 @@ export function buildSceneSsml(scene, opts = {}) {
     const sep = si < sentences.length - 1 ? `<break time="${pause}ms"/>` : ''
     return (tone ? `<prosody${tone}>${tokens}</prosody>` : tokens) + sep
   }).join(' ')
-  const rate = hints.rate ?? opts.rate ?? '-8%'
-  const pitch = hints.pitch ? ` pitch="${hints.pitch}"` : ''
+  // Base pace matches the reference (~130 wpm incl. stretched key words); the scene-level pitch
+  // drop brings Aria's ~280 Hz mean closer to the warmer ~215 Hz storyteller register.
+  const rate = hints.rate ?? opts.rate ?? '-4%'
+  const pitch = ` pitch="${hints.pitch ?? opts.pitch ?? '-14%'}"`
   let inner = `<prosody rate="${rate}"${pitch}>${body}</prosody>`
   if (hints.style) {
     const degree = hints.degree !== undefined ? ` styledegree="${hints.degree}"` : ''
