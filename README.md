@@ -213,3 +213,6 @@ client/src/
 
 server/src/      # Express API: issues short-lived Azure Speech tokens (GET /api/speech-token)
 ```
+
+## Deploy
+See [docs/DEPLOY-VERCEL.md](docs/DEPLOY-VERCEL.md) — Vercel hosting with a serverless token function; audio files are committed so deploys have sound.
