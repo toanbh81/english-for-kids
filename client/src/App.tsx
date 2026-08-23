@@ -11,6 +11,7 @@ import { WordList } from './screens/WordList'
 import { WordCard } from './screens/WordCard'
 import { SentenceList } from './screens/SentenceList'
 import { SentenceBuilder } from './screens/SentenceBuilder'
+import { ParentGate } from './screens/ParentGate'
 
 export default function App() {
   return (
@@ -27,6 +28,7 @@ export default function App() {
       <Route path="/words/:topic/:wordId" element={<WordCard />} />
       <Route path="/sentences" element={<SentenceList />} />
       <Route path="/sentence/:id" element={<SentenceBuilder />} />
+      <Route path="/parent" element={<ParentGate />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   )
