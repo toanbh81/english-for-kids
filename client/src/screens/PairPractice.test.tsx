@@ -312,7 +312,7 @@ it('ends at the mission screen when it is the last step of the lesson', async ()
   score(result(85))
 
   fireEvent.click(screen.getByRole('button', { name: /hoàn thành/i }))
-  expect(screen.getByTestId('probe')).toHaveTextContent('/mission')
+  expect(screen.getByTestId('probe')).toHaveTextContent('/mission null')
 })
 
 /** Today's lesson may well list this very pair — but a child who walked in from the bậc did not
@@ -324,4 +324,16 @@ it('stays a free-play card without the flag, lesson or no lesson', () => {
   expect(screen.getByText('Cặp 1/8')).toBeInTheDocument()
   expect(screen.queryByText(/^Thẻ /)).not.toBeInTheDocument()
   expect(screen.getByRole('link', { name: 'Quay lại' })).toHaveAttribute('href', '/level/minimal-pairs')
+})
+
+/** The chain can end without the lesson ending: replaying a step whose group is behind an earlier,
+ * still-open one. "Hoàn thành 🎉" would be congratulating the child for work they still owe. */
+it('offers the way back, not a celebration, while an earlier step is owed', async () => {
+  seedLesson(step('th', '/sound/th'), PAIR_STEP)
+  await reachMic(true)
+  score(result(85))
+
+  expect(screen.queryByRole('button', { name: /hoàn thành/i })).not.toBeInTheDocument()
+  fireEvent.click(screen.getByRole('button', { name: /về nhiệm vụ/i }))
+  expect(screen.getByTestId('probe')).toHaveTextContent('/mission null')
 })

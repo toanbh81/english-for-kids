@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { dayKey, getActivity } from '../progress/activity'
 import { getLesson, lessonStatus } from '../progress/lesson'
-import type { LessonItem, LessonItemKind } from '../progress/lesson'
+import type { LessonItemKind } from '../progress/lesson'
+import { MISSION_STATE, groupItems } from '../progress/missionNav'
 import { Foxy } from '../components/Foxy'
 import { BackButton, Button, Chip } from '../components/ui'
 import type { ChipTone } from '../components/ui'
@@ -22,22 +23,6 @@ function markCelebrated(day: string): void {
   catch { /* ignore: storage unavailable */ }
 }
 
-/** Every way out of this screen carries it, so a practice screen can tell a mission step from free
- * play and number itself, come back here and hand the child the next step (spec §3). */
-const MISSION_STATE = { mission: true }
-
-type DoneItem = LessonItem & { done: boolean }
-
-type Group = {
-  kind: LessonItemKind
-  items: DoneItem[]
-  doneCount: number
-  done: boolean
-  /** Where the card points: the first step of the group still to do — or, once the group is
-   * finished, its first step again, so a favourite story can be played a second time. */
-  route: string
-}
-
 /**
  * How each kind of step dresses its card (spec §1). The minutes are the prototype's rough
  * estimates, sized off the group: a story is a four-minute sit-down, everything else is about a
@@ -53,33 +38,6 @@ const KIND: Record<LessonItemKind, {
   speak: { emoji: '🗣️', tone: 'coral', title: n => `${n} thẻ phát âm`, minutes: n => n },
   word: { emoji: '🧩', tone: 'sun', title: n => `${n} từ mới`, minutes: n => n },
   review: { emoji: '🔁', tone: 'neutral', title: n => `${n} bài ôn tập`, minutes: n => n },
-}
-
-/** Today's items bucketed by kind, each kind in the order it first appears — the generator lays
- * the lesson out in the order the child should work through it, so the cards follow that rather
- * than a hard-coded listen → speak → word → review. */
-function groupItems(items: DoneItem[]): Group[] {
-  const order: LessonItemKind[] = []
-  const byKind = new Map<LessonItemKind, DoneItem[]>()
-  for (const item of items) {
-    const bucket = byKind.get(item.kind)
-    if (bucket) bucket.push(item)
-    else {
-      order.push(item.kind)
-      byKind.set(item.kind, [item])
-    }
-  }
-  return order.map(kind => {
-    const group = byKind.get(kind) ?? []
-    const next = group.find(item => !item.done)
-    return {
-      kind,
-      items: group,
-      doneCount: group.filter(item => item.done).length,
-      done: next === undefined,
-      route: (next ?? group[0]).route,
-    }
-  })
 }
 
 /** The cards sit side by side from `lg` up — one column per group, never more than four — and

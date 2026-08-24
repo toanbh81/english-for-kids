@@ -62,3 +62,44 @@ it('disappears once the whole lesson is done', () => {
 
   expect(screen.queryByRole('link')).not.toBeInTheDocument()
 })
+
+/** A screen opened as a mission step already carries the lesson — its header goes back to
+ * /mission, its CTA hands on to the next step — so a third control in the corner is noise. */
+it('stays out of the way on a screen the child opened as a mission step', () => {
+  const lesson = lessonWith(0)
+  const speak = lesson.items.find(i => !i.route.startsWith('/story/'))!
+
+  render(
+    <MemoryRouter initialEntries={[{ pathname: speak.route, state: { mission: true } }]}>
+      <LessonChip />
+    </MemoryRouter>,
+  )
+
+  expect(screen.queryByRole('link')).not.toBeInTheDocument()
+})
+
+/** Stories keep their own player flow and know nothing about the lesson (spec §3 excludes them),
+ * so on a story the chip is the only thread back — mission step or not. */
+it('still shows on a story, which has no way back of its own', () => {
+  const lesson = lessonWith(0)
+  const story = lesson.items.find(i => i.route.startsWith('/story/'))!
+
+  render(
+    <MemoryRouter initialEntries={[{ pathname: story.route, state: { mission: true } }]}>
+      <LessonChip />
+    </MemoryRouter>,
+  )
+
+  expect(screen.getByRole('link', { name: `🌞 Nhiệm vụ 0/${lesson.items.length}` }))
+    .toHaveAttribute('href', '/mission')
+})
+
+/** Free play is untouched by the rule above: no flag, no hiding. */
+it('still shows on the same route reached without the mission flag', () => {
+  const lesson = lessonWith(0)
+  const speak = lesson.items.find(i => !i.route.startsWith('/story/'))!
+
+  renderAt(speak.route)
+
+  expect(screen.getByRole('link')).toHaveAttribute('href', '/mission')
+})

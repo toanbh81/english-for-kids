@@ -5,7 +5,7 @@ import { SENTENCES, findSentence } from '../content'
 import type { PronunciationResult } from '../scoring/types'
 import { setStars } from '../progress/store'
 import { logActivity } from '../progress/activity'
-import { MISSION_STATE, useMissionPosition } from '../progress/missionNav'
+import { useMissionNext } from '../progress/missionNav'
 import { saveRecording } from '../progress/recordings'
 import { playUrl } from '../audio/player'
 import { toFeedback } from '../scoring/feedback'
@@ -69,7 +69,7 @@ function SentenceBuilderInner({ sentence }: { sentence: Sentence }) {
   const nav = useNavigate()
   // Null unless the child arrived from the mission: only then is this sentence step "Câu 2/2" of
   // today's lesson rather than one sentence of a topic list (spec §3).
-  const mission = useMissionPosition()
+  const mission = useMissionNext()
   const [trayIndices, setTrayIndices] = useState<number[]>([])
   const [shaking, setShaking] = useState(false)
   const [audioMissing, setAudioMissing] = useState(false)
@@ -151,13 +151,11 @@ function SentenceBuilderInner({ sentence }: { sentence: Sentence }) {
   // Both ways out keep the topic: the unfiltered list only shows unlocked topics now, so dropping
   // the filter would land the child on a different topic's sentences than the one they came from.
   const listTo = `/sentences?topic=${sentence.topic}`
-  /** Where "Tiếp theo" goes. In a lesson the list order is not the child's path — the next step
-   * of today's mission is — and the mission screen is where a finished lesson celebrates. */
-  const nextTo = mission ? mission.nextRoute ?? '/mission' : next ? `/sentence/${next.id}` : listTo
-
+  /** In a lesson the list order is not the child's path — the next step of today's mission is,
+   * and the mission screen is where a finished lesson celebrates. */
   function goNext() {
-    if (mission?.nextRoute) nav(nextTo, { state: MISSION_STATE })
-    else nav(nextTo)
+    if (mission) mission.go()
+    else nav(next ? `/sentence/${next.id}` : listTo)
   }
 
   const mood: FoxyMood = attempt.micState === 'recording' ? 'listening' : correct ? 'cheer' : 'idle'
@@ -173,7 +171,7 @@ function SentenceBuilderInner({ sentence }: { sentence: Sentence }) {
           {/* The column only exists to seat the mission chip above the title; free play keeps the
               plain centred block it always had. */}
           <div className={mission ? 'flex flex-col items-center text-center' : 'text-center'}>
-            {mission && <Chip tone="teal">Câu {mission.index}/{mission.total}</Chip>}
+            {mission && <Chip tone="teal">Câu {mission.pos.index}/{mission.pos.total}</Chip>}
             <h1 className="font-display text-[36px] font-extrabold leading-tight text-ink-900">Ghép câu nào! 🧱</h1>
             <p className="mt-1 text-lg font-bold text-ink-500">Chạm các khối từ để xếp vào khay câu</p>
           </div>
@@ -245,7 +243,7 @@ function SentenceBuilderInner({ sentence }: { sentence: Sentence }) {
                 <div className="flex flex-wrap justify-center gap-4">
                   <Button variant="outline" onClick={attempt.reset}>Thử lại</Button>
                   <Button size="lg" pulse onClick={goNext}>
-                    Tiếp theo →
+                    {mission ? mission.label : 'Tiếp theo →'}
                   </Button>
                 </div>
               </section>

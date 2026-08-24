@@ -299,7 +299,7 @@ it('ends at the mission screen when it is the last step of the lesson', () => {
   score(result({ prosody: 84, accuracy: 75 }))
 
   fireEvent.click(screen.getByRole('button', { name: /hoàn thành/i }))
-  expect(screen.getByTestId('probe')).toHaveTextContent('/mission')
+  expect(screen.getByTestId('probe')).toHaveTextContent('/mission null')
 })
 
 /** Today's lesson may well list this very passage — but a child who walked in from the bậc did

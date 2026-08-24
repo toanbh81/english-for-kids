@@ -8,7 +8,7 @@ import { toFeedback } from '../scoring/feedback'
 import { starsForVoice } from '../scoring/levelStars'
 import { setStars } from '../progress/store'
 import { logActivity } from '../progress/activity'
-import { MISSION_STATE, useMissionPosition } from '../progress/missionNav'
+import { useMissionNext } from '../progress/missionNav'
 import { saveRecording } from '../progress/recordings'
 import { MicButton } from '../components/MicButton'
 import { Stars } from '../components/Stars'
@@ -101,7 +101,7 @@ function VoiceRun({ passage }: { passage: VoicePassage }) {
   const nav = useNavigate()
   // Null unless the child arrived from the mission: only then is this passage step "Thẻ 2/4" of
   // today's lesson rather than passage 2 of the bậc (spec §3).
-  const mission = useMissionPosition()
+  const mission = useMissionNext()
   const [audioMissing, setAudioMissing] = useState(false)
   const [secondsLeft, setSecondsLeft] = useState(COUNTDOWN_FROM)
 
@@ -146,12 +146,6 @@ function VoiceRun({ passage }: { passage: VoicePassage }) {
   // A passage that hinges on a particular word says so itself; otherwise the mood's own three.
   const tips = passage.tips ?? MOOD_TIPS[passage.mood]
 
-  /** The lesson's next step — or the mission itself, which celebrates when the lesson is done. */
-  function goMission() {
-    if (mission?.nextRoute) nav(mission.nextRoute, { state: MISSION_STATE })
-    else nav('/mission')
-  }
-
   /** Sample audio is generated locally and may simply not be there yet — say so, never throw. */
   function playSample() {
     playUrl(passage.audio).then(() => setAudioMissing(false), () => setAudioMissing(true))
@@ -172,7 +166,7 @@ function VoiceRun({ passage }: { passage: VoicePassage }) {
           {/* In a lesson the bậc's own count is the wrong count, and two counters are one too many
               for a child to read — so the mission's position replaces it. */}
           {mission
-            ? <Chip tone="coral">Thẻ {mission.index}/{mission.total}</Chip>
+            ? <Chip tone="coral">Thẻ {mission.pos.index}/{mission.pos.total}</Chip>
             : <Chip tone="coral">Đoạn {index + 1}/{STORY_VOICE.length}</Chip>}
           <span className="min-w-[66px] text-right text-base font-bold text-ink-300">
             {engine === 'webspeech' ? 'chế độ đơn giản' : ''}
@@ -219,11 +213,7 @@ function VoiceRun({ passage }: { passage: VoicePassage }) {
               <Button variant="outline" onClick={playSample}>🔊 Nghe mẫu</Button>
               <Button variant="outline" onClick={attempt.reset}>↻ Thử lại</Button>
               {mission
-                ? (
-                  <Button size="lg" pulse onClick={goMission}>
-                    {mission.nextRoute ? 'Tiếp theo →' : 'Hoàn thành 🎉'}
-                  </Button>
-                )
+                ? <Button size="lg" pulse onClick={mission.go}>{mission.label}</Button>
                 : next
                   ? <Button size="lg" pulse onClick={() => nav(`/voice/${next.id}`)}>Tiếp theo →</Button>
                   : <Button size="lg" pulse onClick={() => nav('/level/story-voice')}>Hoàn thành 🎉</Button>}

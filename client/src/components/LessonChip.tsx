@@ -12,6 +12,20 @@ function isExcluded(pathname: string): boolean {
 }
 
 /**
+ * A screen the child opened as a mission step already carries the lesson: its header goes back to
+ * `/mission` and its CTA hands on to the next step (spec §3), so the chip would be a third,
+ * redundant control competing with them in the corner.
+ *
+ * Stories are the exception. They are excluded from the mission-aware screens on purpose — a story
+ * keeps its own player flow — so nothing inside one knows it is a lesson step, and the chip is the
+ * only thread back to the mission.
+ */
+function isRedundant(pathname: string, state: unknown): boolean {
+  const inMission = (state as { mission?: unknown } | null)?.mission === true
+  return inMission && !pathname.startsWith('/story/')
+}
+
+/**
  * The thread back to the lesson. A mission item drops the child onto an ordinary practice screen
  * whose own back button goes wherever that screen belongs — the story list, the word deck — so
  * without this, finishing a step left them off the lesson with no sign it was still running.
@@ -20,8 +34,8 @@ function isExcluded(pathname: string): boolean {
  * unfinished, so it never nags during free practice.
  */
 export function LessonChip() {
-  const { pathname } = useLocation()
-  if (isExcluded(pathname)) return null
+  const { pathname, state } = useLocation()
+  if (isExcluded(pathname) || isRedundant(pathname, state)) return null
   // Keyed on the path so the inner component remounts on every navigation: its lazy state reads
   // the lesson and the event log exactly once per screen the child lands on, never per render.
   return <LessonChipInner key={pathname} pathname={pathname} />

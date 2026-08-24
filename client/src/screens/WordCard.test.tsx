@@ -401,9 +401,10 @@ it('ends at the mission screen when it is the last step of the lesson', () => {
   passGuess('quả táo')
 
   act(() => { attemptControl.onResult?.(resultHigh, null) })
-  fireEvent.click(screen.getByRole('button', { name: /Tiếp theo/ }))
+  // The last step of the lesson says so — the CTA is not "Tiếp theo" any more.
+  fireEvent.click(screen.getByRole('button', { name: /Hoàn thành/ }))
 
-  expect(screen.getByTestId('probe')).toHaveTextContent('/mission')
+  expect(screen.getByTestId('probe')).toHaveTextContent('/mission null')
 })
 
 /** Today's lesson may well list this very word — but a child who walked in from the island did not

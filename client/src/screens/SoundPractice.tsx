@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useParams } from 'react-router-dom'
 import { findSound } from '../content'
 import type { SoundGroup } from '../content/types'
 import type { PronunciationResult, WordTone } from '../scoring/types'
@@ -7,7 +7,7 @@ import { playBlob, playUrl } from '../audio/player'
 import { PHONEME_TIPS, toneFor } from '../scoring/feedback'
 import { setStars } from '../progress/store'
 import { logActivity } from '../progress/activity'
-import { MISSION_STATE, useMissionPosition } from '../progress/missionNav'
+import { useMissionNext } from '../progress/missionNav'
 import { saveRecording } from '../progress/recordings'
 import { MicButton } from '../components/MicButton'
 import { Stars } from '../components/Stars'
@@ -117,10 +117,9 @@ export function SoundPractice() {
 
 function SoundRun({ sound }: { sound: SoundGroup }) {
   const { ph, ipa, cards } = sound
-  const nav = useNavigate()
   // Null unless the child arrived from the mission: only then does this sound know it is step
   // "Âm 2/4" of today's lesson rather than a tile they picked out of the Sound Zoo (spec §3).
-  const mission = useMissionPosition()
+  const mission = useMissionNext()
   const [idx, setIdx] = useState(0)
   // Best scores per word, so a retry can only improve the sound's stars. A `phoneme` of `null` is
   // "no engine has scored the sound in this word yet" — distinct from a genuine 0 — and `word` is
@@ -197,13 +196,6 @@ function SoundRun({ sound }: { sound: SoundGroup }) {
     setIdx(i => i + 1)
   }
 
-  /** Only the END of the run belongs to the lesson: the three words inside the sound are one step,
-   * so the mission's next step is where "Hoàn thành" goes, not where "Tiếp theo" does. */
-  function finishMission() {
-    if (mission?.nextRoute) nav(mission.nextRoute, { state: MISSION_STATE })
-    else nav('/mission')
-  }
-
   return (
     <main className="h-full overflow-y-auto bg-cream-50 px-6 py-5">
       <div className="mx-auto flex min-h-full w-full max-w-5xl flex-col items-center gap-4">
@@ -218,7 +210,7 @@ function SoundRun({ sound }: { sound: SoundGroup }) {
                 the mission chip replaces outright. The "Từ n/3" chip itself now lives with the
                 word tile below (word row, cell B) while idle; the header only takes it back once
                 that cell stops existing, so the count is never simply gone from the screen. */}
-            {mission && <Chip tone="teal">Âm {mission.index}/{mission.total}</Chip>}
+            {mission && <Chip tone="teal">Âm {mission.pos.index}/{mission.pos.total}</Chip>}
             {(result || recording) && <Chip tone="coral">Từ {idx + 1}/{cards.length}</Chip>}
             <div className="flex gap-2">
               {cards.map((c, i) => (
@@ -306,14 +298,13 @@ function SoundRun({ sound }: { sound: SoundGroup }) {
 
               <div className="flex flex-wrap justify-center gap-4 pt-1">
                 <Button variant="outline" onClick={attempt.reset}>↻ Thử lại</Button>
+                {/* Only the END of the run belongs to the lesson: the three words inside the
+                    sound are one step, so the mission hand-off replaces "Hoàn thành", never
+                    "Tiếp theo". */}
                 {!isLast
                   ? <Button size="lg" pulse onClick={nextWord}>Tiếp theo →</Button>
                   : mission
-                    ? (
-                      <Button size="lg" pulse onClick={finishMission}>
-                        {mission.nextRoute ? 'Tiếp theo →' : 'Hoàn thành 🎉'}
-                      </Button>
-                    )
+                    ? <Button size="lg" pulse onClick={mission.go}>{mission.label}</Button>
                     : <Button size="lg" pulse to="/level/sound-zoo">Hoàn thành 🎉</Button>}
               </div>
             </section>

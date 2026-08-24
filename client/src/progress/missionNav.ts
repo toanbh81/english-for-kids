@@ -1,5 +1,5 @@
-import { useMemo } from 'react'
-import { useLocation } from 'react-router-dom'
+import { useCallback, useMemo } from 'react'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { lessonStatus } from './lesson'
 import type { LessonItem, LessonItemKind } from './lesson'
 
@@ -10,6 +10,44 @@ import type { LessonItem, LessonItemKind } from './lesson'
  * and sends the child back to that deck (spec §3).
  */
 export const MISSION_STATE = { mission: true }
+
+/** A lesson item with today's done-ness attached — the shape `lessonStatus` hands out. */
+export type DoneItem = LessonItem & { done: boolean }
+
+/** One step card's worth of lesson: the items of a kind, plus what the card says about them. */
+export type LessonGroup = {
+  kind: LessonItemKind
+  items: DoneItem[]
+  doneCount: number
+  done: boolean
+  /** Where the group starts: its first step still to do — or, once the group is finished, its
+   * first step again, so a favourite story can be played a second time. */
+  route: string
+}
+
+/**
+ * Today's items bucketed by kind, each kind in the order it first appears — the generator lays the
+ * lesson out in the order the child should work through it, so the groups follow that rather than
+ * a hard-coded listen → speak → word → review.
+ *
+ * The Daily Mission screen draws its cards from this and the numbering below counts inside it, so
+ * "Thẻ 2/4" on a practice screen and "2/4" on the card that led there can never disagree.
+ */
+export function groupItems(items: DoneItem[]): LessonGroup[] {
+  const order: LessonItemKind[] = []
+  for (const item of items) if (!order.includes(item.kind)) order.push(item.kind)
+  return order.map(kind => {
+    const group = items.filter(i => i.kind === kind)
+    const next = group.find(item => !item.done)
+    return {
+      kind,
+      items: group,
+      doneCount: group.filter(item => item.done).length,
+      done: next === undefined,
+      route: (next ?? group[0]).route,
+    }
+  })
+}
 
 /** Where the screen the child is standing on sits in today's lesson. */
 export type MissionPos = {
@@ -23,33 +61,18 @@ export type MissionPos = {
   nextRoute: string | null
 }
 
-type DoneItem = LessonItem & { done: boolean }
-type Group = { kind: LessonItemKind; items: DoneItem[] }
-
 /**
- * Today's items bucketed by kind, each kind in the order it first appears — the same buckets the
- * Daily Mission screen draws its cards from, so "Thẻ 2/4" here and "2/4" on the card that led here
- * always count the same steps.
- */
-function groupItems(items: DoneItem[]): Group[] {
-  const order: LessonItemKind[] = []
-  for (const item of items) if (!order.includes(item.kind)) order.push(item.kind)
-  return order.map(kind => ({ kind, items: items.filter(i => i.kind === kind) }))
-}
-
-/**
- * Where `pathname` sits in today's lesson, or `null` when it is not one of today's steps at all
- * (free play, or a lesson route from a different day).
+ * The walk itself, over an already-loaded lesson — no storage, so both entry points below can
+ * share it after a single read.
  *
  * Routes are matched whole, never by prefix: `/story/s1` and `/story/s1/retell` are two different
  * steps of the same story, and a prefix match would count the retell as the listen.
  *
  * `nextRoute` walks forward only — the next step of this group the child still owes, then the
- * first outstanding step of a later group — so a finished lesson (or the last step of it) ends at
- * `null`, which the screens read as "back to the mission".
+ * first outstanding step of a later group — so the last step of the lesson ends at `null`, which
+ * the screens read as "back to the mission".
  */
-export function missionPosition(pathname: string, now = Date.now()): MissionPos | null {
-  const items = lessonStatus(now).items
+function positionIn(items: DoneItem[], pathname: string): MissionPos | null {
   const item = items.find(i => i.route === pathname)
   if (!item) return null
 
@@ -67,15 +90,69 @@ export function missionPosition(pathname: string, now = Date.now()): MissionPos 
 }
 
 /**
- * The mission position of the screen calling it — `null` for free play, which is every visit that
- * did not arrive carrying `MISSION_STATE`.
+ * Where `pathname` sits in today's lesson, or `null` when it is not one of today's steps at all
+ * (free play, or a lesson route from a different day).
+ */
+export function missionPosition(pathname: string, now = Date.now()): MissionPos | null {
+  return positionIn(lessonStatus(now).items, pathname)
+}
+
+/** The one hand-off out of a mission step: where it goes and what the button says. */
+export type MissionNext = {
+  pos: MissionPos
+  /** The next step, or the mission screen when this was the end of the chain. */
+  route: string
+  /** What the screen's next/finish CTA should read. */
+  label: string
+}
+
+const NEXT_LABEL = 'Tiếp theo →'
+const FINISH_LABEL = 'Hoàn thành 🎉'
+/** Neither "next" nor "finished": the chain ends here, but the lesson does not. */
+const RETURN_LABEL = 'Về nhiệm vụ →'
+
+/**
+ * The hand-off for `pathname`, or `null` when it is not one of today's steps.
+ *
+ * The label is a claim about the whole lesson, not about this group. `nextRoute === null` only
+ * means nothing is owed *after* this step — a child replaying a finished later step while an
+ * earlier group is still open would be told "Hoàn thành 🎉" for a lesson they have not finished.
+ * So "Hoàn thành" is reserved for the case where this step is the last thing outstanding (once it
+ * is done, `lessonStatus().done` is true); anything else owed elsewhere reads "Về nhiệm vụ →".
+ */
+export function missionNext(pathname: string, now = Date.now()): MissionNext | null {
+  const items = lessonStatus(now).items
+  const pos = positionIn(items, pathname)
+  if (!pos) return null
+  const owedElsewhere = items.some(i => !i.done && i.route !== pathname)
+  return {
+    pos,
+    route: pos.nextRoute ?? '/mission',
+    label: pos.nextRoute ? NEXT_LABEL : owedElsewhere ? RETURN_LABEL : FINISH_LABEL,
+  }
+}
+
+/**
+ * The mission hand-off for the screen calling it — `null` for free play, which is every visit that
+ * did not arrive carrying `MISSION_STATE`. `go` is the whole navigation: forward to the next step
+ * still carrying the flag, or back to the mission (which celebrates if the lesson is done).
  *
  * Memoised on the path so the lesson and the event log are read once per screen the child lands
- * on: recomputing mid-attempt would let the item the child is working on tick itself off and move
- * the "Tiếp theo" target under their finger.
+ * on: recomputing mid-attempt would let the step the child is working on tick itself off and move
+ * the CTA's target — and its wording — under their finger.
  */
-export function useMissionPosition(): MissionPos | null {
+export function useMissionNext(): (MissionNext & { go: () => void }) | null {
+  const nav = useNavigate()
   const { pathname, state } = useLocation()
   const inMission = (state as { mission?: unknown } | null)?.mission === true
-  return useMemo(() => (inMission ? missionPosition(pathname) : null), [inMission, pathname])
+  const next = useMemo(() => (inMission ? missionNext(pathname) : null), [inMission, pathname])
+
+  const go = useCallback(() => {
+    if (!next) return
+    // The flag travels on to the next step; `/mission` is not a step and needs no state.
+    if (next.pos.nextRoute) nav(next.route, { state: MISSION_STATE })
+    else nav(next.route)
+  }, [nav, next])
+
+  return next && { ...next, go }
 }
