@@ -1,16 +1,16 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { LEVELS, SENTENCES, SOUNDS } from '../content'
-import { STORIES } from '../content/stories'
-import { getStars, totalStars } from '../progress/store'
-import { unlockedCount } from '../progress/leitner'
+import { TOPICS } from '../content/topics'
+import { totalStars } from '../progress/store'
 import { dayKey, getActivity, missionStatus, streak, weekDots, minutesToday } from '../progress/activity'
+import { lessonStatus } from '../progress/lesson'
 import { getLimitMinutes } from '../progress/limit'
+import { topicStars, topicUnlocked } from '../progress/topicProgress'
 import { Foxy } from '../components/Foxy'
 import type { FoxyMood } from '../components/Foxy'
 import { MissionCard } from '../components/MissionCard'
 import { StreakWeek } from '../components/StreakWeek'
-import { SpeechBubble, StarRow } from '../components/ui'
+import { Chip, SpeechBubble, StarRow } from '../components/ui'
 
 const CELEBRATED_KEY = 'speakup.celebrated'
 
@@ -26,34 +26,21 @@ function markCelebrated(day: string): void {
   catch { /* ignore: storage unavailable */ }
 }
 
-type Stars = 0 | 1 | 2 | 3
-
-const best = (values: number[]): Stars => Math.max(0, ...values) as Stars
-
-/** Phase 5 moved Tập âm's stars from per-card `sz-*` keys to per-sound `sound:<ph>` keys. The old
- * keys are still in a returning child's storage, and reading only the new ones showed them an
- * empty island — so the island takes the best of both. */
-const SOUND_ZOO_CARDS = LEVELS.find(l => l.id === 'sound-zoo')?.cards ?? []
-
-/** The vocabulary island has no per-card star, so the Leitner deck stands in for it: the more
- * words the child has unlocked, the more stars the island shows. */
-function wordStars(): Stars {
-  const unlocked = unlockedCount()
-  if (unlocked === 0) return 0
-  if (unlocked < 8) return 1
-  if (unlocked < 16) return 2
-  return 3
-}
-
-/** Islands of the landscape map. `left`/`top` are percentages of the 1194×834 frame taken from the
- * handoff, so the map scales with the viewport instead of drifting on a narrower iPad. */
-const ISLANDS = [
-  { to: '/stories', emoji: '🎧', name: 'Nghe kể chuyện', left: '9%', top: '47%', size: 'h-[104px] w-[104px] text-[44px] lg:h-[128px] lg:w-[128px] lg:text-[54px]', color: 'bg-coral-500 shadow-[0_8px_0_#E05A3A,0_0_0_8px_#FFE9DF]' },
-  { to: '/level/sound-zoo', emoji: '🦁', name: 'Tập âm', left: '28%', top: '32%', size: 'h-[104px] w-[104px] text-[44px] lg:h-[120px] lg:w-[120px] lg:text-[50px]', color: 'bg-teal-500 shadow-[0_8px_0_#1FA396,0_0_0_8px_#D3F1EC]' },
-  { to: '/level/word-pop', emoji: '🎈', name: 'Đọc từ', left: '47%', top: '48%', size: 'h-[104px] w-[104px] text-[44px] lg:h-[120px] lg:w-[120px] lg:text-[50px]', color: 'bg-peach-400 shadow-[0_8px_0_#E07A42,0_0_0_8px_#FFE7D2]' },
-  { to: '/words', emoji: '🧩', name: 'Học từ mới', left: '67%', top: '26%', size: 'h-[104px] w-[104px] text-[44px] lg:h-[120px] lg:w-[120px] lg:text-[50px]', color: 'bg-sky-400 shadow-[0_8px_0_#5BA7D4,0_0_0_8px_#DDF0FB]' },
-  { to: '/sentences', emoji: '🧱', name: 'Ghép câu', left: '84%', top: '40%', size: 'h-[104px] w-[104px] text-[44px] lg:h-[118px] lg:w-[118px] lg:text-[48px]', color: 'bg-sun-400 shadow-[0_8px_0_#E0A61A,0_0_0_8px_#FFF1C9]' },
+/** The five places an island can stand, left to right along the trail. `left`/`top` are
+ * percentages of the 1194×834 frame taken from the handoff, so the map scales with the viewport
+ * instead of drifting on a narrower iPad. The topics fill the slots in unlock order. */
+const SLOTS = [
+  { left: '9%', top: '47%', size: 'h-[104px] w-[104px] text-[44px] lg:h-[128px] lg:w-[128px] lg:text-[54px]', color: 'bg-coral-500 shadow-[0_8px_0_#E05A3A,0_0_0_8px_#FFE9DF]' },
+  { left: '28%', top: '32%', size: 'h-[104px] w-[104px] text-[44px] lg:h-[120px] lg:w-[120px] lg:text-[50px]', color: 'bg-teal-500 shadow-[0_8px_0_#1FA396,0_0_0_8px_#D3F1EC]' },
+  { left: '47%', top: '48%', size: 'h-[104px] w-[104px] text-[44px] lg:h-[120px] lg:w-[120px] lg:text-[50px]', color: 'bg-peach-400 shadow-[0_8px_0_#E07A42,0_0_0_8px_#FFE7D2]' },
+  { left: '67%', top: '26%', size: 'h-[104px] w-[104px] text-[44px] lg:h-[120px] lg:w-[120px] lg:text-[50px]', color: 'bg-sky-400 shadow-[0_8px_0_#5BA7D4,0_0_0_8px_#DDF0FB]' },
+  { left: '84%', top: '40%', size: 'h-[104px] w-[104px] text-[44px] lg:h-[118px] lg:w-[118px] lg:text-[48px]', color: 'bg-sun-400 shadow-[0_8px_0_#E0A61A,0_0_0_8px_#FFF1C9]' },
 ] as const
+
+/** One island per topic (spec §2): the map is the topic list, in unlock order. */
+const ISLANDS = TOPICS.map((topic, i) => ({ ...topic, ...SLOTS[i] }))
+
+const ISLAND_BOX = 'flex flex-col items-center gap-1.5 lg:absolute'
 
 // The dotted trail the islands sit on. Decorative only, and drawn in the same 1194×834 frame
 // coordinates the SVG stretches over. The points are the island CENTRES, not their `left`/`top`
@@ -65,32 +52,28 @@ const TRAIL =
 export function Home() {
   const navigate = useNavigate()
   // One read of the activity log per mount, shared by every query below — the log is a single
-  // localStorage entry, and each query used to parse it again.
-  const [{ events, now }] = useState(() => ({ events: getActivity(), now: Date.now() }))
-  const status = missionStatus(now, events)
-  const hasProgress = status.story > 0 || status.speak > 0 || status.word > 0
-  const mood: FoxyMood = status.done ? 'cheer' : hasProgress ? 'happy' : 'idle'
-  const say = status.done
+  // localStorage entry, and each query used to parse it again. Today's lesson is generated here
+  // too: its `created` stamp has to be the moment the child opened the app, so free practice
+  // before they ever tap "Nhiệm vụ hôm nay" still counts towards it.
+  const [{ events, now, lesson }] = useState(() => {
+    const events = getActivity()
+    const now = Date.now()
+    return { events, now, lesson: lessonStatus(now, events) }
+  })
+  const counters = missionStatus(now, events)
+  const hasProgress =
+    lesson.doneCount > 0 || counters.story > 0 || counters.speak > 0 || counters.word > 0
+  const mood: FoxyMood = lesson.done ? 'cheer' : hasProgress ? 'happy' : 'idle'
+  const say = lesson.done
     ? 'Hoàn thành nhiệm vụ rồi! 🎉'
     : hasProgress
       ? 'Giỏi lắm, tiếp tục nhé!'
       : 'Hôm nay mình luyện nói nhé!'
   const overLimit = minutesToday(now, events) >= getLimitMinutes()
 
-  const stars: Record<string, Stars> = {
-    '/stories': best(STORIES.map(s => getStars(`story:${s.id}`))),
-    '/level/sound-zoo': best([
-      ...SOUNDS.map(s => getStars(`sound:${s.ph}`)),
-      ...SOUND_ZOO_CARDS.map(c => getStars(c.id)),
-    ]),
-    '/level/word-pop': best((LEVELS.find(l => l.id === 'word-pop')?.cards ?? []).map(c => getStars(c.id))),
-    '/words': wordStars(),
-    '/sentences': best(SENTENCES.map(s => getStars(`sentence:${s.id}`))),
-  }
-
   // Decided once per mount, then remembered in storage by the effect below, so the trip to the
-  // celebration screen happens on the render that first sees a finished mission — and only then.
-  const [celebrating] = useState(() => status.done && !alreadyCelebrated(dayKey(now)))
+  // celebration screen happens on the render that first sees a finished lesson — and only then.
+  const [celebrating] = useState(() => lesson.done && !alreadyCelebrated(dayKey(now)))
   useEffect(() => {
     if (!celebrating) return
     markCelebrated(dayKey(now))
@@ -155,29 +138,55 @@ export function Home() {
               <path d={TRAIL} stroke="#EAD9BE" strokeWidth={14} strokeLinecap="round" strokeDasharray="2 26" fill="none" />
             </svg>
 
-            {ISLANDS.map(island => (
-              <Link
-                key={island.to}
-                to={island.to}
-                aria-label={`${island.name}, ${stars[island.to]} sao`}
-                // `left`/`top` are the island's top-left corner, the same anchor the handoff frame
-                // uses. The press is a scale rather than a nudge down, which would fight the
-                // absolute `top` on the map.
-                style={{ left: island.left, top: island.top }}
-                className="flex flex-col items-center gap-1.5 transition-transform active:scale-95 lg:absolute"
-              >
-                <span aria-hidden="true" className={`flex items-center justify-center rounded-full ${island.size} ${island.color}`}>
-                  {island.emoji}
-                </span>
-                <span aria-hidden="true" className="font-display text-xl font-extrabold text-ink-900">{island.name}</span>
-                <StarRow value={stars[island.to]} size="sm" />
-              </Link>
-            ))}
+            {ISLANDS.map(island => {
+              const unlocked = topicUnlocked(island.id)
+              const stars = topicStars(island.id)
+              // `left`/`top` are the island's top-left corner, the same anchor the handoff frame
+              // uses. The press is a scale rather than a nudge down, which would fight the
+              // absolute `top` on the map.
+              const position = { left: island.left, top: island.top }
+
+              // A locked island keeps its place on the trail — the child can see what is coming —
+              // but it is not a link and never reads as one.
+              if (!unlocked) {
+                return (
+                  <div
+                    key={island.id}
+                    data-testid={`island-${island.id}`}
+                    aria-disabled="true"
+                    style={position}
+                    className={`${ISLAND_BOX} opacity-50`}
+                  >
+                    <span aria-hidden="true" className={`flex items-center justify-center rounded-full ${island.size} ${island.color}`}>
+                      🔒
+                    </span>
+                    <span className="font-display text-xl font-extrabold text-ink-500">{island.name}</span>
+                    <Chip tone="neutral" size="sm">Chưa mở khóa</Chip>
+                  </div>
+                )
+              }
+
+              return (
+                <Link
+                  key={island.id}
+                  data-testid={`island-${island.id}`}
+                  to={`/topic/${island.id}`}
+                  aria-label={`${island.name}, ${stars} sao`}
+                  style={position}
+                  className={`${ISLAND_BOX} transition-transform active:scale-95`}
+                >
+                  <span aria-hidden="true" className={`flex items-center justify-center rounded-full ${island.size} ${island.color}`}>
+                    {island.emoji}
+                  </span>
+                  <span aria-hidden="true" className="font-display text-xl font-extrabold text-ink-900">{island.name}</span>
+                  <StarRow value={stars} size="sm" />
+                </Link>
+              )
+            })}
           </div>
 
-          {/* The way into Speak Lab. The islands only reach bậc 1–2 (Tập âm, Đọc từ), so without
-            * this the staircase — and with it Nghe & chọn, Sentence Stars and Story Voice — was
-            * reachable only from a chip buried inside the Đọc từ card grid. */}
+          {/* The way into Speak Lab. The islands are the topic map, so without this the staircase —
+            * and with it Nghe & chọn, Sentence Stars and Story Voice — would have no route in. */}
           <div className="col-span-2 flex justify-center lg:absolute lg:bottom-6 lg:left-1/2 lg:-translate-x-1/2">
             <Link
               to="/levels"
@@ -188,7 +197,7 @@ export function Home() {
           </div>
 
           <div className="col-span-2 lg:absolute lg:bottom-2 lg:left-2 lg:w-[380px]">
-            <MissionCard status={status} />
+            <MissionCard status={lesson} />
           </div>
 
           <div className="col-span-2 flex justify-end lg:absolute lg:bottom-2 lg:right-2">

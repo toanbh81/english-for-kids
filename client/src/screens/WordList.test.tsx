@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { cleanup, render, screen } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { WordList } from './WordList'
 import { promote } from '../progress/leitner'
@@ -31,6 +31,17 @@ it('shows 🔓 for an unlocked word', () => {
   renderList('food')
   expect(screen.getAllByText('🔓')).toHaveLength(1)
   expect(screen.getAllByText('🔒')).toHaveLength(7)
+})
+
+// A map topic was reached from its island, so that is where back goes; the flat word index is only
+// the review deck's home now.
+it('sends a map topic back to its island, and the review deck to the word index', () => {
+  renderList('food')
+  expect(screen.getByRole('link', { name: 'Đồ ăn' })).toHaveAttribute('href', '/topic/food')
+
+  cleanup()
+  renderList('review')
+  expect(screen.getByRole('link', { name: 'Từ vựng' })).toHaveAttribute('href', '/words')
 })
 
 it('links each word card to /words/:topic/:wordId', () => {

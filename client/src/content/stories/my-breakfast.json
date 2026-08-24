@@ -3,6 +3,7 @@
   "title": "My Breakfast",
   "titleVi": "Bữa sáng của em",
   "emoji": "🥞",
+  "topic": "food",
   "scenes": [
     {
       "text": "It is morning. I am hungry.",

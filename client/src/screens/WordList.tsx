@@ -26,7 +26,13 @@ export function WordList() {
   return (
     <main className="h-full overflow-y-auto bg-cream-50 p-6">
       <div className="mx-auto flex w-full max-w-5xl flex-col gap-5">
-        <BackButton to="/words" label="Từ vựng" className="self-start" />
+        {/* A map topic was reached from its island, so back goes to the island — the flat word
+          * index is only ever the review deck's home now. */}
+        <BackButton
+          to={isReview ? '/words' : `/topic/${topic}`}
+          label={isReview ? 'Từ vựng' : t!.title}
+          className="self-start"
+        />
         <h1 className="flex items-center gap-3 font-display text-[40px] font-extrabold leading-tight text-ink-900">
           <span aria-hidden="true">{isReview ? '📚' : t!.emoji}</span>
           <span>{title}</span>

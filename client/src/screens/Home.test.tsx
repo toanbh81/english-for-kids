@@ -1,7 +1,9 @@
 import { render, screen, within } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
+import type { TopicId } from '../content/topics'
+import { findTopic } from '../content/words'
 import { dayKey, logActivity } from '../progress/activity'
-import { setStars } from '../progress/store'
+import { getLesson } from '../progress/lesson'
 import { Home } from './Home'
 
 const NOW = new Date('2026-08-23T10:00:00').getTime()
@@ -20,11 +22,38 @@ function renderHome() {
   )
 }
 
-/** Logs a full day's worth of mission activity so that day counts as done. */
+/** Logs a full day's worth of legacy counter activity so that day counts as done for the streak. */
 function seedDoneDay(ts: number) {
   logActivity({ ts, kind: 'story', id: 'little-fox' })
   for (let i = 0; i < 5; i++) logActivity({ ts: ts + i, kind: 'speak', id: `sz-${i}` })
   for (let i = 0; i < 3; i++) logActivity({ ts: ts + i, kind: 'word', id: `w-${i}` })
+}
+
+/**
+ * Generates today's lesson the way Home does on mount and logs a passing attempt for the first
+ * `count` of its items, so the card's fraction and the celebration can be driven without knowing
+ * which items the seeded generator picked.
+ */
+function completeLesson(ts: number, count = Number.MAX_SAFE_INTEGER) {
+  const lesson = getLesson(ts)
+  lesson.items.slice(0, count).forEach((item, i) => {
+    logActivity({ ts: lesson.created + 1000 + i, kind: item.activity, id: item.id })
+  })
+  return lesson
+}
+
+/** Puts the first `n` words of a topic's deck in Leitner box 1 — the unlock and star currency. */
+function unlockWords(topic: TopicId, n: number) {
+  const deck = findTopic(topic)?.words ?? []
+  const raw: Record<string, { box: number; due: number }> =
+    JSON.parse(localStorage.getItem('speakup.leitner') ?? '{}')
+  for (const w of deck.slice(0, n)) raw[w.id] = { box: 1, due: 0 }
+  localStorage.setItem('speakup.leitner', JSON.stringify(raw))
+}
+
+/** Opens every island, so the map can be checked as a whole. */
+function unlockAllTopics() {
+  for (const id of ['animals', 'food', 'school', 'family'] as TopicId[]) unlockWords(id, 6)
 }
 
 beforeEach(() => {
@@ -36,19 +65,28 @@ afterEach(() => {
   vi.useRealTimers()
 })
 
-it('shows mission progress from seeded activity and a happy Foxy', () => {
-  logActivity({ ts: NOW - 5000, kind: 'story', id: 'little-fox' })
-  logActivity({ ts: NOW - 4000, kind: 'speak', id: 'sz-th-three' })
-  logActivity({ ts: NOW - 3000, kind: 'speak', id: 'sz-th-thank' })
+it('shows how much of today lesson is done and a happy Foxy', () => {
+  const lesson = completeLesson(NOW, 2)
 
   renderHome()
 
-  expect(screen.getByText('1 truyện 1/1')).toBeInTheDocument()
-  expect(screen.getByText('5 thẻ 2/5')).toBeInTheDocument()
-  expect(screen.getByText('3 từ 0/3')).toBeInTheDocument()
+  expect(screen.getByText(`2/${lesson.items.length}`)).toBeInTheDocument()
   expect(screen.getByTestId('foxy')).toHaveAttribute('data-mood', 'happy')
   expect(screen.getByText('Giỏi lắm, tiếp tục nhé!')).toBeInTheDocument()
   expect(screen.getByRole('link', { name: 'Bắt đầu ▸' })).toHaveAttribute('href', '/mission')
+})
+
+// The lesson's `created` stamp gates every done-match, so it has to be set when the child opens
+// the app — not when they first tap through to /mission. Free practice before that visit counts.
+it('generates today lesson on mount so earlier practice still counts', () => {
+  expect(localStorage.getItem(`speakup.lesson.${dayKey(NOW)}`)).toBeNull()
+
+  renderHome()
+
+  const raw = localStorage.getItem(`speakup.lesson.${dayKey(NOW)}`)
+  expect(raw).not.toBeNull()
+  expect(JSON.parse(raw!).created).toBe(NOW)
+  expect(screen.getByText(`0/${JSON.parse(raw!).items.length}`)).toBeInTheDocument()
 })
 
 it('shows an idle Foxy greeting with no activity yet', () => {
@@ -59,8 +97,8 @@ it('shows an idle Foxy greeting with no activity yet', () => {
   expect(screen.getByText('Hôm nay mình luyện nói nhé!')).toBeInTheDocument()
 })
 
-it('offers a replay CTA once the mission is done and already celebrated', () => {
-  seedDoneDay(NOW - 1000)
+it('offers a replay CTA once the lesson is done and already celebrated', () => {
+  completeLesson(NOW)
   localStorage.setItem('speakup.celebrated', dayKey(NOW))
 
   renderHome()
@@ -70,8 +108,8 @@ it('offers a replay CTA once the mission is done and already celebrated', () => 
   expect(screen.getByRole('link', { name: 'Hoàn thành rồi! 🎉 Chơi lại?' })).toHaveAttribute('href', '/mission')
 })
 
-it('sends the child to the celebration screen when the mission is finished', () => {
-  seedDoneDay(NOW - 1000)
+it('sends the child to the celebration screen when the lesson is finished', () => {
+  completeLesson(NOW)
 
   renderHome()
 
@@ -79,8 +117,8 @@ it('sends the child to the celebration screen when the mission is finished', () 
   expect(localStorage.getItem('speakup.celebrated')).toBe(dayKey(NOW))
 })
 
-it('does not celebrate the same finished mission twice in one day', () => {
-  seedDoneDay(NOW - 1000)
+it('does not celebrate the same finished lesson twice in one day', () => {
+  completeLesson(NOW)
   localStorage.setItem('speakup.celebrated', dayKey(NOW))
 
   renderHome()
@@ -89,7 +127,7 @@ it('does not celebrate the same finished mission twice in one day', () => {
 })
 
 it('celebrates again on a new day even if yesterday was celebrated', () => {
-  seedDoneDay(NOW - 1000)
+  completeLesson(NOW)
   localStorage.setItem('speakup.celebrated', dayKey(NOW - DAY_MS))
 
   renderHome()
@@ -97,8 +135,8 @@ it('celebrates again on a new day even if yesterday was celebrated', () => {
   expect(screen.getByText('màn hình chúc mừng')).toBeInTheDocument()
 })
 
-it('stays on the map while the mission is unfinished', () => {
-  logActivity({ ts: NOW, kind: 'story', id: 'little-fox' })
+it('stays on the map while the lesson is unfinished', () => {
+  completeLesson(NOW, 1)
 
   renderHome()
 
@@ -110,7 +148,6 @@ it('shows a 3-day streak after three consecutive completed days', () => {
   seedDoneDay(NOW - 2 * DAY_MS)
   seedDoneDay(NOW - DAY_MS)
   seedDoneDay(NOW)
-  localStorage.setItem('speakup.celebrated', dayKey(NOW))
 
   renderHome()
 
@@ -149,68 +186,75 @@ it('keeps the stacked layout scrollable so the mission CTA is never trapped belo
   expect(Array.from(root.classList).filter(c => c.includes('overflow-hidden'))).toEqual([])
 })
 
-it('puts the five islands on the map and links each to its module', () => {
+it('puts the five topic islands on the map, in unlock order, each linking to its hub', () => {
+  unlockAllTopics()
+
   renderHome()
 
-  expect(screen.getByRole('link', { name: /Nghe kể chuyện/ })).toHaveAttribute('href', '/stories')
-  expect(screen.getByRole('link', { name: /Tập âm/ })).toHaveAttribute('href', '/level/sound-zoo')
-  expect(screen.getByRole('link', { name: /Đọc từ/ })).toHaveAttribute('href', '/level/word-pop')
-  expect(screen.getByRole('link', { name: /Học từ mới/ })).toHaveAttribute('href', '/words')
-  expect(screen.getByRole('link', { name: /Ghép câu/ })).toHaveAttribute('href', '/sentences')
+  const hrefs = screen.getAllByRole('link')
+    .map(a => a.getAttribute('href'))
+    .filter(href => href?.startsWith('/topic/'))
+  expect(hrefs).toEqual([
+    '/topic/animals', '/topic/food', '/topic/school', '/topic/family', '/topic/weather',
+  ])
+  expect(screen.getByRole('link', { name: /Động vật/ })).toHaveAttribute('href', '/topic/animals')
+  expect(screen.getByRole('link', { name: /Thời tiết/ })).toHaveAttribute('href', '/topic/weather')
   expect(screen.getByRole('link', { name: /Phụ huynh/ })).toHaveAttribute('href', '/parent')
 })
 
-// The islands stop at bậc 2, so Home is the only place the staircase can be found from. Without
-// this link Sentence Stars and Story Voice had no route in at all from the map.
+it('locks every island but Động vật for a brand-new child', () => {
+  renderHome()
+
+  expect(screen.getByRole('link', { name: /Động vật/ })).toHaveAttribute('href', '/topic/animals')
+  for (const id of ['food', 'school', 'family', 'weather']) {
+    const island = screen.getByTestId(`island-${id}`)
+    expect(island.tagName).not.toBe('A')
+    expect(island).toHaveAttribute('aria-disabled', 'true')
+    expect(within(island).getByText('Chưa mở khóa')).toBeInTheDocument()
+  }
+  expect(screen.getAllByRole('link').filter(a => a.getAttribute('href')?.startsWith('/topic/')))
+    .toHaveLength(1)
+})
+
+it('opens the next island once six of the previous deck are unlocked', () => {
+  unlockWords('animals', 6)
+
+  renderHome()
+
+  expect(screen.getByRole('link', { name: /Đồ ăn/ })).toHaveAttribute('href', '/topic/food')
+  expect(screen.getByTestId('island-school')).toHaveAttribute('aria-disabled', 'true')
+})
+
+/** Phases 1–6 let children learn any topic. The chain must never take that away: a single word
+ * already unlocked in Gia đình opens that island even though Trường học is nowhere near six. */
+it('keeps a topic with existing progress open even when the chain has not reached it', () => {
+  unlockWords('family', 1)
+
+  renderHome()
+
+  expect(screen.getByRole('link', { name: /Gia đình/ })).toHaveAttribute('href', '/topic/family')
+  expect(screen.getByTestId('island-school')).toHaveAttribute('aria-disabled', 'true')
+})
+
+it('bands each island stars by how much of its deck is unlocked', () => {
+  unlockWords('animals', 1)
+  unlockWords('food', 6)
+  unlockWords('school', 8)
+
+  renderHome()
+
+  const stars = (id: string) =>
+    within(screen.getByTestId(`island-${id}`)).getAllByTestId('star-filled').length
+  expect(stars('animals')).toBe(1)
+  expect(stars('food')).toBe(2)
+  expect(stars('school')).toBe(3)
+  expect(within(screen.getByTestId('island-family')).queryAllByTestId('star-filled')).toHaveLength(0)
+})
+
+// The islands are topics now, so the staircase — Nghe & chọn, Sentence Stars, Story Voice — has
+// no other way in from the map.
 it('links the map to the Speak Lab staircase', () => {
   renderHome()
 
   expect(screen.getByRole('link', { name: /Các bậc luyện nói/ })).toHaveAttribute('href', '/levels')
-})
-
-it('shows each island the best stars earned inside that module', () => {
-  setStars('story:little-fox', 2)
-  setStars('sound:th', 3)
-
-  renderHome()
-
-  const stories = screen.getByRole('link', { name: /Nghe kể chuyện/ })
-  expect(within(stories).getAllByTestId('star-filled')).toHaveLength(2)
-  const soundZoo = screen.getByRole('link', { name: /Tập âm/ })
-  expect(within(soundZoo).getAllByTestId('star-filled')).toHaveLength(3)
-  const wordPop = screen.getByRole('link', { name: /Đọc từ/ })
-  expect(within(wordPop).queryAllByTestId('star-filled')).toHaveLength(0)
-})
-
-/** Phase 5 moved Tập âm's stars from per-card `sz-*` keys to per-sound `sound:<ph>` keys. A child
- * who practised before that still has only the old keys in storage, and reading just the new ones
- * showed them an empty island — as if the app had wiped what they had earned. */
-it('still counts the legacy per-card sz- keys so returning children keep their stars', () => {
-  setStars('sz-th-three', 2)
-
-  renderHome()
-
-  const soundZoo = screen.getByRole('link', { name: /Tập âm/ })
-  expect(within(soundZoo).getAllByTestId('star-filled')).toHaveLength(2)
-})
-
-it('shows the best of the new sound key and the legacy card key', () => {
-  setStars('sz-th-three', 2)
-  setStars('sound:v', 3)
-
-  renderHome()
-
-  const soundZoo = screen.getByRole('link', { name: /Tập âm/ })
-  expect(within(soundZoo).getAllByTestId('star-filled')).toHaveLength(3)
-})
-
-it('turns unlocked vocabulary cards into stars on the Học từ mới island', () => {
-  localStorage.setItem('speakup.leitner', JSON.stringify(
-    Object.fromEntries(Array.from({ length: 9 }, (_, i) => [`w-${i}`, { box: 1, due: 0 }])),
-  ))
-
-  renderHome()
-
-  const words = screen.getByRole('link', { name: /Học từ mới/ })
-  expect(within(words).getAllByTestId('star-filled')).toHaveLength(2)
 })

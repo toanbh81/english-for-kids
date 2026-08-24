@@ -1,0 +1,15 @@
+{
+  "id": "weather",
+  "title": "Thời tiết",
+  "emoji": "☀️",
+  "words": [
+    { "id": "weather-sun", "topic": "weather", "word": "sun", "ipa": "/sʌn/", "emoji": "☀️", "audio": "/audio/words/sun.mp3", "vi": "mặt trời", "example": "The sun is bright." },
+    { "id": "weather-rain", "topic": "weather", "word": "rain", "ipa": "/reɪn/", "emoji": "🌧️", "audio": "/audio/words/rain.mp3", "vi": "mưa", "example": "I hear the rain." },
+    { "id": "weather-wind", "topic": "weather", "word": "wind", "ipa": "/wɪnd/", "emoji": "💨", "audio": "/audio/words/wind.mp3", "vi": "gió", "example": "The wind is strong." },
+    { "id": "weather-cloud", "topic": "weather", "word": "cloud", "ipa": "/klaʊd/", "emoji": "☁️", "audio": "/audio/words/cloud.mp3", "vi": "mây", "example": "I see a cloud." },
+    { "id": "weather-snow", "topic": "weather", "word": "snow", "ipa": "/snoʊ/", "emoji": "❄️", "audio": "/audio/words/snow.mp3", "vi": "tuyết", "example": "I like the snow." },
+    { "id": "weather-hot", "topic": "weather", "word": "hot", "ipa": "/hɑːt/", "emoji": "🥵", "audio": "/audio/words/hot.mp3", "vi": "nóng", "example": "Today is very hot." },
+    { "id": "weather-cold", "topic": "weather", "word": "cold", "ipa": "/koʊld/", "emoji": "🥶", "audio": "/audio/words/cold.mp3", "vi": "lạnh", "example": "Today is very cold." },
+    { "id": "weather-rainbow", "topic": "weather", "word": "rainbow", "ipa": "/ˈreɪnboʊ/", "emoji": "🌈", "audio": "/audio/words/rainbow.mp3", "vi": "cầu vồng", "example": "I see a rainbow." }
+  ]
+}

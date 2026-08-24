@@ -75,6 +75,7 @@ function makeStory(): Story {
     title: 'Test',
     titleVi: 'Test',
     emoji: '🦊',
+    topic: 'animals',
     scenes: [
       scene([
         { w: 'One', start: 0, end: 200 },
@@ -99,6 +100,7 @@ function makeStory3(): Story {
     title: 'Test',
     titleVi: 'Test',
     emoji: '🦊',
+    topic: 'animals',
     scenes: [
       scene([{ w: 'One', start: 0, end: 200 }, { w: 'Two', start: 260, end: 1300 }], '/s1.mp3'),
       scene([{ w: 'Three', start: 0, end: 200 }, { w: 'Four', start: 260, end: 500 }], '/s2.mp3'),

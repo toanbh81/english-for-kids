@@ -120,4 +120,6 @@ it('shows result buttons linking to retell and to listen again', () => {
   expect(retellLink).toHaveAttribute('href', '/story/little-fox/retell')
   const listenLink = screen.getByRole('link', { name: 'Nghe lại' })
   expect(listenLink).toHaveAttribute('href', '/story/little-fox')
+  // Retell and re-listen both stay inside the story — the result screen must also offer a way out.
+  expect(screen.getByRole('link', { name: 'Về bản đồ 🏝️' })).toHaveAttribute('href', '/')
 })

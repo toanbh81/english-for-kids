@@ -34,24 +34,30 @@ describe('Foxy', () => {
 })
 
 describe('MissionCard', () => {
-  function renderCard(status: { story: number; speak: number; word: number; done: boolean }) {
+  function renderCard(status: { doneCount: number; total: number; done: boolean }) {
     render(<MemoryRouter><MissionCard status={status} /></MemoryRouter>)
   }
 
-  it('shows counts for each mission row as links to the right screens', () => {
-    renderCard({ story: 0, speak: 2, word: 0, done: false })
-    expect(screen.getByText(/1 truyện 0\/1/)).toBeInTheDocument()
-    expect(screen.getByText(/5 thẻ 2\/5/)).toBeInTheDocument()
-    expect(screen.getByText(/3 từ 0\/3/)).toBeInTheDocument()
-
-    expect(screen.getByRole('link', { name: /truyện/i })).toHaveAttribute('href', '/stories')
-    expect(screen.getByRole('link', { name: /thẻ/i })).toHaveAttribute('href', '/level/sound-zoo')
-    expect(screen.getByRole('link', { name: /từ/i })).toHaveAttribute('href', '/words')
+  it('shows how far through today lesson the child is, and the way into it', () => {
+    renderCard({ doneCount: 3, total: 10, done: false })
+    expect(screen.getByText('🌞 Nhiệm vụ hôm nay')).toBeInTheDocument()
+    expect(screen.getByText('3/10')).toBeInTheDocument()
+    expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '30')
+    expect(screen.getByRole('link', { name: 'Bắt đầu ▸' })).toHaveAttribute('href', '/mission')
   })
 
-  it('celebrates when all missions are done', () => {
-    renderCard({ story: 1, speak: 5, word: 3, done: true })
+  it('celebrates when the whole lesson is done and offers a replay', () => {
+    renderCard({ doneCount: 10, total: 10, done: true })
     expect(screen.getByText(/Hoàn thành! 🎉/)).toBeInTheDocument()
+    expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '100')
+    expect(screen.getByRole('link', { name: /Chơi lại/ })).toHaveAttribute('href', '/mission')
+  })
+
+  // A lesson can be empty only if generation found nothing at all; the bar must not go NaN.
+  it('shows an empty bar rather than NaN when there is no lesson', () => {
+    renderCard({ doneCount: 0, total: 0, done: false })
+    expect(screen.getByText('0/0')).toBeInTheDocument()
+    expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '0')
   })
 })
 
