@@ -62,8 +62,16 @@ export function useSpeakingAttempt(opts: {
     setWsRecording(false)
     stoppedRef.current = true
     if (timerRef.current) { clearTimeout(timerRef.current); timerRef.current = null }
-    createScorer().then(adoptScorer)
-    return () => { if (timerRef.current) { clearTimeout(timerRef.current); timerRef.current = null } }
+    // A token round trip outlives the card that asked for it — a child tapping through a deck
+    // starts one per word — and the answers can come back out of order. Without this the slow
+    // first lookup lands last and overwrites the fresh card's scorer with the previous card's,
+    // which on a bad token means the new card is quietly demoted to the simple engine.
+    let cancelled = false
+    createScorer().then(bundle => { if (!cancelled) adoptScorer(bundle) })
+    return () => {
+      cancelled = true
+      if (timerRef.current) { clearTimeout(timerRef.current); timerRef.current = null }
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [opts.resetKey])
 

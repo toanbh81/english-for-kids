@@ -26,10 +26,41 @@ export function parseAzureResult(json: unknown): PronunciationResult {
     completeness: pa.CompletenessScore, prosody: pa.ProsodyScore, words, engine: 'azure' }
 }
 
+/**
+ * How long one token round trip may take before the attempt gives up on it. `fetch` has no
+ * deadline of its own: a request that is answered by nobody — a captive-portal wifi, a serverless
+ * function stuck on a cold start — never settles, so the mic that is waiting on it stays ⏳
+ * forever and the child has nothing to tap. 2.5 s is longer than the endpoint's normal answer and
+ * short enough that a lost one still leaves an attempt to make on the simple engine.
+ */
+const TOKEN_TIMEOUT_MS = 2500
+
+/**
+ * The token, or a rejection within `TOKEN_TIMEOUT_MS`. The deadline both aborts the request (so a
+ * dead socket is not left holding a connection) and settles the promise itself — `abort` is a
+ * request to the network layer and some of them answer it late or not at all, and the whole point
+ * here is that the caller always gets an answer back.
+ */
 export async function fetchToken(): Promise<{ token: string; region: string }> {
-  const res = await fetch(`${import.meta.env.VITE_API_BASE ?? ''}/api/speech-token`)
-  if (!res.ok) throw new Error('token unavailable')
-  return res.json()
+  const control = new AbortController()
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const deadline = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => {
+      control.abort()
+      reject(new Error('token timeout'))
+    }, TOKEN_TIMEOUT_MS)
+  })
+  try {
+    const res = await Promise.race([
+      fetch(`${import.meta.env.VITE_API_BASE ?? ''}/api/speech-token`, { signal: control.signal }),
+      deadline,
+    ])
+    if (!res.ok) throw new Error('token unavailable')
+    return await res.json()
+  } finally {
+    // Also stops `deadline` from ever rejecting once the request has won the race.
+    clearTimeout(timer)
+  }
 }
 
 const TARGET_RATE = 16000

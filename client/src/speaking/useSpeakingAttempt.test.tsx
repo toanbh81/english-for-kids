@@ -24,8 +24,9 @@ vi.mock('../audio/recorder', () => ({
 }))
 vi.mock('../scoring/createScorer', () => ({
   createScorer: async () => {
-    if (scorerControl.gate) await scorerControl.gate
-    return scorerControl.queue.shift() ?? {
+    // Claimed when the call is made, not when it answers: a gated call must still be handed the
+    // bundle queued for *its* turn, or a test about out-of-order answers cannot say which is which.
+    const bundle = scorerControl.queue.shift() ?? {
       engine: 'azure',
       scorer: {
         score: async () => ({
@@ -34,6 +35,8 @@ vi.mock('../scoring/createScorer', () => ({
         }),
       },
     }
+    if (scorerControl.gate) await scorerControl.gate
+    return bundle
   },
 }))
 
@@ -189,6 +192,35 @@ it('does not re-check Azure while the browser is offline', async () => {
 
   expect(ws.start).toHaveBeenCalledTimes(1) // synchronously: no token round trip in the way
   expect(result.current.engine).toBe('webspeech')
+})
+
+/** A child tapping through a deck starts one token round trip per card, and the answers can come
+ * back out of order. The card that has been left behind must not adopt anything: its slow lookup
+ * landing last would swap the live card's engine underneath it — on a bad token, all the way down
+ * to the phoneme-blind one. */
+it('ignores the scorer of a card the child has already left', async () => {
+  setOnLine(true)
+  const stale = webSpeechBundle()
+  scorerControl.queue.push(stale.bundle) // claimed by the first card; the second gets Azure
+
+  let answerStale!: () => void
+  const gate = new Promise<void>(resolve => { answerStale = resolve })
+  scorerControl.gate = gate
+
+  const { result, rerender } = renderHook(
+    (props: { resetKey: string }) => useSpeakingAttempt({ targetText: 'cat', resetKey: props.resetKey }),
+    { initialProps: { resetKey: 'apple' } },
+  )
+
+  // Straight on to the next card while the first card's lookup is still in flight.
+  scorerControl.gate = null
+  rerender({ resetKey: 'banana' })
+  await waitFor(() => expect(result.current.engine).toBe('azure'))
+
+  await act(async () => { answerStale(); await gate })
+
+  expect(result.current.engine).toBe('azure')
+  expect(result.current.micState).toBe('idle')
 })
 
 it('shows a friendly error when mic permission is denied', async () => {
