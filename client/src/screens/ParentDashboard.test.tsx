@@ -258,14 +258,21 @@ describe('ParentDashboard', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Đặt lại tiến trình' }))
 
-    await waitFor(() => expect(localStorage.getItem('speakup.band')).toBeNull())
-    expect(localStorage.getItem('speakup.lesson.2026-08-23')).toBeNull()
-    expect(localStorage.getItem('speakup.lesson.length')).toBeNull()
+    // `handleReset` clears `speakup.band` synchronously, before its `await clearRecordings()` —
+    // so a waitFor keyed on that key resolves on its very first (immediate) poll, before the
+    // setState calls that come AFTER the await (setBand/setLength/setSnapshot) have necessarily
+    // committed. That raced the DOM assertions below against React's own re-render, ~1/10 runs.
+    // Waiting on the DOM condition those setState calls actually drive makes the wait mean
+    // something: by the time this resolves, the post-await state update has landed for real.
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Bậc 1' })).toHaveAttribute('aria-pressed', 'true')
+    })
     // …and the card shows what the next read will find, without writing the keys back.
-    expect(screen.getByRole('button', { name: 'Bậc 1' })).toHaveAttribute('aria-pressed', 'true')
     expect(screen.getByRole('button', { name: 'Tự động' })).toHaveAttribute('aria-pressed', 'true')
     expect(screen.getByRole('button', { name: 'Vừa ~12 phút' })).toHaveAttribute('aria-pressed', 'true')
     expect(localStorage.getItem('speakup.band')).toBeNull()
+    expect(localStorage.getItem('speakup.lesson.2026-08-23')).toBeNull()
+    expect(localStorage.getItem('speakup.lesson.length')).toBeNull()
   })
 
   it('does not reset progress when the confirm dialog is dismissed', async () => {
