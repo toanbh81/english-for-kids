@@ -94,6 +94,34 @@ it('still shows on a story, which has no way back of its own', () => {
     .toHaveAttribute('href', '/mission')
 })
 
+/** The listen step is one story worked through three screens — player, quiz, retell. The chip is
+ * the only thread back through all of them, and dropping it at the quiz stranded the child in the
+ * middle of their own lesson step. */
+it.each(['/quiz', '/retell'])('follows the story step into its %s', sub => {
+  const lesson = lessonWith(1)
+  const story = lesson.items.find(i => i.route.startsWith('/story/'))!
+
+  render(
+    <MemoryRouter initialEntries={[{ pathname: `${story.route}${sub}`, state: { mission: true } }]}>
+      <LessonChip />
+    </MemoryRouter>,
+  )
+
+  expect(screen.getByRole('link', { name: `🌞 Nhiệm vụ 1/${lesson.items.length}` }))
+    .toHaveAttribute('href', '/mission')
+})
+
+/** A sub-route is a whole extra segment, not any string that happens to start the same way: a
+ * neighbouring card whose id merely extends today's is not today's step. */
+it('does not mistake a longer sibling route for a step of the lesson', () => {
+  const lesson = lessonWith(0)
+  const word = lesson.items.find(i => i.route.startsWith('/words/'))!
+
+  renderAt(`${word.route}-pie`)
+
+  expect(screen.queryByRole('link')).not.toBeInTheDocument()
+})
+
 /** Free play is untouched by the rule above: no flag, no hiding. */
 it('still shows on the same route reached without the mission flag', () => {
   const lesson = lessonWith(0)

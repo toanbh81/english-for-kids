@@ -26,6 +26,19 @@ function isRedundant(pathname: string, state: unknown): boolean {
 }
 
 /**
+ * Whether the child is standing on `route` — the step itself, or one of the screens that step
+ * leads into. A story is played, then quizzed, then retold across `/story/s1`, `/story/s1/quiz`
+ * and `/story/s1/retell`, and the chip is the only thread back through all three: dropping it at
+ * the quiz stranded the child in the middle of their own lesson step.
+ *
+ * The prefix is matched by whole segment, never as bare text: `/words/food/apple` must not claim
+ * `/words/food/apple-pie`, which is a different card entirely.
+ */
+function onItemRoute(pathname: string, route: string): boolean {
+  return pathname === route || pathname.startsWith(`${route}/`)
+}
+
+/**
  * The thread back to the lesson. A mission item drops the child onto an ordinary practice screen
  * whose own back button goes wherever that screen belongs — the story list, the word deck — so
  * without this, finishing a step left them off the lesson with no sign it was still running.
@@ -46,7 +59,7 @@ function LessonChipInner({ pathname }: { pathname: string }) {
     const events = getActivity()
     const lesson = lessonStatus(Date.now(), events)
     if (lesson.done) return null
-    return lesson.items.some(item => item.route === pathname) ? lesson : null
+    return lesson.items.some(item => onItemRoute(pathname, item.route)) ? lesson : null
   })
 
   if (!status) return null
