@@ -247,6 +247,27 @@ describe('ParentDashboard', () => {
     expect(recordingsMock.clearRecordings).toHaveBeenCalled()
   })
 
+  it('clears the lesson and band stores too, so nothing survives the reset', async () => {
+    localStorage.setItem('speakup.lesson.2026-08-23', JSON.stringify({ v: 1, day: '2026-08-23', created: NOW, band: 4, items: [] }))
+    localStorage.setItem('speakup.lesson.length', 'long')
+    localStorage.setItem('speakup.band', JSON.stringify({ value: 4, mode: 'manual' }))
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+
+    renderWithRouter(<ParentDashboard />)
+    await flush()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Đặt lại tiến trình' }))
+
+    await waitFor(() => expect(localStorage.getItem('speakup.band')).toBeNull())
+    expect(localStorage.getItem('speakup.lesson.2026-08-23')).toBeNull()
+    expect(localStorage.getItem('speakup.lesson.length')).toBeNull()
+    // …and the card shows what the next read will find, without writing the keys back.
+    expect(screen.getByRole('button', { name: 'Bậc 1' })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByRole('button', { name: 'Tự động' })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByRole('button', { name: 'Vừa ~12 phút' })).toHaveAttribute('aria-pressed', 'true')
+    expect(localStorage.getItem('speakup.band')).toBeNull()
+  })
+
   it('does not reset progress when the confirm dialog is dismissed', async () => {
     localStorage.setItem('speakup.stars', JSON.stringify({ a: 3 }))
     vi.spyOn(window, 'confirm').mockReturnValue(false)

@@ -1,6 +1,9 @@
 import { LEVELS, PAIRS, SENTENCE_STARS, STORY_VOICE } from '../content'
 import { completedDays, dayKey, getActivity } from './activity'
 import type { ActivityEvent } from './activity'
+// `lessonStore`, not `lesson`: lesson generation reads the band, so importing the generator here
+// would close the loop. The store sits below both.
+import { itemDone, lessonForDay } from './lessonStore'
 import { getStars } from './store'
 
 /**
@@ -110,12 +113,28 @@ export function autoAdjustBand(now = Date.now(), events = getActivity()): void {
     const avg = dayAverage(byDay.get(day) ?? [])
     return done.has(day) && avg !== null && avg >= GOOD_SCORE
   }
+  /**
+   * A bad day is one the child gave up on, not one they simply did not finish: eight of ten items
+   * at 85 is a good day's work, and demoting for it punished exactly the children who were doing
+   * well. So: fewer than half the lesson's items done, or a lesson they did finish with a
+   * day-average under 60. Half or more done without a low average is neutral — neither good nor
+   * bad — and a day with no events at all is a rest day.
+   */
   const bad = (day: string) => {
     const dayEvents = byDay.get(day) ?? []
-    if (!dayEvents.length) return false // never started: a rest day is not a bad day
-    if (!done.has(day)) return true
+    if (!dayEvents.length) return false
+    const finished = done.has(day)
+    const lesson = lessonForDay(day)
+    if (lesson && lesson.items.length > 0) {
+      const doneCount = lesson.items.filter(i => itemDone(i, lesson, dayEvents)).length
+      if (doneCount * 2 < lesson.items.length) return true
+    } else if (!finished) {
+      // No lesson record — a day from before Phase 7, or one whose record was pruned. The legacy
+      // mission counters are then the only verdict there is: started and never finished is bad.
+      return true
+    }
     const avg = dayAverage(dayEvents)
-    return avg !== null && avg < BAD_SCORE
+    return finished && avg !== null && avg < BAD_SCORE
   }
 
   const upDays = Array.from({ length: GOOD_DAYS }, (_, i) => previous(i + 1))

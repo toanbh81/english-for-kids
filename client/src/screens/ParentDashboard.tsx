@@ -2,10 +2,10 @@ import { useEffect, useState } from 'react'
 import type { ChangeEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { getActivity, minutesPerDay, averageScoreByKind, weakPhonemes, clearActivity } from '../progress/activity'
-import { getBand, setBandAuto, setBandValue } from '../progress/band'
+import { clearBand, getBand, setBandAuto, setBandValue } from '../progress/band'
 import type { Band } from '../progress/band'
 import { clearLeitner } from '../progress/leitner'
-import { LESSON_LENGTHS, getLessonLength, setLessonLength } from '../progress/lesson'
+import { LESSON_LENGTHS, clearLessons, getLessonLength, setLessonLength } from '../progress/lesson'
 import type { LessonLength } from '../progress/lesson'
 import { listRecordings, clearRecordings } from '../progress/recordings'
 import type { Recording } from '../progress/recordings'
@@ -110,8 +110,17 @@ export function ParentDashboard({ onLock }: Props) {
     clearStars()
     clearActivity()
     clearLeitner()
+    // The Phase 7 stores go too: a lesson kept from before the reset would still be pinned to the
+    // old band and still tick items off against an event log that no longer exists.
+    clearLessons()
+    clearBand()
     await clearRecordings()
     setLimit(String(getLimitMinutes()))
+    // Written out rather than re-read: `getBand()` and the lesson store both persist on first read,
+    // which would put back the keys this reset just removed. With no stars left, band 1 / auto and
+    // the default length are exactly what the next read will derive anyway.
+    setBand({ value: 1, mode: 'auto' })
+    setLength(getLessonLength())
     setSnapshot({ events: getActivity(), now: Date.now() })
   }
 
