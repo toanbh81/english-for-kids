@@ -55,6 +55,9 @@ export default {
           '60%': { transform: 'scale(1.15) rotate(8deg)', opacity: '1' },
           '100%': { transform: 'scale(1) rotate(0deg)', opacity: '1' },
         },
+        // One pulse per beat, all the way up and back down inside the beat: the dots of Sentence
+        // Stars' rhythm card land *on* the words rather than drifting across them.
+        beat: { '0%, 100%': { transform: 'scale(1)' }, '50%': { transform: 'scale(1.35)' } },
         bob: { '0%, 100%': { transform: 'translateY(0)' }, '50%': { transform: 'translateY(-9px)' } },
         wiggle: { '0%, 100%': { transform: 'rotate(0deg)' }, '25%': { transform: 'rotate(-8deg)' }, '75%': { transform: 'rotate(8deg)' } },
       },
@@ -63,6 +66,10 @@ export default {
         ring: 'ring 1.4s ease-out infinite',
         fall: 'fall 3.2s linear forwards',
         'star-drop': 'star-drop .6s ease-out both',
+        // One shot, never repeating: the beat has to *travel* along the dots, and a repeating
+        // animation would put them all back in phase after the first pass. StarPractice writes
+        // each dot's own duration and delay; `--beat` (sample length ÷ word count) is the fallback.
+        beat: 'beat var(--beat) ease-out 1',
         bob: 'bob 3s ease-in-out infinite',
         wiggle: 'wiggle 1.8s ease-in-out infinite',
       },

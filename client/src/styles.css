@@ -3,6 +3,10 @@
 html, body, #root { height: 100%; }
 body { @apply bg-cream-50 font-sans text-ink-900; -webkit-user-select: none; }
 
+/* One beat of Sentence Stars' rhythm dots (`animate-beat`). StarPractice overwrites it per sample
+ * with that sample's own tempo; this default only covers a sample whose duration never arrives. */
+:root { --beat: 420ms; }
+
 @keyframes shake { 0%,100%{transform:translateX(0)} 25%{transform:translateX(-8px)} 75%{transform:translateX(8px)} }
 .animate-shake{animation:shake .4s}
 
