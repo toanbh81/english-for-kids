@@ -1,3 +1,5 @@
+import { lessonDone, lessonForDay } from './lessonStore'
+
 const KEY = 'speakup.activity'
 const CAP = 2000
 const MISSION_TARGET = { story: 1, speak: 5, word: 3 } as const
@@ -79,12 +81,24 @@ function isDone(counts: { story: number; speak: number; word: number }): boolean
   return counts.story >= MISSION_TARGET.story && counts.speak >= MISSION_TARGET.speak && counts.word >= MISSION_TARGET.word
 }
 
+/**
+ * A day is done when the legacy counters hold **or** that day's generated lesson is finished
+ * (spec §4, mission compatibility). Both directions matter: streaks earned before Phase 7 keep
+ * counting, and a short lesson the child actually completed counts even though it asks for fewer
+ * than 5 speaks. `dayEvents` must already be filtered to `day`.
+ */
+function dayIsDone(day: string, dayEvents: ActivityEvent[]): boolean {
+  if (isDone(countsForDay(dayEvents))) return true
+  const lesson = lessonForDay(day)
+  return lesson !== null && lessonDone(lesson, dayEvents)
+}
+
 // Every query takes the event log as an optional trailing argument so a screen can read storage
 // once per render and share the same array across all of its queries.
 export function missionStatus(now = Date.now(), events = getActivity()): { story: number; speak: number; word: number; done: boolean } {
   const key = dayKey(now)
-  const counts = countsForDay(events.filter(e => dayKey(e.ts) === key))
-  return { ...counts, done: isDone(counts) }
+  const today = events.filter(e => dayKey(e.ts) === key)
+  return { ...countsForDay(today), done: dayIsDone(key, today) }
 }
 
 export function completedDays(events = getActivity()): Set<string> {
@@ -97,7 +111,7 @@ export function completedDays(events = getActivity()): Set<string> {
   }
   const done = new Set<string>()
   for (const [key, events] of byDay) {
-    if (isDone(countsForDay(events))) done.add(key)
+    if (dayIsDone(key, events)) done.add(key)
   }
   return done
 }

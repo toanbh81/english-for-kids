@@ -3,6 +3,10 @@ import {
   minutesPerDay, minutesToday, weakPhonemes, averageScoreByKind, clearActivity,
 } from './activity'
 import type { ActivityEvent } from './activity'
+import { getLesson, setLessonLength } from './lesson'
+import type { Lesson } from './lesson'
+import { setBandValue } from './band'
+import { findSound } from '../content'
 
 const BASE = new Date('2026-08-23T10:00:00').getTime() // Sunday, last day of its week
 const DAY = 24 * 60 * 60 * 1000
@@ -184,4 +188,46 @@ it('every query reads a passed events array instead of localStorage', () => {
 
   expect(getItem).not.toHaveBeenCalled()
   getItem.mockRestore()
+})
+
+// --- Phase 7: mission compatibility (spec §4) ------------------------------------------------
+
+/** Complete every item of a lesson the way the real screens log it. */
+function playLesson(lesson: Lesson, at: number) {
+  lesson.items.forEach((item, i) => {
+    const id = item.route.startsWith('/sound/') ? findSound(item.id)!.cards[0].id : item.id
+    logActivity({ ts: at + i, kind: item.activity, id, score: 85 })
+  })
+}
+
+it('a day that meets the legacy counters still counts, with no lesson on record', () => {
+  logMissionDay(BASE)
+  expect(missionStatus(BASE).done).toBe(true)
+  expect(completedDays().has(dayKey(BASE))).toBe(true)
+  expect(streak(BASE)).toBe(1)
+  expect(localStorage.getItem(`speakup.lesson.${dayKey(BASE)}`)).toBeNull()
+})
+
+it('a completed lesson makes the day count without the legacy counters', () => {
+  setBandValue(1)
+  setLessonLength('short') // 1 story, 2 speak, 2 word, 1 review — under the 5-speak legacy bar
+  const lesson = getLesson(BASE)
+  expect(missionStatus(BASE).done).toBe(false)
+
+  playLesson(lesson, BASE + 60_000)
+  const status = missionStatus(BASE)
+  expect(status.speak).toBeLessThan(5) // the legacy rule alone would still say "not done"
+  expect(status.done).toBe(true)
+  expect(completedDays().has(dayKey(BASE))).toBe(true)
+  expect(streak(BASE)).toBe(1)
+  expect(weekDots(BASE)[6].done).toBe(true) // BASE is a Sunday
+})
+
+it('a half-finished lesson does not make the day count', () => {
+  setBandValue(1)
+  setLessonLength('short')
+  const lesson = getLesson(BASE)
+  playLesson({ ...lesson, items: lesson.items.slice(0, 3) }, BASE + 60_000)
+  expect(missionStatus(BASE).done).toBe(false)
+  expect(completedDays().has(dayKey(BASE))).toBe(false)
 })
