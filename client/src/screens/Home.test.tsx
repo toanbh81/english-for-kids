@@ -73,7 +73,8 @@ it('shows how much of today lesson is done and a happy Foxy', () => {
   expect(screen.getByText(`2/${lesson.items.length}`)).toBeInTheDocument()
   expect(screen.getByTestId('foxy')).toHaveAttribute('data-mood', 'happy')
   expect(screen.getByText('Giỏi lắm, tiếp tục nhé!')).toBeInTheDocument()
-  expect(screen.getByRole('link', { name: 'Bắt đầu ▸' })).toHaveAttribute('href', '/mission')
+  // Two items in: the card carries on rather than starting over (spec §2).
+  expect(screen.getByRole('link', { name: 'Tiếp tục ▸' })).toHaveAttribute('href', '/mission')
 })
 
 // The lesson's `created` stamp gates every done-match, so it has to be set when the child opens
