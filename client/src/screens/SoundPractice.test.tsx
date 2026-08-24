@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, act } from '@testing-library/react'
+import { render, screen, fireEvent, act, within } from '@testing-library/react'
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import { useEffect, useState } from 'react'
 import type { PronunciationResult } from '../scoring/types'
@@ -95,6 +95,29 @@ it('leads with the sound itself and the first of its three words', () => {
   expect(screen.getByText('Từ 1/3')).toBeInTheDocument()
 })
 
+it('lays the sound and the word out as two rows sharing a tile column', () => {
+  renderSound()
+
+  const grid = screen.getByTestId('sound-word-grid')
+  const soundA = screen.getByTestId('sound-cell-a')
+  const soundB = screen.getByTestId('sound-cell-b')
+  const wordA = screen.getByTestId('word-cell-a')
+  const wordB = screen.getByTestId('word-cell-b')
+  expect(grid).toContainElement(soundA)
+  expect(grid).toContainElement(wordA)
+
+  // Row 1 (sound): the IPA tile plus its own "Nghe âm lẻ" control.
+  expect(soundA).toHaveTextContent('/θ/')
+  expect(within(soundA).getByRole('button', { name: /nghe âm lẻ/i })).toBeInTheDocument()
+  expect(soundB).toHaveTextContent(PHONEME_TIPS.th)
+
+  // Row 2 (word): the word tile plus its own "Nghe mẫu" control, and the word's own text.
+  expect(wordA).toHaveTextContent('🔊')
+  expect(within(wordA).getByRole('button', { name: /nghe mẫu/i })).toBeInTheDocument()
+  expect(wordB).toHaveTextContent('three')
+  expect(wordB).toHaveTextContent('Từ 1/3')
+})
+
 it('plays the sound on its own, and says so when that sample is missing', async () => {
   playerControl.playUrl.mockReturnValue(new Promise<void>(() => {})) // still playing: no state change yet
   renderSound()
@@ -104,6 +127,18 @@ it('plays the sound on its own, and says so when that sample is missing', async 
   playerControl.playUrl.mockRejectedValue(new Error('audio failed'))
   fireEvent.click(screen.getByRole('button', { name: /nghe âm lẻ/i }))
   await screen.findByText('Chưa có audio âm này')
+})
+
+it('folds the word row away once a result lands, and keeps the "Từ n/3" count in the header instead', () => {
+  renderSound()
+  expect(screen.getByTestId('word-cell-a')).toBeInTheDocument()
+
+  score(result(92))
+
+  expect(screen.queryByTestId('word-cell-a')).not.toBeInTheDocument()
+  expect(screen.queryByTestId('word-cell-b')).not.toBeInTheDocument()
+  // Still on screen exactly once — relocated, never lost.
+  expect(screen.getByText('Từ 1/3')).toBeInTheDocument()
 })
 
 it('scores only the target sound: a good phoneme needs no tip', () => {
