@@ -176,6 +176,44 @@ it('a sound tile is done by speaking any of its three cards', () => {
   expect(lessonStatus(BASE, getActivity()).items.find(i => i.route === sound.route)?.done).toBe(true)
 })
 
+// --- malformed records ------------------------------------------------------------------------
+
+const KEY = 'speakup.lesson.2026-08-24'
+
+it('rejects a stored lesson without the current version stamp', () => {
+  band(1)
+  const lesson = getLesson(BASE)
+  expect(JSON.parse(localStorage.getItem(KEY)!).v).toBe(1)
+
+  // A pre-Phase-7-fix record: same shape, no stamp.
+  localStorage.setItem(KEY, JSON.stringify(lesson))
+  expect(lessonForDay('2026-08-24')).toBeNull()
+
+  localStorage.setItem(KEY, JSON.stringify({ ...lesson, v: 2 }))
+  expect(lessonForDay('2026-08-24')).toBeNull()
+})
+
+it('regenerates instead of throwing when a stored item is missing its fields', () => {
+  band(1)
+  const lesson = getLesson(BASE)
+  // The shape that used to brick the app: a record that parses, but whose items have no `route`
+  // for `matchIds` to read.
+  localStorage.setItem(KEY, JSON.stringify({ ...lesson, v: 1, items: [{}] }))
+  expect(lessonForDay('2026-08-24')).toBeNull()
+
+  const status = lessonStatus(BASE, getActivity())
+  expect(status.total).toBe(lesson.items.length)
+  expect(status.items.every(i => typeof i.route === 'string' && i.route.startsWith('/'))).toBe(true)
+  expect(lessonForDay('2026-08-24')).not.toBeNull()
+})
+
+it('rejects a record whose items are not an array at all', () => {
+  band(1)
+  const lesson = getLesson(BASE)
+  localStorage.setItem(KEY, JSON.stringify({ ...lesson, v: 1, items: 'nope' }))
+  expect(lessonForDay('2026-08-24')).toBeNull()
+})
+
 it('prunes lesson records to the most recent 30 days', () => {
   band(1)
   for (let d = 0; d < 35; d++) getLesson(BASE + d * DAY)

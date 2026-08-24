@@ -27,6 +27,13 @@ const DEFAULT_LENGTH: LessonLength = 'medium'
 const PREFIX = 'speakup.lesson.'
 const LENGTH_KEY = `${PREFIX}length`
 const DAY_RE = /^\d{4}-\d{2}-\d{2}$/
+/**
+ * Schema stamp on every persisted lesson. A record without it — or with any other value — is a
+ * hand-edited, half-written or older-shape record, and is thrown away rather than trusted: the
+ * caller regenerates today's lesson instead of rendering items with missing fields (which used to
+ * take the whole app down with it).
+ */
+const VERSION = 1
 /** Lesson records kept in storage; older days are pruned so the child's quota never fills up. */
 const KEEP_DAYS = 30
 /** Same bar as the Leitner unlock and the legacy word mission. */
@@ -34,18 +41,34 @@ const PASS_SCORE = 60
 
 const lessonKey = (day: string) => `${PREFIX}${day}`
 
-/** Corrupt or unavailable storage (private mode, hand-edited value) must not crash the app. */
+/** Every field a screen reads off an item must be a string, or the row renders `undefined` — and
+ * `route.startsWith(...)` in `matchIds` throws, which is what bricked the app. */
+const ITEM_FIELDS = ['kind', 'activity', 'id', 'route', 'label', 'emoji'] as const
+
+function isLessonItem(value: unknown): value is LessonItem {
+  if (!value || typeof value !== 'object') return false
+  const item = value as Record<string, unknown>
+  return ITEM_FIELDS.every(field => typeof item[field] === 'string')
+}
+
+/**
+ * Corrupt or unavailable storage (private mode, hand-edited value) must not crash the app: a record
+ * that fails any check reads as "no lesson yet", so the caller generates a fresh one over the top.
+ */
 export function lessonForDay(day: string): Lesson | null {
   try {
     const raw = localStorage.getItem(lessonKey(day))
     if (!raw) return null
     const parsed: unknown = JSON.parse(raw)
     if (!parsed || typeof parsed !== 'object') return null
-    const lesson = parsed as Lesson
+    const { v, day: storedDay, created, band, items } = parsed as Partial<Lesson> & { v?: unknown }
+    if (v !== VERSION) return null
     // `created` gates every done-match, so a record without it would mark the whole day complete.
-    return Array.isArray(lesson.items) && typeof lesson.day === 'string' && typeof lesson.created === 'number'
-      ? lesson
-      : null
+    if (typeof storedDay !== 'string' || typeof created !== 'number' || typeof band !== 'number') return null
+    if (!Array.isArray(items) || !items.every(isLessonItem)) return null
+    // Rebuilt rather than passed through, so the version stamp stays a storage detail and two
+    // lessons of the same day still compare equal whether they were just generated or read back.
+    return { day: storedDay, created, band, items }
   } catch { return null }
 }
 
@@ -75,14 +98,26 @@ export function saveLesson(lesson: Lesson): void {
     }
   } catch { /* ignore: storage unavailable */ }
 
-  try { localStorage.setItem(lessonKey(lesson.day), JSON.stringify(lesson)) }
+  try { localStorage.setItem(lessonKey(lesson.day), JSON.stringify({ ...lesson, v: VERSION })) }
   catch { /* ignore: storage unavailable */ }
+}
+
+/** Every key this module owns — day records, the length setting, and anything left over from an
+ * older shape — so "clear the lesson store" really leaves nothing of it behind. */
+function lessonKeys(): string[] {
+  const keys: string[] = []
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i)
+      if (key?.startsWith(PREFIX)) keys.push(key)
+    }
+  } catch { return [] }
+  return keys
 }
 
 export function clearLessons(): void {
   try {
-    for (const day of lessonDays()) localStorage.removeItem(lessonKey(day))
-    localStorage.removeItem(LENGTH_KEY)
+    for (const key of lessonKeys()) localStorage.removeItem(key)
   } catch { /* ignore: storage unavailable */ }
 }
 
