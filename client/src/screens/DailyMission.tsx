@@ -16,7 +16,9 @@ export function DailyMission() {
     return { status: lessonStatus(now, events), band: getBand().value }
   })
 
-  const currentIndex = status.items.findIndex(item => !item.done) // -1 once the lesson is finished
+  // -1 once every item is done; also -1 for an empty lesson, which is why the finished branch
+  // below checks `status.done` (it already guards `items.length > 0`) rather than this index.
+  const currentIndex = status.items.findIndex(item => !item.done)
 
   return (
     <main className="relative h-full overflow-y-auto bg-cream-50 p-6">
@@ -55,9 +57,13 @@ export function DailyMission() {
 
         <div className="flex flex-wrap items-end justify-between gap-4 pt-2">
           <Foxy mood="cheer" size="md" />
-          {currentIndex === -1
+          {status.done
             ? <Button to="/" size="lg" variant="secondary">Về bản đồ 🏝️</Button>
-            : <Button to={status.items[currentIndex].route} size="lg" pulse>Bắt đầu {status.items[currentIndex].emoji}</Button>}
+            : currentIndex !== -1
+              ? <Button to={status.items[currentIndex].route} size="lg" pulse>Bắt đầu {status.items[currentIndex].emoji}</Button>
+              // An empty lesson (nothing generated yet) has no item to point at and nothing to
+              // celebrate either — the list above renders empty and there is simply no CTA.
+              : null}
         </div>
       </div>
     </main>

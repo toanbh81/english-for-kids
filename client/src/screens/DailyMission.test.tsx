@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { logActivity } from '../progress/activity'
 import { getBand } from '../progress/band'
@@ -66,6 +66,25 @@ it('links the CTA to the first undone item route when nothing is done yet', () =
   const lesson = completeLesson(NOW)
 
   renderMission()
+
+  expect(screen.getByRole('link', { name: `Bắt đầu ${lesson.items[0].emoji}` }))
+    .toHaveAttribute('href', lesson.items[0].route)
+})
+
+// Done state must be read per item, not inferred from a count of completed events — logging item
+// 1 alone (skipping item 0) must not be mistaken for "the first item is done".
+it('ticks the item actually completed even when it is not the first, and CTA still points at item 0', () => {
+  const lesson = getLesson(NOW)
+  logActivity({ ts: lesson.created + 1000, kind: lesson.items[1].activity, id: lesson.items[1].id })
+
+  renderMission()
+
+  expect(screen.getAllByText('✓ Xong')).toHaveLength(1)
+
+  const item0Card = screen.getByText(lesson.items[0].label).closest('.rounded-xl3') as HTMLElement
+  const item1Card = screen.getByText(lesson.items[1].label).closest('.rounded-xl3') as HTMLElement
+  expect(within(item0Card).queryByText('✓ Xong')).not.toBeInTheDocument()
+  expect(within(item1Card).getByText('✓ Xong')).toBeInTheDocument()
 
   expect(screen.getByRole('link', { name: `Bắt đầu ${lesson.items[0].emoji}` }))
     .toHaveAttribute('href', lesson.items[0].route)
