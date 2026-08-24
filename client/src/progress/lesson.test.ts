@@ -3,6 +3,7 @@ import {
 } from './lesson'
 import type { LessonLength } from './lesson'
 import { getActivity, logActivity } from './activity'
+import type { ActivityKind } from './activity'
 import { setBandAuto, setBandValue } from './band'
 import { promote } from './leitner'
 import { setStars } from './store'
@@ -183,4 +184,73 @@ it('prunes lesson records to the most recent 30 days', () => {
   expect(days[0]).toBe('2026-08-29') // the first five days were pruned away
   expect(lessonForDay('2026-08-24')).toBeNull()
   expect(getLessonLength()).toBe('medium') // the length key survived the prune
+})
+
+// --- done-matching against what the screens actually log --------------------------------------
+//
+// The table below is transcribed from the screens' own `logActivity` calls, NOT derived from the
+// lesson item — an item that declared the wrong `activity`/`id` for its route would fail here even
+// though it would sail through a test that replays `item.activity`/`item.id` back at itself.
+//
+//   StoryQuiz        story   <storyId>            StoryRetell     sentence  retell:<storyId>
+//   SoundPractice    speak   <a card of the ph>   PracticeCard    speak     <cardId>
+//   PairPractice     speak   <pairId>             StarPractice    speak     <sstarId>
+//   VoicePractice    speak   <passageId>          WordCard        word      <wordId>
+//   SentenceBuilder  sentence <sentenceId>
+
+function screenEvent(route: string): { kind: ActivityKind; id: string } {
+  const [head, a, b] = route.split('/').filter(Boolean)
+  if (head === 'story' && b === 'retell') return { kind: 'sentence', id: `retell:${a}` }
+  if (head === 'story') return { kind: 'story', id: a }
+  if (head === 'sound') return { kind: 'speak', id: findSound(a)!.cards[2].id } // any card of the group
+  if (head === 'practice' || head === 'pair' || head === 'star' || head === 'voice') return { kind: 'speak', id: a }
+  if (head === 'words') return { kind: 'word', id: b }
+  if (head === 'sentence') return { kind: 'sentence', id: a }
+  throw new Error(`no screen convention known for ${route}`)
+}
+
+/** A kind no screen would ever pair with that route — the deliberate mismatch. */
+const WRONG_KIND: Record<ActivityKind, ActivityKind> = {
+  story: 'speak', speak: 'sentence', word: 'speak', sentence: 'speak',
+}
+
+const ROUTE_CASES: { name: string; setup: () => void; find: (route: string) => boolean }[] = [
+  { name: 'listen story', setup: () => band(1), find: r => /^\/story\/[^/]+$/.test(r) },
+  { name: 'sound tile', setup: () => band(1), find: r => r.startsWith('/sound/') },
+  { name: 'word card', setup: () => band(2), find: r => r.startsWith('/practice/') },
+  { name: 'minimal pair', setup: () => band(3), find: r => r.startsWith('/pair/') },
+  { name: 'sentence star', setup: () => band(4), find: r => r.startsWith('/star/') },
+  { name: 'story voice', setup: () => band(5), find: r => r.startsWith('/voice/') },
+  { name: 'new word', setup: () => band(1), find: r => r.startsWith('/words/') },
+  {
+    name: 'sentence review',
+    setup: () => { band(1); setStars('sentence:s1', 1) },
+    find: r => r.startsWith('/sentence/'),
+  },
+  {
+    name: 'retell review',
+    setup: () => { band(1); setStars('retell:little-fox', 1) },
+    find: r => r.endsWith('/retell'),
+  },
+]
+
+it.each(ROUTE_CASES)('$name is done by the event its screen logs', ({ setup, find }) => {
+  setup()
+  const lesson = getLesson(BASE)
+  const item = lesson.items.find(i => find(i.route))
+  expect(item, 'the lesson should contain this route').toBeDefined()
+
+  const { kind, id } = screenEvent(item!.route)
+  logActivity({ ts: BASE + 60_000, kind, id, score: 85 })
+  expect(lessonStatus(BASE, getActivity()).items.find(i => i.route === item!.route)?.done).toBe(true)
+})
+
+it.each(ROUTE_CASES)('$name is not done by an event of the wrong kind', ({ setup, find }) => {
+  setup()
+  const lesson = getLesson(BASE)
+  const item = lesson.items.find(i => find(i.route))!
+  const { kind, id } = screenEvent(item.route)
+
+  logActivity({ ts: BASE + 60_000, kind: WRONG_KIND[kind], id, score: 85 })
+  expect(lessonStatus(BASE, getActivity()).items.find(i => i.route === item.route)?.done).toBe(false)
 })

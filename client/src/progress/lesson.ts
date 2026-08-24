@@ -158,9 +158,10 @@ function attemptedPool(): Attempted[] {
   for (const g of SOUNDS) {
     add(`sound:${g.ph}`, 1, reviewItem(g.ph, `/sound/${g.ph}`, 'speak', g.example))
   }
-  for (const level of LEVELS) {
-    const bandLevel = level.id === 'word-pop' ? 2 : 1
-    for (const c of level.cards) add(c.id, bandLevel, reviewItem(c.id, `/practice/${c.id}`, 'speak', c.text))
+  // Only word-pop cards earn stars under their bare card id; sound-zoo progress is stored per
+  // sound group as `sound:<ph>` (added above), never per card.
+  for (const c of wordPopCards()) {
+    add(c.id, 2, reviewItem(c.id, `/practice/${c.id}`, 'speak', c.text))
   }
   for (const p of PAIRS) {
     add(`pair:${p.id}`, 3, reviewItem(p.id, `/pair/${p.id}`, 'speak', `${p.a.word}, ${p.b.word}`))

@@ -42,7 +42,10 @@ export function lessonForDay(day: string): Lesson | null {
     const parsed: unknown = JSON.parse(raw)
     if (!parsed || typeof parsed !== 'object') return null
     const lesson = parsed as Lesson
-    return Array.isArray(lesson.items) && typeof lesson.day === 'string' ? lesson : null
+    // `created` gates every done-match, so a record without it would mark the whole day complete.
+    return Array.isArray(lesson.items) && typeof lesson.day === 'string' && typeof lesson.created === 'number'
+      ? lesson
+      : null
   } catch { return null }
 }
 
@@ -61,15 +64,19 @@ export function lessonDays(): string[] {
 }
 
 export function saveLesson(lesson: Lesson): void {
+  // Prune first, then write: a quota error on the write must not be what skips the prune, or a
+  // full store would stay full forever. Day keys sort lexicographically the same way they sort
+  // chronologically, so the oldest records are the front of the list, and `speakup.lesson.length`
+  // never matches DAY_RE. Today's own key is excluded so it is never counted twice.
   try {
-    localStorage.setItem(lessonKey(lesson.day), JSON.stringify(lesson))
-    // Day keys sort lexicographically the same way they sort chronologically, so the oldest
-    // records are simply the front of the list. `speakup.lesson.length` never matches DAY_RE.
-    const days = lessonDays()
-    for (const day of days.slice(0, Math.max(0, days.length - KEEP_DAYS))) {
+    const others = lessonDays().filter(day => day !== lesson.day)
+    for (const day of others.slice(0, Math.max(0, others.length - (KEEP_DAYS - 1)))) {
       localStorage.removeItem(lessonKey(day))
     }
   } catch { /* ignore: storage unavailable */ }
+
+  try { localStorage.setItem(lessonKey(lesson.day), JSON.stringify(lesson)) }
+  catch { /* ignore: storage unavailable */ }
 }
 
 export function clearLessons(): void {
