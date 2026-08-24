@@ -2,6 +2,8 @@
 
 Ten user-reported adjustments from the first live session with Phase 7 (2026-08-24), plus the root-caused scoring bugs behind three of them. Reference visual: the Daily Mission frame of the Claude Design prototype (grouped step cards "Nghe 1 truyện / 5 thẻ phát âm / 3 từ mới", ≈minute chips, teal ring on the current step, Foxy + single CTA).
 
+Status: implemented 2026-08-24 → 2026-08-25 on branch `phase8-mission-flow` (tasks 1–6), including two approved deviations from this spec: the "Từ n/3" word-position chip relocates into the header while recording/scoring instead of staying in the word-tile cell, since that cell stops existing at that point (§4); and the finish-label predicate was refined so "Hoàn thành 🎉" only fires when this step is the very last thing outstanding in the whole lesson, with "Về nhiệm vụ →" covering a finished group while another is still open (§3, milestone M1).
+
 ## 1. Daily Mission shows groups, not a flat item list
 
 `/mission` renders one card per **group**, derived from today's lesson items by kind, in lesson order:
