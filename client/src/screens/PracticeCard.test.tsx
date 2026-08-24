@@ -53,9 +53,14 @@ function renderCard(cardId = 'sz-th-three') {
   )
 }
 
+/** The card mints its scorer asynchronously, so an enabled mic is what "this card has settled"
+ * looks like. Even a test that never records has to wait for it, or the state update lands after
+ * the test body and React reports it as happening outside act(). */
+const scorerReady = () => waitFor(() => expect(screen.getByRole('button', { name: /bấm để nói/i })).toBeEnabled())
+
 /** Records one attempt and waits for the 3-star result, which is what reveals the next/finish CTA. */
 async function scoreOnce() {
-  await waitFor(() => expect(screen.getByRole('button', { name: /bấm để nói/i })).toBeEnabled())
+  await scorerReady()
   fireEvent.click(screen.getByRole('button', { name: /bấm để nói/i }))
   await waitFor(() => expect(screen.getByRole('button', { name: /dừng/i })).toBeInTheDocument())
   fireEvent.click(screen.getByRole('button', { name: /dừng/i }))
@@ -68,7 +73,7 @@ async function scoreOnce() {
  * the first render (`Math.min(2, feedback.stars)` does not depend on the streak), so waiting on
  * both slots together is what actually pins down the settled, post-effect state. */
 async function recordOnce(expectedStreak: 0 | 1 | 2) {
-  await waitFor(() => expect(screen.getByRole('button', { name: /bấm để nói/i })).toBeEnabled())
+  await scorerReady()
   fireEvent.click(screen.getByRole('button', { name: /bấm để nói/i }))
   await waitFor(() => expect(screen.getByRole('button', { name: /dừng/i })).toBeInTheDocument())
   fireEvent.click(screen.getByRole('button', { name: /dừng/i }))
@@ -125,6 +130,7 @@ it('Tiếp theo goes to the next card of the same level', async () => {
   await scoreOnce()
 
   fireEvent.click(screen.getByRole('button', { name: /tiếp theo/i }))
+  await scorerReady() // the next card mints its own scorer
 
   expect(screen.getByText(soundZooCards[1].text)).toBeInTheDocument() // the 2nd Sound Zoo card
   expect(screen.getByText(`Thẻ 2/${soundZooCards.length}`)).toBeInTheDocument()
@@ -146,8 +152,9 @@ it('the last card of a level finishes back at the level instead of jumping to th
 /** The legacy `/practice/sz-*` route still walks all 27 Sound Zoo cards. 27 dots at 16 px + gap
  * is ~640 px of header, which on a portrait iPad squeezed the 66 px back button below a thumb's
  * worth of tap target. Past a dozen cards the "Thẻ n/N" counter carries the position on its own. */
-it('drops the per-card dots on a level too long to show them', () => {
+it('drops the per-card dots on a level too long to show them', async () => {
   renderCard() // sz-th-three: 27 cards
+  await scorerReady()
   expect(soundZooCards.length).toBeGreaterThan(12)
   expect(screen.getByText(`Thẻ 1/${soundZooCards.length}`)).toBeInTheDocument()
   expect(screen.queryByTestId('card-dots')).not.toBeInTheDocument()
@@ -253,7 +260,10 @@ describe('expired Azure token', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: /bấm để nói/i })).toBeEnabled())
     fireEvent.click(screen.getByRole('button', { name: /bấm để nói/i }))
     await waitFor(() => expect(screen.getByRole('button', { name: /dừng/i })).toBeInTheDocument())
-    fireEvent.click(screen.getByRole('button', { name: /dừng/i }))
+    // Scoring runs entirely on microtasks (stop → score → refresh the token → score again), so
+    // the click is awaited inside act(): otherwise the tail of that chain commits between two
+    // awaits in the test body, where React cannot see it.
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: /dừng/i })) })
   }
 
   it('mints a fresh scorer and retries the score exactly once', async () => {
@@ -295,6 +305,7 @@ describe('Word Pop: hidden IPA + two-in-a-row streak', () => {
 
   it('hides the IPA behind "Xem phiên âm" until tapped', async () => {
     renderCard(card.id)
+    await scorerReady()
     expect(screen.queryByText(card.ipa)).not.toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: 'Xem phiên âm' }))
@@ -341,8 +352,9 @@ describe('Word Pop: hidden IPA + two-in-a-row streak', () => {
     expect(stars[card.id] ?? 0).toBeLessThanOrEqual(2)
   })
 
-  it('keeps the per-card dots for a 12-card level', () => {
+  it('keeps the per-card dots for a 12-card level', async () => {
     renderCard(card.id)
+    await scorerReady()
     const dots = screen.getByTestId('card-dots')
     expect(wordPopCards.length).toBeLessThanOrEqual(12)
     expect(dots.children).toHaveLength(wordPopCards.length)
@@ -350,6 +362,7 @@ describe('Word Pop: hidden IPA + two-in-a-row streak', () => {
 
   it('leaves Sound Zoo cards unchanged: IPA visible, no streak slots', async () => {
     renderCard() // default sz-th-three
+    await scorerReady()
     expect(screen.getByText(soundZooCards[0].ipa)).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Xem phiên âm' })).not.toBeInTheDocument()
     expect(screen.queryByLabelText('Lần 1/2')).not.toBeInTheDocument()

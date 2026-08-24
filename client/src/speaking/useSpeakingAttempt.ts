@@ -42,9 +42,14 @@ export function useSpeakingAttempt(opts: {
   const [error, setError] = useState<string | null>(null)
   const [scoring, setScoring] = useState(false)
   const [wsRecording, setWsRecording] = useState(false)
+  // Opening the mic is not instant — the Azure re-check can spend a round trip and a backoff
+  // first. `starting` is what the child sees during that window (a busy mic, not a live one);
+  // `startingRef` is the same fact read synchronously, which is what actually rejects a second
+  // tap that slips in before the re-render disables the button.
+  const [starting, setStarting] = useState(false)
+  const startingRef = useRef(false)
   const timerRef = useRef<number | null>(null)
   const stoppedRef = useRef(true)
-  const startingRef = useRef(false)
 
   /** Every scorer swap goes through here, so the ref and the badge can never disagree. */
   function adoptScorer(bundle: ScorerBundle) {
@@ -115,6 +120,7 @@ export function useSpeakingAttempt(opts: {
     // The Azure re-check below is awaited, so a second tap could otherwise open the mic twice.
     if (!scorerRef.current || scoring || startingRef.current) return
     startingRef.current = true
+    setStarting(true)
     try {
       setResult(null); setError(null)
       let active = scorerRef.current
@@ -143,7 +149,10 @@ export function useSpeakingAttempt(opts: {
         setError('Bé cho phép dùng mic nhé! 🎤'); console.error(e)
       }
     } finally {
+      // By here the mic is open (the recorder is already 'recording', the recognizer already
+      // listening) or the attempt has failed with a message — either way it is no longer busy.
       startingRef.current = false
+      setStarting(false)
     }
   }
 
@@ -154,7 +163,9 @@ export function useSpeakingAttempt(opts: {
 
   function reset() { setResult(null); setError(null) }
 
-  const micState = !scorer ? 'disabled' : scoring ? 'processing' : recording ? 'recording' : rec.state
+  // `starting` reads as 'processing' on purpose: MicButton already draws that as a busy,
+  // unpressable mic, which is exactly what a tap being worked on looks like.
+  const micState = !scorer ? 'disabled' : scoring || starting ? 'processing' : recording ? 'recording' : rec.state
 
   return {
     micState,

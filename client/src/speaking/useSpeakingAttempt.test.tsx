@@ -2,7 +2,9 @@ import { renderHook, act, waitFor } from '@testing-library/react'
 import { useState } from 'react'
 
 const recorderControl = vi.hoisted(() => ({ shouldFailStart: false, start: vi.fn(), opts: undefined as { maxMs?: number } | undefined }))
-const scorerControl = vi.hoisted(() => ({ queue: [] as { engine: string; scorer: unknown }[] }))
+/** `queue` feeds successive createScorer() calls; `gate`, when set, holds the next one open so a
+ * test can look at the hook while the token round trip is still in flight. */
+const scorerControl = vi.hoisted(() => ({ queue: [] as { engine: string; scorer: unknown }[], gate: null as Promise<void> | null }))
 
 vi.mock('../audio/recorder', () => ({
   useRecorder: (opts: { maxMs?: number } = {}) => {
@@ -21,15 +23,18 @@ vi.mock('../audio/recorder', () => ({
   },
 }))
 vi.mock('../scoring/createScorer', () => ({
-  createScorer: async () => scorerControl.queue.shift() ?? ({
-    engine: 'azure',
-    scorer: {
-      score: async () => ({
-        overall: 85, accuracy: 85, fluency: 90, completeness: 100, engine: 'azure',
-        words: [{ word: 'cat', score: 85, errorType: 'None', phonemes: [] }],
-      }),
-    },
-  }),
+  createScorer: async () => {
+    if (scorerControl.gate) await scorerControl.gate
+    return scorerControl.queue.shift() ?? {
+      engine: 'azure',
+      scorer: {
+        score: async () => ({
+          overall: 85, accuracy: 85, fluency: 90, completeness: 100, engine: 'azure',
+          words: [{ word: 'cat', score: 85, errorType: 'None', phonemes: [] }],
+        }),
+      },
+    }
+  },
 }))
 
 import { useSpeakingAttempt } from './useSpeakingAttempt'
@@ -44,6 +49,7 @@ afterEach(() => {
   recorderControl.start.mockClear()
   recorderControl.opts = undefined
   scorerControl.queue.length = 0
+  scorerControl.gate = null
   delete (window as any).webkitSpeechRecognition
   delete (navigator as unknown as Record<string, unknown>).onLine
   if (origOnLine) Object.defineProperty(Navigator.prototype, 'onLine', origOnLine)
@@ -111,6 +117,41 @@ it('re-checks Azure on the next attempt instead of staying on Web Speech', async
   act(() => { result.current.onMic() })
   await waitFor(() => expect(result.current.result?.overall).toBe(85))
   expect(ws.score).not.toHaveBeenCalled()
+})
+
+/** The re-check costs a round trip and, on a cold start, a backoff on top. For that whole window
+ * the mic looked idle while quietly refusing taps — the child would tap again and again into
+ * nothing. It now shows itself busy, and the tap that lands in the window is a no-op, not a
+ * second mic. */
+it('shows the mic as busy while it re-checks the engine, and refuses a second tap', async () => {
+  setOnLine(true)
+  ;(window as any).webkitSpeechRecognition = class {}
+  const ws = webSpeechBundle()
+  scorerControl.queue.push(ws.bundle)
+  const { result } = renderHook(() => useSpeakingAttempt({ targetText: 'cat' }))
+
+  await waitFor(() => expect(result.current.engine).toBe('webspeech'))
+  expect(result.current.micState).toBe('idle')
+
+  let answerToken!: () => void
+  const gate = new Promise<void>(resolve => { answerToken = resolve })
+  scorerControl.gate = gate
+
+  act(() => { result.current.onMic() })
+
+  // The token round trip is still in flight: busy, and no mic open yet.
+  expect(result.current.micState).toBe('processing')
+  expect(recorderControl.start).not.toHaveBeenCalled()
+  expect(ws.start).not.toHaveBeenCalled()
+
+  act(() => { result.current.onMic() }) // an impatient second tap
+
+  scorerControl.gate = null
+  await act(async () => { answerToken(); await gate })
+
+  await waitFor(() => expect(result.current.micState).toBe('recording'))
+  expect(recorderControl.start).toHaveBeenCalledTimes(1) // once, not twice
+  expect(ws.start).not.toHaveBeenCalled()
 })
 
 it('keeps Web Speech when the token endpoint is still down', async () => {
