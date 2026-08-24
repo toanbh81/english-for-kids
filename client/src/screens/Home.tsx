@@ -175,6 +175,18 @@ export function Home() {
             ))}
           </div>
 
+          {/* The way into Speak Lab. The islands only reach bậc 1–2 (Tập âm, Đọc từ), so without
+            * this the staircase — and with it Nghe & chọn, Sentence Stars and Story Voice — was
+            * reachable only from a chip buried inside the Đọc từ card grid. */}
+          <div className="col-span-2 flex justify-center lg:absolute lg:bottom-6 lg:left-1/2 lg:-translate-x-1/2">
+            <Link
+              to="/levels"
+              className="inline-flex min-h-[64px] items-center gap-2 rounded-xl2 bg-teal-500 px-7 font-display text-xl font-extrabold text-white shadow-chunky-teal active:translate-y-[2px]"
+            >
+              🗣️ Các bậc luyện nói
+            </Link>
+          </div>
+
           <div className="col-span-2 lg:absolute lg:bottom-2 lg:left-2 lg:w-[380px]">
             <MissionCard status={status} />
           </div>

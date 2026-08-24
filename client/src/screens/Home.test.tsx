@@ -160,6 +160,14 @@ it('puts the five islands on the map and links each to its module', () => {
   expect(screen.getByRole('link', { name: /Phụ huynh/ })).toHaveAttribute('href', '/parent')
 })
 
+// The islands stop at bậc 2, so Home is the only place the staircase can be found from. Without
+// this link Sentence Stars and Story Voice had no route in at all from the map.
+it('links the map to the Speak Lab staircase', () => {
+  renderHome()
+
+  expect(screen.getByRole('link', { name: /Các bậc luyện nói/ })).toHaveAttribute('href', '/levels')
+})
+
 it('shows each island the best stars earned inside that module', () => {
   setStars('story:little-fox', 2)
   setStars('sound:th', 3)
