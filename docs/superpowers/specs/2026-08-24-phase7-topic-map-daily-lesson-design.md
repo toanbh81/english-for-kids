@@ -1,5 +1,7 @@
 # Phase 7 — Topic map & Daily lesson engine
 
+**Implemented 2026-08-24 on branch `phase7-topic-lessons` (tasks 1–6).**
+
 Returns Home to the Claude Design intent (islands = topics with locks) and turns "Nhiệm vụ hôm nay" from three counters into a concrete, generated lesson that adapts to the child. Approved by the user 2026-08-24 (topic islands now, auto difficulty with parent override, ~12-minute lessons with a parent-adjustable length).
 
 ## 1. Topics

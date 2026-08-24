@@ -277,7 +277,7 @@ export function ParentDashboard({ onLock }: Props) {
                   type="button"
                   onClick={handleBandAuto}
                   aria-pressed={band.mode === 'auto'}
-                  className={`min-h-[44px] rounded-xl2 px-4 font-display text-sm font-extrabold active:translate-y-[2px] ${
+                  className={`min-h-[64px] rounded-xl2 px-4 font-display text-sm font-extrabold active:translate-y-[2px] ${
                     band.mode === 'auto' ? 'bg-teal-500 text-white shadow-chunky-teal' : 'border-2 border-line-200 bg-cream-50 text-ink-500'
                   }`}
                 >
@@ -293,6 +293,7 @@ export function ParentDashboard({ onLock }: Props) {
                       type="button"
                       onClick={() => handleBandClick(n)}
                       aria-pressed={active}
+                      aria-label={`Bậc ${n}`}
                       className={`min-h-[64px] flex-1 rounded-xl2 font-display text-base font-extrabold active:translate-y-[2px] ${
                         active ? 'bg-coral-500 text-white shadow-chunky-coral' : 'border-2 border-line-200 bg-cream-50 text-ink-500'
                       }`}

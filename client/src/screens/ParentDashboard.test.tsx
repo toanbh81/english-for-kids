@@ -267,8 +267,8 @@ describe('ParentDashboard', () => {
     renderWithRouter(<ParentDashboard />)
     await flush()
 
-    expect(screen.getByRole('button', { name: '3' })).toHaveAttribute('aria-pressed', 'true')
-    expect(screen.getByRole('button', { name: '1' })).toHaveAttribute('aria-pressed', 'false')
+    expect(screen.getByRole('button', { name: 'Bậc 3' })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByRole('button', { name: 'Bậc 1' })).toHaveAttribute('aria-pressed', 'false')
     expect(screen.getByRole('button', { name: 'Tự động' })).toHaveAttribute('aria-pressed', 'false')
     expect(screen.getByRole('button', { name: 'Dài ~18 phút' })).toHaveAttribute('aria-pressed', 'true')
     expect(screen.getByRole('button', { name: 'Vừa ~12 phút' })).toHaveAttribute('aria-pressed', 'false')
@@ -278,10 +278,10 @@ describe('ParentDashboard', () => {
     renderWithRouter(<ParentDashboard />)
     await flush()
 
-    fireEvent.click(screen.getByRole('button', { name: '4' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Bậc 4' }))
 
     expect(getBand()).toEqual({ value: 4, mode: 'manual' })
-    expect(screen.getByRole('button', { name: '4' })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByRole('button', { name: 'Bậc 4' })).toHaveAttribute('aria-pressed', 'true')
     expect(screen.getByRole('button', { name: 'Tự động' })).toHaveAttribute('aria-pressed', 'false')
   })
 
@@ -295,7 +295,7 @@ describe('ParentDashboard', () => {
 
     expect(getBand()).toEqual({ value: 2, mode: 'auto' })
     expect(screen.getByRole('button', { name: 'Tự động' })).toHaveAttribute('aria-pressed', 'true')
-    expect(screen.getByRole('button', { name: '2' })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByRole('button', { name: 'Bậc 2' })).toHaveAttribute('aria-pressed', 'true')
   })
 
   it('pressing a length chip persists the lesson length', async () => {

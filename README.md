@@ -189,12 +189,12 @@ The client dev server uses HTTPS because Safari on iOS/iPadOS only allows microp
 ## Testing
 
 ```bash
-pnpm test        # client (Vitest, 426 tests) + server (Vitest, 2 tests)
+pnpm test        # client (Vitest, 527 tests) + server (Vitest, 2 tests)
 pnpm lint        # oxlint on the client
 pnpm typecheck   # tsc -b (client) + tsc --noEmit (server)
 ```
 
-`pnpm test` runs `pnpm -r test`, which executes the client suite (`vitest run`, 426 tests in 52
+`pnpm test` runs `pnpm -r test`, which executes the client suite (`vitest run`, 527 tests in 58
 files) and the server suite (`vitest run`, 2 tests). `pnpm lint` and `pnpm typecheck` fan out the
 same way.
 
@@ -424,6 +424,96 @@ Audio for both levels is generated with `scripts/gen-phrases.mjs` (Emma HD) — 
 sample audio" above for the exact command and output folders (`client/public/audio/stars`,
 `client/public/audio/voice`).
 
+## Phase 7 — Topic map & Daily lesson engine
+
+Home returns to the original Claude Design intent (islands = topics with locks), and "Nhiệm vụ hôm
+nay" stops being three flat counters and becomes a concrete lesson generated for that day, adapted
+to the child's level.
+
+- **Topic map (`/`)** — the five islands are now the five topics, in unlock order: 🐘 Động vật
+  (`animals`), 🍎 Đồ ăn (`food`), 🏫 Trường học (`school`), 👨‍👩‍👧 Gia đình (`family`), ☀️ Thời tiết
+  (`weather`) — `client/src/content/topics.ts`. An island links to `/topic/:id`; a locked island
+  keeps its place on the trail but renders 🔒 + a "Chưa mở khóa" chip and is not a link.
+  "🗣️ Các bậc luyện nói" and "👨‍👩‍👧 Phụ huynh" keep their Phase 6 placement; "Nghe kể chuyện" is no
+  longer an island (`/stories` is still routable, reached from a topic hub or a lesson item).
+  - **Unlock rule** (`client/src/progress/topicProgress.ts`) — `animals` is always unlocked; a
+    later topic unlocks once the *previous* topic has ≥ 6 of its 8 words unlocked in Leitner.
+    **Migration exception**: a topic with any existing progress — any word already unlocked, or
+    any of its sentences with stars > 0 — unlocks regardless of the chain, so a phase 1–6 player's
+    map never loses content the update would otherwise hide.
+  - **Island stars** (`topicStars`, 0–3): 0 words unlocked → 0★, ≥ 1 → 1★, ≥ 6 → 2★, all 8 → 3★.
+- **Topic hub (`/topic/:id`)** — header (emoji + name + island StarRow) over three ≥ 64 px section
+  cards (`client/src/screens/TopicHub.tsx`): 🧩 **Từ mới** → `/words/<id>` (`x/8 từ` unlocked);
+  🧱 **Ghép câu** → `/sentences?topic=<id>` (`SentenceList` filters to the topic when the query
+  param is present, unfiltered otherwise) showing how many of the topic's sentences have stars;
+  🎧 **Truyện** lists the topic's stories with a StarRow each, or a muted "Sắp có 📖" card (never a
+  link) when the topic has none yet. An unknown or still-locked id renders a "Chưa mở khóa" screen
+  with a back link, so a deep link from PWA history never dead-ends.
+- **Daily lesson engine (`client/src/progress/lesson.ts`, `lessonStore.ts`)** — pure,
+  localStorage-backed, no server call. `getLesson(now)` returns the day's lesson, generating and
+  persisting it (`speakup.lesson.<dayKey>`, pruned to the most recent 30 days) on the first call of
+  the day; generation is seeded off the day key (`shuffleTiles`'s mulberry32 stream), so a reload
+  never changes what a day already handed out. Recipe by length
+  (`speakup.lesson.length`, default `medium`, set from the Parent Dashboard):
+
+    | length | 🎧 listen | 🗣️ speak | 🧩 word | 🔁 review | ≈ time |
+    |---|---|---|---|---|---|
+    | short | 1 | 2 | 2 | 1 | ~8 phút |
+    | medium | 1 | 4 | 3 | 2 | ~12 phút |
+    | long | 1 | 6 | 4 | 3 | ~18 phút |
+
+  - **listen** — the story with the fewest stars (ties broken by the day's seed); done once a
+    `story` activity event for it lands after the lesson was created.
+  - **speak** — drawn from the union of speaking levels up to the child's band (1 sound tiles → 2
+    word-pop cards → 3 minimal pairs → 4 sentence stars → 5 story voice); half the slots (rounded
+    up) come from the band's newest level, the rest from the levels below, all seeded per day.
+    Sound/word cards touching a phoneme averaging < 80 (`weakPhonemes`) are picked first.
+  - **word** — new (unlocked-word-count = 0) words from `currentTopic()` — the first unlocked topic
+    whose deck still has fewer than 8 words unlocked — then the rest of the open map, then locked
+    decks once every open deck is finished, all seeded.
+  - **review** — due Leitner words first, then the previously-attempted item (any kind, stars > 0,
+    at or below the child's band) with the fewest stars; a brand-new player with nothing to review
+    yet gets extra new words as filler instead.
+  - An item counts done (`itemDone`) when a matching activity event lands after the lesson was
+    created with `score === undefined || score >= 60` (a sound tile matches any of its group's word
+    cards, since `SoundPractice` logs the card, not the group).
+  - **Mission compatibility** — `missionStatus`/`completedDays`/`streak`/`weekDots`
+    (`client/src/progress/activity.ts`) mark a day done when **either** the legacy counters hold
+    (1 story, 5 speaks, 3 words scored ≥ 60) **or** that day's persisted lesson is complete
+    (`lessonDone`). History earned on phases 1–6, before lessons existed, keeps counting under the
+    old rule. Home's `MissionCard` now shows the lesson's `doneCount/total`, and the celebration
+    handoff to `/mission/done` fires on lesson completion exactly as it did on counter completion.
+- **Difficulty band (`client/src/progress/band.ts`)** — `speakup.band` stores
+  `{ value: 1–5, mode: 'auto' | 'manual' }`.
+  - **Init** (nothing stored yet): 5 if any `voice:*` stars > 0, else 4 if any `sstar:*`, else 3 if
+    any `pair:*`, else 2 if any Word Pop card has stars, else 1 — so a returning phase 1–6 player is
+    never dropped back to sound tiles.
+  - **Auto adjust** — runs once a day, at lesson generation, only in `auto` mode, and moves at most
+    one level a day: **+1** after 3 consecutive prior days that were completed with that day's mean
+    scored-event ≥ 80; **−1** after 2 consecutive prior days that were started (any event) but not
+    completed, or completed with a mean < 60 — a day with no events at all is a rest day, not a bad
+    one.
+  - **Manual** — the parent picks a value (`setBandValue`), which stops auto adjustment until they
+    re-enable it (`setBandAuto`, which resumes auto from wherever the value currently sits).
+- **Daily Mission screen (`/mission`, rewritten)** — lists today's lesson items in order, each as
+  emoji + label (e.g. "🗣️ Nói: The cat is under the table.") with "✓ Xong" once done; the first
+  undone item gets a teal ring and "bắt đầu ở đây!"; the single CTA reads "Bắt đầu <emoji>" and
+  routes straight to that item, so the child never has to choose. The header shows the band as a
+  chip ("Bậc ⭐ 3") next to the `doneCount/total` chip. All items done → the same celebration
+  handoff as before.
+- **Parent Dashboard additions (`/parent`)** — a new "Bài học" card: **Độ khó** shows the current
+  band as five buttons (1–5, each labelled "Bậc N" for assistive tech, the visible face staying the
+  bare numeral) plus a "Tự động" toggle for the mode — picking a band switches to manual, and
+  toggling auto back on resumes from the value it is already at; **Thời lượng** offers three chips
+  (Ngắn ~8 phút / Vừa ~12 phút / Dài ~18 phút) that set `speakup.lesson.length`. Styled consistent
+  with the rest of the (kid-palette) dashboard.
+
+**New storage keys:** `speakup.band` — difficulty band + mode; `speakup.lesson.<dayKey>` — that
+day's generated lesson (pruned to the most recent 30); `speakup.lesson.length` — lesson length
+(`short`/`medium`/`long`, default `medium`).
+
+**New route:** `/topic/:id` (topic hub). `/sentences` gained an optional `?topic=<id>` filter.
+
 ## iPad setup & testing (Thiết lập trên iPad)
 
 1. Make sure your iPad and PC are on the same Wi-Fi network.
@@ -490,6 +580,15 @@ sample audio" above for the exact command and output folders (`client/public/aud
 | 36 | `/levels` stairs | All 5 steps show as playable links — Sentence Stars and Story Voice have no 🔒 "Sắp có" placeholder left | ⏳ pending |
 | 37 | Story Voice → tap the mic and read a whole passage slowly, with feeling | The countdown ticks 13→1 and the mic stays open to the end of the third sentence — it must not cut off mid-passage | ⏳ pending |
 | 38 | Story Voice → open each of the 8 passages in landscape | The whole screen fits with no scrolling and the mic is fully visible above the fold on every one, including the longest (sv4) | ⏳ pending |
+| 39 | Home → tap the Weather island (locked, at the far right) | Renders 🔒 with a "Chưa mở khóa" chip and does not navigate; unlock it by learning ≥ 6/8 Family words, then tap again | ⏳ pending |
+| 40 | Home → tap the Animals island | Opens `/topic/animals`: emoji + name + island star row, then three cards — 🧩 Từ mới, 🧱 Ghép câu, 🎧 Truyện (with story links + stars, or "Sắp có 📖" for a topic with none yet) | ⏳ pending |
+| 41 | Topic hub → tap 🧩 Từ mới, then 🧱 Ghép câu | Từ mới opens `/words/<topic>` for that topic only; Ghép câu opens `/sentences?topic=<topic>` showing only that topic's sentences | ⏳ pending |
+| 42 | Home → mission card → "Bắt đầu ▸" | Opens `/mission` showing today's generated lesson items (listen/speak/word/review, e.g. "🗣️ Nói: …"), not the old fixed 3-step list; the first undone item has a teal ring and "bắt đầu ở đây!" | ⏳ pending |
+| 43 | `/mission` → complete the current item, return to `/mission` | That item now shows "✓ Xong" and the teal ring/CTA move to the next undone item | ⏳ pending |
+| 44 | `/mission` header | Shows a "Bậc ⭐ N" chip matching the band set in Parent Dashboard, next to the `doneCount/total` chip | ⏳ pending |
+| 45 | Parent Dashboard → "Bài học" card → tap a band number (e.g. 4) | That button highlights (coral) and "Tự động" un-highlights; reopening `/mission` draws speaking practice from the new band | ⏳ pending |
+| 46 | Parent Dashboard → "Bài học" card → tap "Tự động" after picking a band manually | "Tự động" highlights (teal) again, resuming automatic band adjustment from the current value | ⏳ pending |
+| 47 | Parent Dashboard → "Bài học" card → tap a length chip (Ngắn / Vừa / Dài) | That chip highlights; the next day's (or a freshly cleared day's) lesson has the matching item count | ⏳ pending |
 
 ## Architecture
 
