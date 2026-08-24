@@ -21,6 +21,7 @@ import { WordList } from './screens/WordList'
 import { WordCard } from './screens/WordCard'
 import { SentenceList } from './screens/SentenceList'
 import { SentenceBuilder } from './screens/SentenceBuilder'
+import { TopicHub } from './screens/TopicHub'
 import { ParentGate } from './screens/ParentGate'
 
 export default function App() {
@@ -29,6 +30,7 @@ export default function App() {
       <Route path="/" element={<Home />} />
       <Route path="/mission" element={<DailyMission />} />
       <Route path="/mission/done" element={<MissionComplete />} />
+      <Route path="/topic/:id" element={<TopicHub />} />
       <Route path="/levels" element={<LevelStairs />} />
       {/* Static before dynamic: Minimal Pairs, Sentence Stars and Story Voice are bậc of their
         * own, not card levels. */}
