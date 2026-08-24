@@ -110,6 +110,8 @@ const NEXT_LABEL = 'Tiếp theo →'
 const FINISH_LABEL = 'Hoàn thành 🎉'
 /** Neither "next" nor "finished": the chain ends here, but the lesson does not. */
 const RETURN_LABEL = 'Về nhiệm vụ →'
+/** The lesson itself — the one destination that is not a step, so it travels without the flag. */
+const MISSION_ROUTE = '/mission'
 
 /**
  * The hand-off for `pathname`, or `null` when it is not one of today's steps.
@@ -119,16 +121,24 @@ const RETURN_LABEL = 'Về nhiệm vụ →'
  * earlier group is still open would be told "Hoàn thành 🎉" for a lesson they have not finished.
  * So "Hoàn thành" is reserved for the case where this step is the last thing outstanding (once it
  * is done, `lessonStatus().done` is true); anything else owed elsewhere reads "Về nhiệm vụ →".
+ *
+ * A replay is not a step of the run, either. Once THIS step is already done, chaining forward
+ * would walk the child on past whatever they still owe — a second go at a favourite word card
+ * would quietly carry them into the next group while the story they never opened stays open, and
+ * nothing on screen would ever mention it again. So a replay hands back to the mission, where the
+ * open step is a card they can see, and only the debt-free case still chains.
  */
 export function missionNext(pathname: string, now = Date.now()): MissionNext | null {
   const items = lessonStatus(now).items
   const pos = positionIn(items, pathname)
   if (!pos) return null
   const owedElsewhere = items.some(i => !i.done && i.route !== pathname)
+  const replaying = items.some(i => i.route === pathname && i.done)
+  const chained = replaying && owedElsewhere ? null : pos.nextRoute
   return {
     pos,
-    route: pos.nextRoute ?? '/mission',
-    label: pos.nextRoute ? NEXT_LABEL : owedElsewhere ? RETURN_LABEL : FINISH_LABEL,
+    route: chained ?? MISSION_ROUTE,
+    label: chained ? NEXT_LABEL : owedElsewhere ? RETURN_LABEL : FINISH_LABEL,
   }
 }
 
@@ -149,9 +159,11 @@ export function useMissionNext(): (MissionNext & { go: () => void }) | null {
 
   const go = useCallback(() => {
     if (!next) return
-    // The flag travels on to the next step; `/mission` is not a step and needs no state.
-    if (next.pos.nextRoute) nav(next.route, { state: MISSION_STATE })
-    else nav(next.route)
+    // The flag travels on to the next step; `/mission` is not a step and needs no state. Read off
+    // the route the hand-off actually chose, not off `pos.nextRoute` — a replay has a step ahead
+    // of it and still goes back to the mission.
+    if (next.route === MISSION_ROUTE) nav(next.route)
+    else nav(next.route, { state: MISSION_STATE })
   }, [nav, next])
 
   return next && { ...next, go }

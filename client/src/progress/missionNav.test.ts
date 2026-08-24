@@ -171,6 +171,52 @@ it('offers the way back, not a celebration, while an earlier step is owed', () =
   })
 })
 
+/** A replay is not a step of the run. Chaining forward out of a step that is already done would
+ * carry the child past the step they still owe — and the group they skipped would never be
+ * mentioned again. The hand-off goes back to the mission, where the open step is a card they can
+ * see, even though there is something ahead of this one. */
+it('sends a replay back to the mission instead of chaining past an open earlier step', () => {
+  setLesson(
+    item('listen', '/story/s1'),
+    item('speak', '/sound/th', true),
+    item('word', '/words/food/apple'),
+  )
+
+  expect(missionNext('/sound/th')).toMatchObject({
+    route: '/mission', label: 'Về nhiệm vụ →',
+  })
+  // The position itself is unchanged — the walk still knows what comes after this step; only the
+  // hand-off declines to take the child there.
+  expect(missionNext('/sound/th')?.pos.nextRoute).toBe('/words/food/apple')
+})
+
+/** The debt is what stops the chain, not the replay itself: a child going back over a lesson they
+ * have finished owes nothing, so the celebration is still honest. */
+it('still celebrates a replay when the whole lesson is behind the child', () => {
+  setLesson(
+    item('speak', '/sound/th', true),
+    item('word', '/words/food/apple', true),
+  )
+
+  expect(missionNext('/sound/th')).toMatchObject({
+    route: '/mission', label: 'Hoàn thành 🎉',
+  })
+})
+
+/** The step in front of the child is the ordinary case and it is untouched: an undone step still
+ * chains straight on to the next one, past the ones already ticked off. */
+it('still chains forward from the step the child actually owes', () => {
+  setLesson(
+    item('speak', '/sound/th'),
+    item('speak', '/pair/p1', true),
+    item('word', '/words/food/apple'),
+  )
+
+  expect(missionNext('/sound/th')).toMatchObject({
+    route: '/words/food/apple', label: 'Tiếp theo →',
+  })
+})
+
 it('has no hand-off for a screen that is not one of today\'s steps', () => {
   expect(missionNext('/practice/sz-th-three')).toBeNull()
 })
