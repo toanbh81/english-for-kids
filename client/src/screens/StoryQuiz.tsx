@@ -95,6 +95,9 @@ function StoryQuizInner({ quiz, id }: { quiz: QuizQ[]; id: string }) {
         <div className="flex flex-wrap justify-center gap-4">
           <Button to={`/story/${id}/retell`} size="lg">Kể lại câu chuyện →</Button>
           <Button to={`/story/${id}`} size="lg" variant="outline">Nghe lại</Button>
+          {/* The way out. Retell and re-listen both keep the child inside this story, so without
+              this the only exit was the browser's own back gesture. */}
+          <Button to="/" size="lg" variant="secondary">Về bản đồ 🏝️</Button>
         </div>
       </main>
     )

@@ -90,6 +90,30 @@ it('ticks the item actually completed even when it is not the first, and CTA sti
     .toHaveAttribute('href', lesson.items[0].route)
 })
 
+it('makes every undone item its own link, and leaves the done ones inert', () => {
+  const lesson = completeLesson(NOW, 2)
+
+  renderMission()
+
+  lesson.items.forEach((item, i) => {
+    const anchor = screen.getByText(item.label).closest('a')
+    if (i < 2) expect(anchor, `item ${i} is done and must not be a link`).toBeNull()
+    else expect(anchor).toHaveAttribute('href', item.route)
+  })
+})
+
+// A ten-item lesson is taller than an iPad screen, so a CTA that scrolled with the list sat below
+// the fold on load — the one thing the child came here to tap.
+it('keeps the CTA in a block stuck to the bottom of the scroller', () => {
+  completeLesson(NOW)
+
+  renderMission()
+
+  const cta = screen.getByRole('link', { name: /^Bắt đầu/ })
+  expect(cta.parentElement?.className).toContain('sticky')
+  expect(cta.parentElement?.className).toContain('bottom-0')
+})
+
 it('shows the finish state once every item is done', () => {
   const all = getLesson(NOW)
   const lesson = completeLesson(NOW, all.items.length)
