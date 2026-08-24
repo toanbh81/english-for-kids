@@ -309,6 +309,25 @@ it('shows the stars and the score of the attempt under the card', () => {
   expect(screen.getByText('Điểm: 70')).toBeInTheDocument()
 })
 
+/** The iPad's 834 px landscape is the whole screen the child has, and they do not scroll to find
+ * a button. So the result reads as ONE row — stars, score, 🔓 badge — and the CTAs stand beside
+ * the mic instead of below it; stacked into bands of their own, "Tiếp theo" fell off the fold. */
+it('keeps the result on one row and the CTAs beside the mic', () => {
+  attemptControl.current = { ...baseAttempt(), result: resultHigh }
+  renderCard('food', 'food-apple')
+  passGuess('quả táo')
+
+  act(() => { attemptControl.onResult?.(resultHigh, null) })
+
+  const row = screen.getByText('🔓 Mở khoá!').closest('section')!
+  expect(within(row).getAllByTestId('star-filled')).toHaveLength(2)
+  expect(within(row).getByText('Điểm: 70')).toBeInTheDocument()
+
+  const mic = screen.getByRole('button', { name: 'Bấm để nói' })
+  const cta = screen.getByRole('button', { name: /Tiếp theo/ })
+  expect(mic.closest('div')?.parentElement).toBe(cta.closest('div')?.parentElement)
+})
+
 it('shows the stars but no score chip when the engine returned no usable number', () => {
   attemptControl.current = { ...baseAttempt(), result: resultNoScore }
   renderCard('food', 'food-apple')

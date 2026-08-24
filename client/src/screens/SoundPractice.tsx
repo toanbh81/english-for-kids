@@ -73,7 +73,7 @@ function starsFor(scores: WordBest[]): 1 | 2 | 3 {
 /** The whole result in one glance: the IPA symbol, how it went, and the number — or, when no
  * engine scored the sound, a plainly neutral card that says so instead of showing a number. */
 function SoundChip({ ipa, score, engine }: { ipa: string; score: number | null; engine: 'azure' | 'webspeech' | null }) {
-  const CHIP = 'inline-flex min-h-[110px] items-center gap-5 rounded-xl3 border-[4px] px-9 font-display font-extrabold'
+  const CHIP = 'inline-flex min-h-[96px] items-center gap-5 rounded-xl3 border-[4px] px-9 font-display font-extrabold'
 
   if (score === null) {
     const unscored = engine === 'webspeech' ? UNSCORED_SIMPLE : UNSCORED_UNHEARD
@@ -196,14 +196,17 @@ function SoundRun({ sound }: { sound: SoundGroup }) {
     setIdx(i => i + 1)
   }
 
+  // The whole run has to fit the iPad's 834 px landscape without scrolling: a five-year-old does
+  // not scroll to find the mic, or the button that ends the step. The gaps down this column are
+  // the budget that buys that, so they are deliberately tighter than the rest of the app's.
   return (
-    <main className="h-full overflow-y-auto bg-cream-50 px-6 py-5">
-      <div className="mx-auto flex min-h-full w-full max-w-5xl flex-col items-center gap-4">
+    <main className="h-full overflow-y-auto bg-cream-50 px-6 py-4">
+      <div className="mx-auto flex min-h-full w-full max-w-5xl flex-col items-center gap-3">
         <header className="flex w-full items-center justify-between gap-4">
           {mission
             ? <BackButton to="/mission" label="Nhiệm vụ" />
             : <BackButton to="/level/sound-zoo" label="Quay lại" />}
-          <div className="flex flex-col items-center gap-2">
+          <div className="flex flex-col items-center gap-1.5">
             {/* Both counters earn their place here: "Âm 2/4" is where the child is in the lesson,
                 "Từ 1/3" is where they are inside this sound — the run the lesson counts as one
                 step. Every other screen's own counter is a position in a free-play deck, which
@@ -232,7 +235,7 @@ function SoundRun({ sound }: { sound: SoundGroup }) {
             blocks. Row 2 only exists while idle — once recording starts or a result lands, the
             word's slot is doing something else entirely (countdown, score chip) and stops being
             "a tile to line up". */}
-        <div data-testid="sound-word-grid" className="grid w-full grid-cols-1 gap-4 sm:grid-cols-[minmax(180px,auto)_1fr] sm:items-center sm:gap-x-6 sm:gap-y-5">
+        <div data-testid="sound-word-grid" className="grid w-full grid-cols-1 gap-3 sm:grid-cols-[minmax(180px,auto)_1fr] sm:items-center sm:gap-x-6 sm:gap-y-3">
           {/* Row 1, cell A — the sound stays put through every word. */}
           <div data-testid="sound-cell-a" className="flex flex-col items-center gap-2">
             <div className="font-display text-[72px] font-extrabold leading-none text-coral-text">/{ipa}/</div>
@@ -247,8 +250,8 @@ function SoundRun({ sound }: { sound: SoundGroup }) {
           {!result && !recording && (
             <>
               {/* Row 2, cell A — the word tile, directly under the sound tile. */}
-              <div data-testid="word-cell-a" className="flex flex-col items-center gap-3">
-                <span aria-hidden="true" className="text-[96px] leading-none">{card.emoji}</span>
+              <div data-testid="word-cell-a" className="flex flex-col items-center gap-2">
+                <span aria-hidden="true" className="text-[84px] leading-none">{card.emoji}</span>
                 <button onClick={playSample} className={SAMPLE_CHIP}>🔊 Nghe mẫu</button>
                 {sampleMissing && <p className="text-lg font-bold text-ink-300">Chưa có audio mẫu</p>}
               </div>
@@ -268,10 +271,10 @@ function SoundRun({ sound }: { sound: SoundGroup }) {
         {result ? (
           <>
             {earned === 3 && <Confetti />}
-            <section className="flex flex-col items-center gap-4 pb-2">
+            <section className="flex flex-col items-center gap-3 pb-1">
               <SoundChip ipa={ipa} score={score} engine={attempt.engine} />
               {tone !== 'good' && tip && (
-                <p data-testid="sound-tip" className="max-w-xl rounded-xl3 border-[3px] border-[#FFDF9E] bg-[#FFF6E0] px-6 py-4 text-center text-lg font-bold text-ink-500">
+                <p data-testid="sound-tip" className="max-w-xl rounded-xl3 border-[3px] border-[#FFDF9E] bg-[#FFF6E0] px-5 py-2.5 text-center text-lg font-bold text-ink-500">
                   👅 {tip}
                 </p>
               )}
@@ -288,8 +291,8 @@ function SoundRun({ sound }: { sound: SoundGroup }) {
               {sampleMissing && <p className="text-lg font-bold text-ink-300">Chưa có audio mẫu</p>}
 
               {earned !== null && (
-                <div className="flex flex-col items-center gap-2">
-                  <Stars value={earned} animate />
+                <div className="flex flex-col items-center gap-1">
+                  <Stars value={earned} animate size="sm" />
                   <p className="font-display text-2xl font-extrabold text-ink-900">
                     {earned === 3 ? 'Cả 3 từ đều tuyệt!' : earned === 2 ? 'Gần được rồi, luyện thêm nhé!' : 'Nghe mẫu rồi thử lại nhé!'}
                   </p>
@@ -317,8 +320,8 @@ function SoundRun({ sound }: { sound: SoundGroup }) {
           </section>
         ) : (
           <section className="flex w-full flex-1 items-center justify-center">
-            <div className="flex h-[200px] w-[200px] shrink-0 flex-col items-center justify-center gap-2 rounded-xl3 bg-[#FFF1E6] shadow-[0_8px_0_#F2DFC9]">
-              <span aria-hidden="true" className="animate-wiggle text-[76px] leading-none">👄</span>
+            <div className="flex h-[168px] w-[200px] shrink-0 flex-col items-center justify-center gap-2 rounded-xl3 bg-[#FFF1E6] shadow-[0_8px_0_#F2DFC9]">
+              <span aria-hidden="true" className="animate-wiggle text-[68px] leading-none">👄</span>
               <span className="text-base font-bold text-ink-500">Khẩu hình miệng</span>
             </div>
           </section>

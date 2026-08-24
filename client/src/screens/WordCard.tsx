@@ -39,7 +39,7 @@ function pickDistractors(word: Word, topic: string): Word[] {
 
 /** Both faces sit on top of each other inside the rotating shell; only the one facing the
  * child is painted (`backface-visibility`). */
-const FACE = 'absolute inset-0 flex flex-col items-center justify-center gap-3 rounded-xl4 p-6 [backface-visibility:hidden]'
+const FACE = 'absolute inset-0 flex flex-col items-center justify-center gap-3 rounded-xl4 [backface-visibility:hidden]'
 
 const SPEAK_CHIP =
   'inline-flex min-h-[64px] items-center gap-2 rounded-full bg-white px-6 font-display text-lg font-extrabold text-teal-600 shadow-[0_4px_0_#F2DFC9] active:translate-y-[2px]'
@@ -196,10 +196,12 @@ function WordCardInner({ word, topic, isReview, list }: { word: Word; topic: str
   // read as a score for a word the child had not spoken yet (spec §8).
   const say = outcome === 'retry' ? 'Thử lại nhé' : guessJustCorrect ? 'Đoán đúng rồi! 🎉' : undefined
   const score = attempt.result && Number.isFinite(attempt.result.overall) ? Math.round(attempt.result.overall) : null
+  /** The shrunken result-state card keeps its content off the rounded edge. */
+  const facePad = attempt.result ? 'p-4' : 'p-6'
 
   return (
-    <main className="h-full overflow-y-auto bg-cream-50 px-6 py-5">
-      <div className="mx-auto flex min-h-full w-full max-w-4xl flex-col items-center gap-4">
+    <main className="h-full overflow-y-auto bg-cream-50 px-6 py-4">
+      <div className="mx-auto flex min-h-full w-full max-w-4xl flex-col items-center gap-3">
         <header className="flex w-full items-center justify-between gap-4">
           <BackButton to={backTo} label={backLabel} />
           <div className="flex flex-1 flex-col items-center gap-1">
@@ -237,7 +239,11 @@ function WordCardInner({ word, topic, isReview, list }: { word: Word; topic: str
           </div>
         ) : (
           <>
-            <div className="h-[360px] w-[320px] shrink-0 [perspective:1200px]">
+            {/* The card shrinks once it has been spoken to: the result rows below it are what the
+                child is reading now, and the full 360 px shell would spend the height they need on
+                a card whose job is done. The faces lose a little padding with it, or their own
+                content (96 px emoji, 58 px 🔊) would spill past the rounded edge. */}
+            <div className={`${attempt.result ? 'h-[300px]' : 'h-[360px]'} w-[320px] shrink-0 [perspective:1200px]`}>
               {/* The card *is* the control now: a 🔄 button in the corner plus a "MẶT TRƯỚC" label
                   asked a five-year-old to read two labels before touching anything, and they read
                   as decoration. One tap target the size of the whole card, announced as "Lật thẻ",
@@ -258,7 +264,7 @@ function WordCardInner({ word, topic, isReview, list }: { word: Word; topic: str
                     tab order and out of the screen reader. */}
                 <div
                   data-testid="face-front"
-                  className={`${FACE} bg-white shadow-card`}
+                  className={`${FACE} ${facePad} bg-white shadow-card`}
                   inert={flipped}
                   aria-hidden={flipped ? 'true' : undefined}
                 >
@@ -298,7 +304,7 @@ function WordCardInner({ word, topic, isReview, list }: { word: Word; topic: str
 
                 <div
                   data-testid="face-back"
-                  className={`${FACE} bg-[#FFF1E6] shadow-[0_8px_0_#F2DFC9] [transform:rotateY(180deg)]`}
+                  className={`${FACE} ${facePad} bg-[#FFF1E6] shadow-[0_8px_0_#F2DFC9] [transform:rotateY(180deg)]`}
                   inert={!flipped}
                   aria-hidden={flipped ? undefined : 'true'}
                 >
@@ -314,42 +320,47 @@ function WordCardInner({ word, topic, isReview, list }: { word: Word; topic: str
             {audioMissing && <p className="text-lg font-bold text-ink-300">Chưa có audio mẫu</p>}
 
             {/* The attempt was already scored — the screen just never showed it, so a child who
-                spoke saw the 🔓 (or nothing at all) and no idea how well they did (spec §7). */}
-            {feedback && (
-              <section className="flex flex-col items-center gap-3">
-                <Stars value={feedback.stars} animate />
+                spoke saw the 🔓 (or nothing at all) and no idea how well they did (spec §7).
+                One row, not three stacked bands: stars, score and the unlock badge each used to
+                claim a line of their own, which on the iPad's 834 px landscape pushed "Tiếp theo"
+                off the bottom of the screen — the one control the child needs after a result. */}
+            {(feedback || outcome === 'unlocked') && (
+              <section className="flex flex-wrap items-center justify-center gap-4">
+                {feedback && <Stars value={feedback.stars} animate size="sm" />}
                 {/* webspeech has no phoneme scoring but does return an overall; only a result that
                     carries no usable number at all drops the chip rather than showing "Điểm: NaN". */}
-                {score !== null && <Chip tone="teal">{`Điểm: ${score}`}</Chip>}
+                {feedback && score !== null && <Chip tone="teal">{`Điểm: ${score}`}</Chip>}
+                {outcome === 'unlocked' && (
+                  <span className="inline-flex items-center gap-2 rounded-xl2 bg-sun-50 px-5 py-2 font-display text-2xl font-extrabold text-sun-700 shadow-chunky-sun">
+                    🔓 Mở khoá!
+                  </span>
+                )}
               </section>
-            )}
-
-            {outcome === 'unlocked' && (
-              <span className="inline-flex items-center gap-2 rounded-xl2 bg-sun-50 px-6 py-3 font-display text-2xl font-extrabold text-sun-700 shadow-chunky-sun">
-                🔓 Mở khoá!
-              </span>
             )}
 
             {attempt.error && <p className="font-display text-2xl font-extrabold text-fix-700">{attempt.error}</p>}
 
             {outcome === 'retry' && feedback?.hint && <HintCard hint={feedback.hint} />}
 
-            <div className="flex items-end gap-6">
+            {/* The result CTAs stand BESIDE the mic, not under it: a band of their own put "Tiếp
+                theo" below the fold of the iPad's 834 px landscape, and a control a child cannot
+                see is a control they do not have. Aligned on their bottom edges so the mic, Foxy
+                and the two buttons sit on one line. */}
+            <div className="flex flex-wrap items-end justify-center gap-6 pb-2">
               <Foxy mood={mood} size="sm" say={say} />
               <div className="flex flex-col items-center gap-2">
                 <MicButton state={attempt.micState} level={attempt.level} onPress={attempt.onMic} />
                 <p className="font-display text-xl font-extrabold text-ink-500">🎤 Nói để mở khoá</p>
               </div>
+              {outcome && (
+                <div className="flex flex-wrap justify-center gap-4">
+                  <Button variant="outline" onClick={retry}>Thử lại</Button>
+                  <Button size="lg" pulse onClick={goNext}>
+                    {mission ? mission.label : 'Tiếp theo →'}
+                  </Button>
+                </div>
+              )}
             </div>
-
-            {outcome && (
-              <div className="flex flex-wrap justify-center gap-4 pb-2">
-                <Button variant="outline" onClick={retry}>Thử lại</Button>
-                <Button size="lg" pulse onClick={goNext}>
-                  {mission ? mission.label : 'Tiếp theo →'}
-                </Button>
-              </div>
-            )}
           </>
         )}
       </div>
