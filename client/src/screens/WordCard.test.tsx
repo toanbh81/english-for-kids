@@ -1,5 +1,5 @@
 import { render, screen, fireEvent, act, waitFor, within } from '@testing-library/react'
-import { MemoryRouter, Route, Routes } from 'react-router-dom'
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import type { SpeakingAttempt } from '../speaking/useSpeakingAttempt'
 import type { PronunciationResult } from '../scoring/types'
 
@@ -37,7 +37,28 @@ import { WordCard } from './WordCard'
 import { WordList } from './WordList'
 import { findTopic } from '../content/words'
 import { getBox, promote } from '../progress/leitner'
-import { logActivity } from '../progress/activity'
+import { dayKey, logActivity } from '../progress/activity'
+import { saveLesson } from '../progress/lessonStore'
+import type { LessonItem } from '../progress/lesson'
+
+/** Where a mission hand-off landed, and whether it was still carrying `{ mission: true }` — the
+ * flag leaves no trace in the DOM, so the probe is the only way to see it. */
+function Probe() {
+  const location = useLocation()
+  return <p data-testid="probe">{location.pathname} {JSON.stringify(location.state)}</p>
+}
+
+const step = (id: string, route: string): LessonItem =>
+  ({ kind: 'word', activity: 'word', id, route, label: id, emoji: '🧩' })
+
+/** Today's lesson, written straight to storage, so the screen counts real steps. */
+function seedLesson(...items: LessonItem[]) {
+  const now = Date.now()
+  saveLesson({ day: dayKey(now), created: now, band: 5, items })
+}
+
+const WORD_STEP = step('food-apple', '/words/food/food-apple')
+const NEXT_STEP = step('food-bread', '/words/food/food-bread')
 
 const resultHigh: PronunciationResult = {
   overall: 70, accuracy: 70, fluency: 70, completeness: 70,
@@ -50,13 +71,14 @@ const resultLow: PronunciationResult = {
   engine: 'azure',
 }
 
-function renderCard(topic: string, wordId: string) {
+function renderCard(topic: string, wordId: string, mission = false) {
   render(
-    <MemoryRouter initialEntries={[`/words/${topic}/${wordId}`]}>
+    <MemoryRouter initialEntries={[{ pathname: `/words/${topic}/${wordId}`, state: mission ? { mission: true } : null }]}>
       <Routes>
         <Route path="/words/:topic/:wordId" element={<WordCard />} />
         <Route path="/words/:topic" element={<WordList />} />
         <Route path="/topic/:id" element={<div data-testid="topic-hub" />} />
+        <Route path="/mission" element={<Probe />} />
       </Routes>
     </MemoryRouter>,
   )
@@ -344,4 +366,53 @@ it('keeps 🔊 on the front face outside the review deck', () => {
   renderCard('food', 'food-apple')
 
   expect(within(screen.getByTestId('face-front')).getByRole('button', { name: 'Nghe mẫu' })).toBeInTheDocument()
+})
+
+// --- as a step of today's lesson (spec §3) ---------------------------------------------------
+
+it('numbers itself inside the lesson and threads back to the mission', () => {
+  seedLesson(WORD_STEP, NEXT_STEP)
+  renderCard('food', 'food-apple', true)
+
+  expect(screen.getByText('Từ mới 1/2')).toBeInTheDocument()
+  expect(screen.getByRole('link', { name: 'Nhiệm vụ' })).toHaveAttribute('href', '/mission')
+})
+
+/** The deck's own next word is banana; the lesson's next step is bread, and the lesson wins. */
+it('follows the lesson rather than the deck on "Tiếp theo"', () => {
+  attemptControl.current = { ...baseAttempt(), result: resultHigh }
+  seedLesson(WORD_STEP, NEXT_STEP)
+  renderCard('food', 'food-apple', true)
+  passGuess('quả táo')
+
+  act(() => { attemptControl.onResult?.(resultHigh, null) })
+  fireEvent.click(screen.getByRole('button', { name: /Tiếp theo/ }))
+
+  expect(screen.getByText('bread')).toBeInTheDocument()
+  expect(screen.queryByText('banana')).not.toBeInTheDocument()
+  // …and the step it landed on is still numbered, so the flag travelled with it.
+  expect(screen.getByText('Từ mới 2/2')).toBeInTheDocument()
+})
+
+it('ends at the mission screen when it is the last step of the lesson', () => {
+  attemptControl.current = { ...baseAttempt(), result: resultHigh }
+  seedLesson(WORD_STEP)
+  renderCard('food', 'food-apple', true)
+  passGuess('quả táo')
+
+  act(() => { attemptControl.onResult?.(resultHigh, null) })
+  fireEvent.click(screen.getByRole('button', { name: /Tiếp theo/ }))
+
+  expect(screen.getByTestId('probe')).toHaveTextContent('/mission')
+})
+
+/** Today's lesson may well list this very word — but a child who walked in from the island did not
+ * arrive carrying the flag, and nothing about the screen may change for them. */
+it('stays a free-play card without the flag, lesson or no lesson', () => {
+  seedLesson(WORD_STEP, NEXT_STEP)
+  renderCard('food', 'food-apple')
+
+  expect(screen.queryByText(/^Từ mới \d/)).not.toBeInTheDocument()
+  expect(screen.queryByRole('link', { name: 'Nhiệm vụ' })).not.toBeInTheDocument()
+  expect(screen.getByRole('link', { name: findTopic('food')!.title })).toHaveAttribute('href', '/topic/food')
 })

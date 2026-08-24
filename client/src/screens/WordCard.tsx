@@ -7,6 +7,7 @@ import { findTopic, findWord } from '../content/words'
 import { shuffleTiles } from '../content/shuffle'
 import { getBox, promote, demote, dueWords } from '../progress/leitner'
 import { logActivity } from '../progress/activity'
+import { MISSION_STATE, useMissionPosition } from '../progress/missionNav'
 import { saveRecording } from '../progress/recordings'
 import { playUrl } from '../audio/player'
 import { speakText } from '../story/speak'
@@ -67,6 +68,9 @@ export function WordCard() {
 
 function WordCardInner({ word, topic, isReview, list }: { word: Word; topic: string; isReview: boolean; list: Word[] }) {
   const nav = useNavigate()
+  // Null unless the child arrived from the mission: only then is this card step "Từ mới 2/3" of
+  // today's lesson rather than one card of a deck (spec §3).
+  const mission = useMissionPosition()
   const [flipped, setFlipped] = useState(false)
   const [audioMissing, setAudioMissing] = useState(false)
   const [outcome, setOutcome] = useState<'unlocked' | 'retry' | null>(null)
@@ -129,8 +133,17 @@ function WordCardInner({ word, topic, isReview, list }: { word: Word; topic: str
   const next = index >= 0 ? list[index + 1] : undefined
   // A map topic belongs to its island, so leaving the last card of a deck lands there rather than
   // on the flat word index, which no longer lists locked topics at all.
-  const backTo = isReview ? '/words/review' : `/topic/${topic}`
-  const backLabel = isReview ? 'Ôn tập' : findTopic(topic)?.title ?? 'Từ vựng'
+  const backTo = mission ? '/mission' : isReview ? '/words/review' : `/topic/${topic}`
+  const backLabel = mission ? 'Nhiệm vụ' : isReview ? 'Ôn tập' : findTopic(topic)?.title ?? 'Từ vựng'
+
+  /** Where "Tiếp theo" goes. In a lesson the deck order is not the child's path — the next step
+   * of today's mission is — and the mission screen is where a finished lesson celebrates. */
+  const nextTo = mission ? mission.nextRoute ?? '/mission' : next ? `/words/${topic}/${next.id}` : backTo
+
+  function goNext() {
+    if (mission?.nextRoute) nav(nextTo, { state: MISSION_STATE })
+    else nav(nextTo)
+  }
 
   /** The outcome banner belongs to this attempt, so clear it with the attempt — otherwise
    * "🔓 Mở khoá!" stays on screen while the child records again. */
@@ -181,6 +194,7 @@ function WordCardInner({ word, topic, isReview, list }: { word: Word; topic: str
         <header className="flex w-full items-center justify-between gap-4">
           <BackButton to={backTo} label={backLabel} />
           <div className="flex flex-1 flex-col items-center gap-1">
+            {mission && <Chip tone="teal">Từ mới {mission.index}/{mission.total}</Chip>}
             <h1 className="font-display text-[30px] font-extrabold leading-none text-ink-900">Từ mới hôm nay 🧩</h1>
             <p className="font-display text-lg font-extrabold text-ink-500">Chạm thẻ để lật — nói đúng để mở khoá!</p>
           </div>
@@ -315,7 +329,7 @@ function WordCardInner({ word, topic, isReview, list }: { word: Word; topic: str
             {outcome && (
               <div className="flex flex-wrap justify-center gap-4 pb-2">
                 <Button variant="outline" onClick={retry}>Thử lại</Button>
-                <Button size="lg" pulse onClick={() => nav(next ? `/words/${topic}/${next.id}` : backTo)}>
+                <Button size="lg" pulse onClick={goNext}>
                   Tiếp theo →
                 </Button>
               </div>

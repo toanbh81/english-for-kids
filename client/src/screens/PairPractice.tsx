@@ -8,6 +8,7 @@ import { playBlob, playUrl } from '../audio/player'
 import { toFeedback } from '../scoring/feedback'
 import { setStars } from '../progress/store'
 import { logActivity } from '../progress/activity'
+import { MISSION_STATE, useMissionPosition } from '../progress/missionNav'
 import { saveRecording } from '../progress/recordings'
 import { MicButton } from '../components/MicButton'
 import { Stars } from '../components/Stars'
@@ -48,6 +49,9 @@ export function PairPractice() {
 
 function PairRun({ pair }: { pair: PairItem }) {
   const nav = useNavigate()
+  // Null unless the child arrived from the mission: only then is this pair step "Thẻ 2/4" of
+  // today's lesson rather than pair 2 of the bậc (spec §3).
+  const mission = useMissionPosition()
   // Both words in one breath — that is the whole point of a minimal pair: the child has to make
   // the contrast audible twice in a row.
   const targetText = `${pair.a.word}, ${pair.b.word}`
@@ -98,6 +102,12 @@ function PairRun({ pair }: { pair: PairItem }) {
   /** "ship ✓ · sheep ○" — which word the child still owes, in one line. */
   const ticks = `${pair.a.word} ${done.a ? '✓' : '○'} · ${pair.b.word} ${done.b ? '✓' : '○'}`
 
+  /** The lesson's next step — or the mission itself, which celebrates when the lesson is done. */
+  function goMission() {
+    if (mission?.nextRoute) nav(mission.nextRoute, { state: MISSION_STATE })
+    else nav('/mission')
+  }
+
   /** Sample audio is generated locally and may simply not be there yet — say so, never throw. */
   function listen() {
     const side = targetFor(pair, listens)
@@ -140,9 +150,15 @@ function PairRun({ pair }: { pair: PairItem }) {
     <main className="h-full overflow-y-auto bg-cream-50 px-6 py-5">
       <div className="mx-auto flex min-h-full w-full max-w-5xl flex-col items-center gap-4">
         <header className="flex w-full items-center justify-between gap-4">
-          <BackButton to="/level/minimal-pairs" label="Quay lại" />
+          {mission
+            ? <BackButton to="/mission" label="Nhiệm vụ" />
+            : <BackButton to="/level/minimal-pairs" label="Quay lại" />}
           <div className="flex flex-col items-center gap-2">
-            <Chip tone="coral">Cặp {index + 1}/{PAIRS.length}</Chip>
+            {/* In a lesson the bậc's own count is the wrong count, and two counters are one too
+                many for a child to read — so the mission's position replaces it. */}
+            {mission
+              ? <Chip tone="coral">Thẻ {mission.index}/{mission.total}</Chip>
+              : <Chip tone="coral">Cặp {index + 1}/{PAIRS.length}</Chip>}
             <Chip tone="teal" size="sm">{pair.contrast}</Chip>
           </div>
           <span className="min-w-[66px] text-right text-base font-bold text-ink-300">
@@ -213,9 +229,15 @@ function PairRun({ pair }: { pair: PairItem }) {
                 )}
                 <div className="flex flex-wrap justify-center gap-4 pt-1">
                   <Button variant="outline" onClick={attempt.reset}>↻ Thử lại</Button>
-                  {next
-                    ? <Button size="lg" pulse onClick={() => nav(`/pair/${next.id}`)}>Tiếp theo →</Button>
-                    : <Button size="lg" pulse onClick={() => nav('/level/minimal-pairs')}>Hoàn thành 🎉</Button>}
+                  {mission
+                    ? (
+                      <Button size="lg" pulse onClick={goMission}>
+                        {mission.nextRoute ? 'Tiếp theo →' : 'Hoàn thành 🎉'}
+                      </Button>
+                    )
+                    : next
+                      ? <Button size="lg" pulse onClick={() => nav(`/pair/${next.id}`)}>Tiếp theo →</Button>
+                      : <Button size="lg" pulse onClick={() => nav('/level/minimal-pairs')}>Hoàn thành 🎉</Button>}
                 </div>
               </section>
             ) : (

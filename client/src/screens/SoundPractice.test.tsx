@@ -1,5 +1,5 @@
 import { render, screen, fireEvent, act } from '@testing-library/react'
-import { MemoryRouter, Route, Routes } from 'react-router-dom'
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import { useEffect, useState } from 'react'
 import type { PronunciationResult } from '../scoring/types'
 
@@ -24,6 +24,28 @@ vi.mock('../audio/player', () => ({ playUrl: playerControl.playUrl, playBlob: vi
 
 import { SoundPractice } from './SoundPractice'
 import { PHONEME_TIPS } from '../scoring/feedback'
+import { dayKey } from '../progress/activity'
+import { saveLesson } from '../progress/lessonStore'
+import type { LessonItem } from '../progress/lesson'
+
+/** Where a mission hand-off landed, and whether it was still carrying `{ mission: true }` — the
+ * flag leaves no trace in the DOM, so the probe is the only way to see it. */
+function Probe() {
+  const location = useLocation()
+  return <p data-testid="probe">{location.pathname} {JSON.stringify(location.state)}</p>
+}
+
+const step = (id: string, route: string): LessonItem =>
+  ({ kind: 'speak', activity: 'speak', id, route, label: id, emoji: '🗣️' })
+
+/** Today's lesson, written straight to storage, so the screen counts real steps. */
+function seedLesson(...items: LessonItem[]) {
+  const now = Date.now()
+  saveLesson({ day: dayKey(now), created: now, band: 5, items })
+}
+
+const SOUND_STEP = step('th', '/sound/th')
+const NEXT_STEP = step('sz-th-three', '/practice/sz-th-three')
 
 /** One attempt on the word `three`: `ph` is the target phoneme's score, `null` = no detail at all. */
 function result(ph: number | null, overall = 90): PronunciationResult {
@@ -45,12 +67,13 @@ function score(r: PronunciationResult) {
   act(() => { mic.push(r) })
 }
 
-function renderSound(ph = 'th') {
+function renderSound(ph = 'th', mission = false) {
   render(
-    <MemoryRouter initialEntries={[`/sound/${ph}`]}>
+    <MemoryRouter initialEntries={[{ pathname: `/sound/${ph}`, state: mission ? { mission: true } : null }]}>
       <Routes>
         <Route path="/sound/:ph" element={<SoundPractice />} />
         <Route path="/level/:levelId" element={<p>các âm</p>} />
+        <Route path="*" element={<Probe />} />
       </Routes>
     </MemoryRouter>,
   )
@@ -252,4 +275,55 @@ it('lets a retry on the last word raise the stars', () => {
 it('shows a not-found message for a phoneme that has no group', () => {
   renderSound('nope')
   expect(screen.getByText('Không tìm thấy âm')).toBeInTheDocument()
+})
+
+// --- as a step of today's lesson (spec §3) ---------------------------------------------------
+
+/** All three words of the sound, scored well — the run the lesson counts as one step. */
+function runThreeWords() {
+  score(result(92))
+  fireEvent.click(screen.getByRole('button', { name: /tiếp theo/i }))
+  score(result(92))
+  fireEvent.click(screen.getByRole('button', { name: /tiếp theo/i }))
+  score(result(92))
+}
+
+it('numbers the sound inside the lesson and keeps its own three-word run', () => {
+  seedLesson(SOUND_STEP, NEXT_STEP)
+  renderSound('th', true)
+
+  expect(screen.getByText('Âm 1/2')).toBeInTheDocument()
+  // The three words are one lesson step, so the run keeps its own counter alongside.
+  expect(screen.getByText('Từ 1/3')).toBeInTheDocument()
+  expect(screen.getByRole('link', { name: 'Nhiệm vụ' })).toHaveAttribute('href', '/mission')
+})
+
+it('walks its own words first, then hands on to the next step of the lesson', () => {
+  seedLesson(SOUND_STEP, NEXT_STEP)
+  renderSound('th', true)
+  runThreeWords()
+
+  expect(screen.getByText('Từ 3/3')).toBeInTheDocument()
+  fireEvent.click(screen.getByRole('button', { name: /tiếp theo/i }))
+  expect(screen.getByTestId('probe')).toHaveTextContent('/practice/sz-th-three {"mission":true}')
+})
+
+it('ends at the mission screen when it is the last step of the lesson', () => {
+  seedLesson(SOUND_STEP)
+  renderSound('th', true)
+  runThreeWords()
+
+  fireEvent.click(screen.getByRole('button', { name: /hoàn thành/i }))
+  expect(screen.getByTestId('probe')).toHaveTextContent('/mission')
+})
+
+/** Today's lesson may well list this very sound — but a child who walked in from the bậc did not
+ * arrive carrying the flag, and nothing about the screen may change for them. */
+it('stays a free-play sound without the flag, lesson or no lesson', () => {
+  seedLesson(SOUND_STEP, NEXT_STEP)
+  renderSound()
+
+  expect(screen.queryByText(/^Âm \d/)).not.toBeInTheDocument()
+  expect(screen.getByText('Từ 1/3')).toBeInTheDocument()
+  expect(screen.getByRole('link', { name: 'Quay lại' })).toHaveAttribute('href', '/level/sound-zoo')
 })

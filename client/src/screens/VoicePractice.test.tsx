@@ -1,5 +1,5 @@
 import { render, screen, fireEvent, act, cleanup } from '@testing-library/react'
-import { MemoryRouter, Route, Routes } from 'react-router-dom'
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import { useEffect, useState } from 'react'
 import type { PronunciationResult } from '../scoring/types'
 
@@ -34,8 +34,29 @@ vi.mock('../progress/recordings', () => ({ saveRecording: store.saveRecording })
 
 import { VoicePractice, Passage } from './VoicePractice'
 import { STORY_VOICE } from '../content'
+import { dayKey } from '../progress/activity'
+import { saveLesson } from '../progress/lessonStore'
+import type { LessonItem } from '../progress/lesson'
+
+/** Where a mission hand-off landed, and whether it was still carrying `{ mission: true }` — the
+ * flag leaves no trace in the DOM, so the probe is the only way to see it. */
+function Probe() {
+  const location = useLocation()
+  return <p data-testid="probe">{location.pathname} {JSON.stringify(location.state)}</p>
+}
+
+const step = (id: string, route: string): LessonItem =>
+  ({ kind: 'speak', activity: 'speak', id, route, label: id, emoji: '🗣️' })
+
+/** Today's lesson, written straight to storage, so the screen counts real steps. */
+function seedLesson(...items: LessonItem[]) {
+  const now = Date.now()
+  saveLesson({ day: dayKey(now), created: now, band: 5, items })
+}
 
 const SV1 = STORY_VOICE[0]
+const VOICE_STEP = step('sv1', '/voice/sv1')
+const NEXT_STEP = step('sz-th-three', '/practice/sz-th-three')
 
 /** One attempt on a passage. `prosody` is left off entirely for the Web Speech shape. */
 function result(scores: { accuracy: number; prosody?: number; fluency?: number; completeness?: number }): PronunciationResult {
@@ -49,12 +70,13 @@ function result(scores: { accuracy: number; prosody?: number; fluency?: number; 
 
 const score = (r: PronunciationResult, blob: Blob | null = null) => act(() => { mic.push(r, blob) })
 
-function renderVoice(id = SV1.id) {
+function renderVoice(id = SV1.id, mission = false) {
   render(
-    <MemoryRouter initialEntries={[`/voice/${id}`]}>
+    <MemoryRouter initialEntries={[{ pathname: `/voice/${id}`, state: mission ? { mission: true } : null }]}>
       <Routes>
         <Route path="/voice/:id" element={<VoicePractice />} />
         <Route path="/level/story-voice" element={<p>các đoạn</p>} />
+        <Route path="*" element={<Probe />} />
       </Routes>
     </MemoryRouter>,
   )
@@ -248,4 +270,45 @@ it('hands on to the next passage, and finishes the level on the last one', () =>
 it('shows a not-found message for a passage that does not exist', () => {
   renderVoice('nope')
   expect(screen.getByText('Không tìm thấy đoạn')).toBeInTheDocument()
+})
+
+// --- as a step of today's lesson (spec §3) ---------------------------------------------------
+
+it('numbers itself inside the lesson and threads back to the mission', () => {
+  seedLesson(VOICE_STEP, NEXT_STEP)
+  renderVoice(SV1.id, true)
+
+  expect(screen.getByText('Thẻ 1/2')).toBeInTheDocument()
+  // One counter, not two: the bậc's own position means nothing inside a lesson.
+  expect(screen.queryByText('Đoạn 1/8')).not.toBeInTheDocument()
+  expect(screen.getByRole('link', { name: 'Nhiệm vụ' })).toHaveAttribute('href', '/mission')
+})
+
+it('hands on to the next step of the lesson, still carrying the flag', () => {
+  seedLesson(VOICE_STEP, NEXT_STEP)
+  renderVoice(SV1.id, true)
+  score(result({ prosody: 84, accuracy: 75 }))
+
+  fireEvent.click(screen.getByRole('button', { name: /tiếp theo/i }))
+  expect(screen.getByTestId('probe')).toHaveTextContent('/practice/sz-th-three {"mission":true}')
+})
+
+it('ends at the mission screen when it is the last step of the lesson', () => {
+  seedLesson(VOICE_STEP)
+  renderVoice(SV1.id, true)
+  score(result({ prosody: 84, accuracy: 75 }))
+
+  fireEvent.click(screen.getByRole('button', { name: /hoàn thành/i }))
+  expect(screen.getByTestId('probe')).toHaveTextContent('/mission')
+})
+
+/** Today's lesson may well list this very passage — but a child who walked in from the bậc did
+ * not arrive carrying the flag, and nothing about the screen may change for them. */
+it('stays a free-play passage without the flag, lesson or no lesson', () => {
+  seedLesson(VOICE_STEP, NEXT_STEP)
+  renderVoice()
+
+  expect(screen.getByText('Đoạn 1/8')).toBeInTheDocument()
+  expect(screen.queryByText(/^Thẻ /)).not.toBeInTheDocument()
+  expect(screen.getByRole('link', { name: 'Quay lại' })).toHaveAttribute('href', '/level/story-voice')
 })

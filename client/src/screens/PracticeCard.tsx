@@ -6,6 +6,7 @@ import { playBlob, playUrl } from '../audio/player'
 import { toFeedback } from '../scoring/feedback'
 import { setStars } from '../progress/store'
 import { logActivity } from '../progress/activity'
+import { MISSION_STATE, useMissionPosition } from '../progress/missionNav'
 import { saveRecording } from '../progress/recordings'
 import { MicButton } from '../components/MicButton'
 import { Stars } from '../components/Stars'
@@ -39,6 +40,9 @@ export function PracticeCard() {
   // further down are asserting — nothing is recomputed there.
   const level = card ? LEVELS.find(l => l.cards.includes(card)) : undefined
   const isWordPop = level?.id === 'word-pop'
+  // Null unless the child arrived from the mission: only then is this card step "Thẻ 2/4" of
+  // today's lesson rather than card 2 of its level (spec §3).
+  const mission = useMissionPosition()
 
   function handleResult(result: PronunciationResult, blob: Blob | null) {
     logActivity({ ts: Date.now(), kind: 'speak', id: cardId, score: result.overall, phonemes: result.words.flatMap(w => w.phonemes) })
@@ -109,6 +113,12 @@ export function PracticeCard() {
 
   function retry() { attempt.reset() }
 
+  /** The lesson's next step — or the mission itself, which celebrates when the lesson is done. */
+  function goMission() {
+    if (mission?.nextRoute) nav(mission.nextRoute, { state: MISSION_STATE })
+    else nav('/mission')
+  }
+
   /** Sample audio is generated locally and may simply not be there yet — say so, never throw. */
   function playSample() {
     playUrl(card!.audio).then(() => setAudioMissing(false), () => setAudioMissing(true))
@@ -118,15 +128,24 @@ export function PracticeCard() {
     <main className="h-full overflow-y-auto bg-cream-50 px-6 py-5">
       <div className="mx-auto flex min-h-full w-full max-w-5xl flex-col items-center gap-5">
         <header className="flex w-full items-center justify-between gap-4">
-          <BackButton to={`/level/${level!.id}`} label="Quay lại" />
+          {mission
+            ? <BackButton to="/mission" label="Nhiệm vụ" />
+            : <BackButton to={`/level/${level!.id}`} label="Quay lại" />}
           <div className="flex min-w-0 flex-col items-center gap-2 overflow-hidden">
-            <span className="font-display text-xl font-extrabold text-ink-500">Thẻ {cardIndex + 1}/{level!.cards.length}</span>
+            {/* In a lesson the level's own count is the wrong count — and two of them side by side
+                is one too many for a child to read — so the mission's position replaces it, dots
+                and all. */}
+            <span className="font-display text-xl font-extrabold text-ink-500">
+              {mission
+                ? `Thẻ ${mission.index}/${mission.total}`
+                : `Thẻ ${cardIndex + 1}/${level!.cards.length}`}
+            </span>
             {/* The dots are a nicety, the counter above them is the real read-out. Past a dozen
                 cards they stop fitting: the legacy `/practice/sz-*` route walks all 27 Sound Zoo
                 cards, and 27 of them made the header wider than a portrait iPad, squeezing the
                 66 px back button under the 64 px tap-target floor. So they wrap, and beyond
                 DOT_LIMIT they simply do not render. */}
-            {level!.cards.length <= DOT_LIMIT && (
+            {!mission && level!.cards.length <= DOT_LIMIT && (
               <div data-testid="card-dots" className="flex flex-wrap justify-center gap-2">
                 {level!.cards.map((c, i) => (
                   <span
@@ -165,9 +184,15 @@ export function PracticeCard() {
               <div className="flex flex-wrap justify-center gap-4 pt-1">
                 <Button variant="outline" onClick={retry}>↻ Thử lại</Button>
                 {(effectiveStars === 3 || attempts >= 3) && (
-                  next
-                    ? <Button size="lg" pulse onClick={() => nav(`/practice/${next.id}`)}>Tiếp theo →</Button>
-                    : <Button size="lg" pulse onClick={() => nav(`/level/${level!.id}`)}>Hoàn thành 🎉</Button>
+                  mission
+                    ? (
+                      <Button size="lg" pulse onClick={goMission}>
+                        {mission.nextRoute ? 'Tiếp theo →' : 'Hoàn thành 🎉'}
+                      </Button>
+                    )
+                    : next
+                      ? <Button size="lg" pulse onClick={() => nav(`/practice/${next.id}`)}>Tiếp theo →</Button>
+                      : <Button size="lg" pulse onClick={() => nav(`/level/${level!.id}`)}>Hoàn thành 🎉</Button>
                 )}
               </div>
             </section>

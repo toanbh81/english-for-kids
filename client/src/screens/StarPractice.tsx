@@ -8,6 +8,7 @@ import { toFeedback } from '../scoring/feedback'
 import { starsForSentence } from '../scoring/levelStars'
 import { setStars } from '../progress/store'
 import { logActivity } from '../progress/activity'
+import { MISSION_STATE, useMissionPosition } from '../progress/missionNav'
 import { saveRecording } from '../progress/recordings'
 import { MicButton } from '../components/MicButton'
 import { Stars } from '../components/Stars'
@@ -53,6 +54,9 @@ export function StarPractice() {
 
 function StarRun({ star }: { star: SentenceStar }) {
   const nav = useNavigate()
+  // Null unless the child arrived from the mission: only then is this sentence step "Thẻ 2/4" of
+  // today's lesson rather than sentence 2 of the bậc (spec §3).
+  const mission = useMissionPosition()
   const [audioMissing, setAudioMissing] = useState(false)
   // True only while the sample is actually sounding, so the rhythm dots beat with it and stop
   // when it ends (or when the file turns out not to be there).
@@ -103,6 +107,12 @@ function StarRun({ star }: { star: SentenceStar }) {
   const index = SENTENCE_STARS.findIndex(s => s.id === star.id)
   const next = SENTENCE_STARS[index + 1]
   const stressed = new Set(star.stress)
+
+  /** The lesson's next step — or the mission itself, which celebrates when the lesson is done. */
+  function goMission() {
+    if (mission?.nextRoute) nav(mission.nextRoute, { state: MISSION_STATE })
+    else nav('/mission')
+  }
 
   /** Detach and silence whatever is currently sounding. Safe to call on an already-stopped card
    * (nothing is playing) and on unmount, so a sample can never outlive the screen. */
@@ -160,8 +170,14 @@ function StarRun({ star }: { star: SentenceStar }) {
     <main className="h-full overflow-y-auto bg-cream-50 px-6 py-5">
       <div className="mx-auto flex min-h-full w-full max-w-5xl flex-col items-center gap-4">
         <header className="flex w-full items-center justify-between gap-4">
-          <BackButton to="/level/sentence-stars" label="Quay lại" />
-          <Chip tone="coral">Câu {index + 1}/{SENTENCE_STARS.length}</Chip>
+          {mission
+            ? <BackButton to="/mission" label="Nhiệm vụ" />
+            : <BackButton to="/level/sentence-stars" label="Quay lại" />}
+          {/* In a lesson the bậc's own count is the wrong count, and two counters are one too many
+              for a child to read — so the mission's position replaces it. */}
+          {mission
+            ? <Chip tone="coral">Thẻ {mission.index}/{mission.total}</Chip>
+            : <Chip tone="coral">Câu {index + 1}/{SENTENCE_STARS.length}</Chip>}
           <span className="min-w-[66px] text-right text-base font-bold text-ink-300">
             {attempt.engine === 'webspeech' ? 'chế độ đơn giản' : ''}
           </span>
@@ -224,9 +240,15 @@ function StarRun({ star }: { star: SentenceStar }) {
               )}
               <Button variant="outline" onClick={playSample}>🔊 Nghe mẫu</Button>
               <Button variant="outline" onClick={attempt.reset}>↻ Thử lại</Button>
-              {next
-                ? <Button size="lg" pulse onClick={() => nav(`/star/${next.id}`)}>Tiếp theo →</Button>
-                : <Button size="lg" pulse onClick={() => nav('/level/sentence-stars')}>Hoàn thành 🎉</Button>}
+              {mission
+                ? (
+                  <Button size="lg" pulse onClick={goMission}>
+                    {mission.nextRoute ? 'Tiếp theo →' : 'Hoàn thành 🎉'}
+                  </Button>
+                )
+                : next
+                  ? <Button size="lg" pulse onClick={() => nav(`/star/${next.id}`)}>Tiếp theo →</Button>
+                  : <Button size="lg" pulse onClick={() => nav('/level/sentence-stars')}>Hoàn thành 🎉</Button>}
             </div>
           </section>
         ) : (

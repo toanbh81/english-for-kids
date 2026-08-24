@@ -1,5 +1,5 @@
 import { render, screen, fireEvent, act } from '@testing-library/react'
-import { MemoryRouter, Route, Routes } from 'react-router-dom'
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import { useEffect, useState } from 'react'
 import type { PronunciationResult } from '../scoring/types'
 
@@ -51,8 +51,29 @@ vi.mock('../progress/recordings', () => ({ saveRecording: store.saveRecording })
 
 import { StarPractice } from './StarPractice'
 import { SENTENCE_STARS } from '../content'
+import { dayKey } from '../progress/activity'
+import { saveLesson } from '../progress/lessonStore'
+import type { LessonItem } from '../progress/lesson'
+
+/** Where a mission hand-off landed, and whether it was still carrying `{ mission: true }` — the
+ * flag leaves no trace in the DOM, so the probe is the only way to see it. */
+function Probe() {
+  const location = useLocation()
+  return <p data-testid="probe">{location.pathname} {JSON.stringify(location.state)}</p>
+}
+
+const step = (id: string, route: string): LessonItem =>
+  ({ kind: 'speak', activity: 'speak', id, route, label: id, emoji: '🗣️' })
+
+/** Today's lesson, written straight to storage, so the screen counts real steps. */
+function seedLesson(...items: LessonItem[]) {
+  const now = Date.now()
+  saveLesson({ day: dayKey(now), created: now, band: 5, items })
+}
 
 const SS1 = SENTENCE_STARS[0]
+const STAR_STEP = step('ss1', '/star/ss1')
+const NEXT_STEP = step('sz-th-three', '/practice/sz-th-three')
 
 /** One attempt on the sentence; the three numbers the star rule actually reads are explicit. */
 function result(accuracy: number, fluency: number, completeness = 100): PronunciationResult {
@@ -64,12 +85,13 @@ function result(accuracy: number, fluency: number, completeness = 100): Pronunci
 
 const score = (r: PronunciationResult, blob: Blob | null = null) => act(() => { mic.push(r, blob) })
 
-function renderStar(id = SS1.id) {
+function renderStar(id = SS1.id, mission = false) {
   render(
-    <MemoryRouter initialEntries={[`/star/${id}`]}>
+    <MemoryRouter initialEntries={[{ pathname: `/star/${id}`, state: mission ? { mission: true } : null }]}>
       <Routes>
         <Route path="/star/:id" element={<StarPractice />} />
         <Route path="/level/sentence-stars" element={<p>các câu</p>} />
+        <Route path="*" element={<Probe />} />
       </Routes>
     </MemoryRouter>,
   )
@@ -300,4 +322,45 @@ it('finishes the level from the last sentence', () => {
 it('shows a not-found message for a sentence that does not exist', () => {
   renderStar('nope')
   expect(screen.getByText('Không tìm thấy câu')).toBeInTheDocument()
+})
+
+// --- as a step of today's lesson (spec §3) ---------------------------------------------------
+
+it('numbers itself inside the lesson and threads back to the mission', () => {
+  seedLesson(STAR_STEP, NEXT_STEP)
+  renderStar(SS1.id, true)
+
+  expect(screen.getByText('Thẻ 1/2')).toBeInTheDocument()
+  // One counter, not two: the bậc's own position means nothing inside a lesson.
+  expect(screen.queryByText('Câu 1/10')).not.toBeInTheDocument()
+  expect(screen.getByRole('link', { name: 'Nhiệm vụ' })).toHaveAttribute('href', '/mission')
+})
+
+it('hands on to the next step of the lesson, still carrying the flag', () => {
+  seedLesson(STAR_STEP, NEXT_STEP)
+  renderStar(SS1.id, true)
+  score(result(85, 85))
+
+  fireEvent.click(screen.getByRole('button', { name: /tiếp theo/i }))
+  expect(screen.getByTestId('probe')).toHaveTextContent('/practice/sz-th-three {"mission":true}')
+})
+
+it('ends at the mission screen when it is the last step of the lesson', () => {
+  seedLesson(STAR_STEP)
+  renderStar(SS1.id, true)
+  score(result(85, 85))
+
+  fireEvent.click(screen.getByRole('button', { name: /hoàn thành/i }))
+  expect(screen.getByTestId('probe')).toHaveTextContent('/mission')
+})
+
+/** Today's lesson may well list this very sentence — but a child who walked in from the bậc did
+ * not arrive carrying the flag, and nothing about the screen may change for them. */
+it('stays a free-play sentence without the flag, lesson or no lesson', () => {
+  seedLesson(STAR_STEP, NEXT_STEP)
+  renderStar()
+
+  expect(screen.getByText('Câu 1/10')).toBeInTheDocument()
+  expect(screen.queryByText(/^Thẻ /)).not.toBeInTheDocument()
+  expect(screen.getByRole('link', { name: 'Quay lại' })).toHaveAttribute('href', '/level/sentence-stars')
 })

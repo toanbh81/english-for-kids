@@ -1,5 +1,5 @@
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
-import { MemoryRouter, Route, Routes } from 'react-router-dom'
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import { useState } from 'react'
 
 const recorderControl = vi.hoisted(() => ({ shouldFailStart: false, start: vi.fn() }))
@@ -36,18 +36,45 @@ vi.mock('../scoring/createScorer', () => ({
 }))
 import { PracticeCard } from './PracticeCard'
 import { LEVELS } from '../content'
+import { dayKey } from '../progress/activity'
+import { saveLesson } from '../progress/lessonStore'
+import type { LessonItem } from '../progress/lesson'
+
+/** Where a mission hand-off landed, and whether it was still carrying `{ mission: true }` — the
+ * flag leaves no trace in the DOM, so the probe is the only way to see it. */
+function Probe() {
+  const location = useLocation()
+  return <p data-testid="probe">{location.pathname} {JSON.stringify(location.state)}</p>
+}
+
+const step = (id: string, route: string): LessonItem =>
+  ({ kind: 'speak', activity: 'speak', id, route, label: id, emoji: '🗣️' })
+
+/** Today's lesson, written straight to storage, so the screen counts real steps. This file keeps
+ * the activity log between tests (the scorer stubs are what it resets), and a lesson step counts
+ * as done from any attempt logged after it — so the log is cleared with the lesson it belongs to,
+ * or an earlier test's `three` would arrive having already finished today's /sound/th. */
+function seedLesson(...items: LessonItem[]) {
+  const now = Date.now()
+  localStorage.removeItem('speakup.activity')
+  saveLesson({ day: dayKey(now), created: now, band: 5, items })
+}
+
+const CARD_STEP = step('sz-th-three', '/practice/sz-th-three')
+const NEXT_STEP = step('th', '/sound/th')
 
 const soundZooCards = LEVELS.find(l => l.id === 'sound-zoo')!.cards
 const wordPopCards = LEVELS.find(l => l.id === 'word-pop')!.cards
 
 /** The level route is stubbed rather than pulling in LevelSelect: these tests only care that
  * "Hoàn thành 🎉" lands back on the level the card belongs to. */
-function renderCard(cardId = 'sz-th-three') {
+function renderCard(cardId = 'sz-th-three', mission = false) {
   render(
-    <MemoryRouter initialEntries={[`/practice/${cardId}`]}>
+    <MemoryRouter initialEntries={[{ pathname: `/practice/${cardId}`, state: mission ? { mission: true } : null }]}>
       <Routes>
         <Route path="/practice/:cardId" element={<PracticeCard />} />
         <Route path="/level/:levelId" element={<p>danh sách thẻ</p>} />
+        <Route path="*" element={<Probe />} />
       </Routes>
     </MemoryRouter>,
   )
@@ -368,4 +395,49 @@ describe('Word Pop: hidden IPA + two-in-a-row streak', () => {
     expect(screen.queryByLabelText('Lần 1/2')).not.toBeInTheDocument()
     expect(screen.queryByLabelText('Lần 2/2')).not.toBeInTheDocument()
   })
+})
+
+// --- as a step of today's lesson (spec §3) ---------------------------------------------------
+
+it('numbers itself inside the lesson, drops the level dots, and threads back to the mission', async () => {
+  const card = wordPopCards[0]
+  seedLesson(step(card.id, `/practice/${card.id}`), NEXT_STEP)
+  renderCard(card.id, true)
+  await scorerReady()
+
+  expect(screen.getByText('Thẻ 1/2')).toBeInTheDocument()
+  // One counter, not two: the level's own position means nothing inside a lesson, dots included.
+  expect(screen.queryByText(`Thẻ 1/${wordPopCards.length}`)).not.toBeInTheDocument()
+  expect(screen.queryByTestId('card-dots')).not.toBeInTheDocument()
+  expect(screen.getByRole('link', { name: 'Nhiệm vụ' })).toHaveAttribute('href', '/mission')
+})
+
+it('hands on to the next step of the lesson, still carrying the flag', async () => {
+  seedLesson(CARD_STEP, NEXT_STEP)
+  renderCard('sz-th-three', true)
+  await scoreOnce()
+
+  fireEvent.click(screen.getByRole('button', { name: /tiếp theo/i }))
+  expect(screen.getByTestId('probe')).toHaveTextContent('/sound/th {"mission":true}')
+})
+
+it('ends at the mission screen when it is the last step of the lesson', async () => {
+  seedLesson(CARD_STEP)
+  renderCard('sz-th-three', true)
+  await scoreOnce()
+
+  fireEvent.click(screen.getByRole('button', { name: /hoàn thành/i }))
+  expect(screen.getByTestId('probe')).toHaveTextContent('/mission')
+})
+
+/** Today's lesson may well list this very card — but a child who walked in from the level did not
+ * arrive carrying the flag, and nothing about the screen may change for them. */
+it('stays a free-play card without the flag, lesson or no lesson', async () => {
+  seedLesson(CARD_STEP, NEXT_STEP)
+  renderCard()
+  await scorerReady()
+
+  expect(screen.getByText(`Thẻ 1/${soundZooCards.length}`)).toBeInTheDocument()
+  expect(screen.queryByText('Thẻ 1/2')).not.toBeInTheDocument()
+  expect(screen.getByRole('link', { name: 'Quay lại' })).toHaveAttribute('href', '/level/sound-zoo')
 })

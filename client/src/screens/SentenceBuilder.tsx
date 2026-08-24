@@ -5,6 +5,7 @@ import { SENTENCES, findSentence } from '../content'
 import type { PronunciationResult } from '../scoring/types'
 import { setStars } from '../progress/store'
 import { logActivity } from '../progress/activity'
+import { MISSION_STATE, useMissionPosition } from '../progress/missionNav'
 import { saveRecording } from '../progress/recordings'
 import { playUrl } from '../audio/player'
 import { toFeedback } from '../scoring/feedback'
@@ -16,7 +17,7 @@ import { HintCard } from '../components/HintCard'
 import { Stars } from '../components/Stars'
 import { ScoredWords } from '../components/ScoredWords'
 import { ScoreBars } from '../components/ScoreBars'
-import { BackButton, Button } from '../components/ui'
+import { BackButton, Button, Chip } from '../components/ui'
 import { shuffleTiles } from '../content/shuffle'
 
 const SHAKE_MS = 400 // matches the .animate-shake keyframe duration in styles.css
@@ -66,6 +67,9 @@ export function SentenceBuilder() {
 
 function SentenceBuilderInner({ sentence }: { sentence: Sentence }) {
   const nav = useNavigate()
+  // Null unless the child arrived from the mission: only then is this sentence step "Câu 2/2" of
+  // today's lesson rather than one sentence of a topic list (spec §3).
+  const mission = useMissionPosition()
   const [trayIndices, setTrayIndices] = useState<number[]>([])
   const [shaking, setShaking] = useState(false)
   const [audioMissing, setAudioMissing] = useState(false)
@@ -147,6 +151,14 @@ function SentenceBuilderInner({ sentence }: { sentence: Sentence }) {
   // Both ways out keep the topic: the unfiltered list only shows unlocked topics now, so dropping
   // the filter would land the child on a different topic's sentences than the one they came from.
   const listTo = `/sentences?topic=${sentence.topic}`
+  /** Where "Tiếp theo" goes. In a lesson the list order is not the child's path — the next step
+   * of today's mission is — and the mission screen is where a finished lesson celebrates. */
+  const nextTo = mission ? mission.nextRoute ?? '/mission' : next ? `/sentence/${next.id}` : listTo
+
+  function goNext() {
+    if (mission?.nextRoute) nav(nextTo, { state: MISSION_STATE })
+    else nav(nextTo)
+  }
 
   const mood: FoxyMood = attempt.micState === 'recording' ? 'listening' : correct ? 'cheer' : 'idle'
   const say = correct ? 'Đúng rồi! 🎉' : wrong ? 'Thử lại nhé' : undefined
@@ -155,8 +167,13 @@ function SentenceBuilderInner({ sentence }: { sentence: Sentence }) {
     <main className="h-full overflow-y-auto bg-cream-50 px-6 py-5">
       <div className="mx-auto flex min-h-full w-full max-w-4xl flex-col items-center gap-4">
         <header className="flex w-full items-center justify-between gap-4">
-          <BackButton to={listTo} label="Ghép câu" />
-          <div className="text-center">
+          {mission
+            ? <BackButton to="/mission" label="Nhiệm vụ" />
+            : <BackButton to={listTo} label="Ghép câu" />}
+          {/* The column only exists to seat the mission chip above the title; free play keeps the
+              plain centred block it always had. */}
+          <div className={mission ? 'flex flex-col items-center text-center' : 'text-center'}>
+            {mission && <Chip tone="teal">Câu {mission.index}/{mission.total}</Chip>}
             <h1 className="font-display text-[36px] font-extrabold leading-tight text-ink-900">Ghép câu nào! 🧱</h1>
             <p className="mt-1 text-lg font-bold text-ink-500">Chạm các khối từ để xếp vào khay câu</p>
           </div>
@@ -227,7 +244,7 @@ function SentenceBuilderInner({ sentence }: { sentence: Sentence }) {
                 {attempt.result && <ScoreBars result={attempt.result} />}
                 <div className="flex flex-wrap justify-center gap-4">
                   <Button variant="outline" onClick={attempt.reset}>Thử lại</Button>
-                  <Button size="lg" pulse onClick={() => nav(next ? `/sentence/${next.id}` : listTo)}>
+                  <Button size="lg" pulse onClick={goNext}>
                     Tiếp theo →
                   </Button>
                 </div>
