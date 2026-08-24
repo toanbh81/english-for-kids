@@ -1,5 +1,6 @@
 import { STORIES, findStory } from './index'
 import { splitWords } from '../../story/timing'
+import { TOPICS } from '../topics'
 
 it('exposes all three stories in order', () => {
   expect(STORIES.map(s => s.id)).toEqual(['little-fox', 'at-the-zoo', 'my-breakfast'])
@@ -38,6 +39,11 @@ it('every retell sentence appears verbatim in some scene, so its narration can b
   for (const story of STORIES) {
     expect(story.scenes.some(scene => scene.text.includes(story.retell.text))).toBe(true)
   }
+})
+
+it('every story has a topic from TOPICS', () => {
+  const topicIds = TOPICS.map(t => t.id)
+  for (const story of STORIES) expect(topicIds).toContain(story.topic)
 })
 
 it('quiz answers are not all at the same index within a story', () => {

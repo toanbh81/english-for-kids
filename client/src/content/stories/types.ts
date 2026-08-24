@@ -1,3 +1,5 @@
+import type { TopicId } from '../topics'
+
 export type StoryWord = { w: string; start?: number; end?: number }
 /** Acting hints for the narration generator (scripts/gen-story.mjs); ignored by the player. */
 export type VoiceHints = {
@@ -29,6 +31,7 @@ export type Story = {
   title: string
   titleVi: string
   emoji: string
+  topic: TopicId
   scenes: Scene[]
   quiz: QuizQ[]
   retell: { text: string; textVi: string }

@@ -15,12 +15,14 @@ function renderTopics() {
 
 beforeEach(() => localStorage.clear())
 
-it('shows the 3 topic cards with unlocked counts and the review card', () => {
+it('shows the 5 topic cards with unlocked counts and the review card', () => {
   renderTopics()
+  expect(screen.getByText('Động vật')).toBeInTheDocument()
   expect(screen.getByText('Đồ ăn')).toBeInTheDocument()
   expect(screen.getByText('Trường học')).toBeInTheDocument()
   expect(screen.getByText('Gia đình')).toBeInTheDocument()
-  expect(screen.getAllByText('0/8 đã mở khoá')).toHaveLength(3)
+  expect(screen.getByText('Thời tiết')).toBeInTheDocument()
+  expect(screen.getAllByText('0/8 đã mở khoá')).toHaveLength(5)
   expect(screen.getByText('Ôn tập hôm nay (0)')).toBeInTheDocument()
 })
 

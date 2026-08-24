@@ -219,8 +219,8 @@ it('"Tiếp theo" goes to the next sentence in SENTENCES order', () => {
 
 it('"Tiếp theo" goes back to the sentence list from the last sentence', () => {
   attemptControl.current = { ...baseAttempt(), result: result85 }
-  renderBuilder('s12')
-  tapInCorrectOrder('s12')
+  renderBuilder('s20')
+  tapInCorrectOrder('s20')
 
   act(() => { attemptControl.onResult?.(result85, null) })
   fireEvent.click(screen.getByRole('button', { name: /Tiếp theo/ }))

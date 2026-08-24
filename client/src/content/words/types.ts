@@ -1,6 +1,6 @@
 export type Word = {
   id: string
-  topic: 'food' | 'school' | 'family'
+  topic: 'animals' | 'food' | 'school' | 'family' | 'weather'
   word: string
   ipa: string
   emoji: string
@@ -10,7 +10,7 @@ export type Word = {
 }
 
 export type WordTopic = {
-  id: 'food' | 'school' | 'family'
+  id: 'animals' | 'food' | 'school' | 'family' | 'weather'
   title: string
   emoji: string
   words: Word[]

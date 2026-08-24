@@ -26,9 +26,11 @@ it('renders a row for every sentence, grouped by topic, linking to /sentence/<id
   expect(within(s1Link).getAllByTestId('star-filled')).toHaveLength(2)
 })
 
-it('groups sentences under food, school and family headings', () => {
+it('groups sentences under all topic headings', () => {
   render(<MemoryRouter><SentenceList /></MemoryRouter>)
+  expect(screen.getByText('Động vật')).toBeInTheDocument()
   expect(screen.getByText('Đồ ăn')).toBeInTheDocument()
   expect(screen.getByText('Trường học')).toBeInTheDocument()
   expect(screen.getByText('Gia đình')).toBeInTheDocument()
+  expect(screen.getByText('Thời tiết')).toBeInTheDocument()
 })

@@ -1,9 +1,13 @@
 import { TOPICS, ALL_WORDS, findTopic, findWord } from './index'
 
-it('has 3 topics of 8 words each, 24 words total', () => {
-  expect(TOPICS).toHaveLength(3)
+it('has 5 topics of 8 words each, 40 words total', () => {
+  expect(TOPICS).toHaveLength(5)
   for (const t of TOPICS) expect(t.words).toHaveLength(8)
-  expect(ALL_WORDS).toHaveLength(24)
+  expect(ALL_WORDS).toHaveLength(40)
+})
+
+it('lists topics in unlock order: animals, food, school, family, weather', () => {
+  expect(TOPICS.map(t => t.id)).toEqual(['animals', 'food', 'school', 'family', 'weather'])
 })
 
 it('has unique word ids formatted as <topic>-<word>', () => {

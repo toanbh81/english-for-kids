@@ -4,11 +4,13 @@ import { SENTENCES } from '../content'
 import { getStars } from '../progress/store'
 import { BackButton, StarRow } from '../components/ui'
 
-const TOPIC_ORDER: Sentence['topic'][] = ['food', 'school', 'family']
+const TOPIC_ORDER: Sentence['topic'][] = ['animals', 'food', 'school', 'family', 'weather']
 const TOPIC_LABEL: Record<Sentence['topic'], { title: string; emoji: string }> = {
+  animals: { title: 'Động vật', emoji: '🐘' },
   food: { title: 'Đồ ăn', emoji: '🍎' },
   school: { title: 'Trường học', emoji: '🎒' },
   family: { title: 'Gia đình', emoji: '👨‍👩‍👧' },
+  weather: { title: 'Thời tiết', emoji: '☀️' },
 }
 
 const ROW =

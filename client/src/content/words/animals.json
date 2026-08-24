@@ -1,0 +1,15 @@
+{
+  "id": "animals",
+  "title": "Động vật",
+  "emoji": "🐘",
+  "words": [
+    { "id": "animals-elephant", "topic": "animals", "word": "elephant", "ipa": "/ˈelɪfənt/", "emoji": "🐘", "audio": "/audio/words/elephant.mp3", "vi": "con voi", "example": "I see a big elephant." },
+    { "id": "animals-giraffe", "topic": "animals", "word": "giraffe", "ipa": "/dʒəˈrɑːf/", "emoji": "🦒", "audio": "/audio/words/giraffe.mp3", "vi": "hươu cao cổ", "example": "The giraffe is tall." },
+    { "id": "animals-fish", "topic": "animals", "word": "fish", "ipa": "/fɪʃ/", "emoji": "🐟", "audio": "/audio/words/fish.mp3", "vi": "con cá", "example": "I see a fish." },
+    { "id": "animals-bird", "topic": "animals", "word": "bird", "ipa": "/bɜːrd/", "emoji": "🐦", "audio": "/audio/words/bird.mp3", "vi": "con chim", "example": "I hear a bird." },
+    { "id": "animals-monkey", "topic": "animals", "word": "monkey", "ipa": "/ˈmʌŋki/", "emoji": "🐵", "audio": "/audio/words/monkey.mp3", "vi": "con khỉ", "example": "The monkey can jump." },
+    { "id": "animals-tiger", "topic": "animals", "word": "tiger", "ipa": "/ˈtaɪɡər/", "emoji": "🐯", "audio": "/audio/words/tiger.mp3", "vi": "con hổ", "example": "The tiger is strong." },
+    { "id": "animals-bear", "topic": "animals", "word": "bear", "ipa": "/beər/", "emoji": "🐻", "audio": "/audio/words/bear.mp3", "vi": "con gấu", "example": "I see a bear." },
+    { "id": "animals-duck", "topic": "animals", "word": "duck", "ipa": "/dʌk/", "emoji": "🦆", "audio": "/audio/words/duck.mp3", "vi": "con vịt", "example": "I like the duck." }
+  ]
+}

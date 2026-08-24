@@ -10,5 +10,13 @@
   { "id": "s9", "topic": "family", "words": ["This", "is", "my", "mother."], "vi": "Đây là mẹ của con.", "audio": "/audio/sentences/s9.mp3" },
   { "id": "s10", "topic": "family", "words": ["My", "father", "is", "tall."], "vi": "Bố của con cao.", "audio": "/audio/sentences/s10.mp3" },
   { "id": "s11", "topic": "family", "words": ["I", "love", "my", "family."], "vi": "Con yêu gia đình của con.", "audio": "/audio/sentences/s11.mp3" },
-  { "id": "s12", "topic": "family", "words": ["My", "sister", "has", "a", "baby", "doll."], "vi": "Chị của con có một con búp bê em bé.", "audio": "/audio/sentences/s12.mp3" }
+  { "id": "s12", "topic": "family", "words": ["My", "sister", "has", "a", "baby", "doll."], "vi": "Chị của con có một con búp bê em bé.", "audio": "/audio/sentences/s12.mp3" },
+  { "id": "s13", "topic": "animals", "words": ["The", "elephant", "is", "big."], "vi": "Con voi to lớn.", "audio": "/audio/sentences/s13.mp3" },
+  { "id": "s14", "topic": "animals", "words": ["I", "see", "a", "little", "bird."], "vi": "Con thấy một chú chim nhỏ.", "audio": "/audio/sentences/s14.mp3" },
+  { "id": "s15", "topic": "animals", "words": ["The", "monkey", "can", "jump."], "vi": "Chú khỉ biết nhảy.", "audio": "/audio/sentences/s15.mp3" },
+  { "id": "s16", "topic": "animals", "words": ["I", "like", "the", "funny", "duck."], "vi": "Con thích chú vịt ngộ nghĩnh.", "audio": "/audio/sentences/s16.mp3" },
+  { "id": "s17", "topic": "weather", "words": ["The", "sun", "is", "yellow."], "vi": "Mặt trời màu vàng.", "audio": "/audio/sentences/s17.mp3" },
+  { "id": "s18", "topic": "weather", "words": ["It", "is", "raining", "today."], "vi": "Hôm nay trời mưa.", "audio": "/audio/sentences/s18.mp3" },
+  { "id": "s19", "topic": "weather", "words": ["I", "see", "a", "rainbow."], "vi": "Con thấy cầu vồng.", "audio": "/audio/sentences/s19.mp3" },
+  { "id": "s20", "topic": "weather", "words": ["It", "is", "cold", "in", "winter."], "vi": "Mùa đông trời lạnh.", "audio": "/audio/sentences/s20.mp3" }
 ]
