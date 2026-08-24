@@ -29,7 +29,14 @@ const TONE: Record<WordTone, { box: string; glyph: string; label: string }> = {
   fix: { box: 'bg-fix-50 border-fix-300 text-fix-700', glyph: '✗', label: 'cần sửa' },
 }
 
-const UNSCORED = 'Chưa chấm được âm — cần kết nối Azure'
+/**
+ * "Not scored" has two different causes and the child can only act on one of them, so it never
+ * gets one blaming sentence about a service it has never heard of. The simple engine cannot score
+ * a single sound at all — no retry changes that, so the copy only invites another go; a full
+ * scoring run that simply missed the sound really can be fixed by saying it again.
+ */
+const UNSCORED_SIMPLE = 'Chế độ đơn giản chưa chấm được âm lẻ — bé thử lại nhé!'
+const UNSCORED_UNHEARD = 'Chưa nghe rõ âm này — thử lại nhé!'
 
 /**
  * Tập âm scores ONE sound, not the whole word: the chip shows the target phoneme's own score,
@@ -64,20 +71,21 @@ function starsFor(scores: WordBest[]): 1 | 2 | 3 {
 
 /** The whole result in one glance: the IPA symbol, how it went, and the number — or, when no
  * engine scored the sound, a plainly neutral card that says so instead of showing a number. */
-function SoundChip({ ipa, score }: { ipa: string; score: number | null }) {
+function SoundChip({ ipa, score, engine }: { ipa: string; score: number | null; engine: 'azure' | 'webspeech' | null }) {
   const CHIP = 'inline-flex min-h-[110px] items-center gap-5 rounded-xl3 border-[4px] px-9 font-display font-extrabold'
 
   if (score === null) {
+    const unscored = engine === 'webspeech' ? UNSCORED_SIMPLE : UNSCORED_UNHEARD
     return (
       <div
         data-testid="sound-chip"
         data-tone="unknown"
-        aria-label={`Âm ${ipa}: ${UNSCORED}`}
+        aria-label={`Âm ${ipa}: ${unscored}`}
         className={`${CHIP} max-w-xl border-line-200 bg-white text-ink-500`}
       >
         <span aria-hidden="true" className="text-[54px] leading-none">/{ipa}/</span>
         <span aria-hidden="true" className="text-[38px] leading-none">?</span>
-        <span aria-hidden="true" className="max-w-[260px] text-[20px] leading-snug">{UNSCORED}</span>
+        <span aria-hidden="true" className="max-w-[280px] text-[20px] leading-snug">{unscored}</span>
       </div>
     )
   }
@@ -218,7 +226,7 @@ function SoundRun({ sound }: { sound: SoundGroup }) {
           <>
             {earned === 3 && <Confetti />}
             <section className="flex flex-col items-center gap-4 pb-2">
-              <SoundChip ipa={ipa} score={score} />
+              <SoundChip ipa={ipa} score={score} engine={attempt.engine} />
               {tone !== 'good' && tip && (
                 <p data-testid="sound-tip" className="max-w-xl rounded-xl3 border-[3px] border-[#FFDF9E] bg-[#FFF6E0] px-6 py-4 text-center text-lg font-bold text-ink-500">
                   👅 {tip}

@@ -34,14 +34,31 @@ vi.mock('../scoring/createScorer', () => ({
 
 import { useSpeakingAttempt } from './useSpeakingAttempt'
 
+const origOnLine = Object.getOwnPropertyDescriptor(Navigator.prototype, 'onLine')
+function setOnLine(value: boolean) {
+  Object.defineProperty(navigator, 'onLine', { value, configurable: true })
+}
+
 afterEach(() => {
   recorderControl.shouldFailStart = false
   recorderControl.start.mockClear()
   recorderControl.opts = undefined
   scorerControl.queue.length = 0
   delete (window as any).webkitSpeechRecognition
+  delete (navigator as unknown as Record<string, unknown>).onLine
+  if (origOnLine) Object.defineProperty(Navigator.prototype, 'onLine', origOnLine)
   vi.useRealTimers()
 })
+
+/** A Web Speech bundle whose recognizer records whether it was ever asked to listen. */
+function webSpeechBundle() {
+  const start = vi.fn()
+  const score = vi.fn(async () => ({
+    overall: 40, accuracy: 40, fluency: 40, completeness: 100, engine: 'webspeech' as const,
+    words: [{ word: 'cat', score: 40, errorType: 'None' as const, phonemes: [] }],
+  }))
+  return { bundle: { engine: 'webspeech', scorer: { start, score } }, start, score }
+}
 
 it('records and scores an attempt, then reset() clears the result', async () => {
   const { result } = renderHook(() => useSpeakingAttempt({ targetText: 'cat' }))
@@ -69,6 +86,68 @@ it('always gives the recorder a second longer than the screen’s auto-stop', as
   const short = renderHook(() => useSpeakingAttempt({ targetText: 'cat', autoStopMs: 6000 }))
   await waitFor(() => expect(short.result.current.micState).toBe('idle'))
   expect(recorderControl.opts).toEqual({ maxMs: 8000 })
+})
+
+/** One failed token fetch used to pin the card to Web Speech for its whole life — the child then
+ * kept getting "not scored" long after the endpoint had recovered. Every attempt asks again. */
+it('re-checks Azure on the next attempt instead of staying on Web Speech', async () => {
+  setOnLine(true)
+  ;(window as any).webkitSpeechRecognition = class {}
+  const ws = webSpeechBundle()
+  scorerControl.queue.push(ws.bundle) // only the card's first scorer falls back
+  const { result } = renderHook(() => useSpeakingAttempt({ targetText: 'cat' }))
+
+  await waitFor(() => expect(result.current.engine).toBe('webspeech'))
+
+  act(() => { result.current.onMic() })
+
+  // The token endpoint answered this time: Azure is adopted before the mic opens, and the
+  // recognizer — which cannot score a single sound — is never started.
+  await waitFor(() => expect(result.current.engine).toBe('azure'))
+  expect(ws.start).not.toHaveBeenCalled()
+  expect(recorderControl.start).toHaveBeenCalledTimes(1)
+
+  // …and the freshly adopted scorer, not the one this attempt started with, is what scores it.
+  act(() => { result.current.onMic() })
+  await waitFor(() => expect(result.current.result?.overall).toBe(85))
+  expect(ws.score).not.toHaveBeenCalled()
+})
+
+it('keeps Web Speech when the token endpoint is still down', async () => {
+  setOnLine(true)
+  ;(window as any).webkitSpeechRecognition = class {}
+  const first = webSpeechBundle()
+  const second = webSpeechBundle()
+  scorerControl.queue.push(first.bundle, second.bundle)
+  const { result } = renderHook(() => useSpeakingAttempt({ targetText: 'cat' }))
+
+  await waitFor(() => expect(result.current.engine).toBe('webspeech'))
+
+  act(() => { result.current.onMic() })
+
+  await waitFor(() => expect(first.start).toHaveBeenCalledTimes(1))
+  expect(result.current.engine).toBe('webspeech')
+  expect(recorderControl.start).not.toHaveBeenCalled()
+
+  act(() => { result.current.onMic() })
+  await waitFor(() => expect(result.current.result?.overall).toBe(40))
+  expect(first.score).toHaveBeenCalledTimes(1)
+})
+
+/** Offline there is nothing to re-check, and the round trip would only delay the mic. */
+it('does not re-check Azure while the browser is offline', async () => {
+  setOnLine(false)
+  ;(window as any).webkitSpeechRecognition = class {}
+  const ws = webSpeechBundle()
+  scorerControl.queue.push(ws.bundle) // a second createScorer() call would hand back Azure
+  const { result } = renderHook(() => useSpeakingAttempt({ targetText: 'cat' }))
+
+  await waitFor(() => expect(result.current.engine).toBe('webspeech'))
+
+  act(() => { result.current.onMic() })
+
+  expect(ws.start).toHaveBeenCalledTimes(1) // synchronously: no token round trip in the way
+  expect(result.current.engine).toBe('webspeech')
 })
 
 it('shows a friendly error when mic permission is denied', async () => {

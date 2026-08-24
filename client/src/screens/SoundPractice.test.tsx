@@ -112,10 +112,26 @@ it('says the sound was not scored when the engine reports no phoneme detail', ()
 
   const chip = screen.getByTestId('sound-chip')
   expect(chip).toHaveAttribute('data-tone', 'unknown')
-  expect(chip).toHaveTextContent('Chưa chấm được âm — cần kết nối Azure')
+  // Full scoring ran and simply missed the sound — saying it again really can fix that.
+  expect(chip).toHaveTextContent('Chưa nghe rõ âm này — thử lại nhé!')
+  expect(chip).toHaveAttribute('aria-label', 'Âm θ: Chưa nghe rõ âm này — thử lại nhé!')
   expect(chip.textContent).not.toMatch(/\d/)
   // The word's own score is still reported — that much was measured.
   expect(screen.getByText(/70 điểm/)).toBeInTheDocument()
+})
+
+/** The simple engine reports no phoneme detail at all, so "try again" is the whole truth there —
+ * and the child never reads the name of a cloud service it has no way to act on. */
+it('blames neither the connection nor the child when the simple engine cannot score a sound', () => {
+  mic.engine = 'webspeech'
+  renderSound()
+  score(ws(70))
+
+  const chip = screen.getByTestId('sound-chip')
+  expect(chip).toHaveAttribute('data-tone', 'unknown')
+  expect(chip).toHaveTextContent('Chế độ đơn giản chưa chấm được âm lẻ — bé thử lại nhé!')
+  expect(chip).toHaveAttribute('aria-label', 'Âm θ: Chế độ đơn giản chưa chấm được âm lẻ — bé thử lại nhé!')
+  expect(document.body.textContent).not.toMatch(/azure/i)
 })
 
 it('never fabricates a phoneme score on the Web Speech fallback, and caps such a run at 2 stars', () => {

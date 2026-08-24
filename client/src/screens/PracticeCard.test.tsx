@@ -214,13 +214,15 @@ describe('Web Speech engine', () => {
   it('scores via the recognizer without ever starting MediaRecorder', async () => {
     ;(window as any).webkitSpeechRecognition = class {}
     const scorer = webSpeechScorer()
-    scorerControl.queue.push({ engine: 'webspeech', scorer })
+    // Twice: every attempt re-checks Azure first, and the token endpoint is still down here.
+    scorerControl.queue.push({ engine: 'webspeech', scorer }, { engine: 'webspeech', scorer })
     renderCard()
     await waitFor(() => expect(screen.getByRole('button', { name: /bấm để nói/i })).toBeEnabled())
     expect(screen.getByText('chế độ đơn giản')).toBeInTheDocument()
 
     vi.useFakeTimers()
     fireEvent.click(screen.getByRole('button', { name: /bấm để nói/i }))
+    await act(async () => { await vi.advanceTimersByTimeAsync(0) }) // the re-check resolves
     expect(scorer.start).toHaveBeenCalledTimes(1)
     expect(screen.getByRole('button', { name: /dừng/i })).toBeInTheDocument() // wsRecording drives the mic button
     await act(async () => { await vi.advanceTimersByTimeAsync(6000) })
@@ -232,7 +234,7 @@ describe('Web Speech engine', () => {
   })
 
   it('explains that the browser lacks speech recognition instead of blaming the mic', async () => {
-    scorerControl.queue.push({ engine: 'webspeech', scorer: webSpeechScorer() })
+    scorerControl.queue.push({ engine: 'webspeech', scorer: webSpeechScorer() }, { engine: 'webspeech', scorer: webSpeechScorer() })
     renderCard() // no window.webkitSpeechRecognition installed
     await waitFor(() => expect(screen.getByRole('button', { name: /bấm để nói/i })).toBeEnabled())
     fireEvent.click(screen.getByRole('button', { name: /bấm để nói/i }))
