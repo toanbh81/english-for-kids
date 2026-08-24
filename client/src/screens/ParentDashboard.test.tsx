@@ -3,6 +3,8 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import type { ReactElement } from 'react'
 import type { ActivityEvent } from '../progress/activity'
+import { getBand } from '../progress/band'
+import { getLessonLength } from '../progress/lesson'
 import type { Recording } from '../progress/recordings'
 
 // The recordings store round-trips Blobs through IndexedDB via structuredClone, which jsdom's
@@ -256,5 +258,53 @@ describe('ParentDashboard', () => {
 
     expect(localStorage.getItem('speakup.stars')).not.toBeNull()
     expect(recordingsMock.clearRecordings).not.toHaveBeenCalled()
+  })
+
+  it('renders the current band and lesson length highlighted on mount', async () => {
+    localStorage.setItem('speakup.band', JSON.stringify({ value: 3, mode: 'manual' }))
+    localStorage.setItem('speakup.lesson.length', 'long')
+
+    renderWithRouter(<ParentDashboard />)
+    await flush()
+
+    expect(screen.getByRole('button', { name: '3' })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByRole('button', { name: '1' })).toHaveAttribute('aria-pressed', 'false')
+    expect(screen.getByRole('button', { name: 'Tự động' })).toHaveAttribute('aria-pressed', 'false')
+    expect(screen.getByRole('button', { name: 'Dài ~18 phút' })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByRole('button', { name: 'Vừa ~12 phút' })).toHaveAttribute('aria-pressed', 'false')
+  })
+
+  it('pressing a band button persists the value and switches to manual mode', async () => {
+    renderWithRouter(<ParentDashboard />)
+    await flush()
+
+    fireEvent.click(screen.getByRole('button', { name: '4' }))
+
+    expect(getBand()).toEqual({ value: 4, mode: 'manual' })
+    expect(screen.getByRole('button', { name: '4' })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByRole('button', { name: 'Tự động' })).toHaveAttribute('aria-pressed', 'false')
+  })
+
+  it('toggling "Tự động" back on resumes auto mode from the current band value', async () => {
+    localStorage.setItem('speakup.band', JSON.stringify({ value: 2, mode: 'manual' }))
+
+    renderWithRouter(<ParentDashboard />)
+    await flush()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Tự động' }))
+
+    expect(getBand()).toEqual({ value: 2, mode: 'auto' })
+    expect(screen.getByRole('button', { name: 'Tự động' })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByRole('button', { name: '2' })).toHaveAttribute('aria-pressed', 'true')
+  })
+
+  it('pressing a length chip persists the lesson length', async () => {
+    renderWithRouter(<ParentDashboard />)
+    await flush()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Ngắn ~8 phút' }))
+
+    expect(getLessonLength()).toBe('short')
+    expect(screen.getByRole('button', { name: 'Ngắn ~8 phút' })).toHaveAttribute('aria-pressed', 'true')
   })
 })

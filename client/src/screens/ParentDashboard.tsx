@@ -2,7 +2,11 @@ import { useEffect, useState } from 'react'
 import type { ChangeEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { getActivity, minutesPerDay, averageScoreByKind, weakPhonemes, clearActivity } from '../progress/activity'
+import { getBand, setBandAuto, setBandValue } from '../progress/band'
+import type { Band } from '../progress/band'
 import { clearLeitner } from '../progress/leitner'
+import { LESSON_LENGTHS, getLessonLength, setLessonLength } from '../progress/lesson'
+import type { LessonLength } from '../progress/lesson'
 import { listRecordings, clearRecordings } from '../progress/recordings'
 import type { Recording } from '../progress/recordings'
 import { clearStars } from '../progress/store'
@@ -13,6 +17,12 @@ import { Button, Card } from '../components/ui'
 
 const KIND_LABEL = { speak: 'Nói', word: 'Từ vựng', sentence: 'Ghép câu' } as const
 const LIMIT_CHIPS = [15, 20, 30] as const
+const BAND_VALUES = [1, 2, 3, 4, 5] as const satisfies readonly Band[]
+const LENGTH_LABEL: Record<LessonLength, string> = {
+  short: 'Ngắn ~8 phút',
+  medium: 'Vừa ~12 phút',
+  long: 'Dài ~18 phút',
+}
 
 function formatDayLabel(day: string): string {
   const [, m, d] = day.split('-')
@@ -40,6 +50,8 @@ export function ParentDashboard({ onLock }: Props) {
   // snapshot doubles as the reload key for the recordings list.
   const [snapshot, setSnapshot] = useState(() => ({ events: getActivity(), now: Date.now() }))
   const [limit, setLimit] = useState<string>(() => String(getLimitMinutes()))
+  const [band, setBand] = useState(() => getBand())
+  const [length, setLength] = useState<LessonLength>(() => getLessonLength())
 
   const { events, now } = snapshot
   const days = minutesPerDay(14, now, events)
@@ -76,6 +88,21 @@ export function ParentDashboard({ onLock }: Props) {
 
   function handleLimitChip(n: number) {
     setLimit(String(setLimitMinutes(n)))
+  }
+
+  function handleBandClick(value: Band) {
+    setBandValue(value)
+    setBand(getBand())
+  }
+
+  function handleBandAuto() {
+    setBandAuto()
+    setBand(getBand())
+  }
+
+  function handleLengthClick(value: LessonLength) {
+    setLessonLength(value)
+    setLength(getLessonLength())
   }
 
   async function handleReset() {
@@ -239,6 +266,62 @@ export function ParentDashboard({ onLock }: Props) {
                 />
                 <span className="font-semibold text-ink-500">phút / ngày</span>
               </label>
+            </Card>
+
+            <Card className="p-6">
+              <h2 className="mb-3 font-display text-xl font-extrabold text-ink-900">Bài học</h2>
+
+              <div className="mb-2 flex items-center justify-between">
+                <span className="text-sm font-bold text-ink-500">Độ khó</span>
+                <button
+                  type="button"
+                  onClick={handleBandAuto}
+                  aria-pressed={band.mode === 'auto'}
+                  className={`min-h-[44px] rounded-xl2 px-4 font-display text-sm font-extrabold active:translate-y-[2px] ${
+                    band.mode === 'auto' ? 'bg-teal-500 text-white shadow-chunky-teal' : 'border-2 border-line-200 bg-cream-50 text-ink-500'
+                  }`}
+                >
+                  Tự động
+                </button>
+              </div>
+              <div className="mb-4 flex gap-2">
+                {BAND_VALUES.map(n => {
+                  const active = band.value === n
+                  return (
+                    <button
+                      key={n}
+                      type="button"
+                      onClick={() => handleBandClick(n)}
+                      aria-pressed={active}
+                      className={`min-h-[64px] flex-1 rounded-xl2 font-display text-base font-extrabold active:translate-y-[2px] ${
+                        active ? 'bg-coral-500 text-white shadow-chunky-coral' : 'border-2 border-line-200 bg-cream-50 text-ink-500'
+                      }`}
+                    >
+                      {n}
+                    </button>
+                  )
+                })}
+              </div>
+
+              <span className="mb-2 block text-sm font-bold text-ink-500">Thời lượng</span>
+              <div className="flex gap-2">
+                {LESSON_LENGTHS.map(value => {
+                  const active = length === value
+                  return (
+                    <button
+                      key={value}
+                      type="button"
+                      onClick={() => handleLengthClick(value)}
+                      aria-pressed={active}
+                      className={`min-h-[64px] flex-1 rounded-xl2 font-display text-sm font-extrabold active:translate-y-[2px] ${
+                        active ? 'bg-coral-500 text-white shadow-chunky-coral' : 'border-2 border-line-200 bg-cream-50 text-ink-500'
+                      }`}
+                    >
+                      {LENGTH_LABEL[value]}
+                    </button>
+                  )
+                })}
+              </div>
             </Card>
           </div>
         </div>
