@@ -2,6 +2,7 @@ import { Link, useSearchParams } from 'react-router-dom'
 import { SENTENCES } from '../content'
 import { TOPICS, findTopic } from '../content/topics'
 import { getStars } from '../progress/store'
+import { topicUnlocked } from '../progress/topicProgress'
 import { BackButton, StarRow } from '../components/ui'
 
 const ROW =
@@ -12,7 +13,10 @@ export function SentenceList() {
   // `?topic=<id>` comes from a topic hub. An unknown id is treated as no filter at all, so a stale
   // deep link still shows the child something to do.
   const topic = findTopic(params.get('topic') ?? '')
-  const shown = topic ? [topic] : TOPICS
+  // Unfiltered, this screen is a full index of the game's sentences — so it lists only the topics
+  // the map has opened, or it would be a way around the island unlocks. A hub that links in with
+  // its own `?topic=` has already made that decision.
+  const shown = topic ? [topic] : TOPICS.filter(t => topicUnlocked(t.id))
 
   return (
     <main className="h-full overflow-y-auto bg-cream-50 p-6">

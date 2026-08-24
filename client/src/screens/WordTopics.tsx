@@ -1,17 +1,17 @@
-import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { TOPICS, ALL_WORDS } from '../content/words'
 import { getBox, dueWords } from '../progress/leitner'
-import { getActivity, missionStatus } from '../progress/activity'
+import { topicUnlocked } from '../progress/topicProgress'
 import { BackButton, CARD_LINK, Chip } from '../components/ui'
 
-const WORD_GOAL = 3
-
+/**
+ * The flat vocabulary index, kept from phases 1–6 as the way into the review deck. Since Phase 7
+ * the map decides what a child may open, so this screen shows only the topics the map has already
+ * unlocked — otherwise it was a side door straight into locked content.
+ */
 export function WordTopics() {
   const dueCount = dueWords().filter(id => ALL_WORDS.some(w => w.id === id)).length
-  // Read the log once per mount, like Home and Daily Mission do.
-  const [{ events, now }] = useState(() => ({ events: getActivity(), now: Date.now() }))
-  const doneToday = Math.min(missionStatus(now, events).word, WORD_GOAL)
+  const topics = TOPICS.filter(t => topicUnlocked(t.id))
 
   return (
     <main className="h-full overflow-y-auto bg-cream-50 p-6">
@@ -19,9 +19,8 @@ export function WordTopics() {
         <BackButton to="/" label="Về nhà" className="self-start" />
 
         <header className="text-center">
-          <h1 className="flex items-center justify-center gap-3 font-display text-[40px] font-extrabold leading-tight text-ink-900">
-            <span>Từ mới hôm nay 🧩</span>
-            <Chip tone="teal">{doneToday}/{WORD_GOAL}</Chip>
+          <h1 className="font-display text-[40px] font-extrabold leading-tight text-ink-900">
+            Từ mới hôm nay 🧩
           </h1>
           <p className="mt-1 text-lg font-bold text-ink-500">Chạm thẻ để lật — nói đúng để mở khoá!</p>
         </header>
@@ -32,7 +31,7 @@ export function WordTopics() {
             {/* The count rides inside the chip's own text so the label reads as one phrase. */}
             <Chip tone="sun" className="text-[22px]">Ôn tập hôm nay ({dueCount})</Chip>
           </Link>
-          {TOPICS.map(t => {
+          {topics.map(t => {
             const unlocked = t.words.filter(w => getBox(w.id) > 0).length
             return (
               <Link key={t.id} to={`/words/${t.id}`} className={CARD_LINK}>

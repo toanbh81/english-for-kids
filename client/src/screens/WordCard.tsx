@@ -6,7 +6,7 @@ import type { PronunciationResult } from '../scoring/types'
 import { findTopic, findWord } from '../content/words'
 import { shuffleTiles } from '../content/shuffle'
 import { getBox, promote, demote, dueWords } from '../progress/leitner'
-import { logActivity, missionStatus } from '../progress/activity'
+import { logActivity } from '../progress/activity'
 import { saveRecording } from '../progress/recordings'
 import { playUrl } from '../audio/player'
 import { speakText } from '../story/speak'
@@ -29,9 +29,6 @@ function pickDistractors(word: Word, topic: string): Word[] {
   const others = (findTopic(topic)?.words ?? []).filter(w => w.id !== word.id)
   return shuffleTiles(others, `${word.id}-distractors`).slice(0, 2)
 }
-
-/** The daily mission asks for 3 new words; the header counts today's progress towards it. */
-const WORD_TARGET = 3
 
 /** Both faces sit on top of each other inside the rotating shell; only the one facing the
  * child is painted (`backface-visibility`). */
@@ -70,9 +67,6 @@ export function WordCard() {
 
 function WordCardInner({ word, topic, isReview, list }: { word: Word; topic: string; isReview: boolean; list: Word[] }) {
   const nav = useNavigate()
-  // Read once on mount: the counter is the day's tally as the child opened this card, so it does
-  // not tick up mid-attempt and distract from the word in front of them.
-  const [wordsToday] = useState(() => Math.min(missionStatus().word, WORD_TARGET))
   const [flipped, setFlipped] = useState(false)
   const [audioMissing, setAudioMissing] = useState(false)
   const [outcome, setOutcome] = useState<'unlocked' | 'retry' | null>(null)
@@ -133,7 +127,10 @@ function WordCardInner({ word, topic, isReview, list }: { word: Word; topic: str
 
   const index = list.findIndex(w => w.id === word.id)
   const next = index >= 0 ? list[index + 1] : undefined
-  const backTo = isReview ? '/words/review' : `/words/${topic}`
+  // A map topic belongs to its island, so leaving the last card of a deck lands there rather than
+  // on the flat word index, which no longer lists locked topics at all.
+  const backTo = isReview ? '/words/review' : `/topic/${topic}`
+  const backLabel = isReview ? 'Ôn tập' : findTopic(topic)?.title ?? 'Từ vựng'
 
   /** The outcome banner belongs to this attempt, so clear it with the attempt — otherwise
    * "🔓 Mở khoá!" stays on screen while the child records again. */
@@ -182,12 +179,9 @@ function WordCardInner({ word, topic, isReview, list }: { word: Word; topic: str
     <main className="h-full overflow-y-auto bg-cream-50 px-6 py-5">
       <div className="mx-auto flex min-h-full w-full max-w-4xl flex-col items-center gap-4">
         <header className="flex w-full items-center justify-between gap-4">
-          <BackButton to={backTo} label={isReview ? 'Ôn tập' : 'Từ vựng'} />
+          <BackButton to={backTo} label={backLabel} />
           <div className="flex flex-1 flex-col items-center gap-1">
-            <div className="flex items-center gap-3">
-              <h1 className="font-display text-[30px] font-extrabold leading-none text-ink-900">Từ mới hôm nay 🧩</h1>
-              <Chip tone="sun">{wordsToday}/{WORD_TARGET}</Chip>
-            </div>
+            <h1 className="font-display text-[30px] font-extrabold leading-none text-ink-900">Từ mới hôm nay 🧩</h1>
             <p className="font-display text-lg font-extrabold text-ink-500">Chạm thẻ để lật — nói đúng để mở khoá!</p>
           </div>
           <span className="min-w-[66px] text-right text-base font-bold text-ink-300">

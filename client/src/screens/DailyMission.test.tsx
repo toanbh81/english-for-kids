@@ -1,7 +1,7 @@
 import { render, screen, within } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { logActivity } from '../progress/activity'
-import { getBand } from '../progress/band'
+import { getBand, setBandValue } from '../progress/band'
 import { getLesson } from '../progress/lesson'
 import { DailyMission } from './DailyMission'
 
@@ -49,6 +49,20 @@ it('shows the band chip and the done count', () => {
 
   expect(screen.getByText(`Bậc ⭐ ${getBand().value}`)).toBeInTheDocument()
   expect(screen.getByText(`2/${lesson.items.length}`)).toBeInTheDocument()
+})
+
+// The chip labels the items on screen, and those were chosen when the lesson was generated. A
+// parent raising the difficulty at lunchtime changes tomorrow's lesson, not today's list.
+it('shows the band the lesson was built at, not a parent override made since', () => {
+  setBandValue(2)
+  const lesson = completeLesson(NOW)
+  expect(lesson.band).toBe(2)
+
+  setBandValue(5)
+  renderMission()
+
+  expect(screen.getByText('Bậc ⭐ 2')).toBeInTheDocument()
+  expect(screen.queryByText('Bậc ⭐ 5')).not.toBeInTheDocument()
 })
 
 it('ticks off the items already done and rings the first undone one', () => {

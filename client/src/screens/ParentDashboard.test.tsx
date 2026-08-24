@@ -319,6 +319,13 @@ describe('ParentDashboard', () => {
     expect(screen.getByRole('button', { name: 'Bậc 2' })).toHaveAttribute('aria-pressed', 'true')
   })
 
+  it('says when a difficulty or length change takes effect', async () => {
+    renderWithRouter(<ParentDashboard />)
+    await flush()
+
+    expect(screen.getByText('Áp dụng từ bài học ngày mai.')).toBeInTheDocument()
+  })
+
   it('pressing a length chip persists the lesson length', async () => {
     renderWithRouter(<ParentDashboard />)
     await flush()

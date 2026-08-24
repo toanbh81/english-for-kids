@@ -332,6 +332,10 @@ export function ParentDashboard({ onLock }: Props) {
                   )
                 })}
               </div>
+
+              {/* Today's lesson is generated once and then frozen, so a change made now shows up
+                * tomorrow — without this line the buttons look broken. */}
+              <p className="mt-3 text-sm font-semibold text-ink-500">Áp dụng từ bài học ngày mai.</p>
             </Card>
           </div>
         </div>

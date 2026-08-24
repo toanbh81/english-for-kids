@@ -35,6 +35,7 @@ vi.mock('../progress/recordings', () => recordingsMock)
 
 import { WordCard } from './WordCard'
 import { WordList } from './WordList'
+import { findTopic } from '../content/words'
 import { getBox, promote } from '../progress/leitner'
 import { logActivity } from '../progress/activity'
 
@@ -55,6 +56,7 @@ function renderCard(topic: string, wordId: string) {
       <Routes>
         <Route path="/words/:topic/:wordId" element={<WordCard />} />
         <Route path="/words/:topic" element={<WordList />} />
+        <Route path="/topic/:id" element={<div data-testid="topic-hub" />} />
       </Routes>
     </MemoryRouter>,
   )
@@ -80,20 +82,19 @@ it('shows a not-found message for an unknown word id', () => {
   expect(screen.getByText('Không tìm thấy từ')).toBeInTheDocument()
 })
 
-it('heads the card with today\'s word count out of the mission target of 3', () => {
+// The header used to carry an "x/3" counter left over from the legacy word mission. The daily
+// lesson owns that count now, and a second copy here only argued with the mission screen.
+it('heads the card without a mission counter, and goes back to the topic island', () => {
   logActivity({ ts: Date.now(), kind: 'word', id: 'food-banana', score: 80 })
-  logActivity({ ts: Date.now(), kind: 'word', id: 'food-bread', score: 20 }) // too low to count
   renderCard('food', 'food-apple')
 
   expect(screen.getByText('Từ mới hôm nay 🧩')).toBeInTheDocument()
-  expect(screen.getByText('1/3')).toBeInTheDocument()
   expect(screen.getByText('Chạm thẻ để lật — nói đúng để mở khoá!')).toBeInTheDocument()
-})
+  expect(screen.queryByText('1/3')).not.toBeInTheDocument()
 
-it('caps the header counter at the mission target', () => {
-  for (let i = 0; i < 5; i++) logActivity({ ts: Date.now(), kind: 'word', id: `w-${i}`, score: 80 })
-  renderCard('food', 'food-apple')
-  expect(screen.getByText('3/3')).toBeInTheDocument()
+  const back = screen.getAllByRole('link').find(a => a.getAttribute('href') === '/topic/food')
+  expect(back).toBeDefined()
+  expect(back).toHaveAttribute('aria-label', findTopic('food')!.title)
 })
 
 it('shows the front face by default and flips to the Vietnamese/example face on tap', () => {
@@ -253,7 +254,7 @@ it('Tiếp theo goes to the next word in topic order', () => {
   expect(screen.getByText('banana')).toBeInTheDocument()
 })
 
-it('Tiếp theo goes back to the topic list from the last word', () => {
+it('Tiếp theo goes back to the topic island from the last word', () => {
   attemptControl.current = { ...baseAttempt(), result: resultHigh }
   renderCard('food', 'food-cake')
   passGuess('bánh ngọt')
@@ -261,7 +262,7 @@ it('Tiếp theo goes back to the topic list from the last word', () => {
   act(() => { attemptControl.onResult?.(resultHigh, null) })
   fireEvent.click(screen.getByRole('button', { name: /Tiếp theo/ }))
 
-  expect(screen.getByText('Đồ ăn')).toBeInTheDocument()
+  expect(screen.getByTestId('topic-hub')).toBeInTheDocument()
 })
 
 it('shows a simple-mode label for the webspeech engine', () => {

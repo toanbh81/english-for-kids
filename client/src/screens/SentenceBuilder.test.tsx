@@ -81,6 +81,13 @@ it('shows a not-found message for an unknown sentence id', () => {
   expect(screen.getByRole('link', { name: /Ghép câu/ })).toHaveAttribute('href', '/sentences')
 })
 
+// The unfiltered list only shows unlocked topics now, so a back link that dropped the filter could
+// land the child on a different topic's sentences than the one they came from.
+it('keeps the sentence topic on the way back to the list', () => {
+  renderBuilder('s1') // food
+  expect(screen.getByRole('link', { name: /Ghép câu/ })).toHaveAttribute('href', '/sentences?topic=food')
+})
+
 it('shows the Vietnamese cue and all word tiles in the pool', () => {
   renderBuilder('s1')
   const sentence = findSentence('s1')!

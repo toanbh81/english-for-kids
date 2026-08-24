@@ -144,6 +144,9 @@ function SentenceBuilderInner({ sentence }: { sentence: Sentence }) {
   const index = SENTENCES.findIndex(s => s.id === sentence.id)
   const next = index >= 0 ? SENTENCES[index + 1] : undefined
   const total = sentence.words.length
+  // Both ways out keep the topic: the unfiltered list only shows unlocked topics now, so dropping
+  // the filter would land the child on a different topic's sentences than the one they came from.
+  const listTo = `/sentences?topic=${sentence.topic}`
 
   const mood: FoxyMood = attempt.micState === 'recording' ? 'listening' : correct ? 'cheer' : 'idle'
   const say = correct ? 'Đúng rồi! 🎉' : wrong ? 'Thử lại nhé' : undefined
@@ -152,7 +155,7 @@ function SentenceBuilderInner({ sentence }: { sentence: Sentence }) {
     <main className="h-full overflow-y-auto bg-cream-50 px-6 py-5">
       <div className="mx-auto flex min-h-full w-full max-w-4xl flex-col items-center gap-4">
         <header className="flex w-full items-center justify-between gap-4">
-          <BackButton to="/sentences" label="Ghép câu" />
+          <BackButton to={listTo} label="Ghép câu" />
           <div className="text-center">
             <h1 className="font-display text-[36px] font-extrabold leading-tight text-ink-900">Ghép câu nào! 🧱</h1>
             <p className="mt-1 text-lg font-bold text-ink-500">Chạm các khối từ để xếp vào khay câu</p>
@@ -224,7 +227,7 @@ function SentenceBuilderInner({ sentence }: { sentence: Sentence }) {
                 {attempt.result && <ScoreBars result={attempt.result} />}
                 <div className="flex flex-wrap justify-center gap-4">
                   <Button variant="outline" onClick={attempt.reset}>Thử lại</Button>
-                  <Button size="lg" pulse onClick={() => nav(next ? `/sentence/${next.id}` : '/sentences')}>
+                  <Button size="lg" pulse onClick={() => nav(next ? `/sentence/${next.id}` : listTo)}>
                     Tiếp theo →
                   </Button>
                 </div>
