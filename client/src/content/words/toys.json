@@ -1,0 +1,15 @@
+{
+  "id": "toys",
+  "title": "Đồ chơi",
+  "emoji": "🧸",
+  "words": [
+    { "id": "toys-ball", "topic": "toys", "word": "ball", "ipa": "/bɔːl/", "emoji": "⚽", "audio": "/audio/words/ball.mp3", "vi": "quả bóng", "example": "I play with my ball." },
+    { "id": "toys-doll", "topic": "toys", "word": "doll", "ipa": "/dɑːl/", "emoji": "🪆", "audio": "/audio/words/doll.mp3", "vi": "búp bê", "example": "My doll is pretty." },
+    { "id": "toys-kite", "topic": "toys", "word": "kite", "ipa": "/kaɪt/", "emoji": "🪁", "audio": "/audio/words/kite.mp3", "vi": "con diều", "example": "I fly my kite." },
+    { "id": "toys-car", "topic": "toys", "word": "car", "ipa": "/kɑːr/", "emoji": "🚗", "audio": "/audio/words/car.mp3", "vi": "ô tô", "example": "My car is fast." },
+    { "id": "toys-robot", "topic": "toys", "word": "robot", "ipa": "/ˈroʊbɑːt/", "emoji": "🤖", "audio": "/audio/words/robot.mp3", "vi": "rô bốt", "example": "My robot can walk." },
+    { "id": "toys-drum", "topic": "toys", "word": "drum", "ipa": "/drʌm/", "emoji": "🥁", "audio": "/audio/words/drum.mp3", "vi": "cái trống", "example": "I play the drum." },
+    { "id": "toys-puzzle", "topic": "toys", "word": "puzzle", "ipa": "/ˈpʌzl/", "emoji": "🧩", "audio": "/audio/words/puzzle.mp3", "vi": "trò ghép hình", "example": "I like this puzzle." },
+    { "id": "toys-balloon", "topic": "toys", "word": "balloon", "ipa": "/bəˈluːn/", "emoji": "🎈", "audio": "/audio/words/balloon.mp3", "vi": "bóng bay", "example": "My balloon is red." }
+  ]
+}

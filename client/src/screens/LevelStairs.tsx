@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom'
 import { LEVELS, PAIRS, SENTENCE_STARS, SOUNDS, STORY_VOICE } from '../content'
-import { getStars } from '../progress/store'
+import { getStars, soundStars as starsForSound } from '../progress/store'
 import { Foxy } from '../components/Foxy'
 import { BackButton, Chip, StarRow } from '../components/ui'
 
@@ -27,15 +27,16 @@ function levelStars(id: string): Stars {
   return cards.reduce<Stars>((best, c) => (getStars(c.id) > best ? getStars(c.id) : best), 0)
 }
 
-/** Tập âm keeps its stars per *sound*, not per card — a card only clears once all 3 of its
- * sound's words score high, so the step's stars are the best across the 9 `sound:<ph>` keys.
+/** Tập âm keeps its stars per *sound*, not per card — a sound only clears once all 3 of its words
+ * score high (Phase 9 derives that from the `sword:<cardId>` keys, with the retired `sound:<ph>`
+ * key as a floor), so the step's stars are the best across the 9 sounds.
  *
- * Phase 5 is what moved them there; before that each `sz-*` card had its own star. Those keys are
- * still sitting in a returning child's storage, and reading only the new ones emptied the step and
- * looked like the app had wiped their progress — so the step takes the best of both. */
+ * Phase 5 is what moved them off the cards; before that each `sz-*` card had its own star. Those
+ * keys are still sitting in a returning child's storage, and reading only the new ones emptied the
+ * step and looked like the app had wiped their progress — so the step takes the best of both. */
 function soundStars(): Stars {
   const bySound = SOUNDS.reduce<Stars>((best, s) => {
-    const stars = getStars(`sound:${s.ph}`)
+    const stars = starsForSound(s.ph)
     return stars > best ? stars : best
   }, 0)
   const legacy = levelStars('sound-zoo')

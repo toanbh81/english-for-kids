@@ -195,7 +195,11 @@ it('every query reads a passed events array instead of localStorage', () => {
 /** Complete every item of a lesson the way the real screens log it. */
 function playLesson(lesson: Lesson, at: number) {
   lesson.items.forEach((item, i) => {
-    const id = item.route.startsWith('/sound/') ? findSound(item.id)!.cards[0].id : item.id
+    // A Phase 9 sound step already carries the card id SoundPractice logs; a step stored in the
+    // older whole-group shape carries the phoneme, and any card of the group completes it. Gated on
+    // the route, so a short id of some other kind can never be mistaken for a phoneme key.
+    const group = item.route.startsWith('/sound/') ? findSound(item.id) : undefined
+    const id = group?.cards[0].id ?? item.id
     logActivity({ ts: at + i, kind: item.activity, id, score: 85 })
   })
 }

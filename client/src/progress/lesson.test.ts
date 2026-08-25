@@ -1,14 +1,17 @@
 import {
-  RECIPES, getLesson, getLessonLength, lessonDays, lessonForDay, lessonStatus, setLessonLength,
+  RECIPES, clearLessons, getLesson, getLessonLength, lessonDays, lessonForDay, lessonStatus,
+  setLessonLength,
 } from './lesson'
-import type { LessonLength } from './lesson'
+import type { Lesson, LessonItem, LessonLength } from './lesson'
 import { getActivity, logActivity } from './activity'
 import type { ActivityKind } from './activity'
 import { setBandAuto, setBandValue } from './band'
 import { promote } from './leitner'
-import { setStars } from './store'
-import { findSound } from '../content'
-import { TOPICS as WORD_DECKS } from '../content/words'
+import { getStars, setStars } from './store'
+import { unlockedTopics, unlockedWords } from './topicProgress'
+import { SENTENCES, SOUNDS, findSentence, findSound } from '../content'
+import { STORIES } from '../content/stories'
+import { TOPICS as WORD_DECKS, findWord } from '../content/words'
 import type { TopicId } from '../content/topics'
 import type { Band } from './band'
 
@@ -33,8 +36,49 @@ const kinds = (now = BASE) => {
     listen: items.filter(i => i.kind === 'listen').length,
     speak: items.filter(i => i.kind === 'speak').length,
     word: items.filter(i => i.kind === 'word').length,
+    sentence: items.filter(i => i.kind === 'sentence').length,
     review: items.filter(i => i.kind === 'review').length,
   }
+}
+
+/** The islands a lesson's content steps (🧩 words + 🧱 sentences) actually drew from. */
+function contentTopics(lesson: Lesson): TopicId[] {
+  const topics = lesson.items.flatMap(i =>
+    i.kind === 'word' ? [findWord(i.id)!.topic]
+      : i.kind === 'sentence' ? [findSentence(i.id)!.topic]
+        : [])
+  return [...new Set(topics)]
+}
+
+/** Every island a lesson taught from, whichever slot did the teaching — what the rotation reads. */
+function taughtTopics(lesson: Lesson): TopicId[] {
+  const topics = lesson.items.flatMap(i =>
+    i.activity === 'word' ? [findWord(i.id)!.topic]
+      : i.activity === 'sentence' ? [findSentence(i.id)?.topic ?? []].flat()
+        : [])
+  return [...new Set(topics)]
+}
+
+/** Opens `animals … colors` by learning six words of each earlier deck: six islands unlocked. */
+function openSixTopics() {
+  for (const t of ['animals', 'food', 'school', 'family', 'weather'] as TopicId[]) learn(t, 6)
+}
+
+const firstWordTopic = (lesson: Lesson): TopicId =>
+  findWord(lesson.items.find(i => i.kind === 'word')!.id)!.topic
+
+/** The islands the word slots used, in slot order. */
+const wordTopics = (lesson: Lesson): TopicId[] =>
+  lesson.items.filter(i => i.kind === 'word').map(i => findWord(i.id)!.topic)
+
+/**
+ * Every island open with nothing learned anywhere: one starred sentence per topic is the migration
+ * exception `topicUnlocked` honours, so the map opens without promoting a single word. That holds
+ * freshness and the frontier equal across all eight, which leaves the day seed as the only thing
+ * that can decide the order.
+ */
+function openEveryTopicUnlearned() {
+  for (const id of ['s1', 's5', 's9', 's17', 's21', 's25', 's29']) setStars(`sentence:${id}`, 1)
 }
 
 it('defaults to the medium lesson length', () => {
@@ -60,7 +104,7 @@ it('gives every item a route, a Vietnamese label and an emoji, with no duplicate
   band(5)
   setLessonLength('long')
   const items = getLesson(BASE).items
-  expect(items).toHaveLength(14)
+  expect(items).toHaveLength(16)
   for (const i of items) {
     expect(i.route.startsWith('/')).toBe(true)
     expect(i.label.length).toBeGreaterThan(3)
@@ -87,24 +131,301 @@ it('band 5 draws at least one item from the newest level', () => {
 it('a weak phoneme steers the speak choice', () => {
   band(1)
   const plain = getLesson(BASE).items.map(i => i.route)
-  expect(plain).not.toContain('/sound/sh')
+  expect(plain.some(r => r.startsWith('/sound/sh/'))).toBe(false)
 
   localStorage.clear()
   band(1)
   for (let i = 0; i < 2; i++) {
     logActivity({ ts: BASE - DAY + i, kind: 'speak', id: 'sz-sh-ship', score: 40, phonemes: [{ phoneme: 'sh', score: 20 }] })
   }
-  expect(getLesson(BASE).items.map(i => i.route)).toContain('/sound/sh')
+  expect(getLesson(BASE).items.map(i => i.route).some(r => r.startsWith('/sound/sh/'))).toBe(true)
 })
 
-it('new words come from the current topic', () => {
-  band(1)
-  expect(getLesson(BASE).items.filter(i => i.kind === 'word').every(i => i.route.startsWith('/words/animals/'))).toBe(true)
+// --- one word per sound (Phase 9 §2) ----------------------------------------------------------
 
-  localStorage.clear()
+it('makes a sound step one word of the sound, not the whole group', () => {
   band(1)
-  learn('animals', 8) // deck finished, food opens and becomes current
-  expect(getLesson(BASE).items.filter(i => i.kind === 'word').every(i => i.route.startsWith('/words/food/'))).toBe(true)
+  const speak = getLesson(BASE).items.filter(i => i.kind === 'speak')
+  expect(speak.length).toBeGreaterThan(0)
+  for (const item of speak) {
+    const [, ph, cardId] = item.route.split('/').filter(Boolean)
+    expect(item.route).toBe(`/sound/${ph}/${cardId}`)
+    const card = findSound(ph)!.cards.find(c => c.id === cardId)
+    expect(card, `${cardId} should be a card of /${ph}/`).toBeDefined()
+    expect(item.id).toBe(cardId) // the id SoundPractice logs
+    expect(item.label).toBe(`Nói: ${card!.text}`)
+  }
+})
+
+it('offers the sound lowest-starred word', () => {
+  band(1)
+  const [weak, ...rest] = findSound('th')!.cards
+  for (const c of rest) setStars(`sword:${c.id}`, 3)
+  // /θ/ is the weak phoneme, so the lesson reaches for it — at its one word still not green.
+  for (let i = 0; i < 2; i++) {
+    logActivity({ ts: BASE - DAY + i, kind: 'speak', id: 'sz-th-three', score: 40, phonemes: [{ phoneme: 'th', score: 20 }] })
+  }
+  const item = getLesson(BASE).items.find(i => i.route.startsWith('/sound/th/'))
+  expect(item?.route).toBe(`/sound/th/${weak.id}`)
+})
+
+// --- mixing the topics (Phase 9 §2) -----------------------------------------------------------
+
+it('draws its content from several unlocked islands, not just one', () => {
+  band(1)
+  openSixTopics()
+  expect(unlockedTopics().length).toBeGreaterThanOrEqual(4)
+
+  const topics = contentTopics(getLesson(BASE))
+  expect(topics.length).toBeGreaterThanOrEqual(2)
+  // medium = 3 words + 1 sentence, and every open deck still has content, so all four differ.
+  expect(topics).toHaveLength(4)
+})
+
+it('gives consecutive word slots different topics', () => {
+  band(1)
+  openSixTopics()
+  const words = getLesson(BASE).items.filter(i => i.kind === 'word').map(i => findWord(i.id)!.topic)
+  for (let i = 1; i < words.length; i++) expect(words[i]).not.toBe(words[i - 1])
+})
+
+it('rotates the leading topic from one day to the next', () => {
+  band(1)
+  openSixTopics()
+  const today = firstWordTopic(getLesson(BASE))
+  const tomorrow = firstWordTopic(getLesson(BASE + DAY))
+  expect(tomorrow).not.toBe(today)
+})
+
+it('touches every unlocked island across two consecutive days', () => {
+  band(1)
+  openSixTopics()
+  const open = unlockedTopics()
+  expect(open).toHaveLength(6) // more islands than one day has content slots
+
+  const both = [...new Set([
+    ...taughtTopics(getLesson(BASE)),
+    ...taughtTopics(getLesson(BASE + DAY)),
+  ])]
+  for (const id of open) expect(both).toContain(id)
+})
+
+// Nothing distinguishes the islands on a fresh profile — no lesson on record, every deck at zero —
+// so freshness and the frontier both tie and the day seed is the whole of the order. Two first days
+// (or two children starting on different days) must not get the same island order.
+it('settles a fresh profile order by the day seed', () => {
+  band(1)
+  setLessonLength('long')
+  openEveryTopicUnlearned()
+  const open = unlockedTopics()
+  expect(open).toHaveLength(8)
+  expect(open.every(id => unlockedWords(id) === 0)).toBe(true)
+
+  const first = wordTopics(getLesson(BASE))
+  // A different day, with the same fresh profile and no lesson history of its own.
+  clearLessons()
+  setLessonLength('long')
+  const second = wordTopics(getLesson(BASE + DAY))
+
+  expect(first).toHaveLength(RECIPES.long.word)
+  expect(second).not.toEqual(first)
+})
+
+it('rotation survives a day off', () => {
+  band(1)
+  openSixTopics()
+  const first = taughtTopics(getLesson(BASE))
+  const missed = unlockedTopics().filter(id => !first.includes(id))
+  expect(missed.length).toBeGreaterThan(0)
+
+  // Nothing at all on the day between — no lesson is generated, so the calendar has a hole in it.
+  const next = taughtTopics(getLesson(BASE + 2 * DAY))
+
+  // The rotation still knows which islands the last lesson missed, and leads with them.
+  for (const id of missed) expect(next).toContain(id)
+  expect(firstWordTopic(getLesson(BASE + 2 * DAY))).not.toBe(firstWordTopic(getLesson(BASE)))
+})
+
+// A locked island is not a place the child can go — reaching ahead is only for a map whose open
+// decks are all finished.
+// `selectReview`'s filler is genuinely unlearned words, so an island taught in a 🔁 slot has been
+// taught — tomorrow's rotation must not offer it again as though it had been left behind.
+it('counts a new word taught in a review slot as touching its island', () => {
+  band(1)
+  openSixTopics()
+  const first = getLesson(BASE)
+  const inReview = first.items
+    .filter(i => i.kind === 'review' && i.activity === 'word')
+    .map(i => findWord(i.id)!.topic)
+  expect(inReview.length).toBeGreaterThan(0)
+
+  // Whatever the 🔁 slots taught is behind the untouched islands in tomorrow's order, so tomorrow
+  // leads somewhere else.
+  const next = taughtTopics(getLesson(BASE + DAY))
+  for (const id of unlockedTopics().filter(id => !taughtTopics(first).includes(id))) {
+    expect(next).toContain(id)
+  }
+  // And an island only the 🔁 slots taught is not offered again as though it had been left behind.
+  expect(wordTopics(getLesson(BASE + DAY))[0]).not.toBe(inReview[0])
+})
+
+it('prefers open islands over locked ones', () => {
+  band(1)
+  openSixTopics()
+  const open = unlockedTopics()
+  for (const id of contentTopics(getLesson(BASE))) expect(open).toContain(id)
+})
+
+it('skips a deck the child has already finished', () => {
+  band(1)
+  learn('animals', 8) // nothing left to learn there, whatever else the map has open
+  const words = wordTopics(getLesson(BASE))
+  expect(words.length).toBeGreaterThan(0)
+  expect(words).not.toContain('animals')
+})
+
+// --- sentence steps ---------------------------------------------------------------------------
+
+// The reviewer's case: every open deck but animals is finished, so all three word slots land on
+// animals. The 🧱 slot is then the only chance to reach a second island, and it has to take one —
+// an unbuilt sentence from an island the words never touched beats an unbuilt animals one.
+it('spends the sentence slot on an island the words did not reach', () => {
+  band(1)
+  for (const t of ['food', 'school', 'family', 'weather', 'colors', 'body', 'toys'] as TopicId[]) {
+    learn(t, 8)
+  }
+  expect(unlockedTopics()).toHaveLength(8)
+
+  const lesson = getLesson(BASE)
+  expect(new Set(wordTopics(lesson))).toEqual(new Set(['animals'])) // only deck with anything left
+
+  const sentence = findSentence(lesson.items.find(i => i.kind === 'sentence')!.id)!
+  expect(sentence.topic).not.toBe('animals')
+  expect(getStars(`sentence:${sentence.id}`)).toBe(0) // and still an unbuilt one
+})
+
+// …but only while an untouched island has one to give: with every other island's sentences already
+// built, an unbuilt sentence from the island the words used beats replaying a starred one.
+it('falls back to the words own island rather than replaying a built sentence', () => {
+  band(1)
+  for (const t of ['food', 'school', 'family', 'weather', 'colors', 'body', 'toys'] as TopicId[]) {
+    learn(t, 8)
+  }
+  for (const s of SENTENCES.filter(s => s.topic !== 'animals')) setStars(`sentence:${s.id}`, 2)
+
+  const lesson = getLesson(BASE)
+  const sentence = findSentence(lesson.items.find(i => i.kind === 'sentence')!.id)!
+  expect(sentence.topic).toBe('animals')
+  expect(getStars(`sentence:${sentence.id}`)).toBe(0)
+})
+
+// Task-3 review: a `long` lesson has two 🧱 slots. `family` learns exactly enough to unlock
+// `weather` but stays the frontier (fewest learned words among the ties), so it sorts last in
+// `dayTopicOrder` and the four word slots land on the other four open topics — `family` is the
+// lesson's one untouched island. Every sentence is starred built except `family`'s (left alone,
+// several unbuilt) and one in `animals`, a topic the words DID touch (`s16`). A concatenating
+// implementation — grab the untouched island's whole unbuilt queue before ever considering a
+// touched one — would seat both slots on `family`; the real round-robin `deal` seats one there and
+// moves on to `animals` for the second.
+it('spreads two sentence slots across two different topics, not both on the untouched one', () => {
+  band(1)
+  setLessonLength('long')
+  learn('family', 6) // unlocks weather too (previous topic's ≥6 rule)
+  for (const s of SENTENCES) {
+    if (s.topic === 'animals' && s.id !== 's16') setStars(`sentence:${s.id}`, 2)
+    if (s.topic === 'food' || s.topic === 'school' || s.topic === 'weather') setStars(`sentence:${s.id}`, 2)
+  }
+  expect(unlockedTopics().sort()).toEqual(['animals', 'family', 'food', 'school', 'weather'].sort())
+
+  const lesson = getLesson(BASE)
+  expect(new Set(wordTopics(lesson))).toEqual(new Set(['animals', 'food', 'school', 'weather']))
+
+  const sentences = lesson.items.filter(i => i.kind === 'sentence')
+  expect(sentences).toHaveLength(RECIPES.long.sentence)
+  const topics = sentences.map(i => findSentence(i.id)!.topic)
+  expect(new Set(topics)).toEqual(new Set(['family', 'animals']))
+  expect(topics.filter(t => t === 'family')).toHaveLength(1) // never both slots on the untouched one
+  expect(topics.filter(t => t === 'animals')).toHaveLength(1)
+})
+
+it('adds a 🧱 sentence step that routes to the builder', () => {
+  band(1)
+  const items = getLesson(BASE).items.filter(i => i.kind === 'sentence')
+  expect(items).toHaveLength(RECIPES.medium.sentence)
+  for (const item of items) {
+    const sentence = findSentence(item.id)!
+    expect(item.route).toBe(`/sentence/${sentence.id}`)
+    expect(item.activity).toBe('sentence')
+    expect(item.emoji).toBe('🧱')
+    expect(item.label).toBe(`Ghép câu: ${sentence.words.join(' ')}`)
+  }
+})
+
+/** The 🎧 story of a lesson, by id. */
+const listenStory = (now: number) => getLesson(now).items.find(i => i.kind === 'listen')!.id
+
+/**
+ * A returning child has stars on all three stories, so every day is a tie — and a tie used to be
+ * settled by the day seed, which over three stories leaned hard on one of them (at-the-zoo 18 days
+ * in 30, seven of those in a row). The tie now steps through the stories by the day instead.
+ */
+it('rotates the story once the child has played them all', () => {
+  band(1)
+  for (const s of STORIES) setStars(`story:${s.id}`, 2)
+
+  const picked = Array.from({ length: 6 }, (_, d) => {
+    clearLessons()
+    return listenStory(BASE + d * DAY)
+  })
+
+  expect(new Set(picked).size).toBe(STORIES.length)
+  for (let i = 1; i < picked.length; i++) expect(picked[i]).not.toBe(picked[i - 1])
+})
+
+/** Rotation is only the tie-break: a story the child has never earned stars on still comes first. */
+it('still offers the least-starred story before rotating', () => {
+  band(1)
+  // `setStars` only ever raises, so the low one is written first.
+  setStars('story:my-breakfast', 1)
+  for (const s of STORIES) if (s.id !== 'my-breakfast') setStars(`story:${s.id}`, 3)
+
+  for (let d = 0; d < 3; d++) {
+    clearLessons()
+    expect(listenStory(BASE + d * DAY)).toBe('my-breakfast')
+  }
+})
+
+it('lays the steps out listen → speak → word → sentence → review', () => {
+  band(3)
+  const order: string[] = []
+  for (const item of getLesson(BASE).items) if (!order.includes(item.kind)) order.push(item.kind)
+  expect(order).toEqual(['listen', 'speak', 'word', 'sentence', 'review'])
+})
+
+it('offers sentences the child has no stars on yet', () => {
+  band(1)
+  // Every sentence of the open map built except s16, wherever the unlock rule currently draws the
+  // line — so there is exactly one right answer left.
+  const open = unlockedTopics()
+  for (const s of SENTENCES) {
+    if (open.includes(s.topic) && s.id !== 's16') setStars(`sentence:${s.id}`, 3)
+  }
+
+  const chosen = getLesson(BASE).items.filter(i => i.kind === 'sentence').map(i => i.id)
+  expect(chosen).toEqual(['s16'])
+})
+
+// Every open sentence already built: the 🧱 step is still there, replaying one, rather than the
+// lesson quietly coming up a card short.
+it('falls back to a built sentence when none is left unstarred', () => {
+  band(1)
+  const open = unlockedTopics()
+  for (const s of SENTENCES) if (open.includes(s.topic)) setStars(`sentence:${s.id}`, 3)
+
+  const chosen = getLesson(BASE).items.filter(i => i.kind === 'sentence')
+  expect(chosen).toHaveLength(RECIPES.medium.sentence)
+  expect(open).toContain(findSentence(chosen[0].id)!.topic)
+  expect(getStars(`sentence:${chosen[0].id}`)).toBe(3) // a replay, not a card missing
 })
 
 it('review prefers due Leitner words', () => {
@@ -115,6 +436,26 @@ it('review prefers due Leitner words', () => {
   expect(review).toHaveLength(RECIPES.medium.review)
   expect(review.every(i => i.route.startsWith('/words/animals/'))).toBe(true)
   expect(review.every(i => i.activity === 'word')).toBe(true)
+})
+
+it('reviews a sound the child has only per-word stars on, at its weakest word', () => {
+  band(1)
+  // No legacy `sound:<ph>` key anywhere — exactly the shape Phase 9 writes. Each sound's first card
+  // is left the weakest, so both the 🗣️ step and the 🔁 step have one obvious choice.
+  for (const g of SOUNDS) {
+    setStars(`sword:${g.cards[0].id}`, 1)
+    for (const c of g.cards.slice(1)) setStars(`sword:${c.id}`, 3)
+  }
+
+  const review = getLesson(BASE).items.filter(i => i.kind === 'review')
+  expect(review).toHaveLength(RECIPES.medium.review)
+  expect(review.every(i => i.route.startsWith('/sound/'))).toBe(true)
+  for (const item of review) {
+    const [, ph, cardId] = item.route.split('/').filter(Boolean)
+    expect(cardId).toBe(findSound(ph)!.cards[0].id) // the sound's lowest-starred word
+    expect(item.id).toBe(cardId) // and the id SoundPractice logs for it
+    expect(item.activity).toBe('speak')
+  }
 })
 
 it('review falls back to the lowest-star attempted item, inside the band', () => {
@@ -163,17 +504,49 @@ it('an event before the lesson was generated does not count', () => {
   expect(lessonStatus(BASE, getActivity()).doneCount).toBe(0)
 })
 
-it('a sound tile is done by speaking any of its three cards', () => {
+it('completes a sound step from its own word, not from a sibling of the same sound', () => {
   band(1)
   const lesson = getLesson(BASE)
   const sound = lesson.items.find(i => i.route.startsWith('/sound/'))!
-  logActivity({ ts: BASE + 60_000, kind: 'speak', id: `sz-${sound.id}-x`, score: 90 })
-  expect(lessonStatus(BASE, getActivity()).items.find(i => i.route === sound.route)?.done).toBe(false)
+  const [, ph] = sound.route.split('/').filter(Boolean)
+  const done = () => lessonStatus(BASE, getActivity()).items.find(i => i.route === sound.route)?.done
 
-  // the ids the SoundPractice screen actually logs
-  const card = findSound(sound.id)!.cards[1]
-  logActivity({ ts: BASE + 120_000, kind: 'speak', id: card.id, score: 90 })
-  expect(lessonStatus(BASE, getActivity()).items.find(i => i.route === sound.route)?.done).toBe(true)
+  const sibling = findSound(ph)!.cards.find(c => c.id !== sound.id)!
+  logActivity({ ts: BASE + 60_000, kind: 'speak', id: sibling.id, score: 90 })
+  expect(done()).toBe(false)
+
+  // the id the SoundPractice screen actually logs for this card
+  logActivity({ ts: BASE + 120_000, kind: 'speak', id: sound.id, score: 90 })
+  expect(done()).toBe(true)
+})
+
+// --- yesterday's lesson, today's code ---------------------------------------------------------
+//
+// A lesson generated before Phase 9 is sitting in storage: its sound step is a whole group
+// (`/sound/<ph>`, id `<ph>`) and it has no 🧱 step at all. It has to keep working for the rest of
+// the day rather than being thrown away or taking the mission screen down.
+
+it('still renders and matches a lesson stored in the pre-Phase-9 shape', () => {
+  band(1)
+  const items: LessonItem[] = [
+    { kind: 'listen', activity: 'story', id: 'little-fox', route: '/story/little-fox', label: 'Nghe: Cáo nhỏ', emoji: '🎧' },
+    { kind: 'speak', activity: 'speak', id: 'th', route: '/sound/th', label: 'Nói: three', emoji: '🗣️' },
+    { kind: 'word', activity: 'word', id: 'animals-elephant', route: '/words/animals/animals-elephant', label: 'Từ mới: elephant', emoji: '🧩' },
+  ]
+  const stored: Lesson = { day: '2026-08-24', created: BASE - 60_000, band: 1, items }
+  localStorage.setItem(KEY, JSON.stringify({ ...stored, v: 1 }))
+
+  expect(lessonForDay('2026-08-24')).toEqual(stored)
+  const before = lessonStatus(BASE, getActivity())
+  expect(before.items.map(i => i.route)).toEqual(items.map(i => i.route))
+  expect(before.total).toBe(3)
+
+  // The old whole-group step is still completed by any card of the sound — the word list it now
+  // lands on is a fine place to do that.
+  logActivity({ ts: BASE, kind: 'speak', id: findSound('th')!.cards[1].id, score: 90 })
+  const after = lessonStatus(BASE, getActivity())
+  expect(after.items.find(i => i.route === '/sound/th')?.done).toBe(true)
+  expect(after.doneCount).toBe(1)
 })
 
 // --- malformed records ------------------------------------------------------------------------
@@ -240,7 +613,9 @@ function screenEvent(route: string): { kind: ActivityKind; id: string } {
   const [head, a, b] = route.split('/').filter(Boolean)
   if (head === 'story' && b === 'retell') return { kind: 'sentence', id: `retell:${a}` }
   if (head === 'story') return { kind: 'story', id: a }
-  if (head === 'sound') return { kind: 'speak', id: findSound(a)!.cards[2].id } // any card of the group
+  // /sound/<ph>/<cardId> — the word the child is drilling; /sound/<ph> is the group's word list,
+  // which a lesson only holds as a review of a sound practised before Phase 9.
+  if (head === 'sound') return { kind: 'speak', id: b ?? findSound(a)!.cards[2].id }
   if (head === 'practice' || head === 'pair' || head === 'star' || head === 'voice') return { kind: 'speak', id: a }
   if (head === 'words') return { kind: 'word', id: b }
   if (head === 'sentence') return { kind: 'sentence', id: a }
@@ -252,30 +627,33 @@ const WRONG_KIND: Record<ActivityKind, ActivityKind> = {
   story: 'speak', speak: 'sentence', word: 'speak', sentence: 'speak',
 }
 
-const ROUTE_CASES: { name: string; setup: () => void; find: (route: string) => boolean }[] = [
-  { name: 'listen story', setup: () => band(1), find: r => /^\/story\/[^/]+$/.test(r) },
-  { name: 'sound tile', setup: () => band(1), find: r => r.startsWith('/sound/') },
-  { name: 'word card', setup: () => band(2), find: r => r.startsWith('/practice/') },
-  { name: 'minimal pair', setup: () => band(3), find: r => r.startsWith('/pair/') },
-  { name: 'sentence star', setup: () => band(4), find: r => r.startsWith('/star/') },
-  { name: 'story voice', setup: () => band(5), find: r => r.startsWith('/voice/') },
-  { name: 'new word', setup: () => band(1), find: r => r.startsWith('/words/') },
+/** `find` takes the whole item, not just its route: `/sentence/<id>` is now both a 🧱 step and a
+ * possible 🔁 review, and only the kind tells the two apart. */
+const ROUTE_CASES: { name: string; setup: () => void; find: (item: LessonItem) => boolean }[] = [
+  { name: 'listen story', setup: () => band(1), find: i => /^\/story\/[^/]+$/.test(i.route) },
+  { name: 'sound word', setup: () => band(1), find: i => i.route.startsWith('/sound/') },
+  { name: 'word card', setup: () => band(2), find: i => i.route.startsWith('/practice/') },
+  { name: 'minimal pair', setup: () => band(3), find: i => i.route.startsWith('/pair/') },
+  { name: 'sentence star', setup: () => band(4), find: i => i.route.startsWith('/star/') },
+  { name: 'story voice', setup: () => band(5), find: i => i.route.startsWith('/voice/') },
+  { name: 'new word', setup: () => band(1), find: i => i.route.startsWith('/words/') },
+  { name: 'sentence step', setup: () => band(1), find: i => i.kind === 'sentence' },
   {
     name: 'sentence review',
     setup: () => { band(1); setStars('sentence:s1', 1) },
-    find: r => r.startsWith('/sentence/'),
+    find: i => i.kind === 'review' && i.route.startsWith('/sentence/'),
   },
   {
     name: 'retell review',
     setup: () => { band(1); setStars('retell:little-fox', 1) },
-    find: r => r.endsWith('/retell'),
+    find: i => i.route.endsWith('/retell'),
   },
 ]
 
 it.each(ROUTE_CASES)('$name is done by the event its screen logs', ({ setup, find }) => {
   setup()
   const lesson = getLesson(BASE)
-  const item = lesson.items.find(i => find(i.route))
+  const item = lesson.items.find(find)
   expect(item, 'the lesson should contain this route').toBeDefined()
 
   const { kind, id } = screenEvent(item!.route)
@@ -286,7 +664,7 @@ it.each(ROUTE_CASES)('$name is done by the event its screen logs', ({ setup, fin
 it.each(ROUTE_CASES)('$name is not done by an event of the wrong kind', ({ setup, find }) => {
   setup()
   const lesson = getLesson(BASE)
-  const item = lesson.items.find(i => find(i.route))!
+  const item = lesson.items.find(find)!
   const { kind, id } = screenEvent(item.route)
 
   logActivity({ ts: BASE + 60_000, kind: WRONG_KIND[kind], id, score: 85 })

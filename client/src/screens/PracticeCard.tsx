@@ -6,7 +6,7 @@ import { playBlob, playUrl } from '../audio/player'
 import { toFeedback } from '../scoring/feedback'
 import { setStars } from '../progress/store'
 import { logActivity } from '../progress/activity'
-import { useMissionNext } from '../progress/missionNav'
+import { missionNoun, useMissionNext } from '../progress/missionNav'
 import { saveRecording } from '../progress/recordings'
 import { MicButton } from '../components/MicButton'
 import { Stars } from '../components/Stars'
@@ -131,7 +131,7 @@ export function PracticeCard() {
                 and all. */}
             <span className="font-display text-xl font-extrabold text-ink-500">
               {mission
-                ? `Thẻ ${mission.pos.index}/${mission.pos.total}`
+                ? `${missionNoun(mission.pos, 'Thẻ')} ${mission.pos.index}/${mission.pos.total}`
                 : `Thẻ ${cardIndex + 1}/${level!.cards.length}`}
             </span>
             {/* The dots are a nicety, the counter above them is the real read-out. Past a dozen

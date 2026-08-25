@@ -37,12 +37,19 @@ const KIND: Record<LessonItemKind, {
   listen: { emoji: '🎧', tone: 'teal', title: n => `Nghe ${n} truyện`, minutes: n => 4 * n },
   speak: { emoji: '🗣️', tone: 'coral', title: n => `${n} thẻ phát âm`, minutes: n => n },
   word: { emoji: '🧩', tone: 'sun', title: n => `${n} từ mới`, minutes: n => n },
+  sentence: { emoji: '🧱', tone: 'neutral', title: n => `${n} câu ghép`, minutes: n => n },
   review: { emoji: '🔁', tone: 'neutral', title: n => `${n} bài ôn tập`, minutes: n => n },
 }
 
-/** The cards sit side by side from `lg` up — one column per group, never more than four — and
- * stack below that. Written out in full because Tailwind reads the class names from the source. */
-const COLUMNS = ['', 'lg:grid-cols-1', 'lg:grid-cols-2', 'lg:grid-cols-3', 'lg:grid-cols-4']
+/** The cards sit side by side from `lg` up — one column per group — and stack below that. Phase 9
+ * added the 🧱 group, so a lesson now has five: the table runs to five columns, because a row that
+ * wrapped would push the CTA off a 834 px-tall screen. Written out in full because Tailwind reads
+ * the class names from the source. */
+const COLUMNS = [
+  '', 'lg:grid-cols-1', 'lg:grid-cols-2', 'lg:grid-cols-3', 'lg:grid-cols-4', 'lg:grid-cols-5',
+]
+/** Longest lesson shape there is: 🎧 🗣️ 🧩 🧱 🔁 (spec §2). */
+const MAX_GROUPS = 5
 
 /** The group card: the kit's `Card` surface as a tap target, centred like the list-screen cards. */
 const GROUP_CARD =
@@ -95,7 +102,7 @@ export function DailyMission() {
     <main className="relative h-full overflow-y-auto bg-cream-50 p-6">
       <BackButton to="/" label="Về bản đồ" />
 
-      <div className="mx-auto flex w-full max-w-5xl flex-col gap-5 pt-4">
+      <div className="mx-auto flex w-full max-w-6xl flex-col gap-5 pt-4">
         <header className="flex flex-col items-center gap-2 text-center">
           <h1 className="font-display text-[40px] font-extrabold leading-tight text-ink-900">Nhiệm vụ hôm nay 🌞</h1>
           <div className="flex items-center gap-3">
@@ -104,7 +111,7 @@ export function DailyMission() {
           </div>
         </header>
 
-        <div className={`grid gap-4 ${COLUMNS[Math.min(groups.length, 4)]}`}>
+        <div className={`grid gap-3 ${COLUMNS[Math.min(groups.length, MAX_GROUPS)]}`}>
           {groups.map((group, i) => {
             const kind = KIND[group.kind]
             const isCurrent = i === currentIndex

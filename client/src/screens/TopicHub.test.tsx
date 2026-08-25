@@ -2,8 +2,14 @@ import { render, screen, within } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import type { TopicId } from '../content/topics'
 import { findTopic } from '../content/words'
+import { dayKey } from '../progress/activity'
+import { saveLesson } from '../progress/lessonStore'
+import type { LessonItem } from '../progress/lessonStore'
 import { setStars } from '../progress/store'
 import { TopicHub } from './TopicHub'
+
+const NOW = new Date('2026-08-25T10:00:00').getTime()
+const TODAY = 'Có trong nhiệm vụ hôm nay'
 
 function renderHub(id: string) {
   render(
@@ -24,7 +30,34 @@ function unlockWords(topic: TopicId, n: number) {
   localStorage.setItem('speakup.leitner', JSON.stringify(raw))
 }
 
-beforeEach(() => localStorage.clear())
+/**
+ * Freezes today's lesson to exactly these routes, so what the hub chips against is a fixture and
+ * not whatever the seeded generator happens to pick. The rest of an item is filler: the hub only
+ * ever reads `route`.
+ */
+function seedLesson(routes: string[]) {
+  const item = (route: string): LessonItem => {
+    const kind = route.startsWith('/story/') ? 'listen' : route.startsWith('/sentence/') ? 'sentence' : 'word'
+    return {
+      kind,
+      activity: kind === 'listen' ? 'story' : kind,
+      id: route.split('/').pop() ?? '',
+      route,
+      label: route,
+      emoji: '🧩',
+    }
+  }
+  saveLesson({ day: dayKey(NOW), created: NOW, band: 1, items: routes.map(item) })
+}
+
+beforeEach(() => {
+  localStorage.clear()
+  vi.useFakeTimers({ now: new Date(NOW) })
+})
+
+afterEach(() => {
+  vi.useRealTimers()
+})
 
 it('shows the topic header, its stars and the three sections', () => {
   unlockWords('animals', 6)
@@ -75,6 +108,40 @@ it('counts only the unlocked words of the topic', () => {
 
   expect(screen.getByText('3/8 từ')).toBeInTheDocument()
   expect(screen.getAllByTestId('star-filled')).toHaveLength(1)
+})
+
+/** The map and the mission are separate axes, and the hub is where the child can see they overlap
+ * (spec §4): a section holding one of today's items says so, the others stay quiet. */
+it('marks the sections that hold an item of today lesson', () => {
+  seedLesson(['/words/animals/animals-tiger', '/sentence/s13', '/story/at-the-zoo'])
+
+  renderHub('animals')
+
+  expect(within(screen.getByRole('link', { name: /Từ mới/ })).getByText(TODAY)).toBeInTheDocument()
+  expect(within(screen.getByRole('link', { name: /Ghép câu/ })).getByText(TODAY)).toBeInTheDocument()
+  expect(within(screen.getByRole('link', { name: /Ở sở thú/ })).getByText(TODAY)).toBeInTheDocument()
+  // The other story of the same island is not today's listen step, so it stays unmarked.
+  expect(within(screen.getByRole('link', { name: /Chú cáo nhỏ/ })).queryByText(TODAY)).not.toBeInTheDocument()
+  expect(screen.getAllByText(TODAY)).toHaveLength(3)
+})
+
+/** A review step is still today's work, so the word section is marked by one just as it is by a
+ * fresh 🧩 step — both land on `/words/<topic>/<id>`. */
+it('marks the word section for a review step of this island', () => {
+  seedLesson(['/words/animals/animals-duck'])
+
+  renderHub('animals')
+
+  expect(within(screen.getByRole('link', { name: /Từ mới/ })).getByText(TODAY)).toBeInTheDocument()
+  expect(screen.getAllByText(TODAY)).toHaveLength(1)
+})
+
+it('marks nothing when today lesson is drawn from other islands', () => {
+  seedLesson(['/words/food/food-egg', '/sentence/s5', '/story/my-breakfast'])
+
+  renderHub('animals')
+
+  expect(screen.queryByText(TODAY)).not.toBeInTheDocument()
 })
 
 it('shows the locked screen for a topic the child has not reached', () => {

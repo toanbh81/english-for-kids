@@ -75,10 +75,13 @@ it('falls back to the full list for a topic id that no longer exists', () => {
 it('lists only unlocked topics when it is not filtered', () => {
   renderList()
 
-  const animals = SENTENCES.filter(s => s.topic === 'animals')
-  expect(rowLinks()).toHaveLength(animals.length)
-  expect(screen.getByText('Động vật')).toBeInTheDocument()
-  for (const name of ['Đồ ăn', 'Trường học', 'Gia đình', 'Thời tiết']) {
+  // The first four islands are open from the start (Phase 9 §3); everything past them is not.
+  const open = SENTENCES.filter(s => ['animals', 'food', 'school', 'family'].includes(s.topic))
+  expect(rowLinks()).toHaveLength(open.length)
+  for (const name of ['Động vật', 'Đồ ăn', 'Trường học', 'Gia đình']) {
+    expect(screen.getByText(name)).toBeInTheDocument()
+  }
+  for (const name of ['Thời tiết', 'Màu sắc', 'Cơ thể', 'Đồ chơi']) {
     expect(screen.queryByText(name)).not.toBeInTheDocument()
   }
 })

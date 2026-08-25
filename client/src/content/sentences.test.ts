@@ -1,14 +1,14 @@
 import { SENTENCES, findSentence } from './index'
 
-it('has 20 sentences with unique ids', () => {
-  expect(SENTENCES).toHaveLength(20)
-  expect(new Set(SENTENCES.map(s => s.id)).size).toBe(20)
+it('has 32 sentences with unique ids', () => {
+  expect(SENTENCES).toHaveLength(32)
+  expect(new Set(SENTENCES.map(s => s.id)).size).toBe(32)
 })
 
-it('has exactly 4 sentences per topic (animals, food, school, family, weather)', () => {
-  const counts = { animals: 0, food: 0, school: 0, family: 0, weather: 0 }
+it('has exactly 4 sentences per topic (animals, food, school, family, weather, colors, body, toys)', () => {
+  const counts = { animals: 0, food: 0, school: 0, family: 0, weather: 0, colors: 0, body: 0, toys: 0 }
   for (const s of SENTENCES) counts[s.topic]++
-  expect(counts).toEqual({ animals: 4, food: 4, school: 4, family: 4, weather: 4 })
+  expect(counts).toEqual({ animals: 4, food: 4, school: 4, family: 4, weather: 4, colors: 4, body: 4, toys: 4 })
 })
 
 it('every sentence\'s words join into text ending with a period', () => {

@@ -189,12 +189,12 @@ The client dev server uses HTTPS because Safari on iOS/iPadOS only allows microp
 ## Testing
 
 ```bash
-pnpm test        # client (Vitest, 527 tests) + server (Vitest, 2 tests)
+pnpm test        # client (Vitest, 703 tests) + server (Vitest, 2 tests)
 pnpm lint        # oxlint on the client
 pnpm typecheck   # tsc -b (client) + tsc --noEmit (server)
 ```
 
-`pnpm test` runs `pnpm -r test`, which executes the client suite (`vitest run`, 527 tests in 58
+`pnpm test` runs `pnpm -r test`, which executes the client suite (`vitest run`, 703 tests in 63
 files) and the server suite (`vitest run`, 2 tests). `pnpm lint` and `pnpm typecheck` fan out the
 same way.
 
@@ -462,15 +462,17 @@ to the child's level.
     | medium | 1 | 4 | 3 | 2 | ~12 phút |
     | long | 1 | 6 | 4 | 3 | ~18 phút |
 
-  - **listen** — the story with the fewest stars (ties broken by the day's seed); done once a
-    `story` activity event for it lands after the lesson was created.
+  - **listen** — the story with the fewest stars; among the stories tied at that count the day
+    index picks one (`tied[daysSinceEpoch % tied.length]`), so once the child has played them all
+    — when every day is a tie — the three take turns rather than the seed favouring one. Done once
+    a `story` activity event for it lands after the lesson was created.
   - **speak** — drawn from the union of speaking levels up to the child's band (1 sound tiles → 2
     word-pop cards → 3 minimal pairs → 4 sentence stars → 5 story voice); half the slots (rounded
     up) come from the band's newest level, the rest from the levels below, all seeded per day.
     Sound/word cards touching a phoneme averaging < 80 (`weakPhonemes`) are picked first.
-  - **word** — new (unlocked-word-count = 0) words from `currentTopic()` — the first unlocked topic
-    whose deck still has fewer than 8 words unlocked — then the rest of the open map, then locked
-    decks once every open deck is finished, all seeded.
+  - **word** — new (unlocked-word-count = 0) words dealt round-robin across **every** unlocked
+    topic in `dayTopicOrder(day)` (see the mixing rules below), then locked decks once every open
+    deck is finished, all seeded.
   - **review** — due Leitner words first, then the previously-attempted item (any kind, stars > 0,
     at or below the child's band) with the fewest stars; a brand-new player with nothing to review
     yet gets extra new words as filler instead.
@@ -543,7 +545,9 @@ whole card to the phoneme-blind fallback with a scary "lỗi kết nối Azure" 
   spec §3):
   - The header grows a position chip built from `mission.pos.index`/`mission.pos.total`: "Âm i/N"
     (SoundPractice), "Thẻ i/N" (PracticeCard/PairPractice/StarPractice/VoicePractice), "Từ mới i/N"
-    (WordCard), "Câu i/N" (SentenceBuilder).
+    (WordCard), "Câu i/N" (SentenceBuilder). The number counts inside `mission.pos.group`, so the
+    noun has to agree with it: `missionNoun(pos, own)` replaces every one of those with "Ôn tập i/N"
+    when the lesson filed the step under 🔁 — a word reached from review is not "Từ mới" anything.
   - `BackButton` targets `/mission` labelled "Nhiệm vụ" instead of the screen's usual deck/level.
   - The finish/next CTA calls `mission.go()`, which either advances to `nextRoute` (still carrying
     `{ mission: true }`) or, when nothing follows, returns to `/mission` with no state (which then
@@ -558,7 +562,11 @@ whole card to the phoneme-blind fallback with a scary "lỗi kết nối Azure" 
     stays as the thread back to a lesson reached without the flag — except it hides itself whenever
     the screen *is* mission-aware, since the header/CTA already cover that; it only keeps showing
     on `/story/*` routes in mission mode, because stories don't carry the flag through their own
-    flow.
+    flow. "Mission-aware" is asked, never assumed: the chip calls `isItemRoute()` — the same exact
+    route match `missionNav` walks with — so the flag alone is not enough to suppress it. A child
+    upgrading from Phase 8 has a whole-group `/sound/<ph>` step in storage and lands on
+    `/sound/<ph>/<cardId>`, where the screen finds no mission of its own; the chip is then the only
+    control on screen that leads back.
 - **SoundPractice two-row layout** (`client/src/screens/SoundPractice.tsx`) — the practice area is
   a two-row grid (`grid-cols-[minmax(180px,auto)_1fr]` from `sm`, stacked below) sharing columns so
   cells line up: row 1 is the sound (mouth/IPA tile + "🔊 Nghe âm lẻ" | the phoneme's
@@ -591,6 +599,98 @@ whole card to the phoneme-blind fallback with a scary "lỗi kết nối Azure" 
 - **Guess praise reads as a guess, not a score** — the meaning-guess praise is now
   "Đoán đúng rồi! 🎉" and clears itself after 1.5 s on a timer, instead of persisting until the
   first flip (where it used to sit right where the pronunciation score lands).
+
+## Phase 9 — Per-word sound practice, cross-topic lessons, eight islands
+
+Three asks drove this phase: a Tập âm card should drill **one word** of a sound at a time instead
+of its whole 3-word run; the daily mission and the topic islands are **separate axes**, so the
+mission mixes content from every unlocked topic instead of sitting on whichever one the map
+happens to point at; and the map needed more content to mix, so it grew from five islands to eight.
+
+- **Tập âm becomes a word list, then a per-word drill** (`client/src/screens/SoundWordList.tsx`,
+  `SoundPractice.tsx`) — `/sound/:ph` is now a sub-level: the sound's 72 px IPA header,
+  `PHONEME_TIPS[ph]`, a "🔊 Nghe âm lẻ" button, then one card per word of that sound (emoji, word,
+  IPA, its own `StarRow`), each linking to `/sound/:ph/:cardId`. That route is exactly the old
+  `SoundPractice` UI (two-row grid, mouth card, mic, `SoundChip` result) but scored and starred for
+  **one** word; "Tiếp theo →" walks to the next word of the sound in free play, and the last word
+  returns to the word list. The old whole-run behaviour (three words back to back under one score)
+  is gone — nothing links to it any more.
+  - **Stars** live per word at `sword:<cardId>`. The sound's own "stars" are no longer stored at
+    all: `soundStars(ph)` (`client/src/progress/store.ts`) derives them as the **minimum**
+    `sword:*` across the sound's words (so the tile only turns green once every word does), floored
+    by whatever the old `sound:<ph>` key already holds — `max(derived, legacy)` — so a return
+    visit from before this phase never looks like lost progress. The star rule per word is
+    unchanged: target-phoneme score ≥ 80 → 3★, ≥ 60 → 2★, else 1★, capped at 2★ when the engine
+    never scored the phoneme in that word.
+- **The daily mission mixes every unlocked topic** (`client/src/progress/lesson.ts`) —
+  no single "current topic" steers a lesson any more (the old `currentTopic()` helper had no caller
+  left and is gone). A day's word and sentence slots are dealt across **every unlocked topic**
+  instead of whichever one the map would point at next:
+  - **`dayTopicOrder(day)`** ranks the unlocked topics by three keys, strongest first: **freshness**
+    — an island the last lesson (and, at half weight, the one before it) never touched outranks one
+    it did, which is what rotates the leading topic day to day and is what makes any two lessons in
+    a row cover the whole open map while slots allow; then **the frontier** — among islands of equal
+    freshness, the deck with the fewest learned words goes first, so the unlock chain keeps
+    advancing; then **the day's seed** — what freshness and the frontier leave tied is settled by a
+    `shuffleTiles` draw off `dayKey`, so a fresh profile (nothing learned, no lesson history) still
+    gets a different order every day rather than the same one.
+  - **`deal(order, pool)`** hands the topics' pools out one item at a time in a round-robin over
+    `order`, skipping any topic whose pool has run dry — consecutive slots come from different
+    topics while more than one still has content, and a topic that empties out drops from the cycle
+    rather than ending it. New words (`newWordPool`) are dealt this way across the open map, then
+    (a second pass) across the locked decks, so reaching ahead once every open deck is finished can
+    never take a slot from an island still on the map.
+  - **The 🧱 sentence slot spreads too** (`sentencePool`) — the islands the word slots did *not*
+    reach lead the cycle, so an unbuilt sentence from an untouched island is offered before an
+    unbuilt one from a touched island; only once no untouched island has an unbuilt sentence does a
+    touched island's join the pool, and only once nothing anywhere is unbuilt does it fall back to
+    replaying an already-starred sentence. This is still `deal`'s round-robin, not a strict
+    two-phase split, so a lesson with more sentence slots than untouched islands keeps spreading
+    once the untouched side runs dry instead of stacking every remaining slot on one island.
+  - **Rebalanced recipe** (`RECIPES`, `client/src/progress/lesson.ts`) — a speak slot is now one
+    word rather than three, and the new 🧱 group joined:
+
+    | length | 🎧 listen | 🗣️ speak | 🧩 word | 🧱 sentence | 🔁 review | total | ≈ time |
+    |---|---|---|---|---|---|---|---|
+    | short | 1 | 2 | 2 | 1 | 1 | 7 | ~8 phút |
+    | medium | 1 | 4 | 3 | 1 | 2 | 11 | ~12 phút |
+    | long | 1 | 6 | 4 | 2 | 3 | 16 | ~18 phút |
+
+  - `LessonItemKind` gains `'sentence'`; the Daily Mission group renders as "🧱 N câu ghép" after
+    🧩 in lesson order, and a sentence item routes to `/sentence/<id>`, done at score ≥ 60 or
+    unscored — the same bar `SentenceBuilder` already logs against. No island name or topic list
+    appears anywhere on the mission screen; mixing is invisible on purpose.
+- **Three new topics — eight islands** (`client/src/content/topics.ts`,
+  `client/src/content/words/{colors,body,toys}.json`) — **colors 🎨 Màu sắc**, **body 🧍 Cơ thể**,
+  **toys 🧸 Đồ chơi** append to `TOPICS`, 8 words each, same shape/convention as the existing decks.
+  Final unlock order: animals, food, school, family, weather, colors, body, toys. Twelve sentences
+  (s21–s32, 4 per new topic) append to `sentences.json`.
+  - **Unlock** (`client/src/progress/topicProgress.ts`, `OPEN_FROM_START = 4`) — the **first four**
+    topics (animals, food, school, family) are open from the start, so the mixing rules above have
+    something to spread across on day one; each later topic still unlocks once the previous deck
+    reaches ≥ 6/8 words unlocked, and the migration exception (any existing progress in a topic
+    opens it regardless of the chain) is unchanged.
+  - **Map** (`client/src/screens/Home.tsx`) — eight islands in a two-row serpentine (row one left →
+    right, row two right → left) inside the existing 1194×834 frame, 96 px discs (`lg` 112 px), the
+    dotted trail redrawn through the eight centres. Below `lg` the islands fall back to a 2-column
+    grid, unchanged from Phase 7. The eight slots are hand-placed against that hand-fitted trail,
+    so `Home.tsx` throws at module load if `TOPICS` ever outgrows `SLOTS` — a ninth topic would
+    otherwise render an unpositioned, colourless disc on top of the first island.
+- **Island role, made visible** (`client/src/screens/Home.tsx`, `TopicHub.tsx`) — each unlocked
+  island's label grows a "Luyện thêm" subtitle under the topic name, so the map reads as the
+  free-choice library it is, next to (never instead of) the daily mission. **Approved deviation
+  from the spec:** the subtitle renders only on unlocked islands — a locked tile already carries a
+  "Chưa mở khóa" chip in that spot, so there is nothing left to caption twice. The topic hub's 🧩 Từ
+  mới and 🧱 Ghép câu sections show a teal "Có trong nhiệm vụ hôm nay" chip whenever that section
+  holds an item of today's lesson (matched by route against `lessonStatus().items`), so the
+  relationship between the two axes — practising here counts there — is visible without merging
+  them; 🎧 Truyện already showed this per story via its `StarRow` row.
+
+**New routes:** `/sound/:ph/:cardId` (per-word Tập âm practice). `/sound/:ph` is repointed from a
+3-word carousel to the word list described above.
+
+**New storage keys:** `sword:<cardId>` — per-word Tập âm stars; `sound:<ph>` stops being written but
+is still read as a floor by `soundStars`.
 
 ## iPad setup & testing (Thiết lập trên iPad)
 
@@ -682,6 +782,12 @@ whole card to the phoneme-blind fallback with a scary "lỗi kết nối Azure" 
 | 60 | Học từ mới → tap the card once to flip it, flip back, wait several seconds | The peek animation does not resume — it only ever happens before the first flip | ⏳ pending |
 | 61 | Học từ mới → record a word and score it | Stars and a "Điểm: NN" score chip appear under the card, in addition to the existing hint (on a low score) and the 🔓 "Mở khoá!" banner (on unlock) | ⏳ pending |
 | 62 | Học từ mới → a still-locked word → guess its meaning correctly | Shows "Đoán đúng rồi! 🎉" praise, which clears itself after about 1.5 s, well before the mic/flip step | ⏳ pending |
+| 63 | Tập âm → `/level/sound-zoo` → tap a sound tile | Opens a word list: IPA header + tip text + "🔊 Nghe âm lẻ", then one card per word of that sound (emoji, word, IPA, its own star row) — not the old 3-word run | ⏳ pending |
+| 64 | Sound word list → tap one word card → say it, then tap "Tiếp theo →" | Opens the practice screen for that one word only; scoring it stars only that word (`sword:<cardId>`); "Tiếp theo →" walks to the next word of the sound, and the last word returns to the word list | ⏳ pending |
+| 65 | Complete today's mission, then advance the date (or wait) a day and complete the next mission | The two days' 🧩/🧱 items are drawn from different topics where the map allows — the child is not stuck reviewing the same island two days running | ⏳ pending |
+| 66 | `/mission` | A "🧱 N câu ghép" group card appears after "🧩 N từ mới" (once the lesson length includes a sentence slot); tapping it opens Sentence Builder for that item | ⏳ pending |
+| 67 | Home | Eight islands total (Động vật, Đồ ăn, Trường học, Gia đình, Thời tiết, Màu sắc, Cơ thể, Đồ chơi) in a two-row layout; the first four are open from a fresh profile, the rest show 🔒 "Chưa mở khóa" until unlocked | ⏳ pending |
+| 68 | Home → tap an unlocked island → topic hub for a topic with a word or sentence in today's lesson | The 🧩 Từ mới and/or 🧱 Ghép câu section shows a teal "Có trong nhiệm vụ hôm nay" chip; a section with nothing in today's lesson shows no chip | ⏳ pending |
 
 ## Architecture
 

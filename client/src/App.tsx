@@ -5,6 +5,7 @@ import { MissionComplete } from './screens/MissionComplete'
 import { LevelStairs } from './screens/LevelStairs'
 import { LevelSelect } from './screens/LevelSelect'
 import { PracticeCard } from './screens/PracticeCard'
+import { SoundWordList } from './screens/SoundWordList'
 import { SoundPractice } from './screens/SoundPractice'
 import { PairLevel } from './screens/PairLevel'
 import { PairPractice } from './screens/PairPractice'
@@ -41,7 +42,10 @@ export default function App() {
         <Route path="/level/story-voice" element={<VoiceLevel />} />
         <Route path="/level/:levelId" element={<LevelSelect />} />
         <Route path="/practice/:cardId" element={<PracticeCard />} />
-        <Route path="/sound/:ph" element={<SoundPractice />} />
+        {/* A sound is a list of its words; one word is the drill. An old stored lesson still
+          * pointing at `/sound/<ph>` lands on the list, which is a fine place to be. */}
+        <Route path="/sound/:ph" element={<SoundWordList />} />
+        <Route path="/sound/:ph/:cardId" element={<SoundPractice />} />
         <Route path="/pair/:id" element={<PairPractice />} />
         <Route path="/star/:id" element={<StarPractice />} />
         <Route path="/voice/:id" element={<VoicePractice />} />

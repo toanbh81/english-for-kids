@@ -1,0 +1,15 @@
+{
+  "id": "body",
+  "title": "Cơ thể",
+  "emoji": "🧍",
+  "words": [
+    { "id": "body-hand", "topic": "body", "word": "hand", "ipa": "/hænd/", "emoji": "✋", "audio": "/audio/words/hand.mp3", "vi": "bàn tay", "example": "I wave my hand." },
+    { "id": "body-eye", "topic": "body", "word": "eye", "ipa": "/aɪ/", "emoji": "👁️", "audio": "/audio/words/eye.mp3", "vi": "mắt", "example": "I have two eyes." },
+    { "id": "body-ear", "topic": "body", "word": "ear", "ipa": "/ɪr/", "emoji": "👂", "audio": "/audio/words/ear.mp3", "vi": "tai", "example": "I have two ears." },
+    { "id": "body-nose", "topic": "body", "word": "nose", "ipa": "/noʊz/", "emoji": "👃", "audio": "/audio/words/nose.mp3", "vi": "mũi", "example": "My nose is small." },
+    { "id": "body-mouth", "topic": "body", "word": "mouth", "ipa": "/maʊθ/", "emoji": "👄", "audio": "/audio/words/mouth.mp3", "vi": "miệng", "example": "I open my mouth." },
+    { "id": "body-foot", "topic": "body", "word": "foot", "ipa": "/fʊt/", "emoji": "🦶", "audio": "/audio/words/foot.mp3", "vi": "bàn chân", "example": "My foot is small." },
+    { "id": "body-hair", "topic": "body", "word": "hair", "ipa": "/her/", "emoji": "💇", "audio": "/audio/words/hair.mp3", "vi": "tóc", "example": "My hair is black." },
+    { "id": "body-arm", "topic": "body", "word": "arm", "ipa": "/ɑːrm/", "emoji": "💪", "audio": "/audio/words/arm.mp3", "vi": "cánh tay", "example": "I have two arms." }
+  ]
+}

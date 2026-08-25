@@ -1,11 +1,11 @@
 import { Link } from 'react-router-dom'
 import { SOUNDS } from '../content'
-import { getStars } from '../progress/store'
+import { soundStars } from '../progress/store'
 import { BackButton, StarRow } from '../components/ui'
 
 /** Tập âm is organised by SOUND, not by word: one tile per phoneme, each holding its 3 words.
- * The stars are the sound's own key (`sound:<ph>`), so a tile only fills up once the child has
- * said all three of its words well — not once they have been lucky on one card. */
+ * The stars are the sound's derived value — the WEAKEST of its words — so a tile only fills up
+ * once the child has said all three of its words well, not once they have been lucky on one. */
 export function SoundLevel() {
   return (
     <main className="h-full overflow-y-auto bg-cream-50 p-6">
@@ -28,7 +28,7 @@ export function SoundLevel() {
             >
               <span className="font-display text-[56px] font-extrabold leading-none text-coral-text">/{s.ipa}/</span>
               <span className="font-display text-2xl font-extrabold text-ink-900">{s.example}</span>
-              <StarRow value={getStars(`sound:${s.ph}`)} />
+              <StarRow value={soundStars(s.ph)} />
             </Link>
           ))}
         </div>

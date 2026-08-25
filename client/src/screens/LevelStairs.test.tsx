@@ -39,6 +39,18 @@ it('reads the Sentence Stars stars off the sstar keys and Story Voice off the vo
   expect(within(screen.getByTestId('step-story-voice')).getAllByTestId('star-filled')).toHaveLength(2)
 })
 
+/** Phase 9 moved the sound's stars onto its words: the step shows the best sound, and a sound is
+ * only as good as its weakest word. */
+it('reads the Tập âm stars off the words of each sound', () => {
+  localStorage.setItem('speakup.stars', JSON.stringify({
+    'sword:sz-v-very': 3, 'sword:sz-v-van': 3, 'sword:sz-v-seven': 2,
+    'sword:sz-th-three': 3, // one word of /θ/ only — that sound still counts for nothing
+  }))
+  renderStairs()
+
+  expect(within(screen.getByTestId('step-sound-zoo')).getAllByTestId('star-filled')).toHaveLength(2)
+})
+
 it('stands Foxy on the first step that is not finished yet', () => {
   localStorage.setItem('speakup.stars', JSON.stringify({ 'sound:th': 3 }))
   renderStairs()
