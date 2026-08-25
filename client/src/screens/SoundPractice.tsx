@@ -52,21 +52,21 @@ function targetScore(result: PronunciationResult, ph: string): number | null {
   return hits.length ? Math.min(...hits.map(p => p.score)) : null
 }
 
-/** What one word of the run is worth: the target sound's own score when something measured it,
+/** What this word is worth so far: the target sound's own score when something measured it,
  * and the word-level score the attempt did produce when nothing did. */
 type WordBest = { phoneme: number | null; word: number }
 
 /**
- * 3 stars only when the sound itself was good in all three words — that needs real phoneme
- * detail, so a word the engine never scored the sound in caps the run at 2.
+ * 3 stars only when the sound itself was good in this word — that needs real phoneme detail, so a
+ * word the engine never scored the sound in caps at 2.
  *
  * That cap is a ceiling, not a floor. The 1-vs-2 decision still has to be made, and for an
- * unmeasured word the word-level score is the only evidence there is: a Web Speech run the engine
- * barely recognised must not come out level with one it heard perfectly.
+ * unmeasured word the word-level score is the only evidence there is: an attempt the engine barely
+ * recognised must not come out level with one it heard perfectly.
  */
-function starsFor(scores: WordBest[]): 1 | 2 | 3 {
-  if (scores.some(s => (s.phoneme ?? s.word) < 60)) return 1
-  if (scores.every(s => s.phoneme !== null && s.phoneme >= 80)) return 3
+function starsFor(s: WordBest): 1 | 2 | 3 {
+  if ((s.phoneme ?? s.word) < 60) return 1
+  if (s.phoneme !== null && s.phoneme >= 80) return 3
   return 2
 }
 
@@ -107,30 +107,37 @@ function SoundChip({ ipa, score, engine }: { ipa: string; score: number | null; 
   )
 }
 
+/**
+ * ONE word of one sound (Phase 9 §1). The three words of a sound are separate cards with separate
+ * stars now, picked off `SoundWordList`; this screen is the drill for the one the child chose.
+ */
 export function SoundPractice() {
-  const { ph = '' } = useParams()
+  const { ph = '', cardId = '' } = useParams()
   const sound = findSound(ph)
-  // The hooks live in the inner component so an unknown phoneme never renders half of them.
-  if (!sound || sound.cards.length === 0) return <p>Không tìm thấy âm</p>
-  return <SoundRun key={sound.ph} sound={sound} />
+  const idx = sound ? sound.cards.findIndex(c => c.id === cardId) : -1
+  // The hooks live in the inner component so an unknown phoneme (or word) never renders half of
+  // them — and so walking to the next word remounts with a clean attempt.
+  if (!sound || idx < 0) return <p>Không tìm thấy âm</p>
+  return <SoundWord key={cardId} sound={sound} idx={idx} />
 }
 
-function SoundRun({ sound }: { sound: SoundGroup }) {
+function SoundWord({ sound, idx }: { sound: SoundGroup; idx: number }) {
   const { ph, ipa, cards } = sound
-  // Null unless the child arrived from the mission: only then does this sound know it is step
-  // "Âm 2/4" of today's lesson rather than a tile they picked out of the Sound Zoo (spec §3).
+  // Null unless the child arrived from the mission: only then does this word know it is step
+  // "Âm 2/4" of today's lesson rather than a card they picked off the sound's word list (spec §3).
   const mission = useMissionNext()
-  const [idx, setIdx] = useState(0)
-  // Best scores per word, so a retry can only improve the sound's stars. A `phoneme` of `null` is
+  // Best score for this word, so a retry can only improve its stars. A `phoneme` of `null` is
   // "no engine has scored the sound in this word yet" — distinct from a genuine 0 — and `word` is
   // the fallback the star rule falls back on when it stays null.
-  const [best, setBest] = useState<WordBest[]>(() => cards.map(() => ({ phoneme: null, word: 0 })))
+  const [best, setBest] = useState<WordBest>({ phoneme: null, word: 0 })
   const [earned, setEarned] = useState<1 | 2 | 3 | null>(null)
   const [soundMissing, setSoundMissing] = useState(false)
   const [sampleMissing, setSampleMissing] = useState(false)
   const [secondsLeft, setSecondsLeft] = useState(COUNTDOWN_FROM)
   const card = cards[idx]
   const isLast = idx === cards.length - 1
+  // Free play walks the sound's own words and ends back on the list it started from.
+  const nextRoute = isLast ? `/sound/${ph}` : `/sound/${ph}/${cards[idx + 1].id}`
 
   function handleResult(result: PronunciationResult, blob: Blob | null) {
     logActivity({ ts: Date.now(), kind: 'speak', id: card.id, score: result.overall, phonemes: result.words.flatMap(w => w.phonemes) })
@@ -140,7 +147,7 @@ function SoundRun({ sound }: { sound: SoundGroup }) {
   const attempt = useSpeakingAttempt({
     targetText: card.text,
     autoStopMs: AUTO_STOP_MS,
-    resetKey: `${ph}:${idx}`,
+    resetKey: card.id,
     onResult: handleResult,
   })
 
@@ -149,24 +156,19 @@ function SoundRun({ sound }: { sound: SoundGroup }) {
   // would give the same `null`, but naming the engine keeps the rule visible at the call site.
   const score = result && attempt.engine !== 'webspeech' ? targetScore(result, ph) : null
 
-  // One place decides the run's outcome: every scored attempt updates that word's best, and the
-  // last word's result closes the run (a retry there can still raise the stars — `setStars` keeps
-  // the highest it has seen).
+  // One place decides this word's outcome: every scored attempt updates its best and re-stars it
+  // (a retry can only raise them — `setStars` keeps the highest it has seen). The sound's own stars
+  // are never written: they are derived from the words by `soundStars(ph)`.
   useEffect(() => {
     if (!result) return
-    const next = best.map((v, i) => {
-      if (i !== idx) return v
-      return {
-        phoneme: score === null ? v.phoneme : Math.max(v.phoneme ?? score, score),
-        word: Math.max(v.word, result.accuracy),
-      }
-    })
-    setBest(next)
-    if (isLast) {
-      const stars = starsFor(next)
-      setStars(`sound:${ph}`, stars)
-      setEarned(stars)
+    const next: WordBest = {
+      phoneme: score === null ? best.phoneme : Math.max(best.phoneme ?? score, score),
+      word: Math.max(best.word, result.accuracy),
     }
+    setBest(next)
+    const stars = starsFor(next)
+    setStars(`sword:${card.id}`, stars)
+    setEarned(stars)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [result])
 
@@ -191,12 +193,7 @@ function SoundRun({ sound }: { sound: SoundGroup }) {
     playUrl(card.audio).then(() => setSampleMissing(false), () => setSampleMissing(true))
   }
 
-  function nextWord() {
-    setSampleMissing(false)
-    setIdx(i => i + 1)
-  }
-
-  // The whole run has to fit the iPad's 834 px landscape without scrolling: a five-year-old does
+  // The whole screen has to fit the iPad's 834 px landscape without scrolling: a five-year-old does
   // not scroll to find the mic, or the button that ends the step. The gaps down this column are
   // the budget that buys that, so they are deliberately tighter than the rest of the app's.
   return (
@@ -205,14 +202,14 @@ function SoundRun({ sound }: { sound: SoundGroup }) {
         <header className="flex w-full items-center justify-between gap-4">
           {mission
             ? <BackButton to="/mission" label="Nhiệm vụ" />
-            : <BackButton to="/level/sound-zoo" label="Quay lại" />}
+            : <BackButton to={`/sound/${ph}`} label="Quay lại" />}
           <div className="flex flex-col items-center gap-1.5">
             {/* Both counters earn their place here: "Âm 2/4" is where the child is in the lesson,
-                "Từ 1/3" is where they are inside this sound — the run the lesson counts as one
-                step. Every other screen's own counter is a position in a free-play deck, which
-                the mission chip replaces outright. The "Từ n/3" chip itself now lives with the
-                word tile below (word row, cell B) while idle; the header only takes it back once
-                that cell stops existing, so the count is never simply gone from the screen. */}
+                "Từ 1/3" is which of the sound's words they are standing on — two different facts,
+                so the mission chip does not replace this one the way it replaces a free-play
+                deck's position. The "Từ n/3" chip itself lives with the word tile below (word row,
+                cell B) while idle; the header only takes it back once that cell stops existing, so
+                the count is never simply gone from the screen. */}
             {mission && <Chip tone="teal">Âm {mission.pos.index}/{mission.pos.total}</Chip>}
             {(result || recording) && <Chip tone="coral">Từ {idx + 1}/{cards.length}</Chip>}
             <div className="flex gap-2">
@@ -255,10 +252,10 @@ function SoundRun({ sound }: { sound: SoundGroup }) {
                 <button onClick={playSample} className={SAMPLE_CHIP}>🔊 Nghe mẫu</button>
                 {sampleMissing && <p className="text-lg font-bold text-ink-300">Chưa có audio mẫu</p>}
               </div>
-              {/* Row 2, cell B — the word itself, plus this run's own "Từ n/3" counter. Kept out of
-                  the header so it lives with the word it counts; while the run is scoring or
+              {/* Row 2, cell B — the word itself, plus its "Từ n/3" place in the sound. Kept out of
+                  the header so it lives with the word it counts; while the screen is scoring or
                   recording, the word slot is doing something else and the header shows it instead
-                  (see below) so the counter is never lost, just relocated. */}
+                  (see above) so the counter is never lost, just relocated. */}
               <div data-testid="word-cell-b" className="flex flex-col items-center gap-2 text-center sm:items-start sm:text-left">
                 <div className="font-display text-[56px] font-extrabold leading-none text-ink-900">{card.text}</div>
                 <div className="text-[22px] font-bold text-ink-300">{card.ipa}</div>
@@ -294,21 +291,22 @@ function SoundRun({ sound }: { sound: SoundGroup }) {
                 <div className="flex flex-col items-center gap-1">
                   <Stars value={earned} animate size="sm" />
                   <p className="font-display text-2xl font-extrabold text-ink-900">
-                    {earned === 3 ? 'Cả 3 từ đều tuyệt!' : earned === 2 ? 'Gần được rồi, luyện thêm nhé!' : 'Nghe mẫu rồi thử lại nhé!'}
+                    {earned === 3 ? 'Từ này tuyệt lắm!' : earned === 2 ? 'Gần được rồi, luyện thêm nhé!' : 'Nghe mẫu rồi thử lại nhé!'}
                   </p>
                 </div>
               )}
 
               <div className="flex flex-wrap justify-center gap-4 pt-1">
                 <Button variant="outline" onClick={attempt.reset}>↻ Thử lại</Button>
-                {/* Only the END of the run belongs to the lesson: the three words inside the
-                    sound are one step, so the mission hand-off replaces "Hoàn thành", never
-                    "Tiếp theo". */}
-                {!isLast
-                  ? <Button size="lg" pulse onClick={nextWord}>Tiếp theo →</Button>
-                  : mission
-                    ? <Button size="lg" pulse onClick={mission.go}>{mission.label}</Button>
-                    : <Button size="lg" pulse to="/level/sound-zoo">Hoàn thành 🎉</Button>}
+                {/* One word is one lesson step now, so the mission hand-off owns the CTA outright:
+                    a child working through today's lesson must not be walked into the sound's
+                    other two words instead of the step the lesson has lined up next. Free play
+                    still strolls along the sound and ends back on its word list. */}
+                {mission
+                  ? <Button size="lg" pulse onClick={mission.go}>{mission.label}</Button>
+                  : !isLast
+                    ? <Button size="lg" pulse to={nextRoute}>Tiếp theo →</Button>
+                    : <Button size="lg" pulse to={nextRoute}>Hoàn thành 🎉</Button>}
               </div>
             </section>
           </>

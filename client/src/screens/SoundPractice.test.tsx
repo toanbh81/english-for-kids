@@ -44,8 +44,9 @@ function seedLesson(...items: LessonItem[]) {
   saveLesson({ day: dayKey(now), created: now, band: 5, items })
 }
 
-const SOUND_STEP = step('th', '/sound/th')
-const NEXT_STEP = step('sz-th-three', '/practice/sz-th-three')
+/** One word of a sound is one step of the lesson now (Phase 9 §1). */
+const WORD_STEP = step('sz-th-three', '/sound/th/sz-th-three')
+const NEXT_STEP = step('wp-cat', '/practice/wp-cat')
 
 /** One attempt on the word `three`: `ph` is the target phoneme's score, `null` = no detail at all. */
 function result(ph: number | null, overall = 90): PronunciationResult {
@@ -67,17 +68,20 @@ function score(r: PronunciationResult) {
   act(() => { mic.push(r) })
 }
 
-function renderSound(ph = 'th', mission = false) {
+/** One word of one sound — the screen's whole job now. */
+function renderWord(ph = 'th', cardId = 'sz-th-three', mission = false) {
   render(
-    <MemoryRouter initialEntries={[{ pathname: `/sound/${ph}`, state: mission ? { mission: true } : null }]}>
+    <MemoryRouter initialEntries={[{ pathname: `/sound/${ph}/${cardId}`, state: mission ? { mission: true } : null }]}>
       <Routes>
-        <Route path="/sound/:ph" element={<SoundPractice />} />
-        <Route path="/level/:levelId" element={<p>các âm</p>} />
+        <Route path="/sound/:ph/:cardId" element={<SoundPractice />} />
+        <Route path="/sound/:ph" element={<p>danh sách từ</p>} />
         <Route path="*" element={<Probe />} />
       </Routes>
     </MemoryRouter>,
   )
 }
+
+const stored = () => JSON.parse(localStorage.getItem('speakup.stars') ?? '{}')
 
 beforeEach(() => {
   localStorage.clear()
@@ -85,18 +89,22 @@ beforeEach(() => {
   playerControl.playUrl.mockReset().mockResolvedValue(undefined)
 })
 
-const nextWord = () => fireEvent.click(screen.getByRole('button', { name: /tiếp theo/i }))
-
-it('leads with the sound itself and the first of its three words', () => {
-  renderSound()
+it('leads with the sound itself and the one word being drilled', () => {
+  renderWord()
   expect(screen.getByText('/θ/')).toBeInTheDocument()
   expect(screen.getByText(PHONEME_TIPS.th)).toBeInTheDocument()
   expect(screen.getByText('three')).toBeInTheDocument()
   expect(screen.getByText('Từ 1/3')).toBeInTheDocument()
 })
 
+it('numbers the word by its place in the sound, not from 1', () => {
+  renderWord('th', 'sz-th-think')
+  expect(screen.getByText('think')).toBeInTheDocument()
+  expect(screen.getByText('Từ 3/3')).toBeInTheDocument()
+})
+
 it('lays the sound and the word out as two rows sharing a tile column', () => {
-  renderSound()
+  renderWord()
 
   const grid = screen.getByTestId('sound-word-grid')
   const soundA = screen.getByTestId('sound-cell-a')
@@ -120,7 +128,7 @@ it('lays the sound and the word out as two rows sharing a tile column', () => {
 
 it('plays the sound on its own, and says so when that sample is missing', async () => {
   playerControl.playUrl.mockReturnValue(new Promise<void>(() => {})) // still playing: no state change yet
-  renderSound()
+  renderWord()
   fireEvent.click(screen.getByRole('button', { name: /nghe âm lẻ/i }))
   expect(playerControl.playUrl).toHaveBeenCalledWith('/audio/sounds/th.mp3')
 
@@ -130,7 +138,7 @@ it('plays the sound on its own, and says so when that sample is missing', async 
 })
 
 it('folds the word row away once a result lands, and keeps the "Từ n/3" count in the header instead', () => {
-  renderSound()
+  renderWord()
   expect(screen.getByTestId('word-cell-a')).toBeInTheDocument()
 
   score(result(92))
@@ -142,7 +150,7 @@ it('folds the word row away once a result lands, and keeps the "Từ n/3" count 
 })
 
 it('scores only the target sound: a good phoneme needs no tip', () => {
-  renderSound()
+  renderWord()
   score(result(92))
 
   const chip = screen.getByTestId('sound-chip')
@@ -152,7 +160,7 @@ it('scores only the target sound: a good phoneme needs no tip', () => {
 })
 
 it('turns a weak target sound into a fix chip plus the mouth tip', () => {
-  renderSound()
+  renderWord()
   score(result(55))
 
   expect(screen.getByTestId('sound-chip')).toHaveAttribute('data-tone', 'fix')
@@ -165,7 +173,7 @@ it('turns a weak target sound into a fix chip plus the mouth tip', () => {
  * overall. Standing that number under a /θ/ chip told the child their θ was fine when nothing had
  * measured it, so a result with no phoneme detail now says so instead of borrowing a number. */
 it('says the sound was not scored when the engine reports no phoneme detail', () => {
-  renderSound()
+  renderWord()
   score(result(null, 70))
 
   const chip = screen.getByTestId('sound-chip')
@@ -182,7 +190,7 @@ it('says the sound was not scored when the engine reports no phoneme detail', ()
  * and the child never reads the name of a cloud service it has no way to act on. */
 it('blames neither the connection nor the child when the simple engine cannot score a sound', () => {
   mic.engine = 'webspeech'
-  renderSound()
+  renderWord()
   score(ws(70))
 
   const chip = screen.getByTestId('sound-chip')
@@ -192,61 +200,42 @@ it('blames neither the connection nor the child when the simple engine cannot sc
   expect(document.body.textContent).not.toMatch(/azure/i)
 })
 
-it('never fabricates a phoneme score on the Web Speech fallback, and caps such a run at 2 stars', () => {
+it('never fabricates a phoneme score on the Web Speech fallback, and caps such a word at 2 stars', () => {
   mic.engine = 'webspeech'
-  renderSound()
+  renderWord()
 
   score(ws(100))
   const chip = screen.getByTestId('sound-chip')
   expect(chip).toHaveAttribute('data-tone', 'unknown')
   expect(chip.textContent).not.toMatch(/\d/)
 
-  nextWord(); score(ws(100))
-  nextWord(); score(ws(100))
-
-  // A perfect Web Speech run proves the child said *something*, not that the θ was right.
+  // A perfect Web Speech attempt proves the child said *something*, not that the θ was right.
   expect(screen.getAllByTestId('star-filled')).toHaveLength(2)
-  expect(JSON.parse(localStorage.getItem('speakup.stars') ?? '{}')['sound:th']).toBe(2)
+  expect(stored()['sword:sz-th-three']).toBe(2)
 })
 
-/** 2 stars is the CEILING of an unscored run, never its floor: with no phoneme detail to judge,
- * the word's own score is the only evidence there is, and a run the engine barely recognised must
- * not come out level with one it heard perfectly. */
-it('still separates 1 from 2 stars on an unscored run, using the word scores', () => {
+/** 2 stars is the CEILING of an unscored attempt, never its floor: with no phoneme detail to judge,
+ * the word's own score is the only evidence there is, and an attempt the engine barely recognised
+ * must not come out level with one it heard perfectly. */
+it('still separates 1 from 2 stars on an unscored attempt, using the word score', () => {
   mic.engine = 'webspeech'
-  renderSound()
-
-  score(ws(100)); nextWord()
-  score(ws(30)); nextWord()
-  score(ws(100))
+  renderWord()
+  score(ws(30))
 
   expect(screen.getAllByTestId('star-filled')).toHaveLength(1)
+  expect(stored()['sword:sz-th-three']).toBe(1)
 })
 
-it('gives an unscored run 2 stars when every word was at least passable', () => {
-  mic.engine = 'webspeech'
-  renderSound()
-
-  score(ws(100)); nextWord()
-  score(ws(70)); nextWord()
-  score(ws(100))
-
-  expect(screen.getAllByTestId('star-filled')).toHaveLength(2)
-})
-
-it('caps the run at 2 stars when a single word never got phoneme detail', () => {
-  renderSound()
-  score(result(95))
-  nextWord()
+it('caps the word at 2 stars when the attempt never got phoneme detail', () => {
+  renderWord()
   score(result(null, 95)) // Azure dropped the sound in this word
-  nextWord()
-  score(result(95))
 
   expect(screen.getAllByTestId('star-filled')).toHaveLength(2)
+  expect(stored()['sword:sz-th-three']).toBe(2)
 })
 
 it('takes the worst occurrence of the sound, not the average', () => {
-  renderSound()
+  renderWord()
   score({
     ...result(90),
     words: [{ word: 'three', score: 90, errorType: 'None', phonemes: [{ phoneme: 'th', score: 90 }, { phoneme: 'th', score: 40 }] }],
@@ -255,110 +244,130 @@ it('takes the worst occurrence of the sound, not the average', () => {
 })
 
 it('logs a speak event for every scored attempt', () => {
-  renderSound()
+  renderWord()
   score(result(92))
   const events = JSON.parse(localStorage.getItem('speakup.activity') ?? '[]')
   expect(events).toContainEqual(expect.objectContaining({ kind: 'speak', id: 'sz-th-three' }))
 })
 
-it('gives 3 stars once the sound is good in all three words', () => {
-  renderSound()
+// --- one word, one set of stars (spec §1) ----------------------------------------------------
 
+it('stores this word’s stars under its own key, and never the sound’s', () => {
+  renderWord()
   score(result(92))
-  fireEvent.click(screen.getByRole('button', { name: /tiếp theo/i }))
-  expect(screen.getByText('Từ 2/3')).toBeInTheDocument()
-  expect(screen.getByText('thank')).toBeInTheDocument()
 
-  score(result(88))
-  fireEvent.click(screen.getByRole('button', { name: /tiếp theo/i }))
-  expect(screen.getByText('Từ 3/3')).toBeInTheDocument()
-
-  score(result(85))
-
-  expect(JSON.parse(localStorage.getItem('speakup.stars') ?? '{}')).toMatchObject({ 'sound:th': 3 })
+  expect(stored()).toMatchObject({ 'sword:sz-th-three': 3 })
+  expect(stored()['sound:th']).toBeUndefined()
   expect(screen.getAllByTestId('star-filled')).toHaveLength(3)
-  expect(screen.getByRole('link', { name: /hoàn thành/i })).toHaveAttribute('href', '/level/sound-zoo')
 })
 
-it('gives 2 stars when every word was only passable', () => {
-  renderSound()
+it('gives 2 stars when the sound was only passable in this word', () => {
+  renderWord('th', 'sz-th-thank')
   score(result(65))
-  fireEvent.click(screen.getByRole('button', { name: /tiếp theo/i }))
-  score(result(92))
-  fireEvent.click(screen.getByRole('button', { name: /tiếp theo/i }))
-  score(result(70))
 
-  expect(JSON.parse(localStorage.getItem('speakup.stars') ?? '{}')).toMatchObject({ 'sound:th': 2 })
+  expect(stored()).toMatchObject({ 'sword:sz-th-thank': 2 })
   expect(screen.getAllByTestId('star-filled')).toHaveLength(2)
 })
 
-it('lets a retry on the last word raise the stars', () => {
-  renderSound()
+it('leaves the other words of the sound untouched', () => {
+  renderWord()
   score(result(92))
-  fireEvent.click(screen.getByRole('button', { name: /tiếp theo/i }))
-  score(result(92))
-  fireEvent.click(screen.getByRole('button', { name: /tiếp theo/i }))
+
+  expect(stored()['sword:sz-th-thank']).toBeUndefined()
+  expect(stored()['sword:sz-th-think']).toBeUndefined()
+})
+
+it('lets a retry raise the word’s stars', () => {
+  renderWord()
   score(result(40))
-  expect(JSON.parse(localStorage.getItem('speakup.stars') ?? '{}')).toMatchObject({ 'sound:th': 1 })
+  expect(stored()).toMatchObject({ 'sword:sz-th-three': 1 })
 
   fireEvent.click(screen.getByRole('button', { name: /thử lại/i }))
   score(result(95))
 
-  expect(JSON.parse(localStorage.getItem('speakup.stars') ?? '{}')).toMatchObject({ 'sound:th': 3 })
+  expect(stored()).toMatchObject({ 'sword:sz-th-three': 3 })
+})
+
+// --- walking the sound in free play -----------------------------------------------------------
+
+it('hands on to the next word of the sound', () => {
+  renderWord()
+  score(result(92))
+
+  const next = screen.getByRole('link', { name: /tiếp theo/i })
+  expect(next).toHaveAttribute('href', '/sound/th/sz-th-thank')
+
+  fireEvent.click(next)
+  expect(screen.getByText('thank')).toBeInTheDocument()
+  expect(screen.getByText('Từ 2/3')).toBeInTheDocument()
+  // A fresh word starts with a fresh attempt, not the previous word's result.
+  expect(screen.queryByTestId('sound-chip')).not.toBeInTheDocument()
+})
+
+it('ends the last word back on the sound’s word list', () => {
+  renderWord('th', 'sz-th-think')
+  score(result(92))
+
+  expect(screen.queryByRole('link', { name: /tiếp theo/i })).not.toBeInTheDocument()
+  const done = screen.getByRole('link', { name: /hoàn thành/i })
+  expect(done).toHaveAttribute('href', '/sound/th')
+
+  fireEvent.click(done)
+  expect(screen.getByText('danh sách từ')).toBeInTheDocument()
+})
+
+it('goes back to the sound’s word list, not to the bậc', () => {
+  renderWord()
+  expect(screen.getByRole('link', { name: 'Quay lại' })).toHaveAttribute('href', '/sound/th')
 })
 
 it('shows a not-found message for a phoneme that has no group', () => {
-  renderSound('nope')
+  renderWord('nope', 'sz-th-three')
+  expect(screen.getByText('Không tìm thấy âm')).toBeInTheDocument()
+})
+
+it('shows a not-found message for a word that does not belong to the sound', () => {
+  renderWord('th', 'sz-dh-this')
   expect(screen.getByText('Không tìm thấy âm')).toBeInTheDocument()
 })
 
 // --- as a step of today's lesson (spec §3) ---------------------------------------------------
 
-/** All three words of the sound, scored well — the run the lesson counts as one step. */
-function runThreeWords() {
-  score(result(92))
-  fireEvent.click(screen.getByRole('button', { name: /tiếp theo/i }))
-  score(result(92))
-  fireEvent.click(screen.getByRole('button', { name: /tiếp theo/i }))
-  score(result(92))
-}
-
-it('numbers the sound inside the lesson and keeps its own three-word run', () => {
-  seedLesson(SOUND_STEP, NEXT_STEP)
-  renderSound('th', true)
+it('numbers the word inside the lesson and keeps its place in the sound', () => {
+  seedLesson(WORD_STEP, NEXT_STEP)
+  renderWord('th', 'sz-th-three', true)
 
   expect(screen.getByText('Âm 1/2')).toBeInTheDocument()
-  // The three words are one lesson step, so the run keeps its own counter alongside.
+  // Two different facts, so both chips stay.
   expect(screen.getByText('Từ 1/3')).toBeInTheDocument()
   expect(screen.getByRole('link', { name: 'Nhiệm vụ' })).toHaveAttribute('href', '/mission')
 })
 
-it('walks its own words first, then hands on to the next step of the lesson', () => {
-  seedLesson(SOUND_STEP, NEXT_STEP)
-  renderSound('th', true)
-  runThreeWords()
+it('hands on to the next step of the lesson instead of the sound’s next word', () => {
+  seedLesson(WORD_STEP, NEXT_STEP)
+  renderWord('th', 'sz-th-three', true)
+  score(result(92))
 
-  expect(screen.getByText('Từ 3/3')).toBeInTheDocument()
   fireEvent.click(screen.getByRole('button', { name: /tiếp theo/i }))
-  expect(screen.getByTestId('probe')).toHaveTextContent('/practice/sz-th-three {"mission":true}')
+  expect(screen.getByTestId('probe')).toHaveTextContent('/practice/wp-cat {"mission":true}')
 })
 
 it('ends at the mission screen when it is the last step of the lesson', () => {
-  seedLesson(SOUND_STEP)
-  renderSound('th', true)
-  runThreeWords()
+  seedLesson(WORD_STEP)
+  renderWord('th', 'sz-th-three', true)
+  score(result(92))
 
   fireEvent.click(screen.getByRole('button', { name: /hoàn thành/i }))
   expect(screen.getByTestId('probe')).toHaveTextContent('/mission null')
 })
 
-/** Today's lesson may well list this very sound — but a child who walked in from the bậc did not
- * arrive carrying the flag, and nothing about the screen may change for them. */
-it('stays a free-play sound without the flag, lesson or no lesson', () => {
-  seedLesson(SOUND_STEP, NEXT_STEP)
-  renderSound()
+/** Today's lesson may well list this very word — but a child who walked in from the word list did
+ * not arrive carrying the flag, and nothing about the screen may change for them. */
+it('stays free play without the flag, lesson or no lesson', () => {
+  seedLesson(WORD_STEP, NEXT_STEP)
+  renderWord()
 
   expect(screen.queryByText(/^Âm \d/)).not.toBeInTheDocument()
   expect(screen.getByText('Từ 1/3')).toBeInTheDocument()
-  expect(screen.getByRole('link', { name: 'Quay lại' })).toHaveAttribute('href', '/level/sound-zoo')
+  expect(screen.getByRole('link', { name: 'Quay lại' })).toHaveAttribute('href', '/sound/th')
 })
