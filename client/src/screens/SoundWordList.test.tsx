@@ -1,5 +1,5 @@
 import { render, screen, fireEvent, within } from '@testing-library/react'
-import { MemoryRouter, Route, Routes } from 'react-router-dom'
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 
 const playerControl = vi.hoisted(() => ({ playUrl: vi.fn() }))
 vi.mock('../audio/player', () => ({ playUrl: playerControl.playUrl }))
@@ -8,11 +8,19 @@ import { SoundWordList } from './SoundWordList'
 import { PHONEME_TIPS } from '../scoring/feedback'
 import { findSound } from '../content'
 
-function renderList(ph = 'th') {
+/** Where a tap landed, and whether it was still carrying `{ mission: true }` — the flag leaves no
+ * trace in the DOM, so the probe is the only way to see it. */
+function Probe() {
+  const location = useLocation()
+  return <p data-testid="probe">{location.pathname} {JSON.stringify(location.state)}</p>
+}
+
+function renderList(ph = 'th', mission = false) {
   render(
-    <MemoryRouter initialEntries={[`/sound/${ph}`]}>
+    <MemoryRouter initialEntries={[{ pathname: `/sound/${ph}`, state: mission ? { mission: true } : null }]}>
       <Routes>
         <Route path="/sound/:ph" element={<SoundWordList />} />
+        <Route path="*" element={<Probe />} />
       </Routes>
     </MemoryRouter>,
   )
@@ -76,6 +84,31 @@ it('plays the sound on its own, and says so when that sample is missing', async 
 it('goes back to the stairs', () => {
   renderList()
   expect(screen.getByRole('link', { name: 'Các bậc' })).toHaveAttribute('href', '/levels')
+})
+
+it('sends the child on to a word with no mission flag attached', () => {
+  renderList()
+  fireEvent.click(screen.getByRole('link', { name: 'Từ three' }))
+  expect(screen.getByTestId('probe')).toHaveTextContent('/sound/th/sz-th-three null')
+})
+
+// --- reached from a lesson persisted before per-word steps existed ----------------------------
+
+/** A lesson saved yesterday still holds `/sound/<ph>` items, so a mission tap can still land here.
+ * The list is not a step and shows no "Âm i/n" chip — but it must not be a dead end either: the
+ * child gets their way back to the mission, and the flag rides on into the word they pick. */
+it('offers the way back to the mission when a stale lesson step lands here', () => {
+  renderList('th', true)
+
+  expect(screen.getByRole('link', { name: 'Nhiệm vụ' })).toHaveAttribute('href', '/mission')
+  expect(screen.queryByRole('link', { name: 'Các bậc' })).not.toBeInTheDocument()
+})
+
+it('carries the mission flag on into the word the child picks', () => {
+  renderList('th', true)
+  fireEvent.click(screen.getByRole('link', { name: 'Từ thank' }))
+
+  expect(screen.getByTestId('probe')).toHaveTextContent('/sound/th/sz-th-thank {"mission":true}')
 })
 
 it('shows a not-found message for a phoneme that has no group', () => {
