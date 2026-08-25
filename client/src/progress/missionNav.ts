@@ -72,14 +72,27 @@ export type MissionPos = {
  * first outstanding step of a later group — so the last step of the lesson ends at `null`, which
  * the screens read as "back to the mission".
  */
+const routeIs = (route: string, pathname: string) => route === pathname
+
+/**
+ * Whether `pathname` is one of these items' own step routes — the exact rule the walk below uses,
+ * exported so nothing has to restate it. `LessonChip` in particular must agree: it suppresses
+ * itself where a screen knows it is in a mission, and a screen knows that only when this is true.
+ * Guessing the rule instead (a stored `/sound/<ph>` step from a Phase-8 lesson, the child standing
+ * on `/sound/<ph>/<cardId>`) left the child on a screen with no header, no chip and no way back.
+ */
+export function isItemRoute(items: readonly { route: string }[], pathname: string): boolean {
+  return items.some(item => routeIs(item.route, pathname))
+}
+
 function positionIn(items: DoneItem[], pathname: string): MissionPos | null {
-  const item = items.find(i => i.route === pathname)
+  const item = items.find(i => routeIs(i.route, pathname))
   if (!item) return null
 
   const groups = groupItems(items)
   const at = groups.findIndex(g => g.kind === item.kind)
   const group = groups[at].items
-  const index = group.findIndex(i => i.route === pathname)
+  const index = group.findIndex(i => routeIs(i.route, pathname))
 
   let next = group.slice(index + 1).find(i => !i.done)
   for (let g = at + 1; !next && g < groups.length; g++) {
@@ -132,8 +145,8 @@ export function missionNext(pathname: string, now = Date.now()): MissionNext | n
   const items = lessonStatus(now).items
   const pos = positionIn(items, pathname)
   if (!pos) return null
-  const owedElsewhere = items.some(i => !i.done && i.route !== pathname)
-  const replaying = items.some(i => i.route === pathname && i.done)
+  const owedElsewhere = items.some(i => !i.done && !routeIs(i.route, pathname))
+  const replaying = items.some(i => routeIs(i.route, pathname) && i.done)
   const chained = replaying && owedElsewhere ? null : pos.nextRoute
   return {
     pos,

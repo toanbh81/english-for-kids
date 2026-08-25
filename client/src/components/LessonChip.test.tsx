@@ -1,7 +1,8 @@
 import { render, screen } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
-import { logActivity } from '../progress/activity'
+import { dayKey, logActivity } from '../progress/activity'
 import { getLesson } from '../progress/lesson'
+import { saveLesson } from '../progress/lessonStore'
 import { LessonChip } from './LessonChip'
 
 const NOW = new Date('2026-08-23T10:00:00').getTime()
@@ -118,6 +119,46 @@ it('does not mistake a longer sibling route for a step of the lesson', () => {
   const word = lesson.items.find(i => i.route.startsWith('/words/'))!
 
   renderAt(`${word.route}-pie`)
+
+  expect(screen.queryByRole('link')).not.toBeInTheDocument()
+})
+
+/**
+ * The Phase-8 upgrade. Yesterday's persisted lesson still holds a whole-group `/sound/th` step, so
+ * the word screen the child taps — `/sound/th/sz-th-three` — finds no mission of its own: no header
+ * back, no CTA onward. The chip must not read the flag alone and vanish too, or the child is
+ * stranded on a word card with nothing leading back to their lesson.
+ */
+const phase8Lesson = () => saveLesson({
+  day: dayKey(NOW),
+  created: NOW,
+  band: 1,
+  items: [
+    { kind: 'speak', activity: 'speak', id: 'th', route: '/sound/th', label: 'Nói: âm th', emoji: '🗣️' },
+    { kind: 'word', activity: 'word', id: 'apple', route: '/words/food/apple', label: 'Từ mới: apple', emoji: '🧩' },
+  ],
+})
+
+const renderInMission = (pathname: string) => render(
+  <MemoryRouter initialEntries={[{ pathname, state: { mission: true } }]}>
+    <LessonChip />
+  </MemoryRouter>,
+)
+
+it('still shows on a word the stored mission step does not name', () => {
+  phase8Lesson()
+
+  renderInMission('/sound/th/sz-th-three')
+
+  expect(screen.getByRole('link', { name: '🌞 Nhiệm vụ 0/2' })).toHaveAttribute('href', '/mission')
+})
+
+/** The other half of the same rule: where the path IS today's step, the screen really does have
+ * its own header and CTA, so the chip stays out of the corner. */
+it('stays out of the way on the stored step route itself', () => {
+  phase8Lesson()
+
+  renderInMission('/sound/th')
 
   expect(screen.queryByRole('link')).not.toBeInTheDocument()
 })
