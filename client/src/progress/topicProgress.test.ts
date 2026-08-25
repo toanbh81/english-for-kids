@@ -1,4 +1,4 @@
-import { currentTopic, deckComplete, topicStars, topicUnlocked, unlockedTopics, unlockedWords } from './topicProgress'
+import { deckComplete, topicStars, topicUnlocked, unlockedTopics, unlockedWords } from './topicProgress'
 import { promote } from './leitner'
 import { setStars } from './store'
 import { TOPICS as WORD_DECKS } from '../content/words'
@@ -72,25 +72,9 @@ it('island stars follow the word deck: 0 / >=1 / >=6 / all 8', () => {
   expect(deckComplete('animals')).toBe(true)
 })
 
-it('currentTopic is the first unlocked topic with an unfinished deck', () => {
-  expect(currentTopic()).toBe('animals')
-
-  learn('animals', 8)
-  expect(currentTopic()).toBe('food')
-
-  learn('food', 8)
-  expect(currentTopic()).toBe('school')
-})
-
-it('currentTopic falls back to the last unlocked topic when every open deck is finished', () => {
-  learn('animals', 8)
-  learn('food', 8)
-  learn('school', 8)
-  learn('family', 8)
-  learn('weather', 8)
-  learn('colors', 8)
-  learn('body', 8)
-  learn('toys', 8)
+it('opens every island once each deck is finished', () => {
+  for (const id of ['animals', 'food', 'school', 'family', 'weather', 'colors', 'body', 'toys'] as const) {
+    learn(id, 8)
+  }
   expect(unlockedTopics()).toHaveLength(8)
-  expect(currentTopic()).toBe('toys')
 })

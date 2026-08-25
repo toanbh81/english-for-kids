@@ -189,12 +189,12 @@ The client dev server uses HTTPS because Safari on iOS/iPadOS only allows microp
 ## Testing
 
 ```bash
-pnpm test        # client (Vitest, 689 tests) + server (Vitest, 2 tests)
+pnpm test        # client (Vitest, 703 tests) + server (Vitest, 2 tests)
 pnpm lint        # oxlint on the client
 pnpm typecheck   # tsc -b (client) + tsc --noEmit (server)
 ```
 
-`pnpm test` runs `pnpm -r test`, which executes the client suite (`vitest run`, 689 tests in 63
+`pnpm test` runs `pnpm -r test`, which executes the client suite (`vitest run`, 703 tests in 63
 files) and the server suite (`vitest run`, 2 tests). `pnpm lint` and `pnpm typecheck` fan out the
 same way.
 
@@ -462,15 +462,17 @@ to the child's level.
     | medium | 1 | 4 | 3 | 2 | ~12 phút |
     | long | 1 | 6 | 4 | 3 | ~18 phút |
 
-  - **listen** — the story with the fewest stars (ties broken by the day's seed); done once a
-    `story` activity event for it lands after the lesson was created.
+  - **listen** — the story with the fewest stars; among the stories tied at that count the day
+    index picks one (`tied[daysSinceEpoch % tied.length]`), so once the child has played them all
+    — when every day is a tie — the three take turns rather than the seed favouring one. Done once
+    a `story` activity event for it lands after the lesson was created.
   - **speak** — drawn from the union of speaking levels up to the child's band (1 sound tiles → 2
     word-pop cards → 3 minimal pairs → 4 sentence stars → 5 story voice); half the slots (rounded
     up) come from the band's newest level, the rest from the levels below, all seeded per day.
     Sound/word cards touching a phoneme averaging < 80 (`weakPhonemes`) are picked first.
-  - **word** — new (unlocked-word-count = 0) words from `currentTopic()` — the first unlocked topic
-    whose deck still has fewer than 8 words unlocked — then the rest of the open map, then locked
-    decks once every open deck is finished, all seeded.
+  - **word** — new (unlocked-word-count = 0) words dealt round-robin across **every** unlocked
+    topic in `dayTopicOrder(day)` (see the mixing rules below), then locked decks once every open
+    deck is finished, all seeded.
   - **review** — due Leitner words first, then the previously-attempted item (any kind, stars > 0,
     at or below the child's band) with the fewest stars; a brand-new player with nothing to review
     yet gets extra new words as filler instead.
@@ -543,7 +545,9 @@ whole card to the phoneme-blind fallback with a scary "lỗi kết nối Azure" 
   spec §3):
   - The header grows a position chip built from `mission.pos.index`/`mission.pos.total`: "Âm i/N"
     (SoundPractice), "Thẻ i/N" (PracticeCard/PairPractice/StarPractice/VoicePractice), "Từ mới i/N"
-    (WordCard), "Câu i/N" (SentenceBuilder).
+    (WordCard), "Câu i/N" (SentenceBuilder). The number counts inside `mission.pos.group`, so the
+    noun has to agree with it: `missionNoun(pos, own)` replaces every one of those with "Ôn tập i/N"
+    when the lesson filed the step under 🔁 — a word reached from review is not "Từ mới" anything.
   - `BackButton` targets `/mission` labelled "Nhiệm vụ" instead of the screen's usual deck/level.
   - The finish/next CTA calls `mission.go()`, which either advances to `nextRoute` (still carrying
     `{ mission: true }`) or, when nothing follows, returns to `/mission` with no state (which then
@@ -558,7 +562,11 @@ whole card to the phoneme-blind fallback with a scary "lỗi kết nối Azure" 
     stays as the thread back to a lesson reached without the flag — except it hides itself whenever
     the screen *is* mission-aware, since the header/CTA already cover that; it only keeps showing
     on `/story/*` routes in mission mode, because stories don't carry the flag through their own
-    flow.
+    flow. "Mission-aware" is asked, never assumed: the chip calls `isItemRoute()` — the same exact
+    route match `missionNav` walks with — so the flag alone is not enough to suppress it. A child
+    upgrading from Phase 8 has a whole-group `/sound/<ph>` step in storage and lands on
+    `/sound/<ph>/<cardId>`, where the screen finds no mission of its own; the chip is then the only
+    control on screen that leads back.
 - **SoundPractice two-row layout** (`client/src/screens/SoundPractice.tsx`) — the practice area is
   a two-row grid (`grid-cols-[minmax(180px,auto)_1fr]` from `sm`, stacked below) sharing columns so
   cells line up: row 1 is the sound (mouth/IPA tile + "🔊 Nghe âm lẻ" | the phoneme's
@@ -615,9 +623,9 @@ happens to point at; and the map needed more content to mix, so it grew from fiv
     unchanged: target-phoneme score ≥ 80 → 3★, ≥ 60 → 2★, else 1★, capped at 2★ when the engine
     never scored the phoneme in that word.
 - **The daily mission mixes every unlocked topic** (`client/src/progress/lesson.ts`) —
-  `currentTopic()` no longer feeds lesson generation at all; it stays only for the topic-unlock
-  chain. A day's word and sentence slots are dealt across **every unlocked topic** instead of
-  whichever one the map would point at next:
+  no single "current topic" steers a lesson any more (the old `currentTopic()` helper had no caller
+  left and is gone). A day's word and sentence slots are dealt across **every unlocked topic**
+  instead of whichever one the map would point at next:
   - **`dayTopicOrder(day)`** ranks the unlocked topics by three keys, strongest first: **freshness**
     — an island the last lesson (and, at half weight, the one before it) never touched outranks one
     it did, which is what rotates the leading topic day to day and is what makes any two lessons in
@@ -665,7 +673,9 @@ happens to point at; and the map needed more content to mix, so it grew from fiv
   - **Map** (`client/src/screens/Home.tsx`) — eight islands in a two-row serpentine (row one left →
     right, row two right → left) inside the existing 1194×834 frame, 96 px discs (`lg` 112 px), the
     dotted trail redrawn through the eight centres. Below `lg` the islands fall back to a 2-column
-    grid, unchanged from Phase 7.
+    grid, unchanged from Phase 7. The eight slots are hand-placed against that hand-fitted trail,
+    so `Home.tsx` throws at module load if `TOPICS` ever outgrows `SLOTS` — a ninth topic would
+    otherwise render an unpositioned, colourless disc on top of the first island.
 - **Island role, made visible** (`client/src/screens/Home.tsx`, `TopicHub.tsx`) — each unlocked
   island's label grows a "Luyện thêm" subtitle under the topic name, so the map reads as the
   free-choice library it is, next to (never instead of) the daily mission. **Approved deviation

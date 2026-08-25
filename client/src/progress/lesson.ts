@@ -158,7 +158,7 @@ function selectSpeak(count: number, band: Band, day: string, events: ActivityEve
 //
 // The mission and the islands are separate axes (Phase 9 §2): an island is one topic's library,
 // today's lesson is drawn across every unlocked topic, so a whole practice session is never stuck
-// on one theme. `currentTopic()` no longer feeds generation at all.
+// on one theme — no single "current topic" steers it any more.
 
 /**
  * The islands a lesson taught from, by what its items *are* rather than which slot they sat in: a

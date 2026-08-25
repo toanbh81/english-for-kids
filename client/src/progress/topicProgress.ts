@@ -60,14 +60,3 @@ export function topicStars(id: TopicId): 0 | 1 | 2 | 3 {
 export function deckComplete(id: TopicId): boolean {
   return unlockedWords(id) >= DECK_SIZE
 }
-
-/**
- * The topic the daily lesson draws new words from: the first unlocked topic, in unlock order,
- * whose deck still has something left to learn. Every unlocked deck finished → the last one open,
- * so the map still points somewhere sensible.
- */
-export function currentTopic(): TopicId {
-  const open = unlockedTopics()
-  if (open.length === 0) return TOPICS[0].id
-  return open.find(id => !deckComplete(id)) ?? open[open.length - 1]
-}

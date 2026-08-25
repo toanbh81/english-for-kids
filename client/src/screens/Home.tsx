@@ -49,7 +49,20 @@ const SLOTS = [
  * clear of the 64 px tap floor, and small enough that two rows fit the band without touching. */
 const ISLAND_DISC = 'h-24 w-24 text-[40px] lg:h-28 lg:w-28 lg:text-[46px]'
 
-/** One island per topic (spec §2): the map is the topic list, in unlock order. */
+/**
+ * One island per topic (spec §2): the map is the topic list, in unlock order.
+ *
+ * The slots are hand-placed on a hand-fitted trail, so there is no ninth position to fall back on:
+ * a topic added without one would spread `undefined` and render a colourless, unpositioned disc on
+ * top of the first island — a bug nobody would see until they looked at the map. Say so at module
+ * load instead, where whoever added the topic cannot miss it.
+ */
+if (TOPICS.length > SLOTS.length) {
+  throw new Error(
+    `Home map: ${TOPICS.length} topics but only ${SLOTS.length} island slots. `
+    + 'Add a slot to SLOTS (and a point to TRAIL) in screens/Home.tsx for every new topic.',
+  )
+}
 const ISLANDS = TOPICS.map((topic, i) => ({ ...topic, ...SLOTS[i] }))
 
 // `lg:w-[15%]`: a percentage width, so an island's centre is a fixed fraction of the band on every

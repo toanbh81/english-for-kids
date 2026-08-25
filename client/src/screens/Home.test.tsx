@@ -290,3 +290,20 @@ it('links the map to the Speak Lab staircase', () => {
 
   expect(screen.getByRole('link', { name: /Các bậc luyện nói/ })).toHaveAttribute('href', '/levels')
 })
+
+/**
+ * Every island stands on a hand-placed slot, and there is no ninth one. A topic added without a
+ * slot used to render an unpositioned, colourless disc over the first island — a silent bug on the
+ * one screen the child starts from — so the map now refuses to load at all and says why.
+ */
+it('refuses to build a map with more topics than island slots', async () => {
+  vi.resetModules()
+  vi.doMock('../content/topics', () => ({
+    TOPICS: Array.from({ length: 9 }, (_, i) => ({ id: `t${i}`, name: `Đảo ${i}`, emoji: '🏝️' })),
+  }))
+
+  await expect(import('./Home')).rejects.toThrow(/9 topics but only 8 island slots/)
+
+  vi.doUnmock('../content/topics')
+  vi.resetModules()
+})
