@@ -146,12 +146,18 @@ function selectSpeak(count: number, band: Band, day: string, events: ActivityEve
 // today's lesson is drawn across every unlocked topic, so a whole practice session is never stuck
 // on one theme. `currentTopic()` no longer feeds generation at all.
 
-/** The islands a lesson's content steps (🧩 words + 🧱 sentences) drew from. */
+/**
+ * The islands a lesson taught from, by what its items *are* rather than which slot they sat in: a
+ * new word that landed in a 🔁 slot (`selectReview`'s filler is genuinely unlearned words) teaches
+ * that island just as much as one in a 🧩 slot, and "no island left behind" is a claim about the
+ * child's day, not about the recipe. Anything with no word or sentence behind it — a story, a
+ * retell, a sound — belongs to no island and is skipped.
+ */
 function topicsTouched(lesson: Lesson | null): Set<TopicId> {
   const touched = new Set<TopicId>()
   for (const item of lesson?.items ?? []) {
-    const topic = item.kind === 'word' ? findWord(item.id)?.topic
-      : item.kind === 'sentence' ? findSentence(item.id)?.topic
+    const topic = item.activity === 'word' ? findWord(item.id)?.topic
+      : item.activity === 'sentence' ? findSentence(item.id)?.topic
         : undefined
     if (topic) touched.add(topic)
   }
@@ -174,17 +180,22 @@ function recentLessons(day: string, n = ROTATION_MEMORY): Lesson[] {
 }
 
 /**
- * The order today's content slots offer the unlocked topics, by the three mixing rules:
+ * The order today's content slots offer the unlocked topics. Three keys, strongest first — written
+ * in the order the code actually applies them, because which one decides a given day matters:
  *
- * - **rotate by day** — the base order is the day's seeded shuffle, so the topic that leads today
- *   trails tomorrow (and, being seeded rather than random, a reload rebuilds the same lesson);
- * - **no island left behind** — an island the last lesson never touched jumps ahead of one it did,
- *   which is what makes any two lessons in a row cover the whole open map while slots allow. The
- *   lesson before that counts too, at half the weight, so a big map keeps cycling instead of
- *   flipping between the same two halves — but the most recent lesson always outranks it, which is
- *   what keeps the pairwise guarantee intact;
- * - **ties toward the frontier** — otherwise the deck with the fewest learned words goes first, so
- *   the unlock chain keeps advancing instead of one near-finished island soaking up every slot.
+ * 1. **freshness — no island left behind.** An island the last lesson never touched outranks one it
+ *    did, which is what makes any two lessons in a row cover the whole open map while slots allow.
+ *    The lesson before that counts too, at half the weight, so a wide map keeps cycling instead of
+ *    flipping between the same two halves — the most recent lesson always outranks it, which is what
+ *    keeps the pairwise guarantee intact. On most days this key alone decides the front of the list,
+ *    and it is what rotates the leading topic from one lesson to the next.
+ * 2. **the frontier.** Among islands of equal freshness, the deck with the fewest learned words goes
+ *    first, so the unlock chain keeps advancing instead of one near-finished island soaking up every
+ *    slot.
+ * 3. **the day seed.** What is left is settled by the day's seeded shuffle — the same day key always
+ *    gives the same order, so a reload rebuilds today's lesson rather than reshuffling it. This is
+ *    the whole of the order on a fresh profile (no lessons on record, every deck at zero), which is
+ *    exactly when two children — or two first days — should not be handed identical lessons.
  */
 function dayTopicOrder(day: string): TopicId[] {
   const recent = recentLessons(day).map(topicsTouched)
@@ -246,19 +257,26 @@ const sentenceItem = (s: Sentence): LessonItem => ({
 })
 
 /**
- * Sentences with no stars yet, mixed across the open islands — and behind them the ones already
- * built, so a child who has starred every sentence of every open topic still gets their 🧱 step
- * rather than a lesson one card short.
+ * The 🧱 candidates, best first. Spread outranks freshness: an unbuilt sentence from an island
+ * today's word slots did NOT reach comes before an unbuilt one from an island they did, because the
+ * sentence slot is where a day whose words all landed on one island still reaches a second one. Only
+ * when no untouched island has an unbuilt sentence does it fall back to a touched island's, and only
+ * when nothing anywhere is unbuilt does it replay an already-starred sentence — which keeps the 🧱
+ * step on the card rather than leaving the lesson one short.
  *
- * `order` arrives rotated by the caller so the islands today's words did *not* use come first: the
- * sentence slot is where a four-island day fits its fourth island in.
+ * `spent` is the islands the word slots used; the rule lives here rather than in the caller's choice
+ * of `order` so that it holds for whoever calls this next.
  */
-function sentencePool(day: string, order: TopicId[]): Sentence[] {
+function sentencePool(day: string, order: TopicId[], spent: Set<TopicId>): Sentence[] {
   const of = (id: TopicId, starred: boolean) => shuffleTiles(
     SENTENCES.filter(s => s.topic === id && (getStars(`sentence:${s.id}`) > 0) === starred),
     `${day}:sentence:${id}`,
   )
-  return [...deal(order, id => of(id, false)), ...deal(order, id => of(id, true))]
+  // Islands the words did not reach lead the cycle, so the first unbuilt sentence comes from one of
+  // them; a touched island still takes its turn within the round, which is what keeps a long
+  // lesson's two sentence slots on two different islands rather than twice on the same one.
+  const spread = [...order.filter(id => !spent.has(id)), ...order.filter(id => spent.has(id))]
+  return [...deal(spread, id => of(id, false)), ...deal(spread, id => of(id, true))]
 }
 
 // --- review --------------------------------------------------------------------------------
@@ -379,11 +397,10 @@ function generate(day: string, band: Band, now: number, events: ActivityEvent[])
   const words = pool.slice(0, recipe.word)
   for (const w of words) add(wordItem(w))
 
-  // Mixing rule 1, spelled out for the 🧱 slot: the islands today's words did not reach lead the
-  // sentence order, so a day of three word slots and four open topics still touches all four.
+  // Mixing rule 1 for the 🧱 slot: the pool puts the islands today's words did not reach first, so
+  // a day of three word slots and four open islands still touches all four.
   const spent = new Set<TopicId>(words.map(w => w.topic))
-  const sentenceOrder = [...order.filter(id => !spent.has(id)), ...order.filter(id => spent.has(id))]
-  for (const s of sentencePool(day, sentenceOrder).slice(0, recipe.sentence)) add(sentenceItem(s))
+  for (const s of sentencePool(day, order, spent).slice(0, recipe.sentence)) add(sentenceItem(s))
 
   for (const item of selectReview(recipe.review, band, day, now, used, pool.slice(recipe.word))) {
     add(item)

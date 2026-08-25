@@ -1,14 +1,15 @@
 import {
-  RECIPES, getLesson, getLessonLength, lessonDays, lessonForDay, lessonStatus, setLessonLength,
+  RECIPES, clearLessons, getLesson, getLessonLength, lessonDays, lessonForDay, lessonStatus,
+  setLessonLength,
 } from './lesson'
 import type { Lesson, LessonItem, LessonLength } from './lesson'
 import { getActivity, logActivity } from './activity'
 import type { ActivityKind } from './activity'
 import { setBandAuto, setBandValue } from './band'
 import { promote } from './leitner'
-import { setStars } from './store'
-import { unlockedTopics } from './topicProgress'
-import { SOUNDS, findSentence, findSound } from '../content'
+import { getStars, setStars } from './store'
+import { unlockedTopics, unlockedWords } from './topicProgress'
+import { SENTENCES, SOUNDS, findSentence, findSound } from '../content'
 import { TOPICS as WORD_DECKS, findWord } from '../content/words'
 import type { TopicId } from '../content/topics'
 import type { Band } from './band'
@@ -48,6 +49,15 @@ function contentTopics(lesson: Lesson): TopicId[] {
   return [...new Set(topics)]
 }
 
+/** Every island a lesson taught from, whichever slot did the teaching — what the rotation reads. */
+function taughtTopics(lesson: Lesson): TopicId[] {
+  const topics = lesson.items.flatMap(i =>
+    i.activity === 'word' ? [findWord(i.id)!.topic]
+      : i.activity === 'sentence' ? [findSentence(i.id)?.topic ?? []].flat()
+        : [])
+  return [...new Set(topics)]
+}
+
 /** Opens `animals … colors` by learning six words of each earlier deck: six islands unlocked. */
 function openSixTopics() {
   for (const t of ['animals', 'food', 'school', 'family', 'weather'] as TopicId[]) learn(t, 6)
@@ -55,6 +65,20 @@ function openSixTopics() {
 
 const firstWordTopic = (lesson: Lesson): TopicId =>
   findWord(lesson.items.find(i => i.kind === 'word')!.id)!.topic
+
+/** The islands the word slots used, in slot order. */
+const wordTopics = (lesson: Lesson): TopicId[] =>
+  lesson.items.filter(i => i.kind === 'word').map(i => findWord(i.id)!.topic)
+
+/**
+ * Every island open with nothing learned anywhere: one starred sentence per topic is the migration
+ * exception `topicUnlocked` honours, so the map opens without promoting a single word. That holds
+ * freshness and the frontier equal across all eight, which leaves the day seed as the only thing
+ * that can decide the order.
+ */
+function openEveryTopicUnlearned() {
+  for (const id of ['s1', 's5', 's9', 's17', 's21', 's25', 's29']) setStars(`sentence:${id}`, 1)
+}
 
 it('defaults to the medium lesson length', () => {
   expect(getLessonLength()).toBe('medium')
@@ -179,21 +203,42 @@ it('touches every unlocked island across two consecutive days', () => {
   expect(open).toHaveLength(6) // more islands than one day has content slots
 
   const both = [...new Set([
-    ...contentTopics(getLesson(BASE)),
-    ...contentTopics(getLesson(BASE + DAY)),
+    ...taughtTopics(getLesson(BASE)),
+    ...taughtTopics(getLesson(BASE + DAY)),
   ])]
   for (const id of open) expect(both).toContain(id)
+})
+
+// Nothing distinguishes the islands on a fresh profile — no lesson on record, every deck at zero —
+// so freshness and the frontier both tie and the day seed is the whole of the order. Two first days
+// (or two children starting on different days) must not get the same island order.
+it('settles a fresh profile order by the day seed', () => {
+  band(1)
+  setLessonLength('long')
+  openEveryTopicUnlearned()
+  const open = unlockedTopics()
+  expect(open).toHaveLength(8)
+  expect(open.every(id => unlockedWords(id) === 0)).toBe(true)
+
+  const first = wordTopics(getLesson(BASE))
+  // A different day, with the same fresh profile and no lesson history of its own.
+  clearLessons()
+  setLessonLength('long')
+  const second = wordTopics(getLesson(BASE + DAY))
+
+  expect(first).toHaveLength(RECIPES.long.word)
+  expect(second).not.toEqual(first)
 })
 
 it('rotation survives a day off', () => {
   band(1)
   openSixTopics()
-  const first = contentTopics(getLesson(BASE))
+  const first = taughtTopics(getLesson(BASE))
   const missed = unlockedTopics().filter(id => !first.includes(id))
   expect(missed.length).toBeGreaterThan(0)
 
   // Nothing at all on the day between — no lesson is generated, so the calendar has a hole in it.
-  const next = contentTopics(getLesson(BASE + 2 * DAY))
+  const next = taughtTopics(getLesson(BASE + 2 * DAY))
 
   // The rotation still knows which islands the last lesson missed, and leads with them.
   for (const id of missed) expect(next).toContain(id)
@@ -202,6 +247,27 @@ it('rotation survives a day off', () => {
 
 // A locked island is not a place the child can go — reaching ahead is only for a map whose open
 // decks are all finished.
+// `selectReview`'s filler is genuinely unlearned words, so an island taught in a 🔁 slot has been
+// taught — tomorrow's rotation must not offer it again as though it had been left behind.
+it('counts a new word taught in a review slot as touching its island', () => {
+  band(1)
+  openSixTopics()
+  const first = getLesson(BASE)
+  const inReview = first.items
+    .filter(i => i.kind === 'review' && i.activity === 'word')
+    .map(i => findWord(i.id)!.topic)
+  expect(inReview.length).toBeGreaterThan(0)
+
+  // Whatever the 🔁 slots taught is behind the untouched islands in tomorrow's order, so tomorrow
+  // leads somewhere else.
+  const next = taughtTopics(getLesson(BASE + DAY))
+  for (const id of unlockedTopics().filter(id => !taughtTopics(first).includes(id))) {
+    expect(next).toContain(id)
+  }
+  // And an island only the 🔁 slots taught is not offered again as though it had been left behind.
+  expect(wordTopics(getLesson(BASE + DAY))[0]).not.toBe(inReview[0])
+})
+
 it('prefers open islands over locked ones', () => {
   band(1)
   openSixTopics()
@@ -211,12 +277,46 @@ it('prefers open islands over locked ones', () => {
 
 it('skips a deck the child has already finished', () => {
   band(1)
-  learn('animals', 8) // animals done, food open and untouched
-  expect(getLesson(BASE).items.filter(i => i.kind === 'word')
-    .every(i => i.route.startsWith('/words/food/'))).toBe(true)
+  learn('animals', 8) // nothing left to learn there, whatever else the map has open
+  const words = wordTopics(getLesson(BASE))
+  expect(words.length).toBeGreaterThan(0)
+  expect(words).not.toContain('animals')
 })
 
 // --- sentence steps ---------------------------------------------------------------------------
+
+// The reviewer's case: every open deck but animals is finished, so all three word slots land on
+// animals. The 🧱 slot is then the only chance to reach a second island, and it has to take one —
+// an unbuilt sentence from an island the words never touched beats an unbuilt animals one.
+it('spends the sentence slot on an island the words did not reach', () => {
+  band(1)
+  for (const t of ['food', 'school', 'family', 'weather', 'colors', 'body', 'toys'] as TopicId[]) {
+    learn(t, 8)
+  }
+  expect(unlockedTopics()).toHaveLength(8)
+
+  const lesson = getLesson(BASE)
+  expect(new Set(wordTopics(lesson))).toEqual(new Set(['animals'])) // only deck with anything left
+
+  const sentence = findSentence(lesson.items.find(i => i.kind === 'sentence')!.id)!
+  expect(sentence.topic).not.toBe('animals')
+  expect(getStars(`sentence:${sentence.id}`)).toBe(0) // and still an unbuilt one
+})
+
+// …but only while an untouched island has one to give: with every other island's sentences already
+// built, an unbuilt sentence from the island the words used beats replaying a starred one.
+it('falls back to the words own island rather than replaying a built sentence', () => {
+  band(1)
+  for (const t of ['food', 'school', 'family', 'weather', 'colors', 'body', 'toys'] as TopicId[]) {
+    learn(t, 8)
+  }
+  for (const s of SENTENCES.filter(s => s.topic !== 'animals')) setStars(`sentence:${s.id}`, 2)
+
+  const lesson = getLesson(BASE)
+  const sentence = findSentence(lesson.items.find(i => i.kind === 'sentence')!.id)!
+  expect(sentence.topic).toBe('animals')
+  expect(getStars(`sentence:${sentence.id}`)).toBe(0)
+})
 
 it('adds a 🧱 sentence step that routes to the builder', () => {
   band(1)
@@ -238,24 +338,30 @@ it('lays the steps out listen → speak → word → sentence → review', () =>
   expect(order).toEqual(['listen', 'speak', 'word', 'sentence', 'review'])
 })
 
-// s13–s16 are the animals sentences — the only ones open on a fresh map.
 it('offers sentences the child has no stars on yet', () => {
   band(1)
-  for (const s of ['s13', 's14', 's15']) setStars(`sentence:${s}`, 3)
+  // Every sentence of the open map built except s16, wherever the unlock rule currently draws the
+  // line — so there is exactly one right answer left.
+  const open = unlockedTopics()
+  for (const s of SENTENCES) {
+    if (open.includes(s.topic) && s.id !== 's16') setStars(`sentence:${s.id}`, 3)
+  }
 
   const chosen = getLesson(BASE).items.filter(i => i.kind === 'sentence').map(i => i.id)
-  expect(chosen).toEqual(['s16']) // the one animals sentence still unbuilt
+  expect(chosen).toEqual(['s16'])
 })
 
 // Every open sentence already built: the 🧱 step is still there, replaying one, rather than the
 // lesson quietly coming up a card short.
 it('falls back to a built sentence when none is left unstarred', () => {
   band(1)
-  for (const s of ['s13', 's14', 's15', 's16']) setStars(`sentence:${s}`, 3)
+  const open = unlockedTopics()
+  for (const s of SENTENCES) if (open.includes(s.topic)) setStars(`sentence:${s.id}`, 3)
 
   const chosen = getLesson(BASE).items.filter(i => i.kind === 'sentence')
   expect(chosen).toHaveLength(RECIPES.medium.sentence)
-  expect(findSentence(chosen[0].id)?.topic).toBe('animals')
+  expect(open).toContain(findSentence(chosen[0].id)!.topic)
+  expect(getStars(`sentence:${chosen[0].id}`)).toBe(3) // a replay, not a card missing
 })
 
 it('review prefers due Leitner words', () => {
