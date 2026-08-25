@@ -8,7 +8,7 @@ import { setBandAuto, setBandValue } from './band'
 import { promote } from './leitner'
 import { setStars } from './store'
 import { unlockedTopics } from './topicProgress'
-import { findSentence, findSound } from '../content'
+import { SOUNDS, findSentence, findSound } from '../content'
 import { TOPICS as WORD_DECKS, findWord } from '../content/words'
 import type { TopicId } from '../content/topics'
 import type { Band } from './band'
@@ -185,6 +185,21 @@ it('touches every unlocked island across two consecutive days', () => {
   for (const id of open) expect(both).toContain(id)
 })
 
+it('rotation survives a day off', () => {
+  band(1)
+  openSixTopics()
+  const first = contentTopics(getLesson(BASE))
+  const missed = unlockedTopics().filter(id => !first.includes(id))
+  expect(missed.length).toBeGreaterThan(0)
+
+  // Nothing at all on the day between — no lesson is generated, so the calendar has a hole in it.
+  const next = contentTopics(getLesson(BASE + 2 * DAY))
+
+  // The rotation still knows which islands the last lesson missed, and leads with them.
+  for (const id of missed) expect(next).toContain(id)
+  expect(firstWordTopic(getLesson(BASE + 2 * DAY))).not.toBe(firstWordTopic(getLesson(BASE)))
+})
+
 // A locked island is not a place the child can go — reaching ahead is only for a map whose open
 // decks are all finished.
 it('prefers open islands over locked ones', () => {
@@ -251,6 +266,26 @@ it('review prefers due Leitner words', () => {
   expect(review).toHaveLength(RECIPES.medium.review)
   expect(review.every(i => i.route.startsWith('/words/animals/'))).toBe(true)
   expect(review.every(i => i.activity === 'word')).toBe(true)
+})
+
+it('reviews a sound the child has only per-word stars on, at its weakest word', () => {
+  band(1)
+  // No legacy `sound:<ph>` key anywhere — exactly the shape Phase 9 writes. Each sound's first card
+  // is left the weakest, so both the 🗣️ step and the 🔁 step have one obvious choice.
+  for (const g of SOUNDS) {
+    setStars(`sword:${g.cards[0].id}`, 1)
+    for (const c of g.cards.slice(1)) setStars(`sword:${c.id}`, 3)
+  }
+
+  const review = getLesson(BASE).items.filter(i => i.kind === 'review')
+  expect(review).toHaveLength(RECIPES.medium.review)
+  expect(review.every(i => i.route.startsWith('/sound/'))).toBe(true)
+  for (const item of review) {
+    const [, ph, cardId] = item.route.split('/').filter(Boolean)
+    expect(cardId).toBe(findSound(ph)!.cards[0].id) // the sound's lowest-starred word
+    expect(item.id).toBe(cardId) // and the id SoundPractice logs for it
+    expect(item.activity).toBe('speak')
+  }
 })
 
 it('review falls back to the lowest-star attempted item, inside the band', () => {

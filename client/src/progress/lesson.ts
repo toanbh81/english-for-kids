@@ -15,10 +15,10 @@ import { autoAdjustBand, getBand } from './band'
 import type { Band } from './band'
 import { dueWords, getBox } from './leitner'
 import {
-  getLessonLength, itemDone, lessonForDay, saveLesson,
+  getLessonLength, itemDone, lessonDays, lessonForDay, saveLesson,
 } from './lessonStore'
 import type { Lesson, LessonItem, LessonLength } from './lessonStore'
-import { getStars } from './store'
+import { getStars, soundStars } from './store'
 import { unlockedTopics, unlockedWords } from './topicProgress'
 
 export type { Lesson, LessonItem, LessonItemKind, LessonLength } from './lessonStore'
@@ -42,7 +42,8 @@ export const RECIPES: Record<LessonLength, Recipe> = {
 /** Phonemes at or above this are said well enough not to steer the lesson. */
 const WEAK_SCORE = 80
 
-const DAY_MS = 24 * 60 * 60 * 1000
+/** How many past lessons the topic rotation remembers. */
+const ROTATION_MEMORY = 2
 
 const listenEmoji = '🎧'
 const speakEmoji = '🗣️'
@@ -158,19 +159,42 @@ function topicsTouched(lesson: Lesson | null): Set<TopicId> {
 }
 
 /**
+ * The lessons the child actually has on record before `day`, most recent first. Deliberately *not*
+ * "yesterday and the day before": a child who takes the weekend off has no record for those days,
+ * and reading the rotation off the calendar would forget which islands they had just done and start
+ * the cycle over. What the rotation means is "the last time we practised", so that is what it reads.
+ */
+function recentLessons(day: string, n = ROTATION_MEMORY): Lesson[] {
+  return lessonDays()
+    .filter(d => d < day)
+    .slice(-n)
+    .reverse()
+    .map(d => lessonForDay(d))
+    .filter((lesson): lesson is Lesson => lesson !== null)
+}
+
+/**
  * The order today's content slots offer the unlocked topics, by the three mixing rules:
  *
  * - **rotate by day** — the base order is the day's seeded shuffle, so the topic that leads today
  *   trails tomorrow (and, being seeded rather than random, a reload rebuilds the same lesson);
- * - **no island left behind** — a topic yesterday's lesson never touched jumps ahead of one it did,
- *   which is what makes any two consecutive days cover the whole open map while slots allow;
+ * - **no island left behind** — an island the last lesson never touched jumps ahead of one it did,
+ *   which is what makes any two lessons in a row cover the whole open map while slots allow. The
+ *   lesson before that counts too, at half the weight, so a big map keeps cycling instead of
+ *   flipping between the same two halves — but the most recent lesson always outranks it, which is
+ *   what keeps the pairwise guarantee intact;
  * - **ties toward the frontier** — otherwise the deck with the fewest learned words goes first, so
  *   the unlock chain keeps advancing instead of one near-finished island soaking up every slot.
  */
-function dayTopicOrder(day: string, now: number): TopicId[] {
-  const yesterday = topicsTouched(lessonForDay(dayKey(now - DAY_MS)))
+function dayTopicOrder(day: string): TopicId[] {
+  const recent = recentLessons(day).map(topicsTouched)
+  // Touched in the most recent lesson → `recent.length`; only in the one before → 1 less; never → 0.
+  const staleness = (id: TopicId) => {
+    const at = recent.findIndex(touched => touched.has(id))
+    return at === -1 ? 0 : recent.length - at
+  }
   return shuffleTiles(unlockedTopics(), `${day}:topics`)
-    .map((id, seeded) => ({ id, seeded, stale: yesterday.has(id) ? 1 : 0, learned: unlockedWords(id) }))
+    .map((id, seeded) => ({ id, seeded, stale: staleness(id), learned: unlockedWords(id) }))
     .sort((a, b) => a.stale - b.stale || a.learned - b.learned || a.seeded - b.seeded)
     .map(t => t.id)
 }
@@ -240,39 +264,49 @@ function sentencePool(day: string, order: TopicId[]): Sentence[] {
 // --- review --------------------------------------------------------------------------------
 
 /** An item the child has already earned stars on, with the band level it belongs to (0 = ungated). */
-type Attempted = { key: string; item: LessonItem; level: number }
+type Attempted = { stars: number; item: LessonItem; level: number }
 
 const reviewItem = (
   id: string, route: string, activity: ActivityKind, text: string,
 ): LessonItem => ({ kind: 'review', activity, id, route, label: `Ôn lại: ${text}`, emoji: reviewEmoji })
 
-function attemptedPool(): Attempted[] {
+/**
+ * Everything the child has already earned stars on, each with the stars that rank it. The stars are
+ * read here rather than from a key by the caller because a sound no longer *has* a key of its own:
+ * `soundStars` derives it from the words (and the retired `sound:<ph>` value, kept as a floor), so
+ * asking storage for `sound:<ph>` would tell a Phase 9 child they had never practised a sound in
+ * their life and quietly drop every sound out of review.
+ */
+function attemptedPool(day: string): Attempted[] {
   const pool: Attempted[] = []
-  const add = (key: string, level: number, item: LessonItem) => pool.push({ key, item, level })
+  const add = (stars: number, level: number, item: LessonItem) => pool.push({ stars, item, level })
 
   for (const s of STORIES) {
-    add(`story:${s.id}`, 0, reviewItem(s.id, `/story/${s.id}`, 'story', s.titleVi))
-    add(`retell:${s.id}`, 0, reviewItem(`retell:${s.id}`, `/story/${s.id}/retell`, 'sentence', s.titleVi))
+    add(getStars(`story:${s.id}`), 0, reviewItem(s.id, `/story/${s.id}`, 'story', s.titleVi))
+    add(getStars(`retell:${s.id}`), 0, reviewItem(`retell:${s.id}`, `/story/${s.id}/retell`, 'sentence', s.titleVi))
   }
   for (const s of SENTENCES) {
-    add(`sentence:${s.id}`, 0, reviewItem(s.id, `/sentence/${s.id}`, 'sentence', s.words.join(' ')))
+    add(getStars(`sentence:${s.id}`), 0, reviewItem(s.id, `/sentence/${s.id}`, 'sentence', s.words.join(' ')))
   }
+  // A sound is reviewed the way it is now practised: one word, the weakest of the group, by the
+  // same rule the 🗣️ step uses — and the id is that card's, which is what the screen logs.
   for (const g of SOUNDS) {
-    add(`sound:${g.ph}`, 1, reviewItem(g.ph, `/sound/${g.ph}`, 'speak', g.example))
+    const card = weakestWord(g, day)
+    if (card) add(soundStars(g.ph), 1, reviewItem(card.id, `/sound/${g.ph}/${card.id}`, 'speak', card.text))
   }
-  // Only word-pop cards earn stars under their bare card id; sound-zoo progress is stored per
-  // sound group as `sound:<ph>` (added above), never per card.
+  // Only word-pop cards earn stars under their bare card id; sound-zoo progress is per word, under
+  // `sword:<cardId>`, which `soundStars` folds into the sound above.
   for (const c of wordPopCards()) {
-    add(c.id, 2, reviewItem(c.id, `/practice/${c.id}`, 'speak', c.text))
+    add(getStars(c.id), 2, reviewItem(c.id, `/practice/${c.id}`, 'speak', c.text))
   }
   for (const p of PAIRS) {
-    add(`pair:${p.id}`, 3, reviewItem(p.id, `/pair/${p.id}`, 'speak', `${p.a.word}, ${p.b.word}`))
+    add(getStars(`pair:${p.id}`), 3, reviewItem(p.id, `/pair/${p.id}`, 'speak', `${p.a.word}, ${p.b.word}`))
   }
   for (const s of SENTENCE_STARS) {
-    add(`sstar:${s.id}`, 4, reviewItem(s.id, `/star/${s.id}`, 'speak', s.text))
+    add(getStars(`sstar:${s.id}`), 4, reviewItem(s.id, `/star/${s.id}`, 'speak', s.text))
   }
   for (const v of STORY_VOICE) {
-    add(`voice:${v.id}`, 5, reviewItem(v.id, `/voice/${v.id}`, 'speak', firstSentence(v.text)))
+    add(getStars(`voice:${v.id}`), 5, reviewItem(v.id, `/voice/${v.id}`, 'speak', firstSentence(v.text)))
   }
   return pool
 }
@@ -304,8 +338,7 @@ function selectReview(
   }
 
   if (items.length < count) {
-    const attempted = attemptedPool()
-      .map(a => ({ ...a, stars: getStars(a.key) }))
+    const attempted = attemptedPool(day)
       .filter(a => a.stars > 0 && a.level <= band && !taken.has(a.item.route))
     const ordered = shuffleTiles(attempted, `${day}:review-weak`)
       .slice()
@@ -341,7 +374,7 @@ function generate(day: string, band: Band, now: number, events: ActivityEvent[])
 
   for (const item of selectSpeak(recipe.speak, band, day, events)) add(item)
 
-  const order = dayTopicOrder(day, now)
+  const order = dayTopicOrder(day)
   const pool = newWordPool(day, order)
   const words = pool.slice(0, recipe.word)
   for (const w of words) add(wordItem(w))
