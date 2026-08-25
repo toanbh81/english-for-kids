@@ -318,6 +318,35 @@ it('falls back to the words own island rather than replaying a built sentence', 
   expect(getStars(`sentence:${sentence.id}`)).toBe(0)
 })
 
+// Task-3 review: a `long` lesson has two 🧱 slots. `family` learns exactly enough to unlock
+// `weather` but stays the frontier (fewest learned words among the ties), so it sorts last in
+// `dayTopicOrder` and the four word slots land on the other four open topics — `family` is the
+// lesson's one untouched island. Every sentence is starred built except `family`'s (left alone,
+// several unbuilt) and one in `animals`, a topic the words DID touch (`s16`). A concatenating
+// implementation — grab the untouched island's whole unbuilt queue before ever considering a
+// touched one — would seat both slots on `family`; the real round-robin `deal` seats one there and
+// moves on to `animals` for the second.
+it('spreads two sentence slots across two different topics, not both on the untouched one', () => {
+  band(1)
+  setLessonLength('long')
+  learn('family', 6) // unlocks weather too (previous topic's ≥6 rule)
+  for (const s of SENTENCES) {
+    if (s.topic === 'animals' && s.id !== 's16') setStars(`sentence:${s.id}`, 2)
+    if (s.topic === 'food' || s.topic === 'school' || s.topic === 'weather') setStars(`sentence:${s.id}`, 2)
+  }
+  expect(unlockedTopics().sort()).toEqual(['animals', 'family', 'food', 'school', 'weather'].sort())
+
+  const lesson = getLesson(BASE)
+  expect(new Set(wordTopics(lesson))).toEqual(new Set(['animals', 'food', 'school', 'weather']))
+
+  const sentences = lesson.items.filter(i => i.kind === 'sentence')
+  expect(sentences).toHaveLength(RECIPES.long.sentence)
+  const topics = sentences.map(i => findSentence(i.id)!.topic)
+  expect(new Set(topics)).toEqual(new Set(['family', 'animals']))
+  expect(topics.filter(t => t === 'family')).toHaveLength(1) // never both slots on the untouched one
+  expect(topics.filter(t => t === 'animals')).toHaveLength(1)
+})
+
 it('adds a 🧱 sentence step that routes to the builder', () => {
   band(1)
   const items = getLesson(BASE).items.filter(i => i.kind === 'sentence')
