@@ -2,6 +2,8 @@
 
 Approved by the user 2026-08-25. Three asks, in their words: a pronunciation card in the daily mission should be **one representative word**, not the sound's whole 3-word run, while Speak Lab lets the child drill each word of a sound separately; the daily mission and the topic islands must be **separate axes** — the mission mixes content from every unlocked topic so the child is not stuck on one theme; and the map gets **three more topics**, with several islands open from the start, so there is enough content to mix.
 
+Status: implemented 2026-08-25 on branch `phase9-mixed-lessons` (tasks 1–5), including two approved deviations from this spec: the "Luyện thêm" island subtitle (§4) renders only on unlocked islands — a locked tile already says "Chưa mở khóa" there, so there is nothing to caption a second time; and the 🧱 sentence spread (§2, mixing rule 1) is a round-robin `deal` over an untouched-islands-first, then-touched cycle rather than a strict two-phase split, so a lesson with more sentence slots than untouched islands still keeps spreading once the untouched side runs dry instead of piling the rest onto one island.
+
 ## 1. Sound practice by word
 
 - `/sound/:ph` becomes a **word list** (a sub-level): the sound's header (IPA 72 px, `PHONEME_TIPS[ph]`, 🔊 Nghe âm lẻ) then one card per word of that sound (emoji, word, IPA, its own StarRow), each linking to `/sound/:ph/:cardId`. Back → `/levels`.
