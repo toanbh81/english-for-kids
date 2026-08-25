@@ -37,6 +37,7 @@ const KIND: Record<LessonItemKind, {
   listen: { emoji: '🎧', tone: 'teal', title: n => `Nghe ${n} truyện`, minutes: n => 4 * n },
   speak: { emoji: '🗣️', tone: 'coral', title: n => `${n} thẻ phát âm`, minutes: n => n },
   word: { emoji: '🧩', tone: 'sun', title: n => `${n} từ mới`, minutes: n => n },
+  sentence: { emoji: '🧱', tone: 'neutral', title: n => `${n} câu ghép`, minutes: n => n },
   review: { emoji: '🔁', tone: 'neutral', title: n => `${n} bài ôn tập`, minutes: n => n },
 }
 

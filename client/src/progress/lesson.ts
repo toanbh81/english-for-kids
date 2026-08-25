@@ -1,10 +1,12 @@
 import {
-  LEVELS, PAIRS, SENTENCE_STARS, SENTENCES, SOUNDS, STORY_VOICE, findSound,
+  LEVELS, PAIRS, SENTENCE_STARS, SENTENCES, SOUNDS, STORY_VOICE, findSentence, findSound,
 } from '../content'
+import type { Sentence } from '../content'
 import { STORIES } from '../content/stories'
 import { shuffleTiles } from '../content/shuffle'
 import { TOPICS } from '../content/topics'
 import type { TopicId } from '../content/topics'
+import type { LessonCard, SoundGroup } from '../content/types'
 import { TOPICS as WORD_DECKS, findWord } from '../content/words'
 import type { Word } from '../content/words/types'
 import { dayKey, getActivity, weakPhonemes } from './activity'
@@ -17,27 +19,35 @@ import {
 } from './lessonStore'
 import type { Lesson, LessonItem, LessonLength } from './lessonStore'
 import { getStars } from './store'
-import { currentTopic, unlockedTopics } from './topicProgress'
+import { unlockedTopics, unlockedWords } from './topicProgress'
 
 export type { Lesson, LessonItem, LessonItemKind, LessonLength } from './lessonStore'
 export {
   LESSON_LENGTHS, clearLessons, getLessonLength, lessonDays, lessonForDay, setLessonLength,
 } from './lessonStore'
 
-/** How many items of each kind a lesson holds, by length (spec §4). */
-export type Recipe = { listen: number; speak: number; word: number; review: number }
+/**
+ * How many items of each kind a lesson holds, by length (Phase 9 §2 — rebalanced when a speak step
+ * became one word rather than a sound's whole three-card run, and the 🧱 sentence step joined).
+ */
+export type Recipe = {
+  listen: number; speak: number; word: number; sentence: number; review: number
+}
 export const RECIPES: Record<LessonLength, Recipe> = {
-  short: { listen: 1, speak: 2, word: 2, review: 1 },
-  medium: { listen: 1, speak: 4, word: 3, review: 2 },
-  long: { listen: 1, speak: 6, word: 4, review: 3 },
+  short: { listen: 1, speak: 2, word: 2, sentence: 1, review: 1 },
+  medium: { listen: 1, speak: 4, word: 3, sentence: 1, review: 2 },
+  long: { listen: 1, speak: 6, word: 4, sentence: 2, review: 3 },
 }
 
 /** Phonemes at or above this are said well enough not to steer the lesson. */
 const WEAK_SCORE = 80
 
+const DAY_MS = 24 * 60 * 60 * 1000
+
 const listenEmoji = '🎧'
 const speakEmoji = '🗣️'
 const wordEmoji = '🧩'
+const sentenceEmoji = '🧱'
 const reviewEmoji = '🔁'
 
 /** First sentence of a passage — a whole Story Voice text is too long for a lesson row. */
@@ -57,11 +67,29 @@ const speakItem = (id: string, route: string, text: string): LessonItem =>
 
 const wordPopCards = () => LEVELS.find(l => l.id === 'word-pop')?.cards ?? []
 
+/**
+ * The word of `group` today's lesson drills: the one with the fewest `sword:` stars, so the sound's
+ * weakest link is what the child meets — the sound tile only turns green once every word does.
+ * Ties (a fresh sound, whose three words all sit at 0) are broken by the day seed, so the run
+ * rotates through the group over a week instead of always offering the first card.
+ */
+function weakestWord(group: SoundGroup, day: string): LessonCard | undefined {
+  return shuffleTiles(group.cards, `${day}:sound:${group.ph}`)
+    .slice()
+    .sort((a, b) => getStars(`sword:${a.id}`) - getStars(`sword:${b.id}`))[0]
+}
+
 /** The five bậc, in band order: index 0 is band 1. */
-function speakLevels(): SpeakCandidate[][] {
+function speakLevels(day: string): SpeakCandidate[][] {
   return [
-    SOUNDS.filter(g => g.cards.length > 0)
-      .map(g => ({ item: speakItem(g.ph, `/sound/${g.ph}`, g.example), ph: g.ph })),
+    // A sound step is one word (Phase 9 §2): it routes to that word's practice screen and is done
+    // by the event that screen logs — the card id — while `ph` keeps it visible to the weak-phoneme
+    // filter, which is a claim about the sound, not about the card.
+    SOUNDS.map(g => ({ g, card: weakestWord(g, day) }))
+      .filter((x): x is { g: SoundGroup; card: LessonCard } => x.card !== undefined)
+      .map(({ g, card }) => ({
+        item: speakItem(card.id, `/sound/${g.ph}/${card.id}`, card.text), ph: g.ph,
+      })),
     wordPopCards().map(c => ({ item: speakItem(c.id, `/practice/${c.id}`, c.text), ipa: c.ipa })),
     PAIRS.map(p => ({ item: speakItem(p.id, `/pair/${p.id}`, `${p.a.word}, ${p.b.word}`) })),
     SENTENCE_STARS.map(s => ({ item: speakItem(s.id, `/star/${s.id}`, s.text) })),
@@ -94,7 +122,7 @@ function pick<T>(pool: T[], n: number, seed: string, priority?: (x: T) => boolea
 }
 
 function selectSpeak(count: number, band: Band, day: string, events: ActivityEvent[]): LessonItem[] {
-  const levels = speakLevels().slice(0, band)
+  const levels = speakLevels(day).slice(0, band)
   const newest = levels[levels.length - 1] ?? []
   const lower = levels.slice(0, -1).flat()
   const isWeak = weakMatcher(events)
@@ -111,6 +139,57 @@ function selectSpeak(count: number, band: Band, day: string, events: ActivityEve
   return chosen.map(c => c.item)
 }
 
+// --- mixing the topics -------------------------------------------------------------------------
+//
+// The mission and the islands are separate axes (Phase 9 §2): an island is one topic's library,
+// today's lesson is drawn across every unlocked topic, so a whole practice session is never stuck
+// on one theme. `currentTopic()` no longer feeds generation at all.
+
+/** The islands a lesson's content steps (🧩 words + 🧱 sentences) drew from. */
+function topicsTouched(lesson: Lesson | null): Set<TopicId> {
+  const touched = new Set<TopicId>()
+  for (const item of lesson?.items ?? []) {
+    const topic = item.kind === 'word' ? findWord(item.id)?.topic
+      : item.kind === 'sentence' ? findSentence(item.id)?.topic
+        : undefined
+    if (topic) touched.add(topic)
+  }
+  return touched
+}
+
+/**
+ * The order today's content slots offer the unlocked topics, by the three mixing rules:
+ *
+ * - **rotate by day** — the base order is the day's seeded shuffle, so the topic that leads today
+ *   trails tomorrow (and, being seeded rather than random, a reload rebuilds the same lesson);
+ * - **no island left behind** — a topic yesterday's lesson never touched jumps ahead of one it did,
+ *   which is what makes any two consecutive days cover the whole open map while slots allow;
+ * - **ties toward the frontier** — otherwise the deck with the fewest learned words goes first, so
+ *   the unlock chain keeps advancing instead of one near-finished island soaking up every slot.
+ */
+function dayTopicOrder(day: string, now: number): TopicId[] {
+  const yesterday = topicsTouched(lessonForDay(dayKey(now - DAY_MS)))
+  return shuffleTiles(unlockedTopics(), `${day}:topics`)
+    .map((id, seeded) => ({ id, seeded, stale: yesterday.has(id) ? 1 : 0, learned: unlockedWords(id) }))
+    .sort((a, b) => a.stale - b.stale || a.learned - b.learned || a.seeded - b.seeded)
+    .map(t => t.id)
+}
+
+/**
+ * Deal the topics' pools out one item at a time, cycling `order` and skipping whatever has run dry.
+ * Round-robin is the whole of mixing rule 1: consecutive slots come from different topics while
+ * more than one still has content, and the first n items touch as many islands as n allows. A topic
+ * that runs out drops out of the cycle rather than ending it.
+ */
+function deal<T>(order: TopicId[], pool: (id: TopicId) => T[]): T[] {
+  const queues = order.map(id => pool(id))
+  const dealt: T[] = []
+  for (let round = 0; queues.some(q => q.length > round); round++) {
+    for (const q of queues) if (q.length > round) dealt.push(q[round])
+  }
+  return dealt
+}
+
 // --- new words -----------------------------------------------------------------------------
 
 const deckOf = (id: TopicId): Word[] => WORD_DECKS.find(d => d.id === id)?.words ?? []
@@ -119,20 +198,43 @@ const wordItem = (w: Word, kind: 'word' | 'review' = 'word'): LessonItem =>
   ({ kind, activity: 'word', id: w.id, route: `/words/${w.topic}/${w.id}`, label: `Từ mới: ${w.word}`, emoji: wordEmoji })
 
 /**
- * Words the child has not unlocked yet, current topic first, then the rest of the open map, then
- * the locked decks — once every open deck is finished the lesson may reach ahead rather than
- * repeat itself (spec §4).
+ * Words the child has not unlocked yet, mixed across every open island in `order`, and behind them
+ * the locked decks — once every open deck is finished the lesson may reach ahead rather than repeat
+ * itself. The locked decks are dealt as a second pass, so reaching ahead can never take a slot from
+ * an island the child can actually see on the map.
  */
-function newWordPool(day: string): Word[] {
-  const current = currentTopic()
-  const open = unlockedTopics()
-  const order: TopicId[] = [
-    current,
-    ...open.filter(id => id !== current),
-    ...TOPICS.map(t => t.id).filter(id => !open.includes(id)),
-  ]
-  return order.flatMap(id =>
-    shuffleTiles(deckOf(id).filter(w => getBox(w.id) === 0), `${day}:word:${id}`))
+function newWordPool(day: string, order: TopicId[]): Word[] {
+  const unlearned = (id: TopicId) =>
+    shuffleTiles(deckOf(id).filter(w => getBox(w.id) === 0), `${day}:word:${id}`)
+  const locked = TOPICS.map(t => t.id).filter(id => !order.includes(id))
+  return [...deal(order, unlearned), ...deal(locked, unlearned)]
+}
+
+// --- sentences -----------------------------------------------------------------------------
+
+const sentenceItem = (s: Sentence): LessonItem => ({
+  kind: 'sentence',
+  activity: 'sentence',
+  id: s.id,
+  route: `/sentence/${s.id}`,
+  label: `Ghép câu: ${s.words.join(' ')}`,
+  emoji: sentenceEmoji,
+})
+
+/**
+ * Sentences with no stars yet, mixed across the open islands — and behind them the ones already
+ * built, so a child who has starred every sentence of every open topic still gets their 🧱 step
+ * rather than a lesson one card short.
+ *
+ * `order` arrives rotated by the caller so the islands today's words did *not* use come first: the
+ * sentence slot is where a four-island day fits its fourth island in.
+ */
+function sentencePool(day: string, order: TopicId[]): Sentence[] {
+  const of = (id: TopicId, starred: boolean) => shuffleTiles(
+    SENTENCES.filter(s => s.topic === id && (getStars(`sentence:${s.id}`) > 0) === starred),
+    `${day}:sentence:${id}`,
+  )
+  return [...deal(order, id => of(id, false)), ...deal(order, id => of(id, true))]
 }
 
 // --- review --------------------------------------------------------------------------------
@@ -239,8 +341,16 @@ function generate(day: string, band: Band, now: number, events: ActivityEvent[])
 
   for (const item of selectSpeak(recipe.speak, band, day, events)) add(item)
 
-  const pool = newWordPool(day)
-  for (const w of pool.slice(0, recipe.word)) add(wordItem(w))
+  const order = dayTopicOrder(day, now)
+  const pool = newWordPool(day, order)
+  const words = pool.slice(0, recipe.word)
+  for (const w of words) add(wordItem(w))
+
+  // Mixing rule 1, spelled out for the 🧱 slot: the islands today's words did not reach lead the
+  // sentence order, so a day of three word slots and four open topics still touches all four.
+  const spent = new Set<TopicId>(words.map(w => w.topic))
+  const sentenceOrder = [...order.filter(id => !spent.has(id)), ...order.filter(id => spent.has(id))]
+  for (const s of sentencePool(day, sentenceOrder).slice(0, recipe.sentence)) add(sentenceItem(s))
 
   for (const item of selectReview(recipe.review, band, day, now, used, pool.slice(recipe.word))) {
     add(item)

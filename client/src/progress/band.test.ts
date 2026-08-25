@@ -152,7 +152,7 @@ it('holds the band for a child who does most of the lesson well, day after day',
   setBandValue(3) // manual while the days are seeded
   for (let d = 1; d <= 6; d++) {
     const lesson = lessonDay(BASE - d * DAY, 8, 85)
-    expect(lesson.items).toHaveLength(10) // the medium recipe: 8 of 10 is the good partial day
+    expect(lesson.items).toHaveLength(11) // the medium recipe: 8 of 11 is the good partial day
   }
 
   setBandAuto()

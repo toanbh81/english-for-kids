@@ -9,7 +9,7 @@ import { findSound } from '../content'
  * runtime cycle exists. Lesson *generation* (content, band, seeding) lives in `lesson.ts`.
  */
 
-export type LessonItemKind = 'listen' | 'speak' | 'word' | 'review'
+export type LessonItemKind = 'listen' | 'speak' | 'word' | 'sentence' | 'review'
 export type LessonItem = {
   kind: LessonItemKind
   activity: ActivityKind
@@ -134,9 +134,13 @@ export function setLessonLength(length: LessonLength): void {
 }
 
 /**
- * The ids an event may carry to count as this item. A sound tile is one lesson item but three
- * cards on screen, and `SoundPractice` logs whichever card the child spoke — so any of the group's
- * cards completes it.
+ * The ids an event may carry to count as this item.
+ *
+ * A Phase 9 sound step is one word — `/sound/<ph>/<cardId>`, id `<cardId>` — and `SoundPractice`
+ * logs exactly that card, so the plain id is the whole answer and `findSound` finds nothing under
+ * it. The branch below stays for the lesson a returning child has in storage from before the split:
+ * its sound step is a whole group (`/sound/<ph>`, id `<ph>`), which any of the group's cards
+ * completes, exactly as it did yesterday.
  */
 function matchIds(item: LessonItem): string[] {
   if (item.route.startsWith('/sound/')) {

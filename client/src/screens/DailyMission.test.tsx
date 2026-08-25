@@ -51,6 +51,7 @@ const TITLE: Record<LessonItemKind, (n: number) => string> = {
   listen: n => `Nghe ${n} truyện`,
   speak: n => `${n} thẻ phát âm`,
   word: n => `${n} từ mới`,
+  sentence: n => `${n} câu ghép`,
   review: n => `${n} bài ôn tập`,
 }
 
@@ -58,6 +59,7 @@ const MINUTES: Record<LessonItemKind, (n: number) => string> = {
   listen: n => `≈ ${4 * n} phút`,
   speak: n => `≈ ${n} phút`,
   word: n => `≈ ${n} phút`,
+  sentence: n => `≈ ${n} phút`,
   review: n => `≈ ${n} phút`,
 }
 
@@ -94,6 +96,37 @@ it('shows one card per kind of step, in lesson order, titled with its real count
     // Every card is numbered; only the ringed one adds the invitation.
     expect(caption(group.kind)).toBe(i === 0 ? 'Bước 1 · bắt đầu ở đây!' : `Bước ${i + 1}`)
   })
+})
+
+// Phase 9 §2: the 🧱 step sits between 🧩 and 🔁, in the order the generator lays the lesson out.
+it('shows the sentence card in lesson order, after the new words', () => {
+  const lesson = getLesson(NOW)
+  const sentences = lesson.items.filter(i => i.kind === 'sentence')
+  expect(sentences.length).toBeGreaterThan(0)
+
+  renderMission()
+
+  const el = card('sentence')
+  expect(within(el).getByText('🧱')).toBeInTheDocument()
+  expect(within(el).getByText(`${sentences.length} câu ghép`)).toBeInTheDocument()
+  expect(within(el).getByText(`≈ ${sentences.length} phút`)).toBeInTheDocument()
+  expect(el).toHaveAttribute('href', sentences[0].route)
+
+  const order = screen.getAllByTestId(/^group-/).map(el => el.getAttribute('data-testid'))
+  expect(order).toEqual(['group-listen', 'group-speak', 'group-word', 'group-sentence', 'group-review'])
+})
+
+// The child asked for a mission that mixes islands; naming the islands on the card would put the
+// topic axis back on the mission screen, which is exactly what the mix is meant to dissolve.
+it('names no topic anywhere on the mission', () => {
+  getLesson(NOW)
+
+  renderMission()
+
+  const page = document.body.textContent ?? ''
+  for (const name of ['Động vật', 'Đồ ăn', 'Trường học', 'Gia đình', 'Thời tiết', 'Màu sắc', 'Cơ thể', 'Đồ chơi']) {
+    expect(page).not.toContain(name)
+  }
 })
 
 it('counts the finished items inside each group', () => {

@@ -84,6 +84,24 @@ it('walks past a finished group to the first step still owed', () => {
   expect(missionPosition('/sound/th')?.nextRoute).toBe('/sentence/s1')
 })
 
+/** The 🧱 steps are their own group between 🧩 and 🔁 (Phase 9 §2): the walk buckets them like any
+ * other kind, so a sentence step numbers itself inside the sentence card, not the word card. */
+it('groups the sentence steps of a Phase 9 lesson on their own', () => {
+  setLesson(
+    item('word', '/words/food/apple', true),
+    item('word', '/words/colors/red'),
+    item('sentence', '/sentence/s21'),
+    item('sentence', '/sentence/s22'),
+    item('review', '/sentence/s1'),
+  )
+
+  expect(groupItems(lesson.items).map(g => g.kind)).toEqual(['word', 'sentence', 'review'])
+  expect(missionPosition('/sentence/s21')).toEqual({
+    group: 'sentence', index: 1, total: 2, nextRoute: '/sentence/s22',
+  })
+  expect(missionPosition('/sentence/s22')?.nextRoute).toBe('/sentence/s1')
+})
+
 it('ends at null on the last step of the lesson', () => {
   expect(missionPosition('/words/food/banana')).toEqual({
     group: 'word', index: 2, total: 2, nextRoute: null,
