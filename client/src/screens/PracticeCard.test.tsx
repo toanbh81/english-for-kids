@@ -412,6 +412,17 @@ it('numbers itself inside the lesson, drops the level dots, and threads back to 
   expect(screen.getByRole('link', { name: 'Nhiệm vụ' })).toHaveAttribute('href', '/mission')
 })
 
+/** Reached from the 🔁 group the number counts inside review, and the noun says which group. */
+it('calls the step review when the lesson filed it under 🔁', async () => {
+  const card = wordPopCards[0]
+  seedLesson({ ...step(card.id, `/practice/${card.id}`), kind: 'review' }, NEXT_STEP)
+  renderCard(card.id, true)
+  await scorerReady()
+
+  expect(screen.getByText('Ôn tập 1/1')).toBeInTheDocument()
+  expect(screen.queryByText(/^Thẻ \d/)).not.toBeInTheDocument()
+})
+
 it('hands on to the next step of the lesson, still carrying the flag', async () => {
   seedLesson(CARD_STEP, NEXT_STEP)
   renderCard('sz-th-three', true)

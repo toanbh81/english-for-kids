@@ -5,7 +5,7 @@ import { SENTENCES, findSentence } from '../content'
 import type { PronunciationResult } from '../scoring/types'
 import { setStars } from '../progress/store'
 import { logActivity } from '../progress/activity'
-import { useMissionNext } from '../progress/missionNav'
+import { missionNoun, useMissionNext } from '../progress/missionNav'
 import { saveRecording } from '../progress/recordings'
 import { playUrl } from '../audio/player'
 import { toFeedback } from '../scoring/feedback'
@@ -171,7 +171,11 @@ function SentenceBuilderInner({ sentence }: { sentence: Sentence }) {
           {/* The column only exists to seat the mission chip above the title; free play keeps the
               plain centred block it always had. */}
           <div className={mission ? 'flex flex-col items-center text-center' : 'text-center'}>
-            {mission && <Chip tone="teal">Câu {mission.pos.index}/{mission.pos.total}</Chip>}
+            {mission && (
+              <Chip tone="teal">
+                {missionNoun(mission.pos, 'Câu')} {mission.pos.index}/{mission.pos.total}
+              </Chip>
+            )}
             <h1 className="font-display text-[36px] font-extrabold leading-tight text-ink-900">Ghép câu nào! 🧱</h1>
             <p className="mt-1 text-lg font-bold text-ink-500">Chạm các khối từ để xếp vào khay câu</p>
           </div>

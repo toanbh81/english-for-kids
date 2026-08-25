@@ -336,6 +336,15 @@ it('numbers itself inside the lesson and threads back to the mission', () => {
   expect(screen.getByRole('link', { name: 'Nhiệm vụ' })).toHaveAttribute('href', '/mission')
 })
 
+/** Reached from the 🔁 group the number counts inside review, and the noun says which group. */
+it('calls the step review when the lesson filed it under 🔁', () => {
+  seedLesson({ ...STAR_STEP, kind: 'review' }, NEXT_STEP)
+  renderStar(SS1.id, true)
+
+  expect(screen.getByText('Ôn tập 1/1')).toBeInTheDocument()
+  expect(screen.queryByText(/^Thẻ \d/)).not.toBeInTheDocument()
+})
+
 it('hands on to the next step of the lesson, still carrying the flag', () => {
   seedLesson(STAR_STEP, NEXT_STEP)
   renderStar(SS1.id, true)

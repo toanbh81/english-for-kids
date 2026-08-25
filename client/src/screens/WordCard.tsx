@@ -7,7 +7,7 @@ import { findTopic, findWord } from '../content/words'
 import { shuffleTiles } from '../content/shuffle'
 import { getBox, promote, demote, dueWords } from '../progress/leitner'
 import { logActivity } from '../progress/activity'
-import { useMissionNext } from '../progress/missionNav'
+import { missionNoun, useMissionNext } from '../progress/missionNav'
 import { saveRecording } from '../progress/recordings'
 import { playUrl } from '../audio/player'
 import { speakText } from '../story/speak'
@@ -205,7 +205,11 @@ function WordCardInner({ word, topic, isReview, list }: { word: Word; topic: str
         <header className="flex w-full items-center justify-between gap-4">
           <BackButton to={backTo} label={backLabel} />
           <div className="flex flex-1 flex-col items-center gap-1">
-            {mission && <Chip tone="teal">Từ mới {mission.pos.index}/{mission.pos.total}</Chip>}
+            {mission && (
+              <Chip tone="teal">
+                {missionNoun(mission.pos, 'Từ mới')} {mission.pos.index}/{mission.pos.total}
+              </Chip>
+            )}
             <h1 className="font-display text-[30px] font-extrabold leading-none text-ink-900">Từ mới hôm nay 🧩</h1>
             <p className="font-display text-lg font-extrabold text-ink-500">Chạm thẻ để lật — nói đúng để mở khoá!</p>
           </div>

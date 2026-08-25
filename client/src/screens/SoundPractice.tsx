@@ -7,7 +7,7 @@ import { playBlob, playUrl } from '../audio/player'
 import { PHONEME_TIPS, toneFor } from '../scoring/feedback'
 import { setStars } from '../progress/store'
 import { logActivity } from '../progress/activity'
-import { useMissionNext } from '../progress/missionNav'
+import { missionNoun, useMissionNext } from '../progress/missionNav'
 import { saveRecording } from '../progress/recordings'
 import { MicButton } from '../components/MicButton'
 import { Stars } from '../components/Stars'
@@ -210,7 +210,11 @@ function SoundWord({ sound, idx }: { sound: SoundGroup; idx: number }) {
                 deck's position. The "Từ n/3" chip itself lives with the word tile below (word row,
                 cell B) while idle; the header only takes it back once that cell stops existing, so
                 the count is never simply gone from the screen. */}
-            {mission && <Chip tone="teal">Âm {mission.pos.index}/{mission.pos.total}</Chip>}
+            {mission && (
+              <Chip tone="teal">
+                {missionNoun(mission.pos, 'Âm')} {mission.pos.index}/{mission.pos.total}
+              </Chip>
+            )}
             {(result || recording) && <Chip tone="coral">Từ {idx + 1}/{cards.length}</Chip>}
             <div className="flex gap-2">
               {cards.map((c, i) => (

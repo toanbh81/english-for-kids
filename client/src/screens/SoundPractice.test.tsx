@@ -343,6 +343,16 @@ it('numbers the word inside the lesson and keeps its place in the sound', () => 
   expect(screen.getByRole('link', { name: 'Nhiệm vụ' })).toHaveAttribute('href', '/mission')
 })
 
+/** Reached from the 🔁 group the number counts inside review, so "Âm 1/1" would name a group this
+ * step is not in. The sound's own "Từ n/3" is a different fact and stays as it is. */
+it('calls the step review when the lesson filed it under 🔁', () => {
+  seedLesson({ ...WORD_STEP, kind: 'review' }, NEXT_STEP)
+  renderWord('th', 'sz-th-three', true)
+
+  expect(screen.getByText('Ôn tập 1/1')).toBeInTheDocument()
+  expect(screen.queryByText(/^Âm \d/)).not.toBeInTheDocument()
+})
+
 it('hands on to the next step of the lesson instead of the sound’s next word', () => {
   seedLesson(WORD_STEP, NEXT_STEP)
   renderWord('th', 'sz-th-three', true)

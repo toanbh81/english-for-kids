@@ -38,7 +38,7 @@ vi.mock('../progress/recordings', () => recordingsMock)
 import { SentenceBuilder } from './SentenceBuilder'
 import { dayKey } from '../progress/activity'
 import { saveLesson } from '../progress/lessonStore'
-import type { LessonItem } from '../progress/lesson'
+import type { LessonItem, LessonItemKind } from '../progress/lesson'
 
 /** Where a mission hand-off landed, and whether it was still carrying `{ mission: true }` — the
  * flag leaves no trace in the DOM, so the probe is the only way to see it. */
@@ -47,8 +47,10 @@ function Probe() {
   return <p data-testid="probe">{location.pathname} {JSON.stringify(location.state)}</p>
 }
 
-const step = (id: string, route: string): LessonItem =>
-  ({ kind: 'review', activity: 'sentence', id, route, label: id, emoji: '🔁' })
+/** `kind` is the group the lesson filed this step under — which is what the screen's counter
+ * counts inside, and what its noun has to agree with. */
+const step = (id: string, route: string, kind: LessonItemKind = 'sentence'): LessonItem =>
+  ({ kind, activity: 'sentence', id, route, label: id, emoji: kind === 'review' ? '🔁' : '🧱' })
 
 /** Today's lesson, written straight to storage, so the screen counts real steps. */
 function seedLesson(...items: LessonItem[]) {
@@ -283,6 +285,16 @@ it('numbers itself inside the lesson and threads back to the mission', () => {
 
   expect(screen.getByText('Câu 1/2')).toBeInTheDocument()
   expect(screen.getByRole('link', { name: 'Nhiệm vụ' })).toHaveAttribute('href', '/mission')
+})
+
+/** Reached from the 🔁 group the number counts inside review, so "Câu 1/1" would name a group this
+ * step is not in. */
+it('calls itself a review when the lesson filed it under 🔁', () => {
+  seedLesson(step('s1', '/sentence/s1', 'review'), NEXT_STEP)
+  renderBuilder('s1', true)
+
+  expect(screen.getByText('Ôn tập 1/1')).toBeInTheDocument()
+  expect(screen.queryByText(/^Câu \d/)).not.toBeInTheDocument()
 })
 
 it('hands on to the next step of the lesson, still carrying the flag', async () => {

@@ -110,6 +110,19 @@ export function missionPosition(pathname: string, now = Date.now()): MissionPos 
   return positionIn(lessonStatus(now).items, pathname)
 }
 
+/** What the 🔁 group's steps are called on the screens they open. */
+const REVIEW_NOUN = 'Ôn tập'
+
+/**
+ * What the counter chip calls this step — `own` is the noun the screen would use for its own kind
+ * ("Âm", "Từ mới", "Thẻ", "Câu"). The number counts inside `pos.group`, so on a step the lesson put
+ * in the 🔁 group the screen's own noun is a different claim from the number beside it: a word card
+ * reached from review is not "Từ mới 2/3" of anything, it is the second of two review steps.
+ */
+export function missionNoun(pos: MissionPos, own: string): string {
+  return pos.group === 'review' ? REVIEW_NOUN : own
+}
+
 /** The one hand-off out of a mission step: where it goes and what the button says. */
 export type MissionNext = {
   pos: MissionPos

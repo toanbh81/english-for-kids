@@ -497,6 +497,16 @@ it('numbers itself inside the lesson and threads back to the mission', () => {
   expect(screen.getByRole('link', { name: 'Nhiệm vụ' })).toHaveAttribute('href', '/mission')
 })
 
+/** A word reached from the 🔁 group is numbered inside review, so "Từ mới 1/1" would name a group
+ * this step is not in — and call a word the child is revisiting new. */
+it('calls the step review when the lesson filed it under 🔁', () => {
+  seedLesson({ ...WORD_STEP, kind: 'review' }, NEXT_STEP)
+  renderCard('food', 'food-apple', true)
+
+  expect(screen.getByText('Ôn tập 1/1')).toBeInTheDocument()
+  expect(screen.queryByText(/^Từ mới \d/)).not.toBeInTheDocument()
+})
+
 /** The deck's own next word is banana; the lesson's next step is bread, and the lesson wins. */
 it('follows the lesson rather than the deck on "Tiếp theo"', () => {
   attemptControl.current = { ...baseAttempt(), result: resultHigh }

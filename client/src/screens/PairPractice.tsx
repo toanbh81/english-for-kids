@@ -8,7 +8,7 @@ import { playBlob, playUrl } from '../audio/player'
 import { toFeedback } from '../scoring/feedback'
 import { setStars } from '../progress/store'
 import { logActivity } from '../progress/activity'
-import { useMissionNext } from '../progress/missionNav'
+import { missionNoun, useMissionNext } from '../progress/missionNav'
 import { saveRecording } from '../progress/recordings'
 import { MicButton } from '../components/MicButton'
 import { Stars } from '../components/Stars'
@@ -151,7 +151,7 @@ function PairRun({ pair }: { pair: PairItem }) {
             {/* In a lesson the bậc's own count is the wrong count, and two counters are one too
                 many for a child to read — so the mission's position replaces it. */}
             {mission
-              ? <Chip tone="coral">Thẻ {mission.pos.index}/{mission.pos.total}</Chip>
+              ? <Chip tone="coral">{missionNoun(mission.pos, 'Thẻ')} {mission.pos.index}/{mission.pos.total}</Chip>
               : <Chip tone="coral">Cặp {index + 1}/{PAIRS.length}</Chip>}
             <Chip tone="teal" size="sm">{pair.contrast}</Chip>
           </div>
