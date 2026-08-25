@@ -2,7 +2,7 @@ import { render, screen, fireEvent, act, waitFor, within } from '@testing-librar
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import type { SpeakingAttempt } from '../speaking/useSpeakingAttempt'
 import type { PronunciationResult } from '../scoring/types'
-import { findSentence } from '../content'
+import { findSentence, SENTENCES } from '../content'
 import { shuffleTiles } from '../content/shuffle'
 
 function baseAttempt(): SpeakingAttempt {
@@ -253,9 +253,10 @@ it('"Tiếp theo" goes to the next sentence in SENTENCES order', async () => {
 })
 
 it('"Tiếp theo" goes back to the sentence list from the last sentence', async () => {
+  const lastId = SENTENCES[SENTENCES.length - 1].id
   attemptControl.current = { ...baseAttempt(), result: result85 }
-  renderBuilder('s20')
-  await tapInCorrectOrder('s20')
+  renderBuilder(lastId)
+  await tapInCorrectOrder(lastId)
 
   act(() => { attemptControl.onResult?.(result85, null) })
   fireEvent.click(screen.getByRole('button', { name: /Tiếp theo/ }))
