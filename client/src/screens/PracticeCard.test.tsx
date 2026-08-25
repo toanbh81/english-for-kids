@@ -1,5 +1,5 @@
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
-import { MemoryRouter, Route, Routes } from 'react-router-dom'
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import { useState } from 'react'
 
 const recorderControl = vi.hoisted(() => ({ shouldFailStart: false, start: vi.fn() }))
@@ -36,26 +36,58 @@ vi.mock('../scoring/createScorer', () => ({
 }))
 import { PracticeCard } from './PracticeCard'
 import { LEVELS } from '../content'
+import { dayKey } from '../progress/activity'
+import { saveLesson } from '../progress/lessonStore'
+import type { LessonItem } from '../progress/lesson'
+
+/** Where a mission hand-off landed, and whether it was still carrying `{ mission: true }` — the
+ * flag leaves no trace in the DOM, so the probe is the only way to see it. */
+function Probe() {
+  const location = useLocation()
+  return <p data-testid="probe">{location.pathname} {JSON.stringify(location.state)}</p>
+}
+
+const step = (id: string, route: string): LessonItem =>
+  ({ kind: 'speak', activity: 'speak', id, route, label: id, emoji: '🗣️' })
+
+/** Today's lesson, written straight to storage, so the screen counts real steps. This file keeps
+ * the activity log between tests (the scorer stubs are what it resets), and a lesson step counts
+ * as done from any attempt logged after it — so the log is cleared with the lesson it belongs to,
+ * or an earlier test's `three` would arrive having already finished today's /sound/th. */
+function seedLesson(...items: LessonItem[]) {
+  const now = Date.now()
+  localStorage.removeItem('speakup.activity')
+  saveLesson({ day: dayKey(now), created: now, band: 5, items })
+}
+
+const CARD_STEP = step('sz-th-three', '/practice/sz-th-three')
+const NEXT_STEP = step('th', '/sound/th')
 
 const soundZooCards = LEVELS.find(l => l.id === 'sound-zoo')!.cards
 const wordPopCards = LEVELS.find(l => l.id === 'word-pop')!.cards
 
 /** The level route is stubbed rather than pulling in LevelSelect: these tests only care that
  * "Hoàn thành 🎉" lands back on the level the card belongs to. */
-function renderCard(cardId = 'sz-th-three') {
+function renderCard(cardId = 'sz-th-three', mission = false) {
   render(
-    <MemoryRouter initialEntries={[`/practice/${cardId}`]}>
+    <MemoryRouter initialEntries={[{ pathname: `/practice/${cardId}`, state: mission ? { mission: true } : null }]}>
       <Routes>
         <Route path="/practice/:cardId" element={<PracticeCard />} />
         <Route path="/level/:levelId" element={<p>danh sách thẻ</p>} />
+        <Route path="*" element={<Probe />} />
       </Routes>
     </MemoryRouter>,
   )
 }
 
+/** The card mints its scorer asynchronously, so an enabled mic is what "this card has settled"
+ * looks like. Even a test that never records has to wait for it, or the state update lands after
+ * the test body and React reports it as happening outside act(). */
+const scorerReady = () => waitFor(() => expect(screen.getByRole('button', { name: /bấm để nói/i })).toBeEnabled())
+
 /** Records one attempt and waits for the 3-star result, which is what reveals the next/finish CTA. */
 async function scoreOnce() {
-  await waitFor(() => expect(screen.getByRole('button', { name: /bấm để nói/i })).toBeEnabled())
+  await scorerReady()
   fireEvent.click(screen.getByRole('button', { name: /bấm để nói/i }))
   await waitFor(() => expect(screen.getByRole('button', { name: /dừng/i })).toBeInTheDocument())
   fireEvent.click(screen.getByRole('button', { name: /dừng/i }))
@@ -68,7 +100,7 @@ async function scoreOnce() {
  * the first render (`Math.min(2, feedback.stars)` does not depend on the streak), so waiting on
  * both slots together is what actually pins down the settled, post-effect state. */
 async function recordOnce(expectedStreak: 0 | 1 | 2) {
-  await waitFor(() => expect(screen.getByRole('button', { name: /bấm để nói/i })).toBeEnabled())
+  await scorerReady()
   fireEvent.click(screen.getByRole('button', { name: /bấm để nói/i }))
   await waitFor(() => expect(screen.getByRole('button', { name: /dừng/i })).toBeInTheDocument())
   fireEvent.click(screen.getByRole('button', { name: /dừng/i }))
@@ -125,6 +157,7 @@ it('Tiếp theo goes to the next card of the same level', async () => {
   await scoreOnce()
 
   fireEvent.click(screen.getByRole('button', { name: /tiếp theo/i }))
+  await scorerReady() // the next card mints its own scorer
 
   expect(screen.getByText(soundZooCards[1].text)).toBeInTheDocument() // the 2nd Sound Zoo card
   expect(screen.getByText(`Thẻ 2/${soundZooCards.length}`)).toBeInTheDocument()
@@ -146,8 +179,9 @@ it('the last card of a level finishes back at the level instead of jumping to th
 /** The legacy `/practice/sz-*` route still walks all 27 Sound Zoo cards. 27 dots at 16 px + gap
  * is ~640 px of header, which on a portrait iPad squeezed the 66 px back button below a thumb's
  * worth of tap target. Past a dozen cards the "Thẻ n/N" counter carries the position on its own. */
-it('drops the per-card dots on a level too long to show them', () => {
+it('drops the per-card dots on a level too long to show them', async () => {
   renderCard() // sz-th-three: 27 cards
+  await scorerReady()
   expect(soundZooCards.length).toBeGreaterThan(12)
   expect(screen.getByText(`Thẻ 1/${soundZooCards.length}`)).toBeInTheDocument()
   expect(screen.queryByTestId('card-dots')).not.toBeInTheDocument()
@@ -214,13 +248,15 @@ describe('Web Speech engine', () => {
   it('scores via the recognizer without ever starting MediaRecorder', async () => {
     ;(window as any).webkitSpeechRecognition = class {}
     const scorer = webSpeechScorer()
-    scorerControl.queue.push({ engine: 'webspeech', scorer })
+    // Twice: every attempt re-checks Azure first, and the token endpoint is still down here.
+    scorerControl.queue.push({ engine: 'webspeech', scorer }, { engine: 'webspeech', scorer })
     renderCard()
     await waitFor(() => expect(screen.getByRole('button', { name: /bấm để nói/i })).toBeEnabled())
     expect(screen.getByText('chế độ đơn giản')).toBeInTheDocument()
 
     vi.useFakeTimers()
     fireEvent.click(screen.getByRole('button', { name: /bấm để nói/i }))
+    await act(async () => { await vi.advanceTimersByTimeAsync(0) }) // the re-check resolves
     expect(scorer.start).toHaveBeenCalledTimes(1)
     expect(screen.getByRole('button', { name: /dừng/i })).toBeInTheDocument() // wsRecording drives the mic button
     await act(async () => { await vi.advanceTimersByTimeAsync(6000) })
@@ -232,7 +268,7 @@ describe('Web Speech engine', () => {
   })
 
   it('explains that the browser lacks speech recognition instead of blaming the mic', async () => {
-    scorerControl.queue.push({ engine: 'webspeech', scorer: webSpeechScorer() })
+    scorerControl.queue.push({ engine: 'webspeech', scorer: webSpeechScorer() }, { engine: 'webspeech', scorer: webSpeechScorer() })
     renderCard() // no window.webkitSpeechRecognition installed
     await waitFor(() => expect(screen.getByRole('button', { name: /bấm để nói/i })).toBeEnabled())
     fireEvent.click(screen.getByRole('button', { name: /bấm để nói/i }))
@@ -251,7 +287,10 @@ describe('expired Azure token', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: /bấm để nói/i })).toBeEnabled())
     fireEvent.click(screen.getByRole('button', { name: /bấm để nói/i }))
     await waitFor(() => expect(screen.getByRole('button', { name: /dừng/i })).toBeInTheDocument())
-    fireEvent.click(screen.getByRole('button', { name: /dừng/i }))
+    // Scoring runs entirely on microtasks (stop → score → refresh the token → score again), so
+    // the click is awaited inside act(): otherwise the tail of that chain commits between two
+    // awaits in the test body, where React cannot see it.
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: /dừng/i })) })
   }
 
   it('mints a fresh scorer and retries the score exactly once', async () => {
@@ -293,6 +332,7 @@ describe('Word Pop: hidden IPA + two-in-a-row streak', () => {
 
   it('hides the IPA behind "Xem phiên âm" until tapped', async () => {
     renderCard(card.id)
+    await scorerReady()
     expect(screen.queryByText(card.ipa)).not.toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: 'Xem phiên âm' }))
@@ -339,8 +379,9 @@ describe('Word Pop: hidden IPA + two-in-a-row streak', () => {
     expect(stars[card.id] ?? 0).toBeLessThanOrEqual(2)
   })
 
-  it('keeps the per-card dots for a 12-card level', () => {
+  it('keeps the per-card dots for a 12-card level', async () => {
     renderCard(card.id)
+    await scorerReady()
     const dots = screen.getByTestId('card-dots')
     expect(wordPopCards.length).toBeLessThanOrEqual(12)
     expect(dots.children).toHaveLength(wordPopCards.length)
@@ -348,9 +389,55 @@ describe('Word Pop: hidden IPA + two-in-a-row streak', () => {
 
   it('leaves Sound Zoo cards unchanged: IPA visible, no streak slots', async () => {
     renderCard() // default sz-th-three
+    await scorerReady()
     expect(screen.getByText(soundZooCards[0].ipa)).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Xem phiên âm' })).not.toBeInTheDocument()
     expect(screen.queryByLabelText('Lần 1/2')).not.toBeInTheDocument()
     expect(screen.queryByLabelText('Lần 2/2')).not.toBeInTheDocument()
   })
+})
+
+// --- as a step of today's lesson (spec §3) ---------------------------------------------------
+
+it('numbers itself inside the lesson, drops the level dots, and threads back to the mission', async () => {
+  const card = wordPopCards[0]
+  seedLesson(step(card.id, `/practice/${card.id}`), NEXT_STEP)
+  renderCard(card.id, true)
+  await scorerReady()
+
+  expect(screen.getByText('Thẻ 1/2')).toBeInTheDocument()
+  // One counter, not two: the level's own position means nothing inside a lesson, dots included.
+  expect(screen.queryByText(`Thẻ 1/${wordPopCards.length}`)).not.toBeInTheDocument()
+  expect(screen.queryByTestId('card-dots')).not.toBeInTheDocument()
+  expect(screen.getByRole('link', { name: 'Nhiệm vụ' })).toHaveAttribute('href', '/mission')
+})
+
+it('hands on to the next step of the lesson, still carrying the flag', async () => {
+  seedLesson(CARD_STEP, NEXT_STEP)
+  renderCard('sz-th-three', true)
+  await scoreOnce()
+
+  fireEvent.click(screen.getByRole('button', { name: /tiếp theo/i }))
+  expect(screen.getByTestId('probe')).toHaveTextContent('/sound/th {"mission":true}')
+})
+
+it('ends at the mission screen when it is the last step of the lesson', async () => {
+  seedLesson(CARD_STEP)
+  renderCard('sz-th-three', true)
+  await scoreOnce()
+
+  fireEvent.click(screen.getByRole('button', { name: /hoàn thành/i }))
+  expect(screen.getByTestId('probe')).toHaveTextContent('/mission null')
+})
+
+/** Today's lesson may well list this very card — but a child who walked in from the level did not
+ * arrive carrying the flag, and nothing about the screen may change for them. */
+it('stays a free-play card without the flag, lesson or no lesson', async () => {
+  seedLesson(CARD_STEP, NEXT_STEP)
+  renderCard()
+  await scorerReady()
+
+  expect(screen.getByText(`Thẻ 1/${soundZooCards.length}`)).toBeInTheDocument()
+  expect(screen.queryByText('Thẻ 1/2')).not.toBeInTheDocument()
+  expect(screen.getByRole('link', { name: 'Quay lại' })).toHaveAttribute('href', '/level/sound-zoo')
 })

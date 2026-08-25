@@ -514,6 +514,84 @@ day's generated lesson (pruned to the most recent 30); `speakup.lesson.length` �
 
 **New route:** `/topic/:id` (topic hub). `/sentences` gained an optional `?topic=<id>` filter.
 
+## Phase 8 — Mission flow & practice polish
+
+Ten fixes from the first live session on Phase 7, plus the scoring bugs behind three of them: the
+Daily Mission became a flat list of individual items instead of the prototype's grouped step
+cards, practice screens gave the child no way back into the lesson or on to its next step, Tập âm's
+layout wandered, WordCard hid its own score, and a single cold Azure token request could pin a
+whole card to the phoneme-blind fallback with a scary "lỗi kết nối Azure" message.
+
+- **Daily Mission (`/mission`) shows groups, not items** (`client/src/progress/missionNav.ts`
+  `groupItems`, `client/src/screens/DailyMission.tsx`) — today's lesson items are bucketed by kind
+  in the order the generator laid them out (never a hard-coded listen → speak → word → review), one
+  card per group: emoji, title ("Nghe 1 truyện" / "N thẻ phát âm" / "M từ mới" / "K bài ôn tập"),
+  `doneCount/total`, a "Bước i" caption, and either a "≈ N phút" chip or "✓ Xong". The first group
+  with an undone item gets a teal ring + "· bắt đầu ở đây!"; every card links to the group's first
+  undone item (a finished group links to its first item, for a replay), carrying router state
+  `{ mission: true }` (`MISSION_STATE`) so the screen it opens knows it is a lesson step. Cards sit
+  in a grid, up to 4 columns from `lg`, stacked below. The single sticky CTA goes to the ringed
+  group and reads "Bắt đầu ▸" while `doneCount === 0`, "Tiếp tục ▸" after — the same rule
+  `MissionCard` already used on Home (`client/src/components/MissionCard.tsx`). `/mission` also
+  gained Home's once-per-day celebration redirect: on mount, a lesson that is `done` and not yet
+  celebrated today marks itself celebrated and navigates to `/mission/done`.
+- **Mission session: numbering, back, next** (`client/src/progress/missionNav.ts`) — a new
+  `missionPosition`/`missionNext`/`useMissionNext` walk today's lesson to place whatever route the
+  child is standing on. `SoundPractice`, `PracticeCard`, `PairPractice`, `StarPractice`,
+  `VoicePractice`, `WordCard` and `SentenceBuilder` become mission-aware whenever they were reached
+  with `state: { mission: true }` (`StoryPlayer` is excluded — stories keep their own flow, per
+  spec §3):
+  - The header grows a position chip built from `mission.pos.index`/`mission.pos.total`: "Âm i/N"
+    (SoundPractice), "Thẻ i/N" (PracticeCard/PairPractice/StarPractice/VoicePractice), "Từ mới i/N"
+    (WordCard), "Câu i/N" (SentenceBuilder).
+  - `BackButton` targets `/mission` labelled "Nhiệm vụ" instead of the screen's usual deck/level.
+  - The finish/next CTA calls `mission.go()`, which either advances to `nextRoute` (still carrying
+    `{ mission: true }`) or, when nothing follows, returns to `/mission` with no state (which then
+    celebrates if the lesson is now done). The label is decided by `missionNext`: "Tiếp theo →"
+    whenever an undone step still follows this one in lesson order — the rest of this group, then
+    the next group's first undone item; only once nothing follows does it distinguish "Hoàn thành
+    🎉" (this really was the last thing outstanding anywhere in the lesson) from "Về nhiệm vụ →" (an
+    earlier group is still open) — a child replaying an already-finished later group while an
+    earlier one waits must not be told the lesson is done. Free play (no `mission` state) is
+    unaffected: every screen behaves exactly as before, and `LessonChip`
+    (`client/src/components/LessonChip.tsx`, mounted globally)
+    stays as the thread back to a lesson reached without the flag — except it hides itself whenever
+    the screen *is* mission-aware, since the header/CTA already cover that; it only keeps showing
+    on `/story/*` routes in mission mode, because stories don't carry the flag through their own
+    flow.
+- **SoundPractice two-row layout** (`client/src/screens/SoundPractice.tsx`) — the practice area is
+  a two-row grid (`grid-cols-[minmax(180px,auto)_1fr]` from `sm`, stacked below) sharing columns so
+  cells line up: row 1 is the sound (mouth/IPA tile + "🔊 Nghe âm lẻ" | the phoneme's
+  `PHONEME_TIPS`), row 2 is the word (emoji tile + "🔊 Nghe mẫu" | word text, IPA, and a "Từ n/3"
+  chip), row 2 only rendered while idle. **Approved deviation from spec §4:** once recording starts
+  or a result lands, the word cell stops existing, so the "Từ n/3" chip relocates into the header
+  next to the mission's "Âm i/N" chip instead of simply disappearing — the run's position inside
+  the sound is never off-screen, just relocated.
+- **Scoring resilience** (root cause of "lỗi kết nối Azure") — `createScorer()`
+  (`client/src/scoring/createScorer.ts`) retries the token fetch once after a 700 ms backoff before
+  falling back to Web Speech, since a Vercel cold start can fail only the first request; offline
+  skips the retry outright. The fallback is no longer sticky: `useSpeakingAttempt.startRecording`
+  (`client/src/speaking/useSpeakingAttempt.ts`) checks, on every mic tap while the current scorer is
+  `webspeech` and `navigator.onLine`, whether a fresh `createScorer()` now comes back `azure`, and
+  adopts it before opening the mic — one failed token fetch can no longer pin a whole card to the
+  phoneme-blind engine. That re-check is awaited, so the mic reads as busy (`micState:
+  'processing'`) rather than idle for the moment it takes; a `startingRef` guard rejects a second
+  tap that lands inside that window. `SoundPractice`'s unscored copy no longer blames a connection
+  the child has never heard of: the simple engine → "Chế độ đơn giản chưa chấm được âm lẻ — bé thử
+  lại nhé!"; an Azure result that simply missed the phoneme → "Chưa nghe rõ âm này — thử lại nhé!".
+- **WordCard flip: hint instead of buttons** (`client/src/screens/WordCard.tsx`) — the
+  "MẶT TRƯỚC"/"MẶT SAU" chips and the two 🔄 flip buttons are gone; the card itself is the control
+  (`role="button"`, `tabIndex=0`, `aria-label="Lật thẻ"`, Enter/Space still flip it). While
+  un-flipped and idle it runs a CSS `peek` keyframe (rotateY 0 → −18° → 0 over 0.9 s) every 4 s,
+  starting 2.5 s after mount, driven purely by `animation-delay`/`animation-iteration-count` and a
+  `hasFlipped` class that turns it off for good after the first flip.
+- **WordCard shows its score** — after an attempt, `Stars` (from `toFeedback(result).stars`) and a
+  "Điểm: NN" chip (rounded overall, hidden when the engine returned no usable number) render under
+  the card, alongside the existing `HintCard` on retry and the 🔓 "Mở khoá!" banner.
+- **Guess praise reads as a guess, not a score** — the meaning-guess praise is now
+  "Đoán đúng rồi! 🎉" and clears itself after 1.5 s on a timer, instead of persisting until the
+  first flip (where it used to sit right where the pronunciation score lands).
+
 ## iPad setup & testing (Thiết lập trên iPad)
 
 1. Make sure your iPad and PC are on the same Wi-Fi network.
@@ -558,7 +636,7 @@ day's generated lesson (pruned to the most recent 30); `speakup.lesson.length` �
 | 14 | Home → mission card → "Bắt đầu ▸" | Opens `/mission` on the first not-yet-done step | ⏳ pending |
 | 15 | Complete the 3rd mission step | Routes to `/mission/done` with confetti + Foxy cheer | ⏳ pending |
 | 16 | Speak card (`/practice/:cardId`) → tap mic | A countdown number under the word ticks 6→1 while recording, mirroring the auto-stop timer | ⏳ pending |
-| 17 | Words → Food → any word card → tap the card (or the "Lật thẻ" button on the face) | Card flips (emoji/IPA face ↔ Vietnamese/example face) | ⏳ pending |
+| 17 | Words → Food → any word card → tap the card (whole card is the control, `aria-label="Lật thẻ"`, no separate 🔄 button) | Card flips (emoji/IPA face ↔ Vietnamese/example face) | ⏳ pending |
 | 18 | Sentence Builder → any sentence | Tiles are colored by role (who/does/what), with the legend between the tray and the tile pool | ⏳ pending |
 | 19 | Parent Dashboard → tap "Khoá lại" | Immediately re-locks and shows a fresh math question, without leaving `/parent` | ⏳ pending |
 | 20 | Story player → tap the subtitle switch | Toggle switch flips state and announces it (e.g. "Phụ đề bật") | ⏳ pending |
@@ -569,7 +647,7 @@ day's generated lesson (pruned to the most recent 30); `speakup.lesson.length` �
 | 25 | Học từ mới → "Ôn tập hôm nay" → open a due word | English word is hidden (emoji + Vietnamese only) until "Gợi ý" is tapped | ⏳ pending |
 | 26 | Nghe & chọn (`/level/minimal-pairs`) → open a pair → listen, choose, then read both words | 🔊 plays one word, tapping the matching card gives ✅/🙈 + Foxy. The line under the cards ticks off one word at a time ("ship ✓ · sheep ○") and the mic step appears only after BOTH words have been picked correctly — deliberately getting the same word right twice must not open it | ⏳ pending |
 | 27 | `/levels` stairs | "Nghe & chọn" step shows unlocked (not the 🔒 "Sắp có" placeholder) | ⏳ pending |
-| 28 | Turn Wi-Fi off (header shows "chế độ đơn giản") → Tập âm → say all 3 words of a sound | Chip reads "Chưa chấm được âm — cần kết nối Azure" with no number, the word's own score still shows, and the run awards at most 2 stars | ⏳ pending |
+| 28 | Turn Wi-Fi off (header shows "chế độ đơn giản") → Tập âm → say all 3 words of a sound | Chip reads "Chế độ đơn giản chưa chấm được âm lẻ — bé thử lại nhé!" with no number and no mention of "Azure"; the word's own score still shows, and the run awards at most 2 stars | ⏳ pending |
 | 29 | Học từ mới → "Ôn tập hôm nay" → open a due word | No 🔊 on the hidden front face; it appears only after "Gợi ý" is tapped | ⏳ pending |
 | 30 | Sentence Stars → open a sentence with a linked pair (e.g. ss1 "red apple") | Stressed words render coral and larger; the linked pair shows a small ‿ connector underneath | ⏳ pending |
 | 31 | Sentence Stars practice → tap the rhythm card | Each dot pops once when its word is spoken — the beat travels left to right with the voice, the dots never pulse in unison, and the dot for each stressed word is visibly bigger. Tapping again replays it | ⏳ pending |
@@ -583,12 +661,27 @@ day's generated lesson (pruned to the most recent 30); `speakup.lesson.length` �
 | 39 | Home → tap the Weather island (locked, at the far right) | Renders 🔒 with a "Chưa mở khóa" chip and does not navigate; unlock it by learning ≥ 6/8 Family words, then tap again | ⏳ pending |
 | 40 | Home → tap the Animals island | Opens `/topic/animals`: emoji + name + island star row, then three cards — 🧩 Từ mới, 🧱 Ghép câu, 🎧 Truyện (with story links + stars, or "Sắp có 📖" for a topic with none yet) | ⏳ pending |
 | 41 | Topic hub → tap 🧩 Từ mới, then 🧱 Ghép câu | Từ mới opens `/words/<topic>` for that topic only; Ghép câu opens `/sentences?topic=<topic>` showing only that topic's sentences | ⏳ pending |
-| 42 | Home → mission card → "Bắt đầu ▸" | Opens `/mission` showing today's generated lesson items (listen/speak/word/review, e.g. "🗣️ Nói: …"), not the old fixed 3-step list; the first undone item has a teal ring and "bắt đầu ở đây!" | ⏳ pending |
-| 43 | `/mission` → complete the current item, return to `/mission` | That item now shows "✓ Xong" and the teal ring/CTA move to the next undone item | ⏳ pending |
+| 42 | Home → mission card → "Bắt đầu ▸" | Opens `/mission` showing today's lesson as grouped step cards (e.g. "🎧 Nghe 1 truyện", "🗣️ 4 thẻ phát âm", "🧩 3 từ mới"), not a flat item list; each card shows its own `x/N` progress and a "Bước i" caption; the first group with an undone item has a teal ring and "· bắt đầu ở đây!" | ⏳ pending |
+| 43 | `/mission` → tap the ringed group's card (or the sticky CTA), finish its first undone item, return to `/mission` | That group's `x/N` progress advances; once every item in it is done the card shows "✓ Xong" instead of the "≈ N phút" chip, and the teal ring/CTA move to the next group with an undone item | ⏳ pending |
 | 44 | `/mission` header | Shows a "Bậc ⭐ N" chip matching the band set in Parent Dashboard, next to the `doneCount/total` chip | ⏳ pending |
 | 45 | Parent Dashboard → "Bài học" card → tap a band number (e.g. 4) | That button highlights (coral) and "Tự động" un-highlights; reopening `/mission` draws speaking practice from the new band | ⏳ pending |
 | 46 | Parent Dashboard → "Bài học" card → tap "Tự động" after picking a band manually | "Tự động" highlights (teal) again, resuming automatic band adjustment from the current value | ⏳ pending |
 | 47 | Parent Dashboard → "Bài học" card → tap a length chip (Ngắn / Vừa / Dài) | That chip highlights; the next day's (or a freshly cleared day's) lesson has the matching item count | ⏳ pending |
+| 48 | `/mission` → tap a group card that is NOT yet ringed teal (e.g. tap "🧩 3 từ mới" while "🎧 Nghe 1 truyện" is still the ringed one) | Opens that group's first item anyway — the child can jump ahead, not just follow the ring | ⏳ pending |
+| 49 | `/mission` → open any of today's speak/word/sentence items from a group card | Screen header shows a position chip ("Âm i/N" / "Thẻ i/N" / "Từ mới i/N" / "Câu i/N") and the back arrow reads "Nhiệm vụ" instead of the usual deck/level name; tapping it returns to `/mission`, not the deck | ⏳ pending |
+| 50 | `/mission` → open a speak/word/sentence item that is not the last item of its group, finish it | The finish button reads "Tiếp theo →" and opens the next item of the same group, still tagged as a mission step | ⏳ pending |
+| 51 | `/mission` → open the last item of a group while another group still has undone items, finish it | The finish button reads "Về nhiệm vụ →" (not "Hoàn thành 🎉"); tapping it returns to `/mission`, which still shows the other group open | ⏳ pending |
+| 52 | `/mission` → finish the very last undone item of the whole lesson | The finish button reads "Hoàn thành 🎉"; tapping it routes to `/mission`, which immediately redirects to `/mission/done` for the confetti + Foxy cheer | ⏳ pending |
+| 53 | Open a practice/word/sentence screen directly from Speak Lab, Words or Sentence Builder (not from `/mission`) | No position chip in the header, back arrow goes to the usual deck/level as before Phase 8, and finishing reads "Tiếp theo →" / "Hoàn thành 🎉" against that screen's own deck — free play is unchanged | ⏳ pending |
+| 54 | `/mission` → open a story item, listen to it, then open a non-story mission item from the same lesson | While inside the story, a small floating "🌞 Nhiệm vụ x/N" chip (bottom-right) is visible and links back to `/mission`; once on the non-story item, that floating chip is gone (the header/back-button already cover it) | ⏳ pending |
+| 55 | Tập âm → open any sound tile (free play or from `/mission`) | Two aligned rows: sound tile (mouth/IPA + "🔊 Nghe âm lẻ") over its description on the left column, word tile (emoji + "🔊 Nghe mẫu") over word text/IPA/"Từ 1/3" chip on the right column, both rows sharing the same left edge | ⏳ pending |
+| 56 | Tập âm, opened from `/mission` → tap the mic to record a word | The "Từ n/3" chip moves up into the header next to the "Âm i/N" chip the instant recording starts (the word tile/description row disappears) — the count is never simply gone from the screen | ⏳ pending |
+| 57 | Turn Wi-Fi off then quickly back on → Tập âm → tap mic right away | Mic briefly shows a busy/processing state (not an error) while it re-checks for Azure, then opens for real; if Azure answers, the header does not show "chế độ đơn giản" | ⏳ pending |
+| 58 | Turn Wi-Fi off (header shows "chế độ đơn giản") → Học từ mới → say a word | Chip/feedback area never mentions "Azure"; wording is plain and encouraging | ⏳ pending |
+| 59 | Học từ mới → any card, before the first tap | Card gently rocks (peeks open a little) every few seconds on its own, without being told to | ⏳ pending |
+| 60 | Học từ mới → tap the card once to flip it, flip back, wait several seconds | The peek animation does not resume — it only ever happens before the first flip | ⏳ pending |
+| 61 | Học từ mới → record a word and score it | Stars and a "Điểm: NN" score chip appear under the card, in addition to the existing hint (on a low score) and the 🔓 "Mở khoá!" banner (on unlock) | ⏳ pending |
+| 62 | Học từ mới → a still-locked word → guess its meaning correctly | Shows "Đoán đúng rồi! 🎉" praise, which clears itself after about 1.5 s, well before the mic/flip step | ⏳ pending |
 
 ## Architecture
 

@@ -1,4 +1,4 @@
-import { parseAzureResult, pcmToWav } from './azureScorer'
+import { fetchToken, parseAzureResult, pcmToWav } from './azureScorer'
 
 it('parses NBest[0] into PronunciationResult', () => {
   const r = parseAzureResult({ NBest: [{
@@ -10,6 +10,48 @@ it('parses NBest[0] into PronunciationResult', () => {
     words: [{ word: 'three', score: 40, errorType: 'Mispronunciation', phonemes: [{ phoneme: 'th', score: 20 }] }] })
 })
 it('throws on missing NBest', () => { expect(() => parseAzureResult({})).toThrow() })
+
+/** The mic waits on this request. `fetch` never times out on its own, so without a deadline a
+ * request nobody answers leaves the child holding a ⏳ mic that will never open. */
+describe('fetchToken', () => {
+  const origFetch = globalThis.fetch
+
+  afterEach(() => {
+    globalThis.fetch = origFetch
+    vi.useRealTimers()
+  })
+
+  it('gives up on a request nobody answers, and aborts it', async () => {
+    vi.useFakeTimers()
+    let signal: AbortSignal | undefined
+    globalThis.fetch = vi.fn((_url: unknown, init?: { signal?: AbortSignal }) => {
+      signal = init?.signal
+      return new Promise<Response>(() => {}) // answered by nobody, ever
+    }) as unknown as typeof fetch
+
+    const settled = expect(fetchToken()).rejects.toThrow(/timeout/)
+    await vi.advanceTimersByTimeAsync(2500)
+
+    await settled
+    expect(signal?.aborted).toBe(true)
+  })
+
+  it('answers from the request when it arrives in time, and leaves no timer behind', async () => {
+    vi.useFakeTimers()
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: true, json: async () => ({ token: 'tok', region: 'southeastasia' }),
+    }) as unknown as typeof fetch
+
+    await expect(fetchToken()).resolves.toEqual({ token: 'tok', region: 'southeastasia' })
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('still rejects a refused token rather than waiting out the deadline', async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue({ ok: false }) as unknown as typeof fetch
+
+    await expect(fetchToken()).rejects.toThrow(/unavailable/)
+  })
+})
 
 describe('pcmToWav', () => {
   const ascii = (v: DataView, off: number, len: number) =>

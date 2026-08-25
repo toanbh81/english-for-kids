@@ -43,7 +43,19 @@ describe('MissionCard', () => {
     expect(screen.getByText('🌞 Nhiệm vụ hôm nay')).toBeInTheDocument()
     expect(screen.getByText('3/10')).toBeInTheDocument()
     expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '30')
+    expect(screen.getByRole('link', { name: 'Tiếp tục ▸' })).toHaveAttribute('href', '/mission')
+  })
+
+  // "Bắt đầu" is a promise about the lesson, not about the tap: a child who has already done two
+  // steps is carrying on, and the card must say so (spec §2).
+  it('says Bắt đầu on an untouched lesson and Tiếp tục once a step is done', () => {
+    const { unmount } = render(<MemoryRouter><MissionCard status={{ doneCount: 0, total: 10, done: false }} /></MemoryRouter>)
     expect(screen.getByRole('link', { name: 'Bắt đầu ▸' })).toHaveAttribute('href', '/mission')
+    unmount()
+
+    renderCard({ doneCount: 1, total: 10, done: false })
+    expect(screen.getByRole('link', { name: 'Tiếp tục ▸' })).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'Bắt đầu ▸' })).not.toBeInTheDocument()
   })
 
   it('celebrates when the whole lesson is done and offers a replay', () => {

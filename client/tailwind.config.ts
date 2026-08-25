@@ -60,6 +60,14 @@ export default {
         beat: { '0%, 100%': { transform: 'scale(1)' }, '50%': { transform: 'scale(1.35)' } },
         bob: { '0%, 100%': { transform: 'translateY(0)' }, '50%': { transform: 'translateY(-9px)' } },
         wiggle: { '0%, 100%': { transform: 'rotate(0deg)' }, '25%': { transform: 'rotate(-8deg)' }, '75%': { transform: 'rotate(8deg)' } },
+        // A word card lifting its own corner: "there is something on the back, tap me." The nudge
+        // takes ~0.9 s but the keyframe runs 4 s, with the rotation packed into the first 22 % and
+        // the card sitting still after it — that is what spaces the repeats out, so one infinite
+        // CSS animation gives a periodic hint with no JS timer keeping time.
+        peek: {
+          '0%, 22%, 100%': { transform: 'rotateY(0deg)' },
+          '11%': { transform: 'rotateY(-18deg)' },
+        },
       },
       animation: {
         'pulse-soft': 'pulse-soft 1.6s ease-in-out infinite',
@@ -72,6 +80,9 @@ export default {
         beat: 'beat var(--beat) ease-out 1',
         bob: 'bob 3s ease-in-out infinite',
         wiggle: 'wiggle 1.8s ease-in-out infinite',
+        // 2.5 s of grace first: the hint is for a child who has stopped and is looking at the card,
+        // not for one who is already tapping it.
+        peek: 'peek 4s ease-in-out 2.5s infinite',
       },
     },
   },

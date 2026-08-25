@@ -24,8 +24,12 @@ export function MissionCard({ status, className = '' }: { status: MissionProgres
         <div className="text-center font-display text-2xl font-extrabold text-good-700">Hoàn thành! 🎉</div>
       )}
 
+      {/* "Bắt đầu" only ever means an untouched lesson (spec §2): once the child has ticked
+        * something off, the card offers to carry on rather than to start over. */}
       <Button to="/mission" className="w-full">
-        {done ? 'Hoàn thành rồi! 🎉 Chơi lại?' : 'Bắt đầu ▸'}
+        {done
+          ? 'Hoàn thành rồi! 🎉 Chơi lại?'
+          : doneCount === 0 ? 'Bắt đầu ▸' : 'Tiếp tục ▸'}
       </Button>
     </div>
   )

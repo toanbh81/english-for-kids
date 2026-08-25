@@ -1,5 +1,5 @@
 import { render, screen, fireEvent, act, waitFor, within } from '@testing-library/react'
-import { MemoryRouter, Route, Routes } from 'react-router-dom'
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import type { SpeakingAttempt } from '../speaking/useSpeakingAttempt'
 import type { PronunciationResult } from '../scoring/types'
 import { findSentence } from '../content'
@@ -36,6 +36,28 @@ const recordingsMock = vi.hoisted(() => ({ saveRecording: vi.fn(() => Promise.re
 vi.mock('../progress/recordings', () => recordingsMock)
 
 import { SentenceBuilder } from './SentenceBuilder'
+import { dayKey } from '../progress/activity'
+import { saveLesson } from '../progress/lessonStore'
+import type { LessonItem } from '../progress/lesson'
+
+/** Where a mission hand-off landed, and whether it was still carrying `{ mission: true }` — the
+ * flag leaves no trace in the DOM, so the probe is the only way to see it. */
+function Probe() {
+  const location = useLocation()
+  return <p data-testid="probe">{location.pathname} {JSON.stringify(location.state)}</p>
+}
+
+const step = (id: string, route: string): LessonItem =>
+  ({ kind: 'review', activity: 'sentence', id, route, label: id, emoji: '🔁' })
+
+/** Today's lesson, written straight to storage, so the screen counts real steps. */
+function seedLesson(...items: LessonItem[]) {
+  const now = Date.now()
+  saveLesson({ day: dayKey(now), created: now, band: 5, items })
+}
+
+const SENTENCE_STEP = step('s1', '/sentence/s1')
+const NEXT_STEP = step('food-apple', '/words/food/food-apple')
 
 const result85: PronunciationResult = {
   overall: 85, accuracy: 85, fluency: 85, completeness: 85,
@@ -43,12 +65,13 @@ const result85: PronunciationResult = {
   engine: 'azure',
 }
 
-function renderBuilder(id: string) {
+function renderBuilder(id: string, mission = false) {
   render(
-    <MemoryRouter initialEntries={[`/sentence/${id}`]}>
+    <MemoryRouter initialEntries={[{ pathname: `/sentence/${id}`, state: mission ? { mission: true } : null }]}>
       <Routes>
         <Route path="/sentence/:id" element={<SentenceBuilder />} />
         <Route path="/sentences" element={<div>Danh sách câu</div>} />
+        <Route path="*" element={<Probe />} />
       </Routes>
     </MemoryRouter>,
   )
@@ -62,9 +85,14 @@ function tapInShuffledOrder(sentenceId: string) {
   order.forEach(idx => fireEvent.click(screen.getByRole('button', { name: sentence.words[idx] })))
 }
 
-function tapInCorrectOrder(sentenceId: string) {
+/** The last tile completes the sentence, which starts a `playUrl` whose promise settles into
+ * `setAudioMissing` — so the taps have to be awaited inside act(), or that state update lands
+ * after the test body. */
+async function tapInCorrectOrder(sentenceId: string) {
   const sentence = findSentence(sentenceId)!
-  sentence.words.forEach(w => fireEvent.click(screen.getByRole('button', { name: w })))
+  await act(async () => {
+    sentence.words.forEach(w => fireEvent.click(screen.getByRole('button', { name: w })))
+  })
 }
 
 beforeEach(() => {
@@ -165,7 +193,7 @@ it('clears the shake-restore timer on unmount without throwing', () => {
 it('a correct order shows "Đúng rồi!", plays the sample audio, and reveals the mic', async () => {
   renderBuilder('s1')
   const sentence = findSentence('s1')!
-  tapInCorrectOrder('s1')
+  await tapInCorrectOrder('s1')
 
   expect(screen.getByText('Đúng rồi! 🎉')).toBeInTheDocument()
   await waitFor(() => expect(playerMock.playUrl).toHaveBeenCalledWith(sentence.audio))
@@ -175,14 +203,14 @@ it('a correct order shows "Đúng rồi!", plays the sample audio, and reveals t
 it('shows the missing-audio notice when the sample fails to play', async () => {
   playerMock.playUrl.mockImplementationOnce(() => Promise.reject(new Error('no audio')))
   renderBuilder('s1')
-  tapInCorrectOrder('s1')
+  await tapInCorrectOrder('s1')
   await waitFor(() => expect(screen.getByText('Chưa có audio mẫu')).toBeInTheDocument())
 })
 
-it('a spoken score of 85 shows 3 filled stars, stores sentence:s1 = 3, and logs a sentence activity event', () => {
+it('a spoken score of 85 shows 3 filled stars, stores sentence:s1 = 3, and logs a sentence activity event', async () => {
   attemptControl.current = { ...baseAttempt(), result: result85 }
   renderBuilder('s1')
-  tapInCorrectOrder('s1')
+  await tapInCorrectOrder('s1')
   expect(screen.getByText('Đúng rồi! 🎉')).toBeInTheDocument()
 
   const blob = new Blob(['x'])
@@ -202,20 +230,20 @@ it('a spoken score of 85 shows 3 filled stars, stores sentence:s1 = 3, and logs 
   )
 })
 
-it('does not save a recording when no blob is available (web speech engine)', () => {
+it('does not save a recording when no blob is available (web speech engine)', async () => {
   attemptControl.current = { ...baseAttempt(), result: result85 }
   renderBuilder('s1')
-  tapInCorrectOrder('s1')
+  await tapInCorrectOrder('s1')
 
   act(() => { attemptControl.onResult?.(result85, null) })
 
   expect(recordingsMock.saveRecording).not.toHaveBeenCalled()
 })
 
-it('"Tiếp theo" goes to the next sentence in SENTENCES order', () => {
+it('"Tiếp theo" goes to the next sentence in SENTENCES order', async () => {
   attemptControl.current = { ...baseAttempt(), result: result85 }
   renderBuilder('s1')
-  tapInCorrectOrder('s1')
+  await tapInCorrectOrder('s1')
 
   act(() => { attemptControl.onResult?.(result85, null) })
   fireEvent.click(screen.getByRole('button', { name: /Tiếp theo/ }))
@@ -224,10 +252,10 @@ it('"Tiếp theo" goes to the next sentence in SENTENCES order', () => {
   expect(screen.getByText(sentence2.vi)).toBeInTheDocument()
 })
 
-it('"Tiếp theo" goes back to the sentence list from the last sentence', () => {
+it('"Tiếp theo" goes back to the sentence list from the last sentence', async () => {
   attemptControl.current = { ...baseAttempt(), result: result85 }
   renderBuilder('s20')
-  tapInCorrectOrder('s20')
+  await tapInCorrectOrder('s20')
 
   act(() => { attemptControl.onResult?.(result85, null) })
   fireEvent.click(screen.getByRole('button', { name: /Tiếp theo/ }))
@@ -235,13 +263,58 @@ it('"Tiếp theo" goes back to the sentence list from the last sentence', () => 
   expect(screen.getByText('Danh sách câu')).toBeInTheDocument()
 })
 
-it('"Thử lại" resets the spoken attempt', () => {
+it('"Thử lại" resets the spoken attempt', async () => {
   attemptControl.current = { ...baseAttempt(), result: result85 }
   renderBuilder('s1')
-  tapInCorrectOrder('s1')
+  await tapInCorrectOrder('s1')
 
   act(() => { attemptControl.onResult?.(result85, null) })
   fireEvent.click(screen.getByRole('button', { name: 'Thử lại' }))
 
   expect((attemptControl.current as SpeakingAttempt).reset).toHaveBeenCalled()
+})
+
+// --- as a step of today's lesson (spec §3) ---------------------------------------------------
+
+it('numbers itself inside the lesson and threads back to the mission', () => {
+  seedLesson(SENTENCE_STEP, NEXT_STEP)
+  renderBuilder('s1', true)
+
+  expect(screen.getByText('Câu 1/2')).toBeInTheDocument()
+  expect(screen.getByRole('link', { name: 'Nhiệm vụ' })).toHaveAttribute('href', '/mission')
+})
+
+it('hands on to the next step of the lesson, still carrying the flag', async () => {
+  attemptControl.current = { ...baseAttempt(), result: result85 }
+  seedLesson(SENTENCE_STEP, NEXT_STEP)
+  renderBuilder('s1', true)
+  await tapInCorrectOrder('s1')
+
+  act(() => { attemptControl.onResult?.(result85, null) })
+  fireEvent.click(screen.getByRole('button', { name: /Tiếp theo/ }))
+
+  expect(screen.getByTestId('probe')).toHaveTextContent('/words/food/food-apple {"mission":true}')
+})
+
+it('ends at the mission screen when it is the last step of the lesson', async () => {
+  attemptControl.current = { ...baseAttempt(), result: result85 }
+  seedLesson(SENTENCE_STEP)
+  renderBuilder('s1', true)
+  await tapInCorrectOrder('s1')
+
+  act(() => { attemptControl.onResult?.(result85, null) })
+  // The last step of the lesson says so — the CTA is not "Tiếp theo" any more.
+  fireEvent.click(screen.getByRole('button', { name: /Hoàn thành/ }))
+
+  expect(screen.getByTestId('probe')).toHaveTextContent('/mission null')
+})
+
+/** Today's lesson may well list this very sentence — but a child who walked in from the list did
+ * not arrive carrying the flag, and nothing about the screen may change for them. */
+it('stays a free-play sentence without the flag, lesson or no lesson', () => {
+  seedLesson(SENTENCE_STEP, NEXT_STEP)
+  renderBuilder('s1')
+
+  expect(screen.queryByText(/^Câu \d/)).not.toBeInTheDocument()
+  expect(screen.getByRole('link', { name: /Ghép câu/ })).toHaveAttribute('href', '/sentences?topic=food')
 })

@@ -7,6 +7,7 @@ import { playBlob, playUrl } from '../audio/player'
 import { PHONEME_TIPS, toneFor } from '../scoring/feedback'
 import { setStars } from '../progress/store'
 import { logActivity } from '../progress/activity'
+import { useMissionNext } from '../progress/missionNav'
 import { saveRecording } from '../progress/recordings'
 import { MicButton } from '../components/MicButton'
 import { Stars } from '../components/Stars'
@@ -29,7 +30,14 @@ const TONE: Record<WordTone, { box: string; glyph: string; label: string }> = {
   fix: { box: 'bg-fix-50 border-fix-300 text-fix-700', glyph: '✗', label: 'cần sửa' },
 }
 
-const UNSCORED = 'Chưa chấm được âm — cần kết nối Azure'
+/**
+ * "Not scored" has two different causes and the child can only act on one of them, so it never
+ * gets one blaming sentence about a service it has never heard of. The simple engine cannot score
+ * a single sound at all — no retry changes that, so the copy only invites another go; a full
+ * scoring run that simply missed the sound really can be fixed by saying it again.
+ */
+const UNSCORED_SIMPLE = 'Chế độ đơn giản chưa chấm được âm lẻ — bé thử lại nhé!'
+const UNSCORED_UNHEARD = 'Chưa nghe rõ âm này — thử lại nhé!'
 
 /**
  * Tập âm scores ONE sound, not the whole word: the chip shows the target phoneme's own score,
@@ -64,20 +72,21 @@ function starsFor(scores: WordBest[]): 1 | 2 | 3 {
 
 /** The whole result in one glance: the IPA symbol, how it went, and the number — or, when no
  * engine scored the sound, a plainly neutral card that says so instead of showing a number. */
-function SoundChip({ ipa, score }: { ipa: string; score: number | null }) {
-  const CHIP = 'inline-flex min-h-[110px] items-center gap-5 rounded-xl3 border-[4px] px-9 font-display font-extrabold'
+function SoundChip({ ipa, score, engine }: { ipa: string; score: number | null; engine: 'azure' | 'webspeech' | null }) {
+  const CHIP = 'inline-flex min-h-[96px] items-center gap-5 rounded-xl3 border-[4px] px-9 font-display font-extrabold'
 
   if (score === null) {
+    const unscored = engine === 'webspeech' ? UNSCORED_SIMPLE : UNSCORED_UNHEARD
     return (
       <div
         data-testid="sound-chip"
         data-tone="unknown"
-        aria-label={`Âm ${ipa}: ${UNSCORED}`}
+        aria-label={`Âm ${ipa}: ${unscored}`}
         className={`${CHIP} max-w-xl border-line-200 bg-white text-ink-500`}
       >
         <span aria-hidden="true" className="text-[54px] leading-none">/{ipa}/</span>
         <span aria-hidden="true" className="text-[38px] leading-none">?</span>
-        <span aria-hidden="true" className="max-w-[260px] text-[20px] leading-snug">{UNSCORED}</span>
+        <span aria-hidden="true" className="max-w-[280px] text-[20px] leading-snug">{unscored}</span>
       </div>
     )
   }
@@ -108,6 +117,9 @@ export function SoundPractice() {
 
 function SoundRun({ sound }: { sound: SoundGroup }) {
   const { ph, ipa, cards } = sound
+  // Null unless the child arrived from the mission: only then does this sound know it is step
+  // "Âm 2/4" of today's lesson rather than a tile they picked out of the Sound Zoo (spec §3).
+  const mission = useMissionNext()
   const [idx, setIdx] = useState(0)
   // Best scores per word, so a retry can only improve the sound's stars. A `phoneme` of `null` is
   // "no engine has scored the sound in this word yet" — distinct from a genuine 0 — and `word` is
@@ -184,13 +196,25 @@ function SoundRun({ sound }: { sound: SoundGroup }) {
     setIdx(i => i + 1)
   }
 
+  // The whole run has to fit the iPad's 834 px landscape without scrolling: a five-year-old does
+  // not scroll to find the mic, or the button that ends the step. The gaps down this column are
+  // the budget that buys that, so they are deliberately tighter than the rest of the app's.
   return (
-    <main className="h-full overflow-y-auto bg-cream-50 px-6 py-5">
-      <div className="mx-auto flex min-h-full w-full max-w-5xl flex-col items-center gap-4">
+    <main className="h-full overflow-y-auto bg-cream-50 px-6 py-4">
+      <div className="mx-auto flex min-h-full w-full max-w-5xl flex-col items-center gap-3">
         <header className="flex w-full items-center justify-between gap-4">
-          <BackButton to="/level/sound-zoo" label="Quay lại" />
-          <div className="flex flex-col items-center gap-2">
-            <Chip tone="coral">Từ {idx + 1}/{cards.length}</Chip>
+          {mission
+            ? <BackButton to="/mission" label="Nhiệm vụ" />
+            : <BackButton to="/level/sound-zoo" label="Quay lại" />}
+          <div className="flex flex-col items-center gap-1.5">
+            {/* Both counters earn their place here: "Âm 2/4" is where the child is in the lesson,
+                "Từ 1/3" is where they are inside this sound — the run the lesson counts as one
+                step. Every other screen's own counter is a position in a free-play deck, which
+                the mission chip replaces outright. The "Từ n/3" chip itself now lives with the
+                word tile below (word row, cell B) while idle; the header only takes it back once
+                that cell stops existing, so the count is never simply gone from the screen. */}
+            {mission && <Chip tone="teal">Âm {mission.pos.index}/{mission.pos.total}</Chip>}
+            {(result || recording) && <Chip tone="coral">Từ {idx + 1}/{cards.length}</Chip>}
             <div className="flex gap-2">
               {cards.map((c, i) => (
                 <span
@@ -206,21 +230,51 @@ function SoundRun({ sound }: { sound: SoundGroup }) {
           </span>
         </header>
 
-        {/* The sound itself is the headline of the screen — it stays put through every word. */}
-        <section className="flex flex-col items-center gap-2">
-          <div className="font-display text-[72px] font-extrabold leading-none text-coral-text">/{ipa}/</div>
-          {tip && <p className="max-w-xl text-center text-lg font-bold text-ink-500">{tip}</p>}
-          <Button variant="secondary" onClick={playIsolated}>🔊 Nghe âm lẻ</Button>
-          {soundMissing && <p className="text-lg font-bold text-ink-300">Chưa có audio âm này</p>}
-        </section>
+        {/* Two rows, one shared cell-A column: the sound's tile (row 1) and the word's tile (row
+            2) line up their left edges so the child reads them as one deck, not two unrelated
+            blocks. Row 2 only exists while idle — once recording starts or a result lands, the
+            word's slot is doing something else entirely (countdown, score chip) and stops being
+            "a tile to line up". */}
+        <div data-testid="sound-word-grid" className="grid w-full grid-cols-1 gap-3 sm:grid-cols-[minmax(180px,auto)_1fr] sm:items-center sm:gap-x-6 sm:gap-y-3">
+          {/* Row 1, cell A — the sound stays put through every word. */}
+          <div data-testid="sound-cell-a" className="flex flex-col items-center gap-2">
+            <div className="font-display text-[72px] font-extrabold leading-none text-coral-text">/{ipa}/</div>
+            <Button variant="secondary" onClick={playIsolated}>🔊 Nghe âm lẻ</Button>
+            {soundMissing && <p className="text-lg font-bold text-ink-300">Chưa có audio âm này</p>}
+          </div>
+          {/* Row 1, cell B — what the sound is. */}
+          <div data-testid="sound-cell-b" className="flex flex-col items-center gap-2 text-center sm:items-start sm:text-left">
+            {tip && <p className="max-w-xl text-lg font-bold text-ink-500">{tip}</p>}
+          </div>
+
+          {!result && !recording && (
+            <>
+              {/* Row 2, cell A — the word tile, directly under the sound tile. */}
+              <div data-testid="word-cell-a" className="flex flex-col items-center gap-2">
+                <span aria-hidden="true" className="text-[84px] leading-none">{card.emoji}</span>
+                <button onClick={playSample} className={SAMPLE_CHIP}>🔊 Nghe mẫu</button>
+                {sampleMissing && <p className="text-lg font-bold text-ink-300">Chưa có audio mẫu</p>}
+              </div>
+              {/* Row 2, cell B — the word itself, plus this run's own "Từ n/3" counter. Kept out of
+                  the header so it lives with the word it counts; while the run is scoring or
+                  recording, the word slot is doing something else and the header shows it instead
+                  (see below) so the counter is never lost, just relocated. */}
+              <div data-testid="word-cell-b" className="flex flex-col items-center gap-2 text-center sm:items-start sm:text-left">
+                <div className="font-display text-[56px] font-extrabold leading-none text-ink-900">{card.text}</div>
+                <div className="text-[22px] font-bold text-ink-300">{card.ipa}</div>
+                <Chip tone="coral">Từ {idx + 1}/{cards.length}</Chip>
+              </div>
+            </>
+          )}
+        </div>
 
         {result ? (
           <>
             {earned === 3 && <Confetti />}
-            <section className="flex flex-col items-center gap-4 pb-2">
-              <SoundChip ipa={ipa} score={score} />
+            <section className="flex flex-col items-center gap-3 pb-1">
+              <SoundChip ipa={ipa} score={score} engine={attempt.engine} />
               {tone !== 'good' && tip && (
-                <p data-testid="sound-tip" className="max-w-xl rounded-xl3 border-[3px] border-[#FFDF9E] bg-[#FFF6E0] px-6 py-4 text-center text-lg font-bold text-ink-500">
+                <p data-testid="sound-tip" className="max-w-xl rounded-xl3 border-[3px] border-[#FFDF9E] bg-[#FFF6E0] px-5 py-2.5 text-center text-lg font-bold text-ink-500">
                   👅 {tip}
                 </p>
               )}
@@ -237,8 +291,8 @@ function SoundRun({ sound }: { sound: SoundGroup }) {
               {sampleMissing && <p className="text-lg font-bold text-ink-300">Chưa có audio mẫu</p>}
 
               {earned !== null && (
-                <div className="flex flex-col items-center gap-2">
-                  <Stars value={earned} animate />
+                <div className="flex flex-col items-center gap-1">
+                  <Stars value={earned} animate size="sm" />
                   <p className="font-display text-2xl font-extrabold text-ink-900">
                     {earned === 3 ? 'Cả 3 từ đều tuyệt!' : earned === 2 ? 'Gần được rồi, luyện thêm nhé!' : 'Nghe mẫu rồi thử lại nhé!'}
                   </p>
@@ -247,9 +301,14 @@ function SoundRun({ sound }: { sound: SoundGroup }) {
 
               <div className="flex flex-wrap justify-center gap-4 pt-1">
                 <Button variant="outline" onClick={attempt.reset}>↻ Thử lại</Button>
-                {isLast
-                  ? <Button size="lg" pulse to="/level/sound-zoo">Hoàn thành 🎉</Button>
-                  : <Button size="lg" pulse onClick={nextWord}>Tiếp theo →</Button>}
+                {/* Only the END of the run belongs to the lesson: the three words inside the
+                    sound are one step, so the mission hand-off replaces "Hoàn thành", never
+                    "Tiếp theo". */}
+                {!isLast
+                  ? <Button size="lg" pulse onClick={nextWord}>Tiếp theo →</Button>
+                  : mission
+                    ? <Button size="lg" pulse onClick={mission.go}>{mission.label}</Button>
+                    : <Button size="lg" pulse to="/level/sound-zoo">Hoàn thành 🎉</Button>}
               </div>
             </section>
           </>
@@ -260,17 +319,9 @@ function SoundRun({ sound }: { sound: SoundGroup }) {
             <Foxy mood="listening" size="sm" say="Foxy đang lắng nghe…" />
           </section>
         ) : (
-          <section className="flex w-full flex-1 flex-wrap items-center justify-center gap-8">
-            <div className="flex flex-col items-center gap-3">
-              <span aria-hidden="true" className="text-[96px] leading-none">{card.emoji}</span>
-              <div className="font-display text-[56px] font-extrabold leading-none text-ink-900">{card.text}</div>
-              <div className="text-[22px] font-bold text-ink-300">{card.ipa}</div>
-              <button onClick={playSample} className={SAMPLE_CHIP}>🔊 Nghe mẫu</button>
-              {sampleMissing && <p className="text-lg font-bold text-ink-300">Chưa có audio mẫu</p>}
-            </div>
-
-            <div className="flex h-[200px] w-[200px] shrink-0 flex-col items-center justify-center gap-2 rounded-xl3 bg-[#FFF1E6] shadow-[0_8px_0_#F2DFC9]">
-              <span aria-hidden="true" className="animate-wiggle text-[76px] leading-none">👄</span>
+          <section className="flex w-full flex-1 items-center justify-center">
+            <div className="flex h-[168px] w-[200px] shrink-0 flex-col items-center justify-center gap-2 rounded-xl3 bg-[#FFF1E6] shadow-[0_8px_0_#F2DFC9]">
+              <span aria-hidden="true" className="animate-wiggle text-[68px] leading-none">👄</span>
               <span className="text-base font-bold text-ink-500">Khẩu hình miệng</span>
             </div>
           </section>

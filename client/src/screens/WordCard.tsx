@@ -7,6 +7,7 @@ import { findTopic, findWord } from '../content/words'
 import { shuffleTiles } from '../content/shuffle'
 import { getBox, promote, demote, dueWords } from '../progress/leitner'
 import { logActivity } from '../progress/activity'
+import { useMissionNext } from '../progress/missionNav'
 import { saveRecording } from '../progress/recordings'
 import { playUrl } from '../audio/player'
 import { speakText } from '../story/speak'
@@ -16,12 +17,18 @@ import { MicButton } from '../components/MicButton'
 import { Foxy } from '../components/Foxy'
 import type { FoxyMood } from '../components/Foxy'
 import { HintCard } from '../components/HintCard'
+import { Stars } from '../components/Stars'
 import { BackButton, Button, Chip } from '../components/ui'
 
 const UNLOCK_SCORE = 60
 
 /** Matches the .animate-shake keyframe duration in styles.css. */
 const SHAKE_MS = 400
+
+/** How long "Đoán đúng rồi! 🎉" stays up. Long enough to read, short enough that it is plainly
+ * about the guess and gone before the child records — it used to linger until the first flip,
+ * where it read as praise for a pronunciation that had not happened yet (spec §8). */
+const PRAISE_MS = 1500
 
 /** Two wrong Vietnamese meanings to go with the right one, picked deterministically from the
  * word's own topic so a repeat visit to the same card sees the same three options. */
@@ -32,12 +39,7 @@ function pickDistractors(word: Word, topic: string): Word[] {
 
 /** Both faces sit on top of each other inside the rotating shell; only the one facing the
  * child is painted (`backface-visibility`). */
-const FACE = 'absolute inset-0 flex flex-col items-center justify-center gap-3 rounded-xl4 p-6 [backface-visibility:hidden]'
-
-/** 64 px tap target in the face's bottom corner — the explicit, focusable way to flip, so the
- * card never has to pretend to be a button. */
-const FLIP_BUTTON =
-  'absolute bottom-2 right-2 flex h-16 w-16 items-center justify-center rounded-full text-3xl active:translate-y-[2px]'
+const FACE = 'absolute inset-0 flex flex-col items-center justify-center gap-3 rounded-xl4 [backface-visibility:hidden]'
 
 const SPEAK_CHIP =
   'inline-flex min-h-[64px] items-center gap-2 rounded-full bg-white px-6 font-display text-lg font-extrabold text-teal-600 shadow-[0_4px_0_#F2DFC9] active:translate-y-[2px]'
@@ -67,7 +69,13 @@ export function WordCard() {
 
 function WordCardInner({ word, topic, isReview, list }: { word: Word; topic: string; isReview: boolean; list: Word[] }) {
   const nav = useNavigate()
+  // Null unless the child arrived from the mission: only then is this card step "Từ mới 2/3" of
+  // today's lesson rather than one card of a deck (spec §3).
+  const mission = useMissionNext()
   const [flipped, setFlipped] = useState(false)
+  // Sticky, unlike `flipped`: the peek nudge is a one-time lesson ("this card turns over"), so the
+  // very first flip retires it for good rather than letting it come back on every flip home.
+  const [hasFlipped, setHasFlipped] = useState(false)
   const [audioMissing, setAudioMissing] = useState(false)
   const [outcome, setOutcome] = useState<'unlocked' | 'retry' | null>(null)
 
@@ -78,6 +86,7 @@ function WordCardInner({ word, topic, isReview, list }: { word: Word; topic: str
   const [guessJustCorrect, setGuessJustCorrect] = useState(false)
   const [wrongOption, setWrongOption] = useState<number | null>(null)
   const wrongTimerRef = useRef<number | null>(null)
+  const praiseTimerRef = useRef<number | null>(null)
   const [hintRevealed, setHintRevealed] = useState(false)
 
   const guessOptions = useMemo(
@@ -87,6 +96,7 @@ function WordCardInner({ word, topic, isReview, list }: { word: Word; topic: str
 
   useEffect(() => () => {
     if (wrongTimerRef.current) clearTimeout(wrongTimerRef.current)
+    if (praiseTimerRef.current) clearTimeout(praiseTimerRef.current)
   }, [])
 
   /** Wrong guess shakes just that option and invites another try; right guess retires the whole
@@ -97,6 +107,10 @@ function WordCardInner({ word, topic, isReview, list }: { word: Word; topic: str
       setWrongOption(null)
       setGuessPending(false)
       setGuessJustCorrect(true)
+      praiseTimerRef.current = window.setTimeout(() => {
+        setGuessJustCorrect(false)
+        praiseTimerRef.current = null
+      }, PRAISE_MS)
       return
     }
     const idx = guessOptions.indexOf(option)
@@ -129,8 +143,15 @@ function WordCardInner({ word, topic, isReview, list }: { word: Word; topic: str
   const next = index >= 0 ? list[index + 1] : undefined
   // A map topic belongs to its island, so leaving the last card of a deck lands there rather than
   // on the flat word index, which no longer lists locked topics at all.
-  const backTo = isReview ? '/words/review' : `/topic/${topic}`
-  const backLabel = isReview ? 'Ôn tập' : findTopic(topic)?.title ?? 'Từ vựng'
+  const backTo = mission ? '/mission' : isReview ? '/words/review' : `/topic/${topic}`
+  const backLabel = mission ? 'Nhiệm vụ' : isReview ? 'Ôn tập' : findTopic(topic)?.title ?? 'Từ vựng'
+
+  /** In a lesson the deck order is not the child's path — the next step of today's mission is,
+   * and the mission screen is where a finished lesson celebrates. */
+  function goNext() {
+    if (mission) mission.go()
+    else nav(next ? `/words/${topic}/${next.id}` : backTo)
+  }
 
   /** The outcome banner belongs to this attempt, so clear it with the attempt — otherwise
    * "🔓 Mở khoá!" stays on screen while the child records again. */
@@ -144,11 +165,9 @@ function WordCardInner({ word, topic, isReview, list }: { word: Word; topic: str
     playUrl(word.audio).then(() => setAudioMissing(false), () => setAudioMissing(true))
   }
 
-  /** The "Đúng rồi! 🎉" praise belongs to the moment the guess step hands off to the card, so the
-   * first real interaction with the card (a flip) is what clears it. */
   function flip() {
     setFlipped(f => !f)
-    if (guessJustCorrect) setGuessJustCorrect(false)
+    setHasFlipped(true)
   }
 
   /** The card is the flip target, so the audio buttons riding on its faces must not flip it too. */
@@ -173,14 +192,20 @@ function WordCardInner({ word, topic, isReview, list }: { word: Word; topic: str
     : outcome === 'retry' ? 'surprised'
     : guessJustCorrect ? 'happy'
     : 'idle'
-  const say = outcome === 'retry' ? 'Thử lại nhé' : guessJustCorrect ? 'Đúng rồi! 🎉' : undefined
+  // "Đoán", not just "Đúng": the bare praise landed right where the pronunciation score lands and
+  // read as a score for a word the child had not spoken yet (spec §8).
+  const say = outcome === 'retry' ? 'Thử lại nhé' : guessJustCorrect ? 'Đoán đúng rồi! 🎉' : undefined
+  const score = attempt.result && Number.isFinite(attempt.result.overall) ? Math.round(attempt.result.overall) : null
+  /** The shrunken result-state card keeps its content off the rounded edge. */
+  const facePad = attempt.result ? 'p-4' : 'p-6'
 
   return (
-    <main className="h-full overflow-y-auto bg-cream-50 px-6 py-5">
-      <div className="mx-auto flex min-h-full w-full max-w-4xl flex-col items-center gap-4">
+    <main className="h-full overflow-y-auto bg-cream-50 px-6 py-4">
+      <div className="mx-auto flex min-h-full w-full max-w-4xl flex-col items-center gap-3">
         <header className="flex w-full items-center justify-between gap-4">
           <BackButton to={backTo} label={backLabel} />
           <div className="flex flex-1 flex-col items-center gap-1">
+            {mission && <Chip tone="teal">Từ mới {mission.pos.index}/{mission.pos.total}</Chip>}
             <h1 className="font-display text-[30px] font-extrabold leading-none text-ink-900">Từ mới hôm nay 🧩</h1>
             <p className="font-display text-lg font-extrabold text-ink-500">Chạm thẻ để lật — nói đúng để mở khoá!</p>
           </div>
@@ -214,24 +239,32 @@ function WordCardInner({ word, topic, isReview, list }: { word: Word; topic: str
           </div>
         ) : (
           <>
-            <div className="h-[360px] w-[320px] shrink-0 [perspective:1200px]">
-              {/* A plain div, not a `role="button"`: the whole card stays tap-anywhere for a small
-                  finger, while the flip each face carries is the real control screen readers and
-                  keyboards use. */}
+            {/* The card shrinks once it has been spoken to: the result rows below it are what the
+                child is reading now, and the full 360 px shell would spend the height they need on
+                a card whose job is done. The faces lose a little padding with it, or their own
+                content (96 px emoji, 58 px 🔊) would spill past the rounded edge. */}
+            <div className={`${attempt.result ? 'h-[300px]' : 'h-[360px]'} w-[320px] shrink-0 [perspective:1200px]`}>
+              {/* The card *is* the control now: a 🔄 button in the corner plus a "MẶT TRƯỚC" label
+                  asked a five-year-old to read two labels before touching anything, and they read
+                  as decoration. One tap target the size of the whole card, announced as "Lật thẻ",
+                  says the same thing without words — and the peek nudge below shows it (spec §6). */}
               <div
                 data-testid="flip-card"
+                role="button"
+                tabIndex={0}
+                aria-label="Lật thẻ"
                 onClick={flip}
                 onKeyDown={onCardKey}
                 className={`relative h-full w-full cursor-pointer transition-transform duration-500 [transform-style:preserve-3d] ${
                   flipped ? '[transform:rotateY(180deg)]' : ''
-                }`}
+                } ${hasFlipped || flipped ? '' : 'animate-peek'}`}
               >
                 {/* The face turned away is still painted-over by `backface-visibility`, but that is a
                     purely visual trick: `inert` + `aria-hidden` are what keep its buttons out of the
                     tab order and out of the screen reader. */}
                 <div
                   data-testid="face-front"
-                  className={`${FACE} bg-white shadow-card`}
+                  className={`${FACE} ${facePad} bg-white shadow-card`}
                   inert={flipped}
                   aria-hidden={flipped ? 'true' : undefined}
                 >
@@ -267,15 +300,11 @@ function WordCardInner({ word, topic, isReview, list }: { word: Word; topic: str
                       </span>
                     </button>
                   )}
-                  <Chip className="absolute bottom-4">MẶT TRƯỚC</Chip>
-                  <button type="button" aria-label="Lật thẻ" onClick={e => onFaceButton(e, flip)} className={FLIP_BUTTON}>
-                    <span aria-hidden="true">🔄</span>
-                  </button>
                 </div>
 
                 <div
                   data-testid="face-back"
-                  className={`${FACE} bg-[#FFF1E6] shadow-[0_8px_0_#F2DFC9] [transform:rotateY(180deg)]`}
+                  className={`${FACE} ${facePad} bg-[#FFF1E6] shadow-[0_8px_0_#F2DFC9] [transform:rotateY(180deg)]`}
                   inert={!flipped}
                   aria-hidden={flipped ? undefined : 'true'}
                 >
@@ -284,42 +313,54 @@ function WordCardInner({ word, topic, isReview, list }: { word: Word; topic: str
                   <button type="button" onClick={e => onFaceButton(e, () => speakText(word.example))} className={SPEAK_CHIP}>
                     🔊 Nghe câu ví dụ
                   </button>
-                  <Chip className="absolute bottom-4">MẶT SAU</Chip>
-                  <button type="button" aria-label="Lật thẻ" onClick={e => onFaceButton(e, flip)} className={FLIP_BUTTON}>
-                    <span aria-hidden="true">🔄</span>
-                  </button>
                 </div>
               </div>
             </div>
 
             {audioMissing && <p className="text-lg font-bold text-ink-300">Chưa có audio mẫu</p>}
 
-            {outcome === 'unlocked' && (
-              <span className="inline-flex items-center gap-2 rounded-xl2 bg-sun-50 px-6 py-3 font-display text-2xl font-extrabold text-sun-700 shadow-chunky-sun">
-                🔓 Mở khoá!
-              </span>
+            {/* The attempt was already scored — the screen just never showed it, so a child who
+                spoke saw the 🔓 (or nothing at all) and no idea how well they did (spec §7).
+                One row, not three stacked bands: stars, score and the unlock badge each used to
+                claim a line of their own, which on the iPad's 834 px landscape pushed "Tiếp theo"
+                off the bottom of the screen — the one control the child needs after a result. */}
+            {(feedback || outcome === 'unlocked') && (
+              <section className="flex flex-wrap items-center justify-center gap-4">
+                {feedback && <Stars value={feedback.stars} animate size="sm" />}
+                {/* webspeech has no phoneme scoring but does return an overall; only a result that
+                    carries no usable number at all drops the chip rather than showing "Điểm: NaN". */}
+                {feedback && score !== null && <Chip tone="teal">{`Điểm: ${score}`}</Chip>}
+                {outcome === 'unlocked' && (
+                  <span className="inline-flex items-center gap-2 rounded-xl2 bg-sun-50 px-5 py-2 font-display text-2xl font-extrabold text-sun-700 shadow-chunky-sun">
+                    🔓 Mở khoá!
+                  </span>
+                )}
+              </section>
             )}
 
             {attempt.error && <p className="font-display text-2xl font-extrabold text-fix-700">{attempt.error}</p>}
 
             {outcome === 'retry' && feedback?.hint && <HintCard hint={feedback.hint} />}
 
-            <div className="flex items-end gap-6">
+            {/* The result CTAs stand BESIDE the mic, not under it: a band of their own put "Tiếp
+                theo" below the fold of the iPad's 834 px landscape, and a control a child cannot
+                see is a control they do not have. Aligned on their bottom edges so the mic, Foxy
+                and the two buttons sit on one line. */}
+            <div className="flex flex-wrap items-end justify-center gap-6 pb-2">
               <Foxy mood={mood} size="sm" say={say} />
               <div className="flex flex-col items-center gap-2">
                 <MicButton state={attempt.micState} level={attempt.level} onPress={attempt.onMic} />
                 <p className="font-display text-xl font-extrabold text-ink-500">🎤 Nói để mở khoá</p>
               </div>
+              {outcome && (
+                <div className="flex flex-wrap justify-center gap-4">
+                  <Button variant="outline" onClick={retry}>Thử lại</Button>
+                  <Button size="lg" pulse onClick={goNext}>
+                    {mission ? mission.label : 'Tiếp theo →'}
+                  </Button>
+                </div>
+              )}
             </div>
-
-            {outcome && (
-              <div className="flex flex-wrap justify-center gap-4 pb-2">
-                <Button variant="outline" onClick={retry}>Thử lại</Button>
-                <Button size="lg" pulse onClick={() => nav(next ? `/words/${topic}/${next.id}` : backTo)}>
-                  Tiếp theo →
-                </Button>
-              </div>
-            )}
           </>
         )}
       </div>
