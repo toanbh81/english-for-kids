@@ -13,7 +13,13 @@ export const findPair = (id: string): PairItem | undefined => PAIRS.find(p => p.
 
 export { SOUNDS, findSound } from './sounds'
 
-export type Sentence = { id: string; topic: 'animals' | 'food' | 'school' | 'family' | 'weather'; words: string[]; vi: string; audio: string }
+export type Sentence = {
+  id: string
+  topic: 'animals' | 'food' | 'school' | 'family' | 'weather' | 'colors' | 'body' | 'toys'
+  words: string[]
+  vi: string
+  audio: string
+}
 export const SENTENCES: Sentence[] = sentencesData as Sentence[]
 export const findSentence = (id: string): Sentence | undefined => SENTENCES.find(s => s.id === id)
 

@@ -1,13 +1,13 @@
 import { TOPICS, ALL_WORDS, findTopic, findWord } from './index'
 
-it('has 5 topics of 8 words each, 40 words total', () => {
-  expect(TOPICS).toHaveLength(5)
+it('has 8 topics of 8 words each, 64 words total', () => {
+  expect(TOPICS).toHaveLength(8)
   for (const t of TOPICS) expect(t.words).toHaveLength(8)
-  expect(ALL_WORDS).toHaveLength(40)
+  expect(ALL_WORDS).toHaveLength(64)
 })
 
-it('lists topics in unlock order: animals, food, school, family, weather', () => {
-  expect(TOPICS.map(t => t.id)).toEqual(['animals', 'food', 'school', 'family', 'weather'])
+it('lists topics in unlock order: animals, food, school, family, weather, colors, body, toys', () => {
+  expect(TOPICS.map(t => t.id)).toEqual(['animals', 'food', 'school', 'family', 'weather', 'colors', 'body', 'toys'])
 })
 
 it('has unique word ids formatted as <topic>-<word>', () => {

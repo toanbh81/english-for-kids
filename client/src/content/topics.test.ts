@@ -1,8 +1,8 @@
 import { TOPICS, findTopic } from './topics'
 
-it('has 5 topics in unlock order: animals, food, school, family, weather', () => {
-  expect(TOPICS).toHaveLength(5)
-  expect(TOPICS.map(t => t.id)).toEqual(['animals', 'food', 'school', 'family', 'weather'])
+it('has 8 topics in unlock order: animals, food, school, family, weather, colors, body, toys', () => {
+  expect(TOPICS).toHaveLength(8)
+  expect(TOPICS.map(t => t.id)).toEqual(['animals', 'food', 'school', 'family', 'weather', 'colors', 'body', 'toys'])
 })
 
 it('every topic has an emoji and a Vietnamese name', () => {

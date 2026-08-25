@@ -18,5 +18,17 @@
   { "id": "s17", "topic": "weather", "words": ["The", "sun", "is", "yellow."], "vi": "Mặt trời màu vàng.", "audio": "/audio/sentences/s17.mp3" },
   { "id": "s18", "topic": "weather", "words": ["It", "is", "raining", "today."], "vi": "Hôm nay trời mưa.", "audio": "/audio/sentences/s18.mp3" },
   { "id": "s19", "topic": "weather", "words": ["I", "see", "a", "rainbow."], "vi": "Con thấy cầu vồng.", "audio": "/audio/sentences/s19.mp3" },
-  { "id": "s20", "topic": "weather", "words": ["It", "is", "cold", "in", "winter."], "vi": "Mùa đông trời lạnh.", "audio": "/audio/sentences/s20.mp3" }
+  { "id": "s20", "topic": "weather", "words": ["It", "is", "cold", "in", "winter."], "vi": "Mùa đông trời lạnh.", "audio": "/audio/sentences/s20.mp3" },
+  { "id": "s21", "topic": "colors", "words": ["The", "sky", "is", "blue."], "vi": "Bầu trời màu xanh.", "audio": "/audio/sentences/s21.mp3" },
+  { "id": "s22", "topic": "colors", "words": ["I", "like", "the", "red", "car."], "vi": "Con thích chiếc ô tô đỏ.", "audio": "/audio/sentences/s22.mp3" },
+  { "id": "s23", "topic": "colors", "words": ["My", "bag", "is", "yellow."], "vi": "Cặp của con màu vàng.", "audio": "/audio/sentences/s23.mp3" },
+  { "id": "s24", "topic": "colors", "words": ["The", "grass", "is", "green."], "vi": "Cỏ màu xanh lá.", "audio": "/audio/sentences/s24.mp3" },
+  { "id": "s25", "topic": "body", "words": ["I", "have", "two", "hands."], "vi": "Con có hai bàn tay.", "audio": "/audio/sentences/s25.mp3" },
+  { "id": "s26", "topic": "body", "words": ["My", "eyes", "are", "big."], "vi": "Mắt của con to.", "audio": "/audio/sentences/s26.mp3" },
+  { "id": "s27", "topic": "body", "words": ["I", "wash", "my", "hands."], "vi": "Con rửa tay.", "audio": "/audio/sentences/s27.mp3" },
+  { "id": "s28", "topic": "body", "words": ["I", "hear", "with", "my", "ears."], "vi": "Con nghe bằng tai.", "audio": "/audio/sentences/s28.mp3" },
+  { "id": "s29", "topic": "toys", "words": ["I", "play", "with", "my", "ball."], "vi": "Con chơi với quả bóng.", "audio": "/audio/sentences/s29.mp3" },
+  { "id": "s30", "topic": "toys", "words": ["My", "doll", "is", "small."], "vi": "Búp bê của con nhỏ.", "audio": "/audio/sentences/s30.mp3" },
+  { "id": "s31", "topic": "toys", "words": ["The", "kite", "is", "in", "the", "sky."], "vi": "Con diều ở trên trời.", "audio": "/audio/sentences/s31.mp3" },
+  { "id": "s32", "topic": "toys", "words": ["I", "like", "my", "toy", "car."], "vi": "Con thích ô tô đồ chơi của con.", "audio": "/audio/sentences/s32.mp3" }
 ]

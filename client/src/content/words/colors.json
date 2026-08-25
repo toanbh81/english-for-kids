@@ -1,0 +1,15 @@
+{
+  "id": "colors",
+  "title": "Màu sắc",
+  "emoji": "🎨",
+  "words": [
+    { "id": "colors-red", "topic": "colors", "word": "red", "ipa": "/red/", "emoji": "🔴", "audio": "/audio/words/red.mp3", "vi": "màu đỏ", "example": "My ball is red." },
+    { "id": "colors-blue", "topic": "colors", "word": "blue", "ipa": "/bluː/", "emoji": "🔵", "audio": "/audio/words/blue.mp3", "vi": "màu xanh dương", "example": "The sky is blue." },
+    { "id": "colors-yellow", "topic": "colors", "word": "yellow", "ipa": "/ˈjeloʊ/", "emoji": "🟡", "audio": "/audio/words/yellow.mp3", "vi": "màu vàng", "example": "My bag is yellow." },
+    { "id": "colors-green", "topic": "colors", "word": "green", "ipa": "/ɡriːn/", "emoji": "🟢", "audio": "/audio/words/green.mp3", "vi": "màu xanh lá", "example": "The grass is green." },
+    { "id": "colors-black", "topic": "colors", "word": "black", "ipa": "/blæk/", "emoji": "⚫", "audio": "/audio/words/black.mp3", "vi": "màu đen", "example": "My cat is black." },
+    { "id": "colors-white", "topic": "colors", "word": "white", "ipa": "/waɪt/", "emoji": "⚪", "audio": "/audio/words/white.mp3", "vi": "màu trắng", "example": "My shirt is white." },
+    { "id": "colors-pink", "topic": "colors", "word": "pink", "ipa": "/pɪŋk/", "emoji": "🌸", "audio": "/audio/words/pink.mp3", "vi": "màu hồng", "example": "My dress is pink." },
+    { "id": "colors-orange", "topic": "colors", "word": "orange", "ipa": "/ˈɔːrɪndʒ/", "emoji": "🟠", "audio": "/audio/words/orange.mp3", "vi": "màu cam", "example": "My kite is orange." }
+  ]
+}
