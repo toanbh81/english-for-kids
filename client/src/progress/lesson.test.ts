@@ -10,6 +10,7 @@ import { promote } from './leitner'
 import { getStars, setStars } from './store'
 import { unlockedTopics, unlockedWords } from './topicProgress'
 import { SENTENCES, SOUNDS, findSentence, findSound } from '../content'
+import { STORIES } from '../content/stories'
 import { TOPICS as WORD_DECKS, findWord } from '../content/words'
 import type { TopicId } from '../content/topics'
 import type { Band } from './band'
@@ -357,6 +358,40 @@ it('adds a 🧱 sentence step that routes to the builder', () => {
     expect(item.activity).toBe('sentence')
     expect(item.emoji).toBe('🧱')
     expect(item.label).toBe(`Ghép câu: ${sentence.words.join(' ')}`)
+  }
+})
+
+/** The 🎧 story of a lesson, by id. */
+const listenStory = (now: number) => getLesson(now).items.find(i => i.kind === 'listen')!.id
+
+/**
+ * A returning child has stars on all three stories, so every day is a tie — and a tie used to be
+ * settled by the day seed, which over three stories leaned hard on one of them (at-the-zoo 18 days
+ * in 30, seven of those in a row). The tie now steps through the stories by the day instead.
+ */
+it('rotates the story once the child has played them all', () => {
+  band(1)
+  for (const s of STORIES) setStars(`story:${s.id}`, 2)
+
+  const picked = Array.from({ length: 6 }, (_, d) => {
+    clearLessons()
+    return listenStory(BASE + d * DAY)
+  })
+
+  expect(new Set(picked).size).toBe(STORIES.length)
+  for (let i = 1; i < picked.length; i++) expect(picked[i]).not.toBe(picked[i - 1])
+})
+
+/** Rotation is only the tie-break: a story the child has never earned stars on still comes first. */
+it('still offers the least-starred story before rotating', () => {
+  band(1)
+  // `setStars` only ever raises, so the low one is written first.
+  setStars('story:my-breakfast', 1)
+  for (const s of STORIES) if (s.id !== 'my-breakfast') setStars(`story:${s.id}`, 3)
+
+  for (let d = 0; d < 3; d++) {
+    clearLessons()
+    expect(listenStory(BASE + d * DAY)).toBe('my-breakfast')
   }
 })
 

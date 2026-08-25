@@ -54,6 +54,20 @@ const reviewEmoji = '🔁'
 /** First sentence of a passage — a whole Story Voice text is too long for a lesson row. */
 const firstSentence = (text: string) => text.split(/(?<=[.!?])\s+/)[0] ?? text
 
+const MS_PER_DAY = 86_400_000
+
+/**
+ * Days since the epoch, read off a `YYYY-MM-DD` day key. A counter, not a seed: where a choice is
+ * a tie between a handful of equals, stepping through them by the day is what actually rotates
+ * them, while a seeded shuffle only *looks* random and over a 3-element array leans hard on one
+ * (measured: the same story 18 days in 30, and 7 of them in a row). Built with `Date.UTC` so the
+ * step is exactly one per calendar day, whatever the local offset the key was written in.
+ */
+function dayIndex(day: string): number {
+  const [y, m, d] = day.split('-').map(Number)
+  return Math.floor(Date.UTC(y, m - 1, d) / MS_PER_DAY)
+}
+
 // --- speaking pool -------------------------------------------------------------------------
 
 /**
@@ -381,11 +395,16 @@ function generate(day: string, band: Band, now: number, events: ActivityEvent[])
     items.push(item)
   }
 
-  // listen: the story the child has the fewest stars on; the shuffle breaks ties, the stable sort
-  // keeps that order inside each star count.
-  const stories = shuffleTiles(STORIES, `${day}:listen`)
-    .slice()
-    .sort((a, b) => getStars(`story:${a.id}`) - getStars(`story:${b.id}`))
+  // listen: the story the child has the fewest stars on. Ties are broken by the day rather than by
+  // the seed — and once the child has played all three, every day is a tie, which is the state a
+  // returning child lives in. The seeded shuffle turned that into "at-the-zoo again" 18 days in 30;
+  // stepping the tied set by the day index gives each story its turn, in order, forever.
+  const storyStars = (s: { id: string }) => getStars(`story:${s.id}`)
+  const byStars = STORIES.slice().sort((a, b) => storyStars(a) - storyStars(b))
+  const lowest = byStars.length > 0 ? storyStars(byStars[0]) : 0
+  const tied = byStars.filter(s => storyStars(s) === lowest)
+  const turn = tied.length > 0 ? dayIndex(day) % tied.length : 0
+  const stories = [...tied.slice(turn), ...tied.slice(0, turn), ...byStars.slice(tied.length)]
   for (const s of stories.slice(0, recipe.listen)) {
     add({ kind: 'listen', activity: 'story', id: s.id, route: `/story/${s.id}`, label: `Nghe: ${s.titleVi}`, emoji: listenEmoji })
   }
