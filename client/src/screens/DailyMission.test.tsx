@@ -116,6 +116,19 @@ it('shows the sentence card in lesson order, after the new words', () => {
   expect(order).toEqual(['group-listen', 'group-speak', 'group-word', 'group-sentence', 'group-review'])
 })
 
+/** Five groups since 🧱 joined them, and the grid has to hold all five side by side: a row that
+ * wrapped pushed the CTA off a 1194×834 iPad, which is the one thing the child came here to tap. */
+it('keeps all five groups on a single row from lg up', () => {
+  const groups = groupsOf(getLesson(NOW))
+  expect(groups).toHaveLength(5)
+
+  renderMission()
+
+  const grid = card('listen').parentElement
+  expect(grid).toHaveClass('grid', 'lg:grid-cols-5')
+  expect(within(grid!).getAllByTestId(/^group-/)).toHaveLength(5)
+})
+
 // The child asked for a mission that mixes islands; naming the islands on the card would put the
 // topic axis back on the mission screen, which is exactly what the mix is meant to dissolve.
 it('names no topic anywhere on the mission', () => {

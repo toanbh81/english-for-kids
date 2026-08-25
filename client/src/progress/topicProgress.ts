@@ -9,6 +9,13 @@ import { getStars } from './store'
 const DECK_SIZE = 8
 /** A topic opens once the previous deck is this far along (spec §2). */
 const UNLOCK_AT = 6
+/**
+ * How many islands are open from the very first launch (Phase 9 §3). The daily mission mixes its
+ * content across every unlocked topic, so a child who has only one island open would get a lesson
+ * that is still stuck on one theme — the thing the mixing rules exist to prevent. Four open decks
+ * give the generator something to spread across on day one.
+ */
+const OPEN_FROM_START = 4
 
 const deckWordIds = (id: TopicId): string[] =>
   WORD_DECKS.find(d => d.id === id)?.words.map(w => w.id) ?? []
@@ -32,7 +39,7 @@ function hasProgress(id: TopicId): boolean {
 export function topicUnlocked(id: TopicId): boolean {
   const index = TOPICS.findIndex(t => t.id === id)
   if (index < 0) return false
-  if (index === 0) return true // animals is always open
+  if (index < OPEN_FROM_START) return true // the first four islands are open from the start
   if (hasProgress(id)) return true
   return unlockedWords(TOPICS[index - 1].id) >= UNLOCK_AT
 }

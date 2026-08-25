@@ -26,28 +26,54 @@ function markCelebrated(day: string): void {
   catch { /* ignore: storage unavailable */ }
 }
 
-/** The five places an island can stand, left to right along the trail. `left`/`top` are
- * percentages of the 1194×834 frame taken from the handoff, so the map scales with the viewport
- * instead of drifting on a narrower iPad. The topics fill the slots in unlock order. */
+/**
+ * The eight places an island can stand (Phase 9 §3): a two-row serpentine, row one left → right and
+ * row two right → left, so the trail snakes on rather than doubling back. `left`/`top` are
+ * percentages of the map band, and the island box is a percentage wide too — that keeps every
+ * centre at a fixed fraction of the band on any viewport, so the trail below never drifts off the
+ * discs. Column centres land at 10.5 / 34.5 / 58.5 / 82.5 %, leaving a 9 % gutter (~100 px at
+ * 1194) between neighbours. The topics fill the slots in unlock order.
+ */
 const SLOTS = [
-  { left: '9%', top: '47%', size: 'h-[104px] w-[104px] text-[44px] lg:h-[128px] lg:w-[128px] lg:text-[54px]', color: 'bg-coral-500 shadow-[0_8px_0_#E05A3A,0_0_0_8px_#FFE9DF]' },
-  { left: '28%', top: '32%', size: 'h-[104px] w-[104px] text-[44px] lg:h-[120px] lg:w-[120px] lg:text-[50px]', color: 'bg-teal-500 shadow-[0_8px_0_#1FA396,0_0_0_8px_#D3F1EC]' },
-  { left: '47%', top: '48%', size: 'h-[104px] w-[104px] text-[44px] lg:h-[120px] lg:w-[120px] lg:text-[50px]', color: 'bg-peach-400 shadow-[0_8px_0_#E07A42,0_0_0_8px_#FFE7D2]' },
-  { left: '67%', top: '26%', size: 'h-[104px] w-[104px] text-[44px] lg:h-[120px] lg:w-[120px] lg:text-[50px]', color: 'bg-sky-400 shadow-[0_8px_0_#5BA7D4,0_0_0_8px_#DDF0FB]' },
-  { left: '84%', top: '40%', size: 'h-[104px] w-[104px] text-[44px] lg:h-[118px] lg:w-[118px] lg:text-[48px]', color: 'bg-sun-400 shadow-[0_8px_0_#E0A61A,0_0_0_8px_#FFF1C9]' },
+  { left: '3%', top: '0%', color: 'bg-coral-500 shadow-[0_8px_0_#E05A3A,0_0_0_8px_#FFE9DF]' },
+  { left: '27%', top: '0%', color: 'bg-peach-400 shadow-[0_8px_0_#E07A42,0_0_0_8px_#FFE7D2]' },
+  { left: '51%', top: '0%', color: 'bg-sky-400 shadow-[0_8px_0_#5BA7D4,0_0_0_8px_#DDF0FB]' },
+  { left: '75%', top: '0%', color: 'bg-teal-500 shadow-[0_8px_0_#1FA396,0_0_0_8px_#D3F1EC]' },
+  { left: '75%', top: '52%', color: 'bg-sun-400 shadow-[0_8px_0_#E0A61A,0_0_0_8px_#FFF1C9]' },
+  { left: '51%', top: '52%', color: 'bg-[#7ED99A] shadow-[0_8px_0_#4FB56E,0_0_0_8px_#E3F6E8]' },
+  { left: '27%', top: '52%', color: 'bg-[#F8A3AE] shadow-[0_8px_0_#D97C89,0_0_0_8px_#FFE3E6]' },
+  { left: '3%', top: '52%', color: 'bg-[#B8A6E8] shadow-[0_8px_0_#8E79C8,0_0_0_8px_#EDE7FB]' },
 ] as const
+
+/** Every disc is the same size now that there are eight of them: 96 px, 112 px from `lg` up — well
+ * clear of the 64 px tap floor, and small enough that two rows fit the band without touching. */
+const ISLAND_DISC = 'h-24 w-24 text-[40px] lg:h-28 lg:w-28 lg:text-[46px]'
 
 /** One island per topic (spec §2): the map is the topic list, in unlock order. */
 const ISLANDS = TOPICS.map((topic, i) => ({ ...topic, ...SLOTS[i] }))
 
-const ISLAND_BOX = 'flex flex-col items-center gap-1.5 lg:absolute'
+// `lg:w-[15%]`: a percentage width, so an island's centre is a fixed fraction of the band on every
+// viewport and the trail below stays under the discs. The tighter `lg:gap-1` is what buys the two
+// rows their clearance on the shortest landscape iPad (1024×768).
+const ISLAND_BOX = 'flex flex-col items-center gap-1.5 lg:absolute lg:w-[15%] lg:gap-1'
 
 // The dotted trail the islands sit on. Decorative only, and drawn in the same 1194×834 frame
 // coordinates the SVG stretches over. The points are the island CENTRES, not their `left`/`top`
 // corners — the trail used to run through the corners and so passed above and left of every
-// island. Measured in the browser and smoothed into a Catmull-Rom curve through all five.
-const TRAIL =
-  'M180 503 C 216 481, 321 371, 394 371 C 468 371, 543 513, 621 505 C 699 497, 787 333, 860 321 C 934 310, 1028 417, 1062 436'
+// island. The eight centres were measured in the browser at 1194×834 and the curve fitted to them
+// (each pass lands within half a pixel): across row one, round the right-hand end, back across row
+// two. The gentle sag between neighbours is what keeps it from reading as two ruled lines.
+const TRAIL = [
+  'M125 103',
+  'C 197 127, 340 127, 412 103', // row one, left → right, sagging gently between the discs
+  'C 484 127, 626 127, 698 103',
+  'C 770 127, 913 127, 985 103',
+  'C 1088 103, 1142 185, 1142 320', // the turn: out past the right-hand column, then down
+  'C 1142 455, 1088 537, 985 537',
+  'C 913 561, 770 561, 698 537', // row two, right → left
+  'C 626 561, 484 561, 412 537',
+  'C 340 561, 197 561, 125 537',
+].join(' ')
 
 export function Home() {
   const navigate = useNavigate()
@@ -157,10 +183,10 @@ export function Home() {
                     style={position}
                     className={`${ISLAND_BOX} opacity-50`}
                   >
-                    <span aria-hidden="true" className={`flex items-center justify-center rounded-full ${island.size} ${island.color}`}>
+                    <span aria-hidden="true" className={`flex items-center justify-center rounded-full ${ISLAND_DISC} ${island.color}`}>
                       🔒
                     </span>
-                    <span className="font-display text-xl font-extrabold text-ink-500">{island.name}</span>
+                    <span className="font-display text-xl font-extrabold leading-tight text-ink-500">{island.name}</span>
                     <Chip tone="neutral" size="sm">Chưa mở khóa</Chip>
                   </div>
                 )
@@ -175,10 +201,17 @@ export function Home() {
                   style={position}
                   className={`${ISLAND_BOX} transition-transform active:scale-95`}
                 >
-                  <span aria-hidden="true" className={`flex items-center justify-center rounded-full ${island.size} ${island.color}`}>
+                  <span aria-hidden="true" className={`flex items-center justify-center rounded-full ${ISLAND_DISC} ${island.color}`}>
                     {island.emoji}
                   </span>
-                  <span aria-hidden="true" className="font-display text-xl font-extrabold text-ink-900">{island.name}</span>
+                  {/* The subtitle is the island's job description (Phase 9 §4): the map is the
+                    * free-choice library the child dips into, next to — never instead of — the
+                    * daily mission. Locked tiles say "Chưa mở khóa" there instead: there is
+                    * nothing to practise on an island that has not opened yet. */}
+                  <span aria-hidden="true" className="flex flex-col items-center leading-tight">
+                    <span className="font-display text-xl font-extrabold text-ink-900">{island.name}</span>
+                    <span className="font-display text-[13px] font-extrabold text-ink-500">Luyện thêm</span>
+                  </span>
                   <StarRow value={stars} size="sm" />
                 </Link>
               )

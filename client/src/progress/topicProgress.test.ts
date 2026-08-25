@@ -14,33 +14,48 @@ function learn(topic: TopicId, n: number) {
   for (const w of words.slice(0, n)) promote(w.id, BASE)
 }
 
-it('animals is always unlocked and the rest start locked', () => {
-  expect(unlockedTopics()).toEqual(['animals'])
+/** Phase 9 §3: the mission mixes across every open island, so a fresh profile needs more than one
+ * island to mix. The first four are open on day one; the chain starts at the fifth. */
+it('the first four topics are unlocked and the rest start locked', () => {
+  expect(unlockedTopics()).toEqual(['animals', 'food', 'school', 'family'])
   expect(topicUnlocked('animals')).toBe(true)
-  expect(topicUnlocked('food')).toBe(false)
+  expect(topicUnlocked('family')).toBe(true)
   expect(topicUnlocked('weather')).toBe(false)
+  expect(topicUnlocked('toys')).toBe(false)
 })
 
-it('a topic unlocks once the previous deck reaches 6 of 8 words', () => {
-  learn('animals', 5)
-  expect(topicUnlocked('food')).toBe(false)
+it('the fifth topic unlocks once the fourth deck reaches 6 of 8 words', () => {
+  learn('family', 5)
+  expect(topicUnlocked('weather')).toBe(false)
 
-  learn('animals', 6)
-  expect(topicUnlocked('food')).toBe(true)
-  expect(topicUnlocked('school')).toBe(false)
-  expect(unlockedTopics()).toEqual(['animals', 'food'])
+  learn('family', 6)
+  expect(topicUnlocked('weather')).toBe(true)
+  expect(topicUnlocked('colors')).toBe(false)
+  expect(unlockedTopics()).toEqual(['animals', 'food', 'school', 'family', 'weather'])
+})
+
+it('every later topic keeps the same 6 of 8 chain', () => {
+  learn('family', 6)
+  learn('weather', 6)
+  expect(topicUnlocked('colors')).toBe(true)
+  expect(topicUnlocked('body')).toBe(false)
+
+  learn('colors', 6)
+  expect(topicUnlocked('body')).toBe(true)
+  expect(topicUnlocked('toys')).toBe(false)
 })
 
 it('migration: a topic with existing progress stays open even out of order', () => {
-  learn('family', 1)
-  expect(topicUnlocked('family')).toBe(true)
-  expect(topicUnlocked('school')).toBe(false)
+  learn('toys', 1)
+  expect(topicUnlocked('toys')).toBe(true)
+  expect(topicUnlocked('weather')).toBe(false)
+  expect(unlockedTopics()).toEqual(['animals', 'food', 'school', 'family', 'toys'])
 })
 
 it('migration: a topic sentence with stars opens the topic', () => {
   setStars('sentence:s17', 2) // a weather sentence
   expect(topicUnlocked('weather')).toBe(true)
-  expect(unlockedTopics()).toEqual(['animals', 'weather'])
+  expect(unlockedTopics()).toEqual(['animals', 'food', 'school', 'family', 'weather'])
 })
 
 it('island stars follow the word deck: 0 / >=1 / >=6 / all 8', () => {
@@ -61,7 +76,7 @@ it('currentTopic is the first unlocked topic with an unfinished deck', () => {
   expect(currentTopic()).toBe('animals')
 
   learn('animals', 8)
-  expect(currentTopic()).toBe('food') // animals done, food now open
+  expect(currentTopic()).toBe('food')
 
   learn('food', 8)
   expect(currentTopic()).toBe('school')

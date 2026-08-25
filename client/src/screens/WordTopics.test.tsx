@@ -25,23 +25,26 @@ beforeEach(() => localStorage.clear())
 it('lists only the topics the map has unlocked, plus the review card', () => {
   renderTopics()
 
-  expect(screen.getByText('Động vật')).toBeInTheDocument()
-  expect(screen.getByText('0/8 đã mở khoá')).toBeInTheDocument()
+  // The first four islands are open from the start (Phase 9 §3).
+  for (const name of ['Động vật', 'Đồ ăn', 'Trường học', 'Gia đình']) {
+    expect(screen.getByText(name)).toBeInTheDocument()
+  }
+  expect(screen.getAllByText('0/8 đã mở khoá')).toHaveLength(4)
   expect(screen.getByText('Ôn tập hôm nay (0)')).toBeInTheDocument()
 
-  // Everything behind the first island is still locked, and this screen is not a way in.
-  for (const name of ['Đồ ăn', 'Trường học', 'Gia đình', 'Thời tiết']) {
+  // Everything behind the fourth island is still locked, and this screen is not a way in.
+  for (const name of ['Thời tiết', 'Màu sắc', 'Cơ thể', 'Đồ chơi']) {
     expect(screen.queryByText(name)).not.toBeInTheDocument()
   }
 })
 
 it('shows a topic as soon as the map opens it', () => {
-  openDeck('animals')
+  openDeck('family')
   renderTopics()
 
-  expect(screen.getByText('Đồ ăn')).toBeInTheDocument()
-  expect(screen.getByRole('link', { name: /Đồ ăn/ })).toHaveAttribute('href', '/words/food')
-  expect(screen.queryByText('Trường học')).not.toBeInTheDocument()
+  expect(screen.getByText('Thời tiết')).toBeInTheDocument()
+  expect(screen.getByRole('link', { name: /Thời tiết/ })).toHaveAttribute('href', '/words/weather')
+  expect(screen.queryByText('Màu sắc')).not.toBeInTheDocument()
 })
 
 it('reflects unlocked words in a topic', () => {

@@ -51,9 +51,10 @@ function unlockWords(topic: TopicId, n: number) {
   localStorage.setItem('speakup.leitner', JSON.stringify(raw))
 }
 
-/** Opens every island, so the map can be checked as a whole. */
+/** Opens every island, so the map can be checked as a whole. The first four are open from the
+ * start, so the chain only has to be walked from the fourth deck onwards. */
 function unlockAllTopics() {
-  for (const id of ['animals', 'food', 'school', 'family'] as TopicId[]) unlockWords(id, 6)
+  for (const id of ['family', 'weather', 'colors', 'body'] as TopicId[]) unlockWords(id, 6)
 }
 
 beforeEach(() => {
@@ -187,7 +188,7 @@ it('keeps the stacked layout scrollable so the mission CTA is never trapped belo
   expect(Array.from(root.classList).filter(c => c.includes('overflow-hidden'))).toEqual([])
 })
 
-it('puts the five topic islands on the map, in unlock order, each linking to its hub', () => {
+it('puts the eight topic islands on the map, in unlock order, each linking to its hub', () => {
   unlockAllTopics()
 
   renderHome()
@@ -196,45 +197,75 @@ it('puts the five topic islands on the map, in unlock order, each linking to its
     .map(a => a.getAttribute('href'))
     .filter(href => href?.startsWith('/topic/'))
   expect(hrefs).toEqual([
-    '/topic/animals', '/topic/food', '/topic/school', '/topic/family', '/topic/weather',
+    '/topic/animals', '/topic/food', '/topic/school', '/topic/family',
+    '/topic/weather', '/topic/colors', '/topic/body', '/topic/toys',
   ])
   expect(screen.getByRole('link', { name: /Động vật/ })).toHaveAttribute('href', '/topic/animals')
-  expect(screen.getByRole('link', { name: /Thời tiết/ })).toHaveAttribute('href', '/topic/weather')
+  expect(screen.getByRole('link', { name: /Đồ chơi/ })).toHaveAttribute('href', '/topic/toys')
   expect(screen.getByRole('link', { name: /Phụ huynh/ })).toHaveAttribute('href', '/parent')
 })
 
-it('locks every island but Động vật for a brand-new child', () => {
+/** The map is the free-choice library beside the daily mission (spec §4), and every open island
+ * says so under its name. A locked one says "Chưa mở khóa" instead — there is nothing to practise
+ * there yet, so promising extra practice would be a lie. */
+it('labels every open island as free practice', () => {
+  unlockAllTopics()
+
   renderHome()
 
-  expect(screen.getByRole('link', { name: /Động vật/ })).toHaveAttribute('href', '/topic/animals')
-  for (const id of ['food', 'school', 'family', 'weather']) {
+  expect(screen.getAllByText('Luyện thêm')).toHaveLength(8)
+  expect(within(screen.getByTestId('island-toys')).getByText('Luyện thêm')).toBeInTheDocument()
+})
+
+it('offers no free-practice subtitle on a locked island', () => {
+  renderHome()
+
+  expect(screen.getAllByText('Luyện thêm')).toHaveLength(4)
+  const locked = screen.getByTestId('island-weather')
+  expect(within(locked).queryByText('Luyện thêm')).not.toBeInTheDocument()
+  expect(within(locked).getByText('Chưa mở khóa')).toBeInTheDocument()
+})
+
+it('opens the first four islands for a brand-new child and locks the rest', () => {
+  renderHome()
+
+  for (const id of ['animals', 'food', 'school', 'family']) {
+    expect(screen.getByTestId(`island-${id}`)).toHaveAttribute('href', `/topic/${id}`)
+  }
+  for (const id of ['weather', 'colors', 'body', 'toys']) {
     const island = screen.getByTestId(`island-${id}`)
     expect(island.tagName).not.toBe('A')
     expect(island).toHaveAttribute('aria-disabled', 'true')
     expect(within(island).getByText('Chưa mở khóa')).toBeInTheDocument()
   }
   expect(screen.getAllByRole('link').filter(a => a.getAttribute('href')?.startsWith('/topic/')))
-    .toHaveLength(1)
+    .toHaveLength(4)
 })
 
-it('opens the next island once six of the previous deck are unlocked', () => {
-  unlockWords('animals', 6)
+it('opens the fifth island only once six of the fourth deck are unlocked', () => {
+  unlockWords('family', 5)
+
+  const { unmount } = render(<MemoryRouter><Home /></MemoryRouter>)
+  expect(screen.getByTestId('island-weather')).toHaveAttribute('aria-disabled', 'true')
+  unmount()
+
+  unlockWords('family', 6)
 
   renderHome()
 
-  expect(screen.getByRole('link', { name: /Đồ ăn/ })).toHaveAttribute('href', '/topic/food')
-  expect(screen.getByTestId('island-school')).toHaveAttribute('aria-disabled', 'true')
+  expect(screen.getByRole('link', { name: /Thời tiết/ })).toHaveAttribute('href', '/topic/weather')
+  expect(screen.getByTestId('island-colors')).toHaveAttribute('aria-disabled', 'true')
 })
 
 /** Phases 1–6 let children learn any topic. The chain must never take that away: a single word
- * already unlocked in Gia đình opens that island even though Trường học is nowhere near six. */
+ * already unlocked in Đồ chơi opens that island even though Thời tiết is nowhere near six. */
 it('keeps a topic with existing progress open even when the chain has not reached it', () => {
-  unlockWords('family', 1)
+  unlockWords('toys', 1)
 
   renderHome()
 
-  expect(screen.getByRole('link', { name: /Gia đình/ })).toHaveAttribute('href', '/topic/family')
-  expect(screen.getByTestId('island-school')).toHaveAttribute('aria-disabled', 'true')
+  expect(screen.getByRole('link', { name: /Đồ chơi/ })).toHaveAttribute('href', '/topic/toys')
+  expect(screen.getByTestId('island-weather')).toHaveAttribute('aria-disabled', 'true')
 })
 
 it('bands each island stars by how much of its deck is unlocked', () => {
