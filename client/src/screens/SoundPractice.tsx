@@ -37,6 +37,19 @@ const SAMPLE_CHIP =
  * because every variant is emitted after the plain utilities. It is also, by construction, invisible
  * from 768 up, which is the property this screen is graded on. It is never used for layout the
  * screen owns outright; that stays at the default breakpoint where the next task can read it.
+ *
+ * **Gotcha, and the reason the mic is not `sticky bottom-0`.** The obvious way to honour the
+ * design's "trên 667 thì ghim đáy" is `mt-auto` plus a `sticky bottom-0` panel. It is wrong, and
+ * it fails silently: `mt-auto` can only hand out slack that exists, so the moment the frame is
+ * taller than the viewport there is none — and a sticky bottom panel then rides UP from its place
+ * in flow to the viewport edge and paints over the tail of the content behind it. On the first
+ * paint at 375×667 that hid the bottom of the "Từ 1/3" chip *inside* the viewport, which is worse
+ * than being below the fold: below the fold a child can scroll to it, under an opaque panel they
+ * cannot see that there is anything to scroll to. A bottom-pinned panel always covers whatever
+ * happens to sit at its y — that is what pinning is — so the only fix that hides nothing is to
+ * make the frame fit. That is what the `[@media(max-width:767px)_and_(max-height:700px)]` rules
+ * below are: the design's own 667 shrink list, taken far enough that `mt-auto` has real slack to
+ * hand out and the panel never has to float. Copy the trims, not a sticky.
  */
 const CTA_PHONE = 'max-md:min-h-[64px] max-md:px-4 max-md:text-lg'
 
@@ -270,7 +283,7 @@ function SoundWord({ sound, idx }: { sound: SoundGroup; idx: number }) {
             folds the whole deck away on the phone: the score chip already carries the sound and
             the tip is reprinted under it, so the tier would only be repeating itself (§5 M3b). */}
         <div data-testid="sound-word-grid" className={`grid w-full grid-cols-1 gap-3 md:grid-cols-[minmax(180px,auto)_1fr] md:items-center md:gap-x-6 md:gap-y-3 ${result ? 'max-md:hidden' : ''}`}>
-          <div data-testid="sound-tier" className="flex w-full flex-col rounded-[24px] bg-[#FFF1E6] px-4 py-3.5 shadow-[0_6px_0_#F2DFC9] md:contents">
+          <div data-testid="sound-tier" className="flex w-full flex-col rounded-[24px] bg-[#FFF1E6] px-4 py-3.5 shadow-[0_6px_0_#F2DFC9] [@media(max-width:767px)_and_(max-height:700px)]:py-2 md:contents">
             {/* Row 1, cell A — the sound stays put through every word. On the phone this is the
                 design's sound row: mouth, symbol, speaker, all on one 64 px line. */}
             <div data-testid="sound-cell-a" className="flex w-full flex-wrap items-center gap-3.5 md:w-auto md:flex-col md:flex-nowrap md:gap-2">
@@ -308,7 +321,7 @@ function SoundWord({ sound, idx }: { sound: SoundGroup; idx: number }) {
           </div>
 
           {!result && !recording && (
-            <div data-testid="word-tier" className="flex w-full flex-col items-center gap-2.5 rounded-xl3 bg-white px-4 py-5 shadow-card md:contents">
+            <div data-testid="word-tier" className="flex w-full flex-col items-center gap-2.5 rounded-xl3 bg-white px-4 py-5 shadow-card [@media(max-width:767px)_and_(max-height:700px)]:gap-1.5 [@media(max-width:767px)_and_(max-height:700px)]:py-2.5 md:contents">
               {/* Row 2, cell A — the word tile, directly under the sound tile. `contents` on the
                   phone so the card can put the sample button *after* the word instead of between
                   the emoji and it: the order the design reads top to bottom is emoji, word, IPA,
@@ -323,7 +336,7 @@ function SoundWord({ sound, idx }: { sound: SoundGroup; idx: number }) {
                   recording, the word slot is doing something else and the header shows it instead
                   (see above) so the counter is never lost, just relocated. */}
               <div data-testid="word-cell-b" className="contents md:flex md:flex-col md:items-start md:gap-2 md:text-left">
-                <div className="order-2 font-display text-[42px] font-extrabold leading-none text-ink-900 md:order-none md:text-[56px]">{card.text}</div>
+                <div className="order-2 font-display text-[42px] font-extrabold leading-none text-ink-900 [@media(max-width:767px)_and_(max-height:700px)]:text-[32px] md:order-none md:text-[56px]">{card.text}</div>
                 {/* The 375×667 rules of the design, and the only two things it lets this screen
                     drop there: the word's IPA and (below) the "chạm để nói" caption. The mouth
                     description is explicitly NOT droppable — it is what the screen teaches — so
@@ -414,13 +427,12 @@ function SoundWord({ sound, idx }: { sound: SoundGroup; idx: number }) {
             the mic would otherwise float directly under the word card. It takes the free space
             instead and sits on the bottom edge, which is where the design pins it. From 768 up the
             tile is back and takes the space, so the margin goes to nothing.
-            `sticky`: that is enough at 390×844, where nothing scrolls — but the design's own frame
-            rule is "CTA chính luôn trên nếp gấp 844, trên 667 thì ghim đáy", and 667 is where the
-            deck genuinely does not fit. Sticking the mic to the bottom edge is what "ghim đáy"
-            means: the one control the child needs is never the thing they have to scroll for. It
-            is inert wherever the page fits, and `md:static` takes it away above the phone. */}
+
+            This block is deliberately NOT `sticky bottom-0` — see the gotcha at the top of the
+            file. The design's "trên 667 thì ghim đáy" is bought by making the frame FIT 667 (the
+            `max-height:700px` trims above), not by floating an opaque panel over the deck. */}
         {!result && (
-          <div className="sticky bottom-0 z-10 mt-auto flex flex-col items-center gap-3 bg-cream-50 pb-2 pt-1 md:static md:mt-0 md:bg-transparent">
+          <div className="mt-auto flex flex-col items-center gap-3 pb-2 pt-1 [@media(max-width:767px)_and_(max-height:700px)]:pb-0 [@media(max-width:767px)_and_(max-height:700px)]:pt-0 md:mt-0">
             <MicButton state={attempt.micState} level={attempt.level} onPress={attempt.onMic} />
             {!recording && <p className="font-display text-base font-extrabold text-ink-500 [@media(max-width:767px)_and_(max-height:700px)]:hidden md:text-xl">Chạm để nói nào!</p>}
           </div>

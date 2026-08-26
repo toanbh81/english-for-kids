@@ -12,6 +12,11 @@ export function ScoredWords({ words, onWordTap }: { words: { word: string; tone:
   return (
     // 24 px words in a 64 px chip on a phone (design §5 M3b), the 34 px of the landscape frame
     // from `md` up. The tap target never moves: `min-h-[64px]` is unprefixed at every width.
+    //
+    // `md:leading-none` on the glyph is not redundant. A `text-*` scale step sets a line-height as
+    // well as a font size, and a prefixed one is emitted *after* every plain utility — so
+    // `md:text-2xl` quietly overrides an unprefixed `leading-none` and the glyph grew 24 px → 32.
+    // Any `md:text-<scale>` restore has to restate the leading it is stepping on.
     <div className="flex flex-wrap justify-center gap-2.5 md:gap-4">
       {words.map((w, i) => {
         const tone = TONE[w.tone]
@@ -23,7 +28,7 @@ export function ScoredWords({ words, onWordTap }: { words: { word: string; tone:
             className={`flex min-h-[64px] items-center justify-center gap-2 rounded-xl2 border-[3px] px-4 font-display font-extrabold md:px-5 ${tone.chip} ${tone.text} active:translate-y-[2px]`}
           >
             <span className={`text-2xl leading-none md:text-[34px] ${tone.text}`}>{w.word}</span>
-            <span aria-hidden="true" className="text-xl leading-none md:text-2xl">{tone.glyph}</span>
+            <span aria-hidden="true" className="text-xl leading-none md:text-2xl md:leading-none">{tone.glyph}</span>
           </button>
         )
       })}

@@ -83,6 +83,11 @@ function renderWord(ph = 'th', cardId = 'sz-th-three', mission = false) {
 
 const stored = () => JSON.parse(localStorage.getItem('speakup.stars') ?? '{}')
 
+/** An element's classes as exact tokens. `className.includes('mt-auto')` also matches
+ * `sm:mt-auto` and `md:mt-auto` — which is the whole thing these tests exist to catch — so every
+ * breakpoint assertion below compares tokens, never substrings. */
+const classes = (el: Element) => el.className.split(/\s+/).filter(Boolean)
+
 beforeEach(() => {
   localStorage.clear()
   mic.engine = 'azure'
@@ -140,11 +145,11 @@ it('reads the sound and word cells as two stacked tiers on a phone and as grid c
   // what lets one DOM be both layouts: `md:contents` takes them out of the grid.
   for (const id of ['sound-tier', 'word-tier']) {
     const tier = screen.getByTestId(id)
-    expect(tier.className).toContain('md:contents')
-    expect(tier.className).toMatch(/rounded-/)
+    expect(classes(tier)).toContain('md:contents')
+    expect(classes(tier).some(c => c.startsWith('rounded-'))).toBe(true)
   }
   // The two-column grid is still the tablet/iPad layout and still starts at 768.
-  expect(screen.getByTestId('sound-word-grid').className).toContain('md:grid-cols-[minmax(180px,auto)_1fr]')
+  expect(classes(screen.getByTestId('sound-word-grid'))).toContain('md:grid-cols-[minmax(180px,auto)_1fr]')
 })
 
 /** The 168×200 tile is the one element the design cuts outright: it is what pushed the mic under
@@ -154,21 +159,21 @@ it('swaps the big mouth tile for a 64 px one in the sound row, below `md` only',
 
   const small = screen.getByTestId('mouth-tile')
   expect(screen.getByTestId('sound-cell-a')).toContainElement(small)
-  expect(small.className).toContain('md:hidden')
+  expect(classes(small)).toContain('md:hidden')
 
-  const big = screen.getByText('Khẩu hình miệng').closest('section')!
-  expect(big.className).toContain('hidden')
-  expect(big.className).toContain('md:flex')
+  const big = classes(screen.getByText('Khẩu hình miệng').closest('section')!)
+  expect(big).toContain('hidden')
+  expect(big).toContain('md:flex')
 })
 
 /** Both counters still exist on a phone; only the deck they sit in folds away. */
 it('folds the whole deck away on a phone once a result lands, and only on a phone', () => {
   renderWord()
-  expect(screen.getByTestId('sound-word-grid').className).not.toContain('max-md:hidden')
+  expect(classes(screen.getByTestId('sound-word-grid'))).not.toContain('max-md:hidden')
 
   score(result(55))
 
-  expect(screen.getByTestId('sound-word-grid').className).toContain('max-md:hidden')
+  expect(classes(screen.getByTestId('sound-word-grid'))).toContain('max-md:hidden')
   // The sound and its tip are not lost with it — the result state reprints both.
   expect(screen.getByTestId('sound-chip')).toHaveTextContent('/θ/')
   expect(screen.getByTestId('sound-tip')).toHaveTextContent(PHONEME_TIPS.th)
@@ -183,25 +188,32 @@ it('keeps the result CTAs a phone-only size, and never touches the button primit
 
   // "Tiếp theo" is a link in free play and a button under the mission, so ask for either.
   for (const name of [/thử lại/i, /tiếp theo/i]) {
-    const cta = screen.getByRole(/thử lại/.test(name.source) ? 'button' : 'link', { name })
-    expect(cta.className).toContain('max-md:min-h-[64px]')
-    expect(cta.className).toMatch(/max-md:flex-(1|\[1\.35\])/)
+    const cta = classes(screen.getByRole(/thử lại/.test(name.source) ? 'button' : 'link', { name }))
+    expect(cta).toContain('max-md:min-h-[64px]')
+    expect(cta.some(c => c === 'max-md:flex-1' || c === 'max-md:flex-[1.35]')).toBe(true)
     // The landscape size map is untouched: 72 px and 64 px are still what `Button` hands out.
-    expect(cta.className).toMatch(/min-h-\[(64|72)px\]/)
+    expect(cta.some(c => c === 'min-h-[64px]' || c === 'min-h-[72px]')).toBe(true)
   }
 })
 
-/** The mic is never the thing a child has to scroll for: it takes the free space at 844 and
- * sticks to the bottom edge where the deck does not fit (375×667). Neither applies from `md` up,
- * where the mouth tile is back and already holds the column open. */
-it('pins the mic to the bottom of the phone frame and leaves the landscape column alone', () => {
+/** The mic takes the free space at the bottom of the phone frame and gives it straight back from
+ * `md` up, where the mouth tile is holding the column open again.
+ *
+ * It must NOT be `sticky`: a bottom-pinned panel paints over whatever sits at its y, and at
+ * 375×667 that hid the tail of the word card *inside* the viewport. The frame is trimmed to fit
+ * instead. `classes()` is exact-token, not substring — `sm:mt-auto` is a different rule and has to
+ * fail this. */
+it('pins the mic with layout, never with an overlay, and leaves the landscape column alone', () => {
   renderWord()
 
-  const micBlock = screen.getByRole('button', { name: /bấm để nói/i }).parentElement!
-  expect(micBlock.className).toContain('mt-auto')
-  expect(micBlock.className).toContain('md:mt-0')
-  expect(micBlock.className).toContain('sticky')
-  expect(micBlock.className).toContain('md:static')
+  const micBlock = classes(screen.getByRole('button', { name: /bấm để nói/i }).parentElement!)
+  expect(micBlock).toContain('mt-auto')
+  expect(micBlock).toContain('md:mt-0')
+  // No panel floats over the deck at any width.
+  expect(micBlock).not.toContain('sticky')
+  expect(micBlock).not.toContain('fixed')
+  expect(micBlock).not.toContain('absolute')
+  expect(micBlock).not.toContain('bg-cream-50')
 })
 
 it('plays the sound on its own, and says so when that sample is missing', async () => {
