@@ -123,3 +123,48 @@ it('shows result buttons linking to retell and to listen again', () => {
   // Retell and re-listen both stay inside the story — the result screen must also offer a way out.
   expect(screen.getByRole('link', { name: 'Về bản đồ 🏝️' })).toHaveAttribute('href', '/')
 })
+
+/* ---- Phase 10, design §10 M6b: the phone stack, with the landscape row untouched ---- */
+
+/** jsdom has no layout, so these pin *which breakpoint each rule is written at*; the pixel
+ * geometry (three cards fully on screen at 390×844 and 375×667) is the browser's job. */
+it('stacks the three answers on a phone and keeps the wrapped row from md up', () => {
+  const { container } = renderQuiz()
+  const deck = screen.getByRole('button', { name: 'cat' }).parentElement!
+  expect(deck).toHaveClass('flex', 'w-full', 'flex-1', 'flex-col')
+  expect(deck).toHaveClass('md:w-auto', 'md:flex-initial', 'md:flex-row', 'md:flex-wrap', 'md:gap-5')
+
+  for (const label of ['cat', 'fox', 'dog']) {
+    const card = screen.getByRole('button', { name: label })
+    // Sized by `flex-1` on a phone, so the same rule gives ~178 px at 844 and ~119 px at 667 —
+    // both comfortably over the 64 px tap floor, which `min-h-[96px]` guarantees outright.
+    expect(card).toHaveClass('w-full', 'flex-1', 'max-md:min-h-[96px]')
+    expect(card).toHaveClass('md:h-[270px]', 'md:w-[250px]', 'md:flex-initial')
+  }
+  expect(container.querySelector('main')).toHaveClass('px-5', 'md:px-6')
+})
+
+it('drops Foxy\'s bubble on a phone, where the banner at the foot already says it', () => {
+  renderQuiz()
+  const q0 = story.quiz[0]
+  const wrong = q0.options.findIndex((_, i) => i !== q0.answer)
+  fireEvent.click(screen.getByRole('button', { name: q0.options[wrong].label }))
+  // Still rendered — and still read by a screen reader at every width — only hidden below 768,
+  // because it is what pushed the third answer card under the fold.
+  expect(screen.getByText('🦊 Chưa đúng, thử lại nhé').parentElement).toHaveClass('max-md:hidden')
+  expect(screen.getByText('Gần đúng rồi — thử lại nhé! 💪')).toBeInTheDocument()
+})
+
+it('stacks the three result exits full width on a phone and keeps the row from md up', () => {
+  renderQuiz()
+  story.quiz.forEach(q => {
+    fireEvent.click(screen.getByRole('button', { name: q.options[q.answer].label }))
+    act(() => { vi.advanceTimersByTime(900) })
+  })
+  const row = screen.getByRole('link', { name: 'Nghe lại' }).parentElement!
+  expect(row).toHaveClass('w-full', 'flex-col', 'md:w-auto', 'md:flex-row', 'md:flex-wrap', 'md:gap-4')
+  for (const name of [/Kể lại câu chuyện/, /^Nghe lại$/, /Về bản đồ/]) {
+    // `max-md:` only, so `Button`'s own `min-h-[72px] px-10 text-[26px]` is what 1194 still gets.
+    expect(screen.getByRole('link', { name })).toHaveClass('max-md:w-full', 'max-md:min-h-[64px]')
+  }
+})

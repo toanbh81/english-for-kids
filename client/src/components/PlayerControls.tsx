@@ -1,8 +1,20 @@
 import { SceneDots } from './ui/SceneDots'
 import { Toggle } from './ui/Toggle'
 
-const STEP = 'flex h-[64px] w-[64px] items-center justify-center rounded-2xl bg-white text-3xl text-ink-500 shadow-card-sm active:translate-y-[2px]'
-const SPEED_CHIP = 'flex h-[46px] w-[52px] items-center justify-center rounded-[14px] text-2xl transition-colors'
+/**
+ * Phone rules live at the default breakpoint and `md:` (768) restores the landscape value exactly
+ * — the phase-10 idiom (see the block comment in `screens/SoundPractice.tsx`).
+ *
+ * The one structural change below 768 is the `order-*` run. All five controls are in one
+ * `flex-wrap` row, and at 390 px they need two lines; left to itself the wrap puts the speed pill
+ * and ⏮ on the first line and the play button on the second, which is the opposite of the design's
+ * "cụm điều khiển ghim đáy" (§9 M6: transport on its own row, options under it). The orders pull
+ * ⏮ · ▶ · ⏭ (260 px at the design's sizes) onto the first line and leave speed + subtitles for the
+ * second; `md:order-none` hands the DOM order back from 768 up, where the whole thing is one row.
+ */
+const TRANSPORT = 'order-1 md:order-none'
+const STEP = `flex h-[64px] w-[64px] items-center justify-center rounded-2xl bg-white text-3xl text-ink-500 shadow-card-sm active:translate-y-[2px] ${TRANSPORT}`
+const SPEED_CHIP = 'flex h-10 w-11 items-center justify-center rounded-[14px] text-xl transition-colors md:h-[46px] md:w-[52px] md:text-2xl'
 const SPEED_ACTIVE = 'bg-coral-50 ring-[3px] ring-inset ring-peach-400'
 
 type Props = {
@@ -35,7 +47,7 @@ export function PlayerControls({
         <button
           aria-label={rate === 1 ? 'Tốc độ 0.75' : 'Tốc độ 1'}
           onClick={onRate}
-          className="flex min-h-[64px] items-center gap-2 rounded-xl2 bg-white p-2 shadow-card-sm active:translate-y-[2px]"
+          className="order-2 flex min-h-[64px] items-center gap-2 rounded-xl2 bg-white p-2 shadow-card-sm active:translate-y-[2px] md:order-none"
         >
           <span aria-hidden="true" className={`${SPEED_CHIP} ${rate === 0.75 ? SPEED_ACTIVE : ''}`}>🐢</span>
           <span aria-hidden="true" className={`${SPEED_CHIP} ${rate === 1 ? SPEED_ACTIVE : ''}`}>🐇</span>
@@ -48,7 +60,7 @@ export function PlayerControls({
         <button
           aria-label={playing ? 'Tạm dừng' : 'Phát'}
           onClick={onToggle}
-          className="flex h-[104px] w-[104px] items-center justify-center rounded-full bg-teal-500 text-[44px] text-white shadow-[0_8px_0_#1FA396] active:translate-y-[3px] active:shadow-[0_5px_0_#1FA396]"
+          className={`flex h-24 w-24 items-center justify-center rounded-full bg-teal-500 text-[38px] text-white shadow-[0_8px_0_#1FA396] active:translate-y-[3px] active:shadow-[0_5px_0_#1FA396] md:h-[104px] md:w-[104px] md:text-[44px] ${TRANSPORT}`}
         >
           <span aria-hidden="true">{playing ? '❚❚' : '▶'}</span>
         </button>
@@ -57,7 +69,11 @@ export function PlayerControls({
           <span aria-hidden="true">⏭</span>
         </button>
 
-        <div className="flex flex-col">
+        <div className="order-3 flex flex-col md:order-none">
+          {/* The design shrinks this switch to a 14 px line of text (§9 M6); it stays a real
+              switch — the brief's Q12 leaves the static-text version unresolved and a toggle the
+              child cannot press is not a smaller toggle. Only the label shrinks, which is what
+              gets speed + subtitles onto one 375 px row. */}
           <Toggle
             role="button"
             ariaLabel={subtitles ? 'Phụ đề bật' : 'Phụ đề tắt'}
@@ -65,6 +81,7 @@ export function PlayerControls({
             onChange={onSubtitles}
             emoji="🇻🇳"
             label="Phụ đề Việt"
+            className="max-md:gap-2 max-md:px-0 max-md:text-[14px]"
           />
         </div>
       </div>
