@@ -1,7 +1,7 @@
-import { useParams } from 'react-router-dom'
+import { useLocation, useParams } from 'react-router-dom'
 import type { Story } from '../content/stories/types'
 import { findStory } from '../content/stories'
-import { MISSION_STATE, useMissionNext } from '../progress/missionNav'
+import { MISSION_STATE } from '../progress/missionNav'
 import { useStoryPlayer } from '../story/useStoryPlayer'
 import { SceneArt } from '../components/SceneArt'
 import { Karaoke } from '../components/Karaoke'
@@ -25,16 +25,24 @@ export function StoryPlayer() {
 function StoryPlayerInner({ story, id }: { story: Story; id: string }) {
   const p = useStoryPlayer(story)
   /**
-   * Null unless the child arrived from today's lesson. The 🎧 step's route is exactly this one, so
-   * the hand-off resolves here and the story can behave like every other practice screen: the
-   * arrow leads back to the mission rather than out of the lesson into the story library.
+   * Whether the child walked in from today's lesson — the flag itself, not whether the lesson
+   * still lists this story.
    *
-   * The chain past this screen is the reason the flag is also forwarded below. `/story/:id/quiz`
-   * and `/story/:id/retell` are SUB-routes, and `missionNav` matches item routes whole on purpose
-   * (see its `routeIs`), so nothing downstream can rediscover the lesson for itself — if this link
-   * drops the flag, the mission dies at the first question.
+   * The story chain names no next step of its own: the player hands on to the quiz, the quiz to
+   * the retell, and only the retell (which can be a 🔁 step's own exact route) ever needs
+   * `useMissionNext()` to say what comes after. So there is nothing here that has to resolve
+   * against today's items, and asking anyway would be a second, weaker rule for the same fact:
+   * a lesson regenerated mid-session, or persisted in an older shape, would answer "no mission"
+   * for a child who is plainly in one — and drop them back in the story library, which is the very
+   * bug this chain was fixed for. `SoundWordList` settled this precedent: honour the flag.
+   *
+   * That is also why it travels on below. `/story/:id/quiz` and `/story/:id/retell` are SUB-routes,
+   * and `missionNav` matches item routes whole on purpose (see its `routeIs`), so nothing
+   * downstream can rediscover the lesson for itself — if this link drops the flag, the mission
+   * dies at the first question.
    */
-  const mission = useMissionNext()
+  const { state } = useLocation()
+  const mission = (state as { mission?: unknown } | null)?.mission === true
   const scene = story.scenes[p.sceneIndex]
 
   const scenePct = ((p.sceneIndex + 1) / story.scenes.length) * 100

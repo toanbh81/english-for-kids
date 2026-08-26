@@ -237,9 +237,10 @@ it('holds the back arrow to the 64 px tap floor on a phone', () => {
 
 // --- as a step of today's lesson (fix: the story chain keeps its thread back) ------------------
 //
-// The player sits on the 🎧 step's own exact route, so `useMissionNext()` resolves here and the
-// screen can behave like every other practice screen: the arrow leads back to the lesson, not out
+// The screen behaves like every other practice screen: the arrow leads back to the lesson, not out
 // of it, and the flag travels on to the quiz so the rest of the chain knows where the child is.
+// Both facts are read off the flag the child arrived carrying — never off today's lesson listing
+// this story — so the guarantee holds even when the two disagree (see the stale-step case below).
 
 it('sends the back arrow to the mission, not to the story library, when the child came from the lesson', () => {
   seedLesson(LISTEN_STEP, NEXT_STEP)
@@ -263,6 +264,26 @@ it('carries the mission on to the quiz, before the story ends and after it', () 
   state.ended = true
   renderPlayer('little-fox', true)
   fireEvent.click(screen.getByRole('link', { name: /Tiếp tục/ }))
+  expect(screen.getByTestId('probe')).toHaveTextContent('/story/little-fox/quiz {"mission":true}')
+})
+
+/**
+ * The stale-step case, and the reason this screen reads the flag rather than asking whether today's
+ * lesson still lists the story. "The child came from the mission" is a fact about how they got
+ * here; it does not stop being true because the lesson has moved on, was regenerated, or was
+ * persisted in an older shape. Trusting the lesson instead put the child back in the story library
+ * — the very bug this fix exists for — one screen further along, and it is `SoundWordList`'s
+ * precedent that decides it: honour the flag, and hand it on to the screens that can use it.
+ */
+it('still leads home when the flag arrives on a story today’s lesson does not list', () => {
+  seedLesson(NEXT_STEP) // today's lesson holds no story at all
+  renderPlayer('little-fox', true)
+
+  expect(screen.getByRole('link', { name: 'Nhiệm vụ' })).toHaveAttribute('href', '/mission')
+  expect(screen.queryByRole('link', { name: 'Truyện' })).not.toBeInTheDocument()
+
+  // And the chain past it stays alive: dropping the flag here would strand the child at the quiz.
+  fireEvent.click(screen.getByRole('link', { name: /Bỏ qua/ }))
   expect(screen.getByTestId('probe')).toHaveTextContent('/story/little-fox/quiz {"mission":true}')
 })
 
