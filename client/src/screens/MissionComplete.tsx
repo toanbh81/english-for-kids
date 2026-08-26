@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { dayKey, getActivity, streak } from '../progress/activity'
 import { Confetti } from '../components/Confetti'
 import { Foxy } from '../components/Foxy'
-import { Button } from '../components/ui'
+import { Button, HomeLabel, PAGE_SHELL } from '../components/ui'
 
 // "Stars earned today" has no store of its own — stars are kept per card, not per day. So the
 // screen counts today's practice events that cleared the passing bar (the same 60 that unlocks a
@@ -22,24 +22,33 @@ export function MissionComplete() {
   ).length
 
   return (
-    <main className="relative flex h-full flex-col items-center justify-center gap-5 overflow-y-auto bg-gradient-to-b from-cream-50 to-[#FFEFD9] p-8 text-center">
+    // The phone stack of design M8b: the same column, sized so the whole celebration — mascot,
+    // title, star pill, streak and the way out — fits a 667 px screen without scrolling. The iPad
+    // keeps its bigger type from the tablet breakpoint up.
+    <main className={`relative flex h-full flex-col items-center justify-center gap-4 overflow-y-auto bg-gradient-to-b from-cream-50 to-[#FFEFD9] px-6 text-center md:gap-5 md:px-8 ${PAGE_SHELL}`}>
       <Confetti />
 
-      <Foxy mood="cheer" size="lg" className="animate-bob" />
+      <Foxy mood="cheer" size="lg" className="animate-bob [&_svg]:h-[145px] [&_svg]:w-[150px] md:[&_svg]:h-[155px] md:[&_svg]:w-[160px]" />
 
-      <h1 className="font-display text-[52px] font-extrabold leading-tight text-ink-900">
+      <h1 className="font-display text-[30px] font-extrabold leading-tight text-ink-900 md:text-[52px]">
         Nhiệm vụ hoàn thành! 🎉
       </h1>
 
-      <div className="inline-flex items-center gap-2 rounded-full bg-sun-50 px-8 py-3 font-display text-[30px] font-extrabold text-sun-700 shadow-chunky-sun">
+      {/* `md:leading-normal` is not decoration. `text-2xl` sets a 32 px line-height as well as a
+          24 px size, and `md:text-[30px]` restores only the size — so the pill came out 56 px tall
+          instead of the 69 it has always been, and the whole centred stack shifted with it (the
+          mascot and the title 6 px down, the streak line and the way out 7 px up). Any
+          arbitrary-size restore has to restate the leading it is stepping on; 1.5 is the inherited
+          value the 30 px pill has always resolved against. */}
+      <div className="inline-flex items-center gap-2 rounded-full bg-sun-50 px-8 py-3 font-display text-2xl font-extrabold text-sun-700 shadow-chunky-sun md:text-[30px] md:leading-normal">
         +{starsToday} ⭐
       </div>
 
-      <p className="font-display text-2xl font-extrabold text-ink-500">
+      <p className="font-display text-base font-extrabold text-ink-500 md:text-2xl">
         🔥 Chuỗi {streak(now, events)} ngày liên tiếp — giỏi lắm!
       </p>
 
-      <Button to="/" size="lg" variant="secondary">Về bản đồ 🏝️</Button>
+      <Button to="/" size="lg" variant="secondary"><HomeLabel /></Button>
     </main>
   )
 }

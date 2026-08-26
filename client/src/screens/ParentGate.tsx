@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import type { ChangeEvent, FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { ParentDashboard } from './ParentDashboard'
-import { Button, Card } from '../components/ui'
+import { Button, Card, PAGE_SHELL } from '../components/ui'
 
 const FLAG_KEY = 'speakup.parent'
 const MAX_AGE_MS = 10 * 60 * 1000
@@ -65,7 +65,7 @@ export function ParentGate() {
   }
 
   return (
-    <main className="flex h-full flex-col items-center justify-center gap-6 overflow-y-auto bg-cream-50 p-6">
+    <main className={`flex h-full flex-col items-center justify-center gap-6 overflow-y-auto bg-cream-50 px-6 ${PAGE_SHELL}`}>
       <Link
         to="/"
         className="inline-flex min-h-[64px] items-center gap-2 self-start rounded-full bg-white px-6 font-display text-xl font-extrabold text-ink-900 shadow-card-sm active:translate-y-[2px]"

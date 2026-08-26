@@ -14,6 +14,11 @@ export default {
   ],
   theme: {
     extend: {
+      // The real iPad-landscape breakpoint. Tailwind's `lg` is 1024, which switched the curved
+      // map, the diagonal stairs and the mission row on 170 px too early: a 1024–1193 tablet got a
+      // squeezed landscape layout instead of the portrait one. Phase 10 moves those layouts here,
+      // so `md` (768) is "tablet portrait" and `ipad` (1194) is "iPad landscape, the original".
+      screens: { ipad: '1194px' },
       colors: {
         cream: { DEFAULT: '#FFF7EA', 50: '#FFF7EA' },
         canvas: '#EFE5D6',

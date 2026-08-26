@@ -6,7 +6,7 @@ import { playUrl } from '../audio/player'
 import { PHONEME_TIPS } from '../scoring/feedback'
 import { getStars } from '../progress/store'
 import { MISSION_STATE } from '../progress/missionNav'
-import { BackButton, Button, CARD_LINK, StarRow } from '../components/ui'
+import { BackButton, Button, CARD_LINK, PAGE_SHELL, StarRow } from '../components/ui'
 
 /**
  * The sound's own sub-level (Phase 9 §1): the sound at the top, then one card per word of it.
@@ -43,36 +43,64 @@ function WordList({ sound }: { sound: SoundGroup }) {
     playUrl(`/audio/sounds/${ph}.mp3`).then(() => setSoundMissing(false), () => setSoundMissing(true))
   }
 
+  // The design draws no frame for this screen (brief §14 Q19), so it follows the speak family it
+  // belongs to: 20 px of side frame on a phone, and everything the drill next door does — the
+  // sound tier's warm card, its 40 px symbol, its round speaker button — so the two screens read
+  // as one place. From 768 up every one of those is handed back to what it was.
   return (
-    <main className="h-full overflow-y-auto bg-cream-50 p-6">
-      <div className="mx-auto flex w-full max-w-5xl flex-col gap-5">
+    <main className={`h-full overflow-y-auto bg-cream-50 px-5 md:px-6 ${PAGE_SHELL}`}>
+      <div className="mx-auto flex w-full max-w-5xl flex-col gap-3 md:gap-5">
         {/* One sound is a sub-level of the bậc Tập âm, and Tập âm hangs off the stairs — unless
             the child got here from a stale mission step, which has its own way home. */}
         {mission
           ? <BackButton to="/mission" label="Nhiệm vụ" className="self-start" />
           : <BackButton to="/levels" label="Các bậc" className="self-start" />}
 
-        <header className="flex flex-col items-center gap-2 text-center">
-          <div className="font-display text-[72px] font-extrabold leading-none text-coral-text">/{ipa}/</div>
-          {tip && <p className="max-w-xl text-lg font-bold text-ink-500">{tip}</p>}
-          <Button variant="secondary" onClick={playIsolated}>🔊 Nghe âm lẻ</Button>
-          {soundMissing && <p className="text-lg font-bold text-ink-300">Chưa có audio âm này</p>}
+        <header className="flex w-full flex-col items-start gap-2 rounded-[24px] bg-[#FFF1E6] px-4 py-3.5 text-left shadow-[0_6px_0_#F2DFC9] md:items-center md:rounded-none md:bg-transparent md:p-0 md:text-center md:shadow-none">
+          {/* The symbol and its speaker share a line on a phone, with the tip under them. From 768
+              up the wrapper stops being a box at all (`md:contents`) and all four go back to being
+              children of the header — in the header's own order, which puts the tip between the
+              symbol and the button. That is what the `md:order-*` are for: they restore the
+              reading order the stacked layout had, not a new one. */}
+          <div className="flex w-full flex-wrap items-center gap-3.5 md:contents">
+            <div className="flex-1 font-display text-[40px] font-extrabold leading-none text-[#C08457] md:order-1 md:flex-initial md:text-[72px] md:text-coral-text">/{ipa}/</div>
+            <Button
+              variant="secondary"
+              aria-label="Nghe âm lẻ"
+              onClick={playIsolated}
+              className="shrink-0 max-md:h-16 max-md:w-16 max-md:rounded-full max-md:px-0 max-md:text-[26px] md:order-3 md:shrink"
+            >
+              <span aria-hidden="true" className="md:hidden">🔊</span>
+              <span aria-hidden="true" className="hidden md:inline">🔊 Nghe âm lẻ</span>
+            </Button>
+            {soundMissing && <p className="w-full text-sm font-bold text-ink-300 md:order-4 md:w-auto md:text-lg">Chưa có audio âm này</p>}
+          </div>
+          {tip && <p className="max-w-xl text-sm font-bold leading-relaxed text-sun-700 md:order-2 md:text-lg md:leading-7 md:text-ink-500">{tip}</p>}
         </header>
 
-        <p className="text-center text-lg font-bold text-ink-500">Chọn một từ để luyện nhé!</p>
+        <p className="text-base font-bold text-ink-500 md:text-center md:text-lg">Chọn một từ để luyện nhé!</p>
 
-        <div className="grid grid-cols-1 gap-5 sm:grid-cols-3">
+        {/* A row per word on a phone — the emoji, the word and its stars read across in 96 px
+            instead of down in 184, which is what puts all three cards plus the sound above the
+            fold on an 844 px screen. The three-column deck of tiles is untouched from 768 up. */}
+        <div className="grid grid-cols-1 gap-2.5 md:gap-5 md:grid-cols-3">
           {cards.map(c => (
             <Link
               key={c.id}
               to={`/sound/${ph}/${c.id}`}
               state={mission ? MISSION_STATE : undefined}
               aria-label={`Từ ${c.text}`}
-              className={`${CARD_LINK} min-h-[184px] justify-center`}
+              // `max-md:flex-row` and `max-md:py-3`, not plain `flex-row`/`py-3`: `CARD_LINK`
+              // writes `flex-col` and `p-6` into the same unprefixed layer, and which of two
+              // unprefixed utilities wins is Tailwind's ordering, not ours. A `max-md:` rule is
+              // emitted after every plain utility, so it wins — and it cannot reach 768 up.
+              className={`${CARD_LINK} min-h-[96px] justify-start gap-3.5 px-4 max-md:flex-row max-md:py-3 md:min-h-[184px] md:justify-center md:gap-2 md:px-6`}
             >
-              <span aria-hidden="true" className="text-[64px] leading-none">{c.emoji}</span>
-              <span className="font-display text-[28px] font-extrabold text-ink-900">{c.text}</span>
-              <span className="text-lg font-bold text-ink-300">{c.ipa}</span>
+              <span aria-hidden="true" className="text-[40px] leading-none md:text-[64px]">{c.emoji}</span>
+              <span className="flex flex-1 flex-col items-start md:flex-initial md:items-center md:gap-2">
+                <span className="font-display text-[22px] font-extrabold text-ink-900 md:text-[28px]">{c.text}</span>
+                <span className="text-sm font-bold text-ink-300 md:text-lg">{c.ipa}</span>
+              </span>
               <StarRow value={getStars(`sword:${c.id}`)} />
             </Link>
           ))}

@@ -133,11 +133,12 @@ it('tints the sentence-final ❗❓ and leaves the words alone', () => {
 it('keeps the long passages at the smaller size a landscape iPad has room for', () => {
   renderVoice('sv4') // 15 words — three lines at 34 px
   expect(screen.getByTestId('voice-passage')).toHaveClass('lg:text-[30px]')
-  expect(screen.getByTestId('mood-emoji')).toHaveClass('text-[56px]')
+  // The landscape sizes are the `md:` half of each pair now; the unprefixed value is the phone's.
+  expect(screen.getByTestId('mood-emoji')).toHaveClass('text-[38px]', 'md:text-[56px]')
 
   cleanupAndRender('sv6') // 10 words — fits at the bigger size
   expect(screen.getByTestId('voice-passage')).not.toHaveClass('lg:text-[30px]')
-  expect(screen.getByTestId('voice-passage')).toHaveClass('text-[34px]')
+  expect(screen.getByTestId('voice-passage')).toHaveClass('text-[24px]', 'md:text-[34px]')
 })
 
 /** A ! that closes a quote inside a sentence is not an instruction to the voice — the sentence
@@ -320,4 +321,52 @@ it('stays a free-play passage without the flag, lesson or no lesson', () => {
   expect(screen.getByText('Đoạn 1/8')).toBeInTheDocument()
   expect(screen.queryByText(/^Thẻ /)).not.toBeInTheDocument()
   expect(screen.getByRole('link', { name: 'Quay lại' })).toHaveAttribute('href', '/level/story-voice')
+})
+
+/** Phase 10: this screen had no phone layout at all — no breakpoint rules and no `PAGE_SHELL`,
+ * so at 390×844 it measured 940 idle (the mic clipped at the fold) and 1742 scored, with
+ * "Tiếp theo →" at y1642. jsdom cannot lay that out, so these guard the inputs. */
+it('carries the safe-area shell at its own resting padding', () => {
+  renderVoice()
+
+  const shell = document.querySelector('main')!.className
+  expect(shell).toContain('pt-[max(var(--page-pad-top,1.5rem),calc(env(safe-area-inset-top)_+_9px))]')
+  expect(shell).toContain('pb-[max(var(--page-pad-bottom,1.5rem),calc(env(safe-area-inset-bottom)_+_10px))]')
+  expect(shell).toContain('[--page-pad-top:1.25rem]')
+  expect(shell).toContain('px-5')
+  expect(shell).toContain('md:px-6')
+})
+
+/** The mood, the passage and the tips fold away on a phone once a result lands: the word chips
+ * below reprint every word of the passage and the mood has already been read. From `md` up all
+ * three stay exactly where they were. */
+it('folds the brief away on a phone result only', () => {
+  renderVoice()
+  const mood = () => screen.getByTestId('mood-emoji').closest('section')!
+  const tips = () => screen.getAllByTestId('mood-tip')[0].closest('div')!
+  expect(mood().className).not.toContain('max-md:hidden')
+
+  score(result({ prosody: 84, accuracy: 75 }), new Blob(['x']))
+  expect(mood().className).toContain('max-md:hidden')
+  expect(screen.getByTestId('voice-passage').closest('section')!.className).toContain('max-md:hidden')
+  expect(tips().className).toContain('max-md:hidden')
+})
+
+/** The result read-out scrolls inside a bounded region on a phone with the CTA row as its sibling
+ * underneath — never a `sticky` panel, which would paint over a word chip. And the bounded height
+ * is switched on for the result *only*: a definite height would also let the recording section be
+ * squeezed below its content and paint the countdown over the mic. */
+it('bounds the column for the result only, and never with a sticky', () => {
+  renderVoice()
+  const column = () => document.querySelector('main > div')!
+  expect(column().className).not.toContain('max-md:h-full')
+
+  score(result({ prosody: 84, accuracy: 75 }), new Blob(['x']))
+  expect(column().className).toContain('max-md:h-full')
+
+  const region = document.querySelector('[class*="md:contents"]')!
+  expect(region.className).toContain('max-md:flex-1')
+  expect(region.className).toContain('max-md:min-h-0')
+  expect(region.className).toContain('max-md:overflow-y-auto')
+  expect(document.querySelector('main')!.innerHTML).not.toContain('sticky')
 })

@@ -12,7 +12,7 @@ const DAY_MS = 24 * 60 * 60 * 1000
 /** Home is rendered inside a router that also serves a stub for the celebration screen, so the
  * once-a-day redirect can be observed without pulling in MissionComplete. */
 function renderHome() {
-  render(
+  return render(
     <MemoryRouter initialEntries={['/']}>
       <Routes>
         <Route path="/" element={<Home />} />
@@ -97,6 +97,17 @@ it('shows an idle Foxy greeting with no activity yet', () => {
   expect(screen.getByTestId('foxy')).toHaveAttribute('data-mood', 'idle')
   expect(screen.getByText('Chào bé! 👋')).toBeInTheDocument()
   expect(screen.getByText('Hôm nay mình luyện nói nhé!')).toBeInTheDocument()
+})
+
+// Design §3: M1b prints the greeting as plain text — the speech bubble is M1a's. Only the chrome
+// is dropped, so both lines are still one element at every width; the panel comes back at `md`.
+it('drops the speech-bubble chrome from the greeting on a phone', () => {
+  renderHome()
+
+  const bubble = screen.getByText('Chào bé! 👋').closest('div')!.parentElement!
+  expect(bubble).toHaveClass('max-md:bg-transparent', 'max-md:shadow-none', 'max-md:px-0', 'max-md:py-0')
+  // The panel itself is untouched from `md` up — every override above is invisible there.
+  expect(bubble).toHaveClass('rounded-[22px]', 'bg-white', 'shadow-card-sm')
 })
 
 it('offers a replay CTA once the lesson is done and already celebrated', () => {
@@ -184,8 +195,75 @@ it('keeps the stacked layout scrollable so the mission CTA is never trapped belo
   expect(root).toHaveClass('min-h-full', 'overflow-y-auto')
   expect(root.classList.contains('h-full')).toBe(false)
   expect(root.classList.contains('overflow-hidden')).toBe(false)
-  // Only the landscape map frame may clip, and only from `lg` up.
+  // Only the landscape map frame may clip, and only from `ipad` up.
   expect(Array.from(root.classList).filter(c => c.includes('overflow-hidden'))).toEqual([])
+})
+
+/**
+ * Phase 10 / design M1b: a phone gets no curved map. The islands are a plain 2-column grid of
+ * cards, and the classes say so — nothing positions them until `ipad`. Asserting the classes is the
+ * only way to see a breakpoint in jsdom, which has no stylesheet and so no layout to measure; the
+ * geometry itself is checked in a real browser at 390×844 and 1194×834.
+ */
+it('lays the islands out as a grid on a phone, with nothing positioned until the iPad', () => {
+  renderHome()
+
+  for (const id of ['animals', 'weather']) {
+    const classes = Array.from(screen.getByTestId(`island-${id}`).classList)
+    // A card of the grid: sized, not placed.
+    expect(classes).toContain('h-32')
+    expect(classes).toContain('rounded-xl3')
+    // `absolute` only ever appears behind the `ipad:` prefix — never on its own.
+    expect(classes.filter(c => c.endsWith('absolute'))).toEqual(['ipad:absolute'])
+  }
+})
+
+/**
+ * The same rule for the other three blocks of the M1b column. Everything the phone lays out has to
+ * stay in flow: an `absolute` that escaped its `ipad:` prefix would take a block out of the column
+ * and drop it on top of the grid, and — unlike the islands — the mission card, the stairs link and
+ * the parent link have no `data-testid` of their own, so nothing else here would notice.
+ */
+it('keeps the mission card, the stairs link and the parent link in flow on a phone', () => {
+  renderHome()
+
+  const wrappers = {
+    mission: screen.getByRole('link', { name: 'Bắt đầu ▸' }).closest('div.col-span-2')!,
+    stairs: screen.getByRole('link', { name: /Các bậc luyện nói/ }).parentElement!,
+    parent: screen.getByRole('link', { name: 'Phụ huynh' }).parentElement!,
+  }
+
+  for (const [name, wrapper] of Object.entries(wrappers)) {
+    const classes = Array.from(wrapper.classList)
+    // `absolute` only ever appears behind the `ipad:` prefix — never on its own.
+    expect(classes.filter(c => c.endsWith('absolute')), name).toEqual(['ipad:absolute'])
+  }
+})
+
+it('keeps the mission CTA above the islands in the DOM, where a phone can reach it', () => {
+  renderHome()
+
+  const cta = screen.getByRole('link', { name: 'Bắt đầu ▸' })
+  const firstIsland = screen.getByTestId('island-animals')
+  // Node.DOCUMENT_POSITION_FOLLOWING: the first island comes *after* the CTA.
+  expect(cta.compareDocumentPosition(firstIsland) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+})
+
+// Dropping the map on the phone must not delete it: from `ipad` up the trail, the slot offsets and
+// the absolute island band are still the layout, exactly as in phase 9.
+it('still emits the curved map for the iPad breakpoint', () => {
+  const { container } = renderHome()
+
+  // The trail is drawn in the map's own 1194×834 frame coordinates — Foxy is the other svg here.
+  const trail = Array.from(container.querySelectorAll('svg'))
+    .find(svg => svg.getAttribute('viewBox') === '0 0 1194 834')
+  expect(trail).toBeDefined()
+  expect(Array.from(trail!.classList)).toEqual(expect.arrayContaining(['hidden', 'ipad:block']))
+  expect(trail!.querySelector('path')?.getAttribute('d')).toMatch(/^M125 103 C/)
+
+  const island = screen.getByTestId('island-animals')
+  expect(Array.from(island.classList)).toEqual(expect.arrayContaining(['ipad:absolute', 'ipad:w-[15%]']))
+  expect(island).toHaveStyle({ left: '3%', top: '0%' })
 })
 
 it('puts the eight topic islands on the map, in unlock order, each linking to its hub', () => {
@@ -306,4 +384,32 @@ it('refuses to build a map with more topics than island slots', async () => {
 
   vi.doUnmock('../content/topics')
   vi.resetModules()
+})
+
+/**
+ * `text-lg` sets a 28 px line-height as well as an 18 px size, and the phone pass restored only
+ * the size — so at 1194×834 the star pill came out 52 px tall instead of the map's 57 and dragged
+ * the row 3 px down. jsdom cannot lay that out, so the guard is on the class list: any
+ * `ipad:text-[...]` restore of a `text-<scale>` phone value has to restate the leading too.
+ */
+it('restores the iPad leading, not just the size, on the star pill', () => {
+  renderHome()
+
+  const pill = screen.getByText(/^⭐/)
+  expect(pill).toHaveClass('text-lg', 'ipad:text-[22px]', 'ipad:leading-normal')
+})
+
+/**
+ * Two whole spellings, `HomeLabel`-style, rather than one emoji plus an `ipad:`-revealed word next
+ * to it: a flex `gap` between two items is 8 px where the map's single text run had a 4-ish px
+ * space, and the corner button measured 157 px wide instead of the 153 it has always been.
+ */
+it('spells the parent link out twice rather than growing the map corner by a gap', () => {
+  renderHome()
+
+  const parent = screen.getByRole('link', { name: 'Phụ huynh' })
+  expect(parent.className).not.toContain('ipad:gap-')
+  expect(parent.className).toContain('ipad:min-w-[64px]')
+  expect(within(parent).getByText('👨‍👩‍👧')).toHaveClass('ipad:hidden')
+  expect(within(parent).getByText('👨‍👩‍👧 Phụ huynh')).toHaveClass('hidden', 'ipad:inline')
 })

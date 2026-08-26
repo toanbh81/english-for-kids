@@ -89,9 +89,11 @@ function renderCard(topic: string, wordId: string, mission = false) {
 
 /** A locked new word opens on the meaning-guess step now, not the flip card — tests that exercise
  * the card/mic directly answer the guess correctly first, exactly as a child tapping the right
- * Vietnamese meaning would. */
+ * Vietnamese meaning would, and then tap the "Tiếp theo →" that hands them over to the speaking
+ * step (spec decision 3: the step no longer retires itself). */
 function passGuess(vi: string) {
   fireEvent.click(screen.getByRole('button', { name: vi }))
+  fireEvent.click(screen.getByRole('button', { name: 'Tiếp theo →' }))
 }
 
 beforeEach(() => {
@@ -392,7 +394,7 @@ it('shows a simple-mode label for the webspeech engine', () => {
   expect(screen.getByText('chế độ đơn giản')).toBeInTheDocument()
 })
 
-it('a locked new word opens on a meaning-guess step: a wrong option shakes and invites another try, the right one reveals the card and mic', () => {
+it('a locked new word opens on a meaning-guess step: a wrong option shakes and invites another try, the right one praises and waits', () => {
   renderCard('food', 'food-apple')
 
   expect(screen.getByText('Từ này nghĩa là gì?')).toBeInTheDocument()
@@ -401,8 +403,8 @@ it('a locked new word opens on a meaning-guess step: a wrong option shakes and i
   expect(screen.queryByText('🎤 Nói để mở khoá')).not.toBeInTheDocument()
 
   const options = screen.getAllByRole('button')
-  const correct = options.find(b => b.textContent === 'quả táo')!
-  const wrong = options.find(b => b.textContent !== 'quả táo')!
+  const correct = options.find(b => b.textContent?.includes('quả táo'))!
+  const wrong = options.find(b => !b.textContent?.includes('quả táo'))!
 
   fireEvent.click(wrong)
   expect(screen.getByText('Thử lại nhé')).toBeInTheDocument()
@@ -410,31 +412,144 @@ it('a locked new word opens on a meaning-guess step: a wrong option shakes and i
   // Still on the guess step — a wrong pick does not skip ahead.
   expect(screen.getByText('Từ này nghĩa là gì?')).toBeInTheDocument()
 
+  // The right one praises and stops there: the card and the mic are the *next* step, and the child
+  // is the one who starts it (spec decision 3).
   fireEvent.click(correct)
-  expect(screen.queryByText('Từ này nghĩa là gì?')).not.toBeInTheDocument()
   expect(screen.getByText('Đoán đúng rồi! 🎉')).toBeInTheDocument()
+  expect(screen.getByText('Từ này nghĩa là gì?')).toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: 'Lật thẻ' })).not.toBeInTheDocument()
+  expect(screen.queryByText('🎤 Nói để mở khoá')).not.toBeInTheDocument()
+
+  const cta = screen.getByRole('button', { name: 'Tiếp theo →' })
+  // ≥64 px at every width: the phone override, and `size="lg"`'s own 72 px from md up.
+  expect(cta.className).toContain('max-md:min-h-[64px]')
+  expect(cta).toHaveClass('min-h-[72px]')
+
+  fireEvent.click(cta)
+  expect(screen.queryByText('Từ này nghĩa là gì?')).not.toBeInTheDocument()
   expect(screen.getByRole('button', { name: 'Lật thẻ' })).toBeInTheDocument()
   expect(screen.getByText('🎤 Nói để mở khoá')).toBeInTheDocument()
 })
 
-/** A bare "Đúng rồi! 🎉" sat exactly where the pronunciation score lands and stayed until the first
- * flip, so it read as praise for a word the child had not spoken yet (spec §8). */
-it('praises the guess as a guess, and clears the praise on its own after 1.5 s', () => {
+/** A bare "Đúng rồi! 🎉" sat exactly where the pronunciation score lands, so it read as praise for
+ * a word the child had not spoken yet (spec §8). The praise now belongs to the step that earned it
+ * and leaves with it, instead of being timed out on a screen it was never about. */
+it('keeps the praise on the guess step, however long the child takes, and drops it on the way out', () => {
   vi.useFakeTimers()
   try {
     renderCard('food', 'food-apple')
-    passGuess('quả táo')
+    fireEvent.click(screen.getByRole('button', { name: 'quả táo' }))
 
     expect(screen.getByText('Đoán đúng rồi! 🎉')).toBeInTheDocument()
 
-    act(() => { vi.advanceTimersByTime(1500) })
+    // No timer retires the step any more: a child who looks away still finds the praise, the
+    // answer they picked, and the button that moves on.
+    act(() => { vi.advanceTimersByTime(5000) })
+    expect(screen.getByText('Đoán đúng rồi! 🎉')).toBeInTheDocument()
+    expect(screen.queryByTestId('flip-card')).not.toBeInTheDocument()
 
+    fireEvent.click(screen.getByRole('button', { name: 'Tiếp theo →' }))
+
+    // The speaking step opens on an un-flipped card, and with nothing said about a word the child
+    // has not spoken yet.
     expect(screen.queryByText('Đoán đúng rồi! 🎉')).not.toBeInTheDocument()
-    // …and it is gone without the child having touched the card.
     expect(screen.getByTestId('flip-card')).not.toHaveClass('[transform:rotateY(180deg)]')
   } finally {
     vi.useRealTimers()
   }
+})
+
+/** Once the meaning is settled, the options are a record of what the child chose — not three live
+ * controls that can un-answer the step or shake at them while the praise is up. */
+it('locks the options after a correct guess and marks the one the child picked', () => {
+  renderCard('food', 'food-apple')
+  const correct = screen.getByRole('button', { name: 'quả táo' })
+  fireEvent.click(correct)
+
+  expect(correct.className).toContain('shadow-[0_6px_0_#7ED99A]')
+
+  const wrong = screen.getAllByRole('button').find(b => !b.textContent?.includes('quả táo') && !b.textContent?.includes('Tiếp theo'))!
+  fireEvent.click(wrong)
+
+  expect(wrong).not.toHaveClass('animate-shake')
+  expect(screen.getByText('Đoán đúng rồi! 🎉')).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: 'Tiếp theo →' })).toBeInTheDocument()
+})
+
+// --- phone layout (design §7 M5 / §8 M5b) ----------------------------------------------------
+// jsdom has no layout engine, so these assert *which breakpoint each rule is written at* — the
+// failure mode brief §15 is about. The geometry itself is measured in a real browser.
+
+it('sizes the flip card to the screen on a phone and puts the fixed 320×360 back from md up', () => {
+  promote('food-apple')
+  renderCard('food', 'food-apple')
+
+  const shell = screen.getByTestId('flip-card').parentElement!
+  expect(shell).toHaveClass('w-[min(320px,82%)]', 'aspect-[16/17]')
+  expect(shell).toHaveClass('md:w-[320px]', 'md:aspect-auto', 'md:h-[360px]')
+  // No unprefixed height at all: on a phone the ratio owns it.
+  expect(shell.className).not.toMatch(/(^|\s)h-\[/)
+})
+
+it('keeps the phone card the same size through the result, and only shrinks the landscape one', () => {
+  attemptControl.current = { ...baseAttempt(), result: resultHigh }
+  promote('food-apple')
+  renderCard('food', 'food-apple')
+
+  act(() => { attemptControl.onResult?.(resultHigh, null) })
+
+  const shell = screen.getByTestId('flip-card').parentElement!
+  expect(shell).toHaveClass('w-[min(320px,82%)]', 'aspect-[16/17]', 'md:h-[300px]')
+  expect(shell.className).not.toMatch(/(^|\s)h-\[/)
+})
+
+/** Design §5 M3b: in the result state the phone drops the mic and gives the bottom row to the two
+ * CTAs. "Thử lại" is the way back to recording — and it brings the mic with it. */
+it('hides the mic on a phone once a result lands, leaving the landscape row untouched', () => {
+  attemptControl.current = { ...baseAttempt(), result: resultHigh }
+  promote('food-apple')
+  renderCard('food', 'food-apple')
+
+  const micBlock = screen.getByRole('button', { name: 'Bấm để nói' }).closest('div')!
+  expect(micBlock.className).not.toContain('max-md:hidden')
+
+  act(() => { attemptControl.onResult?.(resultHigh, null) })
+
+  expect(micBlock.className).toContain('max-md:hidden')
+  expect(screen.getByRole('button', { name: 'Thử lại' }).className).toContain('max-md:flex-1')
+  expect(screen.getByRole('button', { name: /Tiếp theo/ }).className).toContain('max-md:flex-[1.35]')
+})
+
+/** A `sticky bottom-0` row with an opaque background is stuck on first paint whenever the content
+ * is taller than the screen, and then it covers what is behind it. The short-phone rules are what
+ * keep that from happening at 375×667 — measured there, they leave the tip card ending 1 px above
+ * the pinned row instead of 48 px under it. */
+it('pins the bottom block on a phone and shrinks the card at 375×667 so nothing hides under it', () => {
+  attemptControl.current = { ...baseAttempt(), result: resultHigh }
+  promote('food-apple')
+  renderCard('food', 'food-apple')
+
+  act(() => { attemptControl.onResult?.(resultHigh, null) })
+
+  const block = screen.getByRole('button', { name: /Tiếp theo/ }).closest('div')!.parentElement!
+  expect(block).toHaveClass('sticky', 'bottom-0', 'bg-cream-50', 'md:static', 'md:bg-transparent')
+
+  const shell = screen.getByTestId('flip-card').parentElement!
+  expect(shell.className).toContain('[@media(max-width:767px)_and_(max-height:700px)]:w-[min(320px,68%)]')
+})
+
+it('stacks the three meaning options as full-width rows on a phone and keeps the pills from md up', () => {
+  renderCard('food', 'food-apple')
+
+  const option = screen.getByRole('button', { name: 'quả táo' })
+  expect(option).toHaveClass('w-full', 'max-md:min-h-[76px]', 'md:w-auto', 'md:min-w-[160px]')
+  expect(option.parentElement).toHaveClass('flex-col', 'md:flex-row', 'md:flex-wrap', 'md:justify-center')
+
+  // The emoji hint is phone-only, and hidden from assistive tech at both widths: the accessible
+  // name above is still the Vietnamese meaning alone.
+  const hint = option.querySelector('[aria-hidden="true"]')!
+  expect(hint).toHaveClass('md:hidden')
+  expect(hint.textContent).toBe(findTopic('food')!.words.find(w => w.id === 'food-apple')!.emoji)
 })
 
 it('an already-unlocked word skips the meaning-guess step', () => {

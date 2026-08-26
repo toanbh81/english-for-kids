@@ -20,7 +20,10 @@ export function ProsodyChip({ score, engine }: { score: number | null; engine: '
     <div
       data-testid="prosody-chip"
       data-tone={tone}
-      className={`flex min-h-[64px] items-center justify-center rounded-xl2 border-[3px] px-7 font-display text-[30px] font-extrabold leading-none ${TONE[tone]}`}
+      // 20 px in a 64 px band on a phone — "Chưa chấm được ngữ điệu" is six words and at 30 px it
+      // wraps to three lines in a 350 px column. `md:` restores the landscape chip exactly;
+      // `leading-none` is unprefixed, so neither step can reset it.
+      className={`flex min-h-[64px] items-center justify-center rounded-xl2 border-[3px] px-4 text-center font-display text-[20px] font-extrabold leading-none md:px-7 md:text-[30px] ${TONE[tone]}`}
     >
       {unscored ? 'Chưa chấm được ngữ điệu' : `Ngữ điệu ${Math.round(score)}`}
     </div>

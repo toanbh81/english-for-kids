@@ -12,7 +12,7 @@ import { MicButton } from '../components/MicButton'
 import { Stars } from '../components/Stars'
 import { Foxy } from '../components/Foxy'
 import type { FoxyMood } from '../components/Foxy'
-import { BackButton, Button, Card } from '../components/ui'
+import { BackButton, Button, Card, PAGE_SHELL } from '../components/ui'
 import { retellStars, RETELL_MESSAGE } from '../story/retellStars'
 import { speakText } from '../story/speak'
 
@@ -21,7 +21,7 @@ export function StoryRetell() {
   const story = findStory(id)
   if (!story) {
     return (
-      <main className="h-full overflow-y-auto bg-cream-50 p-6">
+      <main className={`h-full overflow-y-auto bg-cream-50 px-6 ${PAGE_SHELL}`}>
         <p className="mb-4 font-display text-2xl font-extrabold text-ink-900">Không tìm thấy truyện</p>
         <BackButton to="/stories" label="Truyện" />
       </main>
@@ -72,7 +72,10 @@ function StoryRetellInner({ story, id }: { story: Story; id: string }) {
     : stars === 3 ? 'cheer' : stars === 2 ? 'happy' : 'idle'
 
   return (
-    <main className="h-full overflow-y-auto bg-cream-50 px-6 py-5">
+    // The safe-area shell, resting at this screen's own `py-5`: the not-found fallback above got
+    // it in task 7 and the screen itself was missed, so on an iPhone the header ran under the
+    // notch. With no inset to clear it is the same 20 px it has always been.
+    <main className={`h-full overflow-y-auto bg-cream-50 px-6 [--page-pad-bottom:1.25rem] [--page-pad-top:1.25rem] ${PAGE_SHELL}`}>
       <div className="mx-auto flex min-h-full w-full max-w-4xl flex-col items-center gap-4">
         <header className="flex w-full items-center justify-between gap-4">
           <BackButton to="/stories" label="Truyện" />

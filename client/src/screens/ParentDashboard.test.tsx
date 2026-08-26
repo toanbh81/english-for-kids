@@ -64,7 +64,7 @@ describe('ParentGate', () => {
     fireEvent.change(screen.getByLabelText('Đáp án'), { target: { value: '9' } })
     fireEvent.click(screen.getByRole('button', { name: 'Vào' }))
 
-    await screen.findByText('Phút luyện mỗi ngày (14 ngày)')
+    await screen.findByText(/Phút luyện mỗi ngày/)
     expect(Number(sessionStorage.getItem(FLAG_KEY))).toBeGreaterThan(Date.now() - 1000)
   })
 
@@ -76,7 +76,7 @@ describe('ParentGate', () => {
     fireEvent.change(input, { target: { value: '9' } })
     fireEvent.submit(input.closest('form')!)
 
-    await screen.findByText('Phút luyện mỗi ngày (14 ngày)')
+    await screen.findByText(/Phút luyện mỗi ngày/)
     expect(Number(sessionStorage.getItem(FLAG_KEY))).toBeGreaterThan(Date.now() - 1000)
   })
 
@@ -84,7 +84,7 @@ describe('ParentGate', () => {
     sessionStorage.setItem(FLAG_KEY, String(Date.now()))
     renderWithRouter(<ParentGate />)
 
-    await screen.findByText('Phút luyện mỗi ngày (14 ngày)')
+    await screen.findByText(/Phút luyện mỗi ngày/)
     expect(screen.queryByLabelText('Đáp án')).not.toBeInTheDocument()
   })
 
@@ -93,7 +93,7 @@ describe('ParentGate', () => {
     renderWithRouter(<ParentGate />)
 
     expect(screen.getByLabelText('Đáp án')).toBeInTheDocument()
-    expect(screen.queryByText('Phút luyện mỗi ngày (14 ngày)')).not.toBeInTheDocument()
+    expect(screen.queryByText(/Phút luyện mỗi ngày/)).not.toBeInTheDocument()
   })
 
   it('asks the question again when the session flag is not a timestamp', () => {
@@ -106,7 +106,7 @@ describe('ParentGate', () => {
   it('clears the session flag on unmount so leaving /parent re-locks the gate', async () => {
     sessionStorage.setItem(FLAG_KEY, String(Date.now()))
     const { unmount } = renderWithRouter(<ParentGate />)
-    await screen.findByText('Phút luyện mỗi ngày (14 ngày)')
+    await screen.findByText(/Phút luyện mỗi ngày/)
 
     unmount()
 
@@ -119,12 +119,12 @@ describe('ParentGate', () => {
 
     fireEvent.change(screen.getByLabelText('Đáp án'), { target: { value: '9' } })
     fireEvent.click(screen.getByRole('button', { name: 'Vào' }))
-    await screen.findByText('Phút luyện mỗi ngày (14 ngày)')
+    await screen.findByText(/Phút luyện mỗi ngày/)
 
     fireEvent.click(screen.getByRole('button', { name: /Khoá lại/ }))
 
     expect(screen.getByLabelText('Đáp án')).toBeInTheDocument()
-    expect(screen.queryByText('Phút luyện mỗi ngày (14 ngày)')).not.toBeInTheDocument()
+    expect(screen.queryByText(/Phút luyện mỗi ngày/)).not.toBeInTheDocument()
     expect(sessionStorage.getItem(FLAG_KEY)).toBeNull()
   })
 })
@@ -331,6 +331,65 @@ describe('ParentDashboard', () => {
     await flush()
 
     expect(screen.getByText('Áp dụng từ bài học ngày mai.')).toBeInTheDocument()
+  })
+
+  /* ---- Phase 10, design §12 M8c: the dense phone layout ---- */
+
+  /**
+   * Spec decision 2: the design drops this card on a phone and we do not. It collapses into a
+   * disclosure instead — and jsdom's `matchMedia` reports every query unmatched, so what these
+   * tests see is exactly the phone state: closed, with the list still in the DOM behind a 64 px
+   * summary row (the one control on this adult screen held to the child tap floor).
+   */
+  it('keeps the recordings card on a phone, collapsed into a closed disclosure', async () => {
+    recordingsMock.listRecordings.mockResolvedValue([
+      { id: 'r1', ts: NOW, text: 'apple', blob: new Blob(['x']) },
+    ])
+
+    renderWithRouter(<ParentDashboard />)
+    const heading = await screen.findByText('Bản ghi gần đây')
+
+    const summary = heading.closest('summary')!
+    expect(summary).toHaveClass('min-h-[64px]')
+    // Closed below 768…
+    expect(summary.closest('details')).not.toHaveAttribute('open')
+    // …but never gone: the recording and its play button are still there to be disclosed.
+    expect(screen.getByRole('button', { name: 'Phát' })).toBeInTheDocument()
+    expect(screen.getByText('apple')).toBeInTheDocument()
+  })
+
+  /**
+   * The design calls this screen an adult interface outright — "vùng chạm 36–48px (không cần 64)" —
+   * so it is the one screen in the app whose phone controls sit below the child floor. The iPad's
+   * 64 px is restored at `md`, which is what these class pairs pin.
+   */
+  it('uses adult 44 px controls on a phone and the 64 px ones from md up', async () => {
+    renderWithRouter(<ParentDashboard />)
+    await flush()
+
+    for (const name of ['Bậc 3', 'Tự động', '30 phút', 'Vừa ~12 phút']) {
+      expect(screen.getByRole('button', { name }), name).toHaveClass('min-h-[44px]', 'md:min-h-[64px]')
+    }
+    expect(screen.getByRole('spinbutton')).toHaveClass('h-11', 'md:h-16')
+    // `max-md:` on the reset button, because `min-h-[64px] px-8` are `Button`'s own classes.
+    expect(screen.getByRole('button', { name: 'Đặt lại tiến trình' })).toHaveClass('max-md:min-h-[48px]')
+    expect(screen.getByRole('main')).toHaveClass('px-[18px]', 'md:px-6')
+  })
+
+  /** Fourteen days of data at every width; a phone draws the last seven, and each hidden bar takes
+   * its own date label with it so the two can never come apart. */
+  it('draws the last seven of the fourteen bars on a phone', async () => {
+    renderWithRouter(<ParentDashboard />)
+    await flush()
+
+    const cells = screen.getAllByTestId('minute-bar').map(bar => bar.parentElement!)
+    expect(cells).toHaveLength(14)
+    expect(cells.slice(0, 7).every(c => c.classList.contains('hidden'))).toBe(true)
+    expect(cells.slice(7).every(c => c.classList.contains('flex') && !c.classList.contains('hidden'))).toBe(true)
+    expect(cells[0]).toHaveClass('md:flex')
+    // The heading counts what is drawn at each width rather than claiming fourteen at both.
+    expect(screen.getByText('(7 ngày)')).toHaveClass('md:hidden')
+    expect(screen.getByText('(14 ngày)')).toHaveClass('hidden', 'md:inline')
   })
 
   it('pressing a length chip persists the lesson length', async () => {

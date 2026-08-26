@@ -1,13 +1,13 @@
 import { Link } from 'react-router-dom'
 import { SENTENCE_STARS } from '../content'
 import { getStars } from '../progress/store'
-import { BackButton, CARD_LINK, StarRow } from '../components/ui'
+import { BackButton, CARD_LINK, PAGE_SHELL, StarRow } from '../components/ui'
 
 /** Sentence Stars is the whole-sentence bậc of the Speak Lab stairs: every card is one sentence,
  * shown in English with its Vietnamese meaning underneath. Stars live on `sstar:<id>`. */
 export function StarLevel() {
   return (
-    <main className="h-full overflow-y-auto bg-cream-50 p-6">
+    <main className={`h-full overflow-y-auto bg-cream-50 px-6 ${PAGE_SHELL}`}>
       <div className="mx-auto flex w-full max-w-5xl flex-col gap-5">
         <BackButton to="/levels" label="Các bậc" className="self-start" />
 
@@ -16,7 +16,7 @@ export function StarLevel() {
           <p className="mt-1 text-lg font-bold text-ink-500">Nói cả câu — nhấn đúng chỗ, nối âm mượt!</p>
         </header>
 
-        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-3">
           {SENTENCE_STARS.map((s, i) => (
             <Link
               key={s.id}

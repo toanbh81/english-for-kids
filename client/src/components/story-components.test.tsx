@@ -26,9 +26,11 @@ describe('Karaoke', () => {
     render(<Karaoke words={words} activeIndex={1} onWordTap={() => {}} />)
     const buttons = screen.getAllByRole('button')
     expect(buttons).toHaveLength(3)
-    expect(buttons[1]).toHaveClass('text-coral-text', 'text-[44px]')
-    expect(buttons[0]).toHaveClass('text-[#CDBFA9]')
-    expect(buttons[2]).toHaveClass('text-ink-900')
+    // Phase 10: the size is written twice — the design's phone value unprefixed, the landscape
+    // one behind `md:` — so 1194 keeps the 44/32 px line it has always had.
+    expect(buttons[1]).toHaveClass('text-coral-text', 'text-[28px]', 'md:text-[44px]')
+    expect(buttons[0]).toHaveClass('text-[#CDBFA9]', 'text-[21px]', 'md:text-[32px]')
+    expect(buttons[2]).toHaveClass('text-ink-900', 'text-[21px]', 'md:text-[32px]')
   })
   it('gives every word a 64px-wide centred tap target', () => {
     render(<Karaoke words={words} activeIndex={1} onWordTap={() => {}} />)
@@ -45,7 +47,7 @@ describe('Karaoke', () => {
   })
   it('shows the subtitle line when provided', () => {
     render(<Karaoke words={words} activeIndex={0} onWordTap={() => {}} subtitle="Con mèo chạy." />)
-    expect(screen.getByText('Con mèo chạy.')).toHaveClass('text-[19px]', 'text-ink-300')
+    expect(screen.getByText('Con mèo chạy.')).toHaveClass('text-[14px]', 'md:text-[19px]', 'text-ink-300')
   })
   it('does not render a subtitle line when omitted', () => {
     render(<Karaoke words={words} activeIndex={0} onWordTap={() => {}} />)
@@ -67,9 +69,23 @@ describe('PlayerControls', () => {
     expect(screen.getByRole('button', { name: 'Tạm dừng' })).toBeInTheDocument()
   })
 
-  it('play button is the 104px teal circle of the handoff', () => {
+  it('play button is the 96px teal circle on a phone and the 104px one of the handoff from md up', () => {
     render(<PlayerControls {...baseProps} />)
-    expect(screen.getByRole('button', { name: 'Phát' })).toHaveClass('w-[104px]', 'h-[104px]', 'rounded-full', 'bg-teal-500', 'text-white')
+    const play = screen.getByRole('button', { name: 'Phát' })
+    expect(play).toHaveClass('h-24', 'w-24', 'text-[38px]')
+    expect(play).toHaveClass('md:w-[104px]', 'md:h-[104px]', 'md:text-[44px]')
+    expect(play).toHaveClass('rounded-full', 'bg-teal-500', 'text-white')
+  })
+
+  /** The wrap at 390 px would otherwise put the speed pill and ⏮ on the first line and the play
+   * button on the second; the design (§9 M6) pins ⏮ ▶ ⏭ together as the transport row. */
+  it('orders the transport ahead of the options below md, and hands the DOM order back at md', () => {
+    render(<PlayerControls {...baseProps} />)
+    for (const name of ['Cảnh trước', 'Phát', 'Cảnh sau']) {
+      expect(screen.getByRole('button', { name })).toHaveClass('order-1', 'md:order-none')
+    }
+    expect(screen.getByRole('button', { name: 'Tốc độ 0.75' })).toHaveClass('order-2', 'md:order-none')
+    expect(screen.getByRole('button', { name: 'Phụ đề bật' }).parentElement).toHaveClass('order-3', 'md:order-none')
   })
 
   it('rate pill offers "Tốc độ 0.75" at rate 1, with 🐇 marked as the speed playing now', () => {

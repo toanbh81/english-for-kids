@@ -115,7 +115,7 @@ it('opens on the sentence with its stress, linking and legend', () => {
 
   expect(screen.getByText('Câu 1/10')).toBeInTheDocument()
   // "have", "red" and "apple." carry the beat of "I have a red apple."
-  expect(screen.getByText('have')).toHaveClass('text-coral-text', 'text-[48px]')
+  expect(screen.getByText('have')).toHaveClass('text-coral-text', 'text-[32px]', 'md:text-[48px]')
   expect(screen.getByText('I')).toHaveClass('text-ink-900')
   // …and "red apple" links, so a ‿ sits between them.
   expect(screen.getAllByTestId('link-mark')).toHaveLength(1)
@@ -372,4 +372,44 @@ it('stays a free-play sentence without the flag, lesson or no lesson', () => {
   expect(screen.getByText('Câu 1/10')).toBeInTheDocument()
   expect(screen.queryByText(/^Thẻ /)).not.toBeInTheDocument()
   expect(screen.getByRole('link', { name: 'Quay lại' })).toHaveAttribute('href', '/level/sentence-stars')
+})
+
+/** Phase 10: this screen had no phone layout at all — no breakpoint rules and no `PAGE_SHELL`,
+ * so at 390×844 it measured 864 idle and 1282 scored (with "Tiếp theo →" at y1182), and its
+ * content ran under the notch. jsdom cannot lay that out, so these guard the inputs. */
+it('carries the safe-area shell at its own resting padding', () => {
+  renderStar()
+
+  const shell = document.querySelector('main')!.className
+  expect(shell).toContain('pt-[max(var(--page-pad-top,1.5rem),calc(env(safe-area-inset-top)_+_9px))]')
+  expect(shell).toContain('pb-[max(var(--page-pad-bottom,1.5rem),calc(env(safe-area-inset-bottom)_+_10px))]')
+  expect(shell).toContain('[--page-pad-top:1.25rem]')
+  expect(shell).toContain('px-5')
+  expect(shell).toContain('md:px-6')
+})
+
+/** The sentence and its rhythm card fold away on a phone once a result lands: `ScoredWords`
+ * reprints every word with its own score, so the pair would only repeat itself over the room the
+ * CTA row needs. From `md` up both stay exactly where they were. */
+it('folds the sentence and the rhythm card away on a phone result only', () => {
+  renderStar()
+  const legend = () => screen.getByText('Chữ cam = nhấn mạnh · ‿ = nối âm').closest('section')!
+  expect(legend().className).not.toContain('max-md:hidden')
+
+  score(result(85, 85, 100), new Blob(['x']))
+  expect(legend().className).toContain('max-md:hidden')
+  expect(screen.getByText('Nhịp của câu — chạm để nghe lại').closest('div')!.className).toContain('max-md:hidden')
+})
+
+/** The result read-out scrolls inside a bounded region on a phone with the CTA row as its sibling
+ * underneath — never a `sticky` panel, which would paint over a word chip. */
+it('gives the phone result a bounded scroller and never a sticky', () => {
+  renderStar()
+  score(result(85, 85, 100), new Blob(['x']))
+
+  const region = document.querySelector('[class*="md:contents"]')!
+  expect(region.className).toContain('max-md:flex-1')
+  expect(region.className).toContain('max-md:min-h-0')
+  expect(region.className).toContain('max-md:overflow-y-auto')
+  expect(document.querySelector('main')!.innerHTML).not.toContain('sticky')
 })

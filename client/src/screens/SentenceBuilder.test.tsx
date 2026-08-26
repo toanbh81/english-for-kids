@@ -277,6 +277,100 @@ it('"Thử lại" resets the spoken attempt', async () => {
   expect((attemptControl.current as SpeakingAttempt).reset).toHaveBeenCalled()
 })
 
+// --- the phone frame (phase 10 final review, C2) ----------------------------------------------
+//
+// jsdom has no layout, so these assert the one thing that decides the layout: which breakpoint
+// each rule is written at. The geometry is measured in a browser (see the fix report) — at
+// 390×844 this screen stood 1470 px tall once scored, with "Tiếp theo →" at y1070. What these
+// guard is that no phone rule is ever moved up to where the iPad sees it.
+
+/** An element's classes as exact tokens: `className.includes('mt-auto')` would also match
+ * `md:mt-auto`, which is a different rule and has to fail these. */
+const classes = (el: Element) => el.className.split(/\s+/).filter(Boolean)
+
+const main = () => document.querySelector('main')!
+
+it('frames itself with the safe-area page shell, resting on the padding it always had', () => {
+  renderBuilder('s1')
+
+  const shell = classes(main())
+  expect(shell).toContain('pt-[max(var(--page-pad-top,1.5rem),calc(env(safe-area-inset-top)_+_9px))]')
+  expect(shell).toContain('pb-[max(var(--page-pad-bottom,1.5rem),calc(env(safe-area-inset-bottom)_+_10px))]')
+  // 1.25 rem is the `py-5` this screen has always had, so nothing without a notch moves.
+  expect(shell).toContain('[--page-pad-top:1.25rem]')
+  expect(shell).toContain('[--page-pad-bottom:1.25rem]')
+  expect(shell).toContain('px-5')
+  expect(shell).toContain('md:px-6')
+})
+
+/** The building half is what the result state cannot afford on a phone, and `ScoredWords` is
+ * already printing the same sentence with a colour per word — so it folds away, and only there. */
+it('folds the tray, the legend and the pool away on a phone once a score is in, and only on a phone', async () => {
+  attemptControl.current = { ...baseAttempt(), result: result85 }
+  renderBuilder('s1')
+
+  expect(classes(screen.getByTestId('tray').parentElement!)).not.toContain('max-md:hidden')
+  expect(classes(screen.getByTestId('pool'))).not.toContain('max-md:hidden')
+
+  await tapInCorrectOrder('s1')
+  act(() => { attemptControl.onResult?.(result85, null) })
+
+  expect(classes(screen.getByTestId('tray').parentElement!)).toContain('max-md:hidden')
+  expect(classes(screen.getByTestId('pool'))).toContain('max-md:hidden')
+  // The sentence itself is still on screen, one chip per word.
+  expect(screen.getByRole('button', { name: /^I / })).toBeInTheDocument()
+})
+
+/** The two CTAs are the bottom row of the phone frame, put there by layout — never by a pinned
+ * overlay, which paints over whatever happens to sit at its y (see SoundPractice's file note). */
+it('sits the result CTAs on the bottom edge with layout, never with an overlay', async () => {
+  attemptControl.current = { ...baseAttempt(), result: result85 }
+  renderBuilder('s1')
+  await tapInCorrectOrder('s1')
+  act(() => { attemptControl.onResult?.(result85, null) })
+
+  const row = classes(screen.getByRole('button', { name: /Tiếp theo/ }).parentElement!)
+  expect(row).toContain('max-md:mt-auto')
+  expect(row).not.toContain('sticky')
+  expect(row).not.toContain('fixed')
+  expect(row).not.toContain('absolute')
+
+  // Every phone override of the shared Button is `max-md:`, which provably cannot reach the iPad,
+  // and the 64 px tap target survives it.
+  for (const name of [/Tiếp theo/, /^Thử lại$/]) {
+    const cta = classes(screen.getByRole('button', { name }))
+    expect(cta).toContain('max-md:min-h-[64px]')
+    expect(cta.some(c => c === 'max-md:flex-1' || c === 'max-md:flex-[1.35]')).toBe(true)
+    expect(cta.some(c => c === 'min-h-[64px]' || c === 'min-h-[72px]')).toBe(true)
+  }
+})
+
+/** Until the score arrives the speaking row IS the bottom row, pinned by layout rather than by a
+ * `sticky` panel that would ride up over the tiles behind it. */
+it('pins the speaking row to the bottom edge with layout, and gives the landscape row straight back', async () => {
+  renderBuilder('s1')
+  await tapInCorrectOrder('s1')
+
+  const row = classes(screen.getByRole('button', { name: 'Bấm để nói' }).parentElement!)
+  expect(row).toContain('mt-auto')
+  expect(row).toContain('md:mt-0')
+  expect(row).toContain('md:gap-6')
+  expect(row).not.toContain('max-md:hidden')
+  expect(row).not.toContain('sticky')
+  expect(row).not.toContain('fixed')
+})
+
+/** …and it goes when the score arrives, exactly as the sound screen's does (design §5 M3b).
+ * "Thử lại" is the way back to recording and brings the mic with it. */
+it('drops the speaking row on a phone once a score is in, and only on a phone', async () => {
+  attemptControl.current = { ...baseAttempt(), result: result85 }
+  renderBuilder('s1')
+  await tapInCorrectOrder('s1')
+  act(() => { attemptControl.onResult?.(result85, null) })
+
+  expect(classes(screen.getByRole('button', { name: 'Bấm để nói' }).parentElement!)).toContain('max-md:hidden')
+})
+
 // --- as a step of today's lesson (spec §3) ---------------------------------------------------
 
 it('numbers itself inside the lesson and threads back to the mission', () => {

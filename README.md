@@ -692,6 +692,126 @@ happens to point at; and the map needed more content to mix, so it grew from fiv
 **New storage keys:** `sword:<cardId>` — per-word Tập âm stars; `sound:<ph>` stops being written but
 is still read as a floor by `soundStars`.
 
+## Phase 10 — Phone layout
+
+The app was built for iPad landscape and was unusable on a phone in practice: nothing overflowed
+sideways, but every screen was 1.2–2.6 viewports tall and the primary action fell below the fold
+(Home's "Bắt đầu ▸" sat at y≈1221 on a 844 px screen). Claude Design's mobile handoff
+(`docs/design/2026-08-25-mobile-handoff-brief.md`) gave per-screen numbers at 390×844; this phase
+implements them without regressing the iPad.
+
+- **Breakpoints, for real.** `client/tailwind.config.ts` gains `screens.ipad = '1194px'`. Unprefixed
+  classes are now the phone (<640, the design's own frame width); `md:` (768) is tablet portrait;
+  `ipad:` (1194) is the iPad-landscape layout — the curved map, the two-column sound drill, the
+  diagonal stairs — moved off Tailwind's `lg:` (1024), which switched them 170 px too early and gave
+  a 1024–1193 tablet a squeezed landscape instead of its portrait one. The five `sm:` (640) call
+  sites that meant "tablet column count" (`SoundPractice`, `SoundWordList`, `LevelStairs`, plus five
+  level-list screens the brief's own table missed) became `md:`. `lg:` (1024) is no longer a layout
+  switch anywhere in the app — **four** level-list grids (`LevelSelect`, `PairLevel`, `StarLevel`,
+  `VoiceLevel`) and one `VoicePractice` type-size step keep it as pure column/scale tuning, not a
+  breakpoint. One consequence is deliberate and worth naming: a **1024–1193 px window now gets the
+  portrait layout**, which on a short one scrolls where the squeezed landscape used to fit. That is
+  what moving the switch off `lg:` was *for* — a 1024-wide tablet is not an iPad in landscape — so
+  the scroll is the ordered behaviour, not a regression.
+- **A safe-area shell**, `client/src/components/ui/pageShell.ts` (`PAGE_SHELL`) — top/bottom padding
+  as `max(the screen's own resting padding, env(safe-area-inset-*) + a few px of breathing room)`.
+  The `max()` is what makes it a no-op on an iPad, a desktop browser, or in a test renderer, where
+  every inset reads 0: the shell just hands back the padding the screen already had. Applied to
+  every `<main>` in the app — all of them, checked with
+  `grep -rn "<main" client/src --include=*.tsx | grep -v PAGE_SHELL` returning nothing, including
+  the `AppErrorBoundary` fallback (the one screen a child cannot navigate away from) and the two
+  story "not found" fallbacks. Horizontal padding stays with each screen (16/20/14/18 px per the
+  design's frame families).
+- **Home (M1b)** — **the island map is dropped below the tablet breakpoint, replaced by a
+  two-column card grid** of the eight topics; the mission card moves to the top of the column, right
+  under the greeting, so its "Bắt đầu ▸" CTA moved from **y≈1221 to y≈299** at 390×844 (with room to
+  spare — 363 px above the 844 px fold). The curved map, `SLOTS`, `TRAIL` and the SVG are all
+  untouched, just `ipad:`-gated instead of `lg:`-gated, so the map itself still renders identically
+  from 1194 up. The greeting drops its speech-bubble chrome on a phone (plain text; the bubble stays
+  from `md:` up, per design §3 — M1a's chrome, not M1b's) and the streak strip shrinks to a 24 px dot
+  row so it fits a 320 px screen.
+- **Daily Mission (M2)** — the five step cards become **76 px rows** (emoji · title · progress line
+  · chip) on a phone instead of five stacked 256 px cards, taking `/mission` from **1759 px to
+  844 px** (no scroll) at 390×844; at 375×667 the sticky CTA is visible on first paint. `Mission
+  Complete` (M8b) is the same phone-sized column (Foxy 150 px, title 30 px, star pill 24 px).
+- **The shared speaking frame + sound drill (M3/M3b, M4)** — `SoundPractice.tsx` is the reference
+  implementation for the phase's idiom (phone rules unprefixed, `md:` restores the exact previous
+  value, `max-md:` only where a shared primitive writes its own competing class). `/sound/dh` goes
+  from **1045 px to 844 px** (idle and result) at 390×844; at 375×667 idle the block that used to be
+  `sticky` and covered the bottom 20 px of the word tier is now plain-flow and the state is trimmed
+  (the design's own 375×667 drops) until it fits with 0 overflow. `ScoreBars` becomes a 2×2 grid
+  below 768 (was a wide row on every width, which would have doubled height on 4-bar screens at
+  iPad size). **Deviation kept:** the mic stays 150/190 px on a phone rather than the design's
+  124 px — `MicButton` is explicitly off-limits (it is shared by every speaking screen and any
+  unprefixed change would shrink it on the iPad too).
+- **Flashcard + meaning-guess (M5/M5b)** — `WordCard`'s flip card becomes fluid,
+  `w-[min(320px,82%)] aspect-[16/17]`, and — per the design — **does not change size when a result
+  lands**; from `md:` up it is the fixed 320×360/300 shell it always was. **Spec decision 3, at
+  every breakpoint including iPad:** a correct meaning guess now praises ("Đoán đúng rồi! 🎉") and
+  waits for the child to tap an explicit **"Tiếp theo →"** button before the speaking step opens,
+  replacing the old auto-advance-after-1.5s behaviour.
+- **Story player + quiz + Speak Lab stairs (M6/M6b/M7)** — the story picture becomes a fixed
+  `aspect-[16/9]` block on a phone (was a flexible one that squeezed to 129 px tall at 375×667); the
+  quiz's three answer cards go from a page that measured **1189 px tall, with the third card
+  starting at y≈875,** to **844 px with all three fully on screen**; the stairs become a bottom-up
+  zigzag column (`flex-col-reverse`, alternating `self-start`/`self-end`) with a new dotted SVG
+  trail and a bottom-pinned CTA naming the current step — none of which existed on this screen
+  before. All three are `ipad:`-restored to the byte-identical landscape layout above 1194.
+- **Topic hub (M8)** — a **236 px teal island header** (measured the design's way, as 180 px of
+  content below the safe-area top padding, so it tracks the shell instead of a fixed number that is
+  only right on a notched phone) sits behind the back row and a title block (92 px white disc,
+  white island name, star row, "Đảo số N"); the three section rows drop to the design's 84 px
+  (34 px emoji, 19 px title) with a trailing "▸", each restored to the landscape 96 px card from
+  `md:` up. **Deviation from the design:** the bottom-pinned "Học tiếp: Từ mới ▸" CTA the design
+  specifies was **not implemented** — the section rows are the only navigation on the phone screen.
+- **Parent dashboard (M8c)** — the one screen the app's 64 px child tap floor does not apply to; the
+  design calls it an adult interface outright ("chữ 12–14px, vùng chạm 36–48px"). Phone controls
+  drop to 44 px (buttons) / 36–48 px, text to 12–14 px, frame padding to the design's 18 px.
+  **"Bản ghi gần đây" stays, against the design (spec decision 2):** the design drops the last-20-
+  recordings card on a phone; this app keeps it, collapsed into a `<details>` closed by default
+  behind a ≥64 px summary row — the one control on this screen still held to the child tap floor.
+  The 14-day minutes chart keeps all fourteen days of data at every width and hides the first seven
+  columns *and* their date labels together below 768 (fourteen labels don't fit a 320 px card).
+  **Also kept, against the design's "bỏ trên phone" list, same reasoning as decision 2:** the "Điểm
+  trung bình" score-average card, the custom-minutes `<input>`, the dashed target-minutes line on
+  the chart, and the "Áp dụng từ bài học ngày mai" caption — none of these were asked for by name, so
+  none were removed.
+- **The other four speaking screens (M3/M3b again)** — `PracticeCard` (Sound Zoo / Word Pop),
+  `PairPractice`, `StarPractice` and `VoicePractice` had been left out of the first pass entirely:
+  no phone rules and no `PAGE_SHELL`, so their content ran under the notch and the home indicator.
+  At 390×844 they now all fit: `/practice/wp-cat` **1156 → 844** (the mic moved from y938 —
+  94 px below the fold — to y638), `/voice/sv1` **940 → 844** (mic y722→y638), `/star/ss1`
+  **864 → 844**, `/pair/pair-ship-sheep` **928 → 844**. Their *result* states were worse than their
+  idle ones — `/voice/sv1` scored was **1742 px** with "Tiếp theo →" at y1642 — and are now 844 with
+  the CTA at y752. The shape that buys that is the one `LevelStairs` introduced, not a `sticky`:
+  **on a phone the result read-out is a bounded scrolling region and the CTA row is its sibling
+  underneath**, so a fourteen-word passage's fourteen 64 px word chips can be scrolled to while the
+  way on stays on screen and nothing is ever painted over anything. The bounded height is switched
+  on for the result state only — a definite height also lets a `flex-1` section be squeezed below
+  its content, which would put the recording countdown on top of the mic. `md:contents` takes the
+  new wrapper out of the box tree from 768 up, so all four screens fingerprint **byte-identical at
+  1194×834, idle and result** (0 boxes moved; the wrapper itself has no box).
+- **Wording sweep (spec decision 1):** every "Về bản đồ 🏝️" (back to the map) string that could
+  appear on a phone — where the map does not exist below `md:` — now reads "Về trang chủ 🏠"
+  instead, in `DailyMission`, `LevelSelect`, `LevelStairs`, `MissionComplete` and `StoryQuiz`. The
+  wording follows the breakpoint, not the device, via a shared `HomeLabel` component
+  (`client/src/components/ui/HomeLabel.tsx`) for visible copy and a new `BackButton` `mdLabel` prop
+  for the button's accessible name, which — unlike visible text — could not previously vary by
+  breakpoint at all.
+
+**Known gaps, not fixed this phase:** `Button`'s `size="lg"` keeps its 34 px landscape corner radius
+on a phone rather than the design's 20 px (no phone size exists on the shared `Button` primitive
+yet); the story quiz's answer cards are emoji, not the design's `art/` photographs (the artwork
+export is a separate task); the Home streak strip's tap-to-see-detail panel the design mentions was
+not built (no design exists for it). **The parent dashboard is still 1268 px tall at 390×844 and was
+deliberately left that way:** it is the one adult screen in the app, it has no single primary action
+to keep above a fold, and a grown-up reading a week of their child's practice is expected to scroll.
+**The topic hub scrolls 42 px at 375×667** (34 of those were already there; the other 8 are the back
+arrow going from 56 px to the spec's 64) — nothing is covered at `scrollTop` 0 and the section rows
+are all reachable. **Story Voice and Sentence Stars still overflow the *iPad* in their result state**
+(`/voice/sv1` scored is 1140 px at 1194×834, `/star/ss1` 959): that predates the phone work, is
+unchanged by it, and is a landscape-frame problem for a later pass.
+
 ## iPad setup & testing (Thiết lập trên iPad)
 
 1. Make sure your iPad and PC are on the same Wi-Fi network.
@@ -781,13 +901,42 @@ is still read as a floor by `soundStars`.
 | 59 | Học từ mới → any card, before the first tap | Card gently rocks (peeks open a little) every few seconds on its own, without being told to | ⏳ pending |
 | 60 | Học từ mới → tap the card once to flip it, flip back, wait several seconds | The peek animation does not resume — it only ever happens before the first flip | ⏳ pending |
 | 61 | Học từ mới → record a word and score it | Stars and a "Điểm: NN" score chip appear under the card, in addition to the existing hint (on a low score) and the 🔓 "Mở khoá!" banner (on unlock) | ⏳ pending |
-| 62 | Học từ mới → a still-locked word → guess its meaning correctly | Shows "Đoán đúng rồi! 🎉" praise, which clears itself after about 1.5 s, well before the mic/flip step | ⏳ pending |
+| 62 | Học từ mới → a still-locked word → guess its meaning correctly | Shows "Đoán đúng rồi! 🎉" praise and a "Tiếp theo →" button; the mic/flip step does not open until that button is tapped (Phase 10 spec decision 3 replaced the old 1.5 s auto-advance, at every breakpoint) | ⏳ pending |
 | 63 | Tập âm → `/level/sound-zoo` → tap a sound tile | Opens a word list: IPA header + tip text + "🔊 Nghe âm lẻ", then one card per word of that sound (emoji, word, IPA, its own star row) — not the old 3-word run | ⏳ pending |
 | 64 | Sound word list → tap one word card → say it, then tap "Tiếp theo →" | Opens the practice screen for that one word only; scoring it stars only that word (`sword:<cardId>`); "Tiếp theo →" walks to the next word of the sound, and the last word returns to the word list | ⏳ pending |
 | 65 | Complete today's mission, then advance the date (or wait) a day and complete the next mission | The two days' 🧩/🧱 items are drawn from different topics where the map allows — the child is not stuck reviewing the same island two days running | ⏳ pending |
 | 66 | `/mission` | A "🧱 N câu ghép" group card appears after "🧩 N từ mới" (once the lesson length includes a sentence slot); tapping it opens Sentence Builder for that item | ⏳ pending |
 | 67 | Home | Eight islands total (Động vật, Đồ ăn, Trường học, Gia đình, Thời tiết, Màu sắc, Cơ thể, Đồ chơi) in a two-row layout; the first four are open from a fresh profile, the rest show 🔒 "Chưa mở khóa" until unlocked | ⏳ pending |
 | 68 | Home → tap an unlocked island → topic hub for a topic with a word or sentence in today's lesson | The 🧩 Từ mới and/or 🧱 Ghép câu section shows a teal "Có trong nhiệm vụ hôm nay" chip; a section with nothing in today's lesson shows no chip | ⏳ pending |
+
+### Verified on iPhone (Phase 10 phone layout)
+
+> Manual checklist — could not be executed in this environment (no physical iPhone available). Run
+> these on a real iPhone (Safari, `https://<PC-LAN-IP>:5173`, same setup as the iPad steps above)
+> and fill in the results. Everything below was measured with DOM geometry in a desktop browser
+> during development (see the task reports under
+> `.superpowers/sdd/2026-08-26-phase10-mobile-layout/`); this table is for what only a physical
+> device can confirm.
+>
+> **Safe-area insets specifically cannot be checked any other way:** `env(safe-area-inset-*)`
+> reads `0` in Chrome DevTools' device toolbar and in jsdom (the test runner), so the top/bottom
+> padding arithmetic in `client/src/components/ui/pageShell.ts` is asserted from the generated CSS
+> text, never measured against a real notch or home indicator. Row 11 below is the only way to
+> close that gap.
+
+| # | Step | Expected result | Result |
+|---|------|------------------|--------|
+| 1 | Home, iPhone in portrait | The island map is gone; a 2-column card grid of the eight topics scrolls under a pinned mission card whose "Bắt đầu ▸" CTA is on screen without scrolling | ⏳ pending |
+| 2 | `/mission` (Nhiệm vụ hôm nay) | All five step rows and the CTA fit on screen at once (or the CTA is pinned at the bottom and visible on first paint on a smaller phone); no row is cut off | ⏳ pending |
+| 3 | Any speaking screen (e.g. Sound Zoo → a word) at a small phone size (iPhone SE class, ≈375×667) | The mic is fully visible, nothing behind it is covered, and the screen does not need to scroll to reach it | ⏳ pending |
+| 4 | Học từ mới (flashcard) → flip a card, say the word, score high enough to unlock | The card resizes fluidly (not a fixed 320×360 box) and the unlocked/🔓 result state is fully visible without scrolling on a small phone | ⏳ pending |
+| 5 | Học từ mới → score a word low enough to trigger a hint | The retry state + hint card both fit above the fold on a small phone, with nothing hidden behind the bottom CTA row | ⏳ pending |
+| 6 | Học từ mới → a locked word → guess its meaning correctly | Shows the praise message and a "Tiếp theo →" button; the flip card/mic step only opens once that button is tapped | ⏳ pending |
+| 7 | Speak Lab stairs (`/levels`) | Steps zigzag up the screen along a dotted trail (current step teal-ringed, done steps ✓), with a CTA pinned to the bottom naming the current step | ⏳ pending |
+| 8 | Story quiz (after any story) | All three answer cards are visible without scrolling | ⏳ pending |
+| 9 | Topic hub (tap any unlocked island from Home) | A teal header band sits behind the back button and title, clear of the iPhone's notch/status bar; the three section rows (Từ mới / Ghép câu / Truyện) each end in a "▸" | ⏳ pending |
+| 10 | Parent Dashboard → "Bản ghi gần đây" | The card is present but collapsed by default; tapping its row opens it to show the recordings list with working play buttons | ⏳ pending |
+| 11 | Any screen, iPhone with a notch/Dynamic Island, both portrait and after rotating | Content clears the notch and the home indicator — nothing sits underneath either one | ⏳ pending |
 
 ## Architecture
 

@@ -5,7 +5,7 @@ import { getLesson, lessonStatus } from '../progress/lesson'
 import type { LessonItemKind } from '../progress/lesson'
 import { MISSION_STATE, groupItems } from '../progress/missionNav'
 import { Foxy } from '../components/Foxy'
-import { BackButton, Button, Chip } from '../components/ui'
+import { BackButton, Button, Chip, HomeLabel, PAGE_SHELL } from '../components/ui'
 import type { ChipTone } from '../components/ui'
 
 const CELEBRATED_KEY = 'speakup.celebrated'
@@ -41,26 +41,44 @@ const KIND: Record<LessonItemKind, {
   review: { emoji: '🔁', tone: 'neutral', title: n => `${n} bài ôn tập`, minutes: n => n },
 }
 
-/** The cards sit side by side from `lg` up — one column per group — and stack below that. Phase 9
+/** The cards sit side by side from `ipad` up — one column per group — and stack below that. Phase 9
  * added the 🧱 group, so a lesson now has five: the table runs to five columns, because a row that
- * wrapped would push the CTA off a 834 px-tall screen. Written out in full because Tailwind reads
- * the class names from the source. */
+ * wrapped would push the CTA off a 834 px-tall screen. A tablet portrait gets two columns of the
+ * same cards (design breakpoint card, 768). Written out in full because Tailwind reads the class
+ * names from the source. */
 const COLUMNS = [
-  '', 'lg:grid-cols-1', 'lg:grid-cols-2', 'lg:grid-cols-3', 'lg:grid-cols-4', 'lg:grid-cols-5',
+  '',
+  'ipad:grid-cols-1',
+  'md:grid-cols-2 ipad:grid-cols-2',
+  'md:grid-cols-2 ipad:grid-cols-3',
+  'md:grid-cols-2 ipad:grid-cols-4',
+  'md:grid-cols-2 ipad:grid-cols-5',
 ]
 /** Longest lesson shape there is: 🎧 🗣️ 🧩 🧱 🔁 (spec §2). */
 const MAX_GROUPS = 5
 
-/** The group card: the kit's `Card` surface as a tap target, centred like the list-screen cards. */
-const GROUP_CARD =
-  'flex flex-col items-center gap-2 rounded-xl3 bg-white p-5 text-center shadow-card transition-transform active:scale-95'
+/**
+ * The group card. On a phone it is a 76 px **row** — emoji, title, progress and chip on one line
+ * (design M2) — because five 256 px columns stacked one under another made this screen 1759 px
+ * tall on an 844 px phone, with the steps below the fold and nothing but scrolling to find them.
+ * From the tablet breakpoint up it is the column card the iPad has always had, unchanged.
+ */
+const GROUP_CARD = [
+  // `min-w-0`: a grid item refuses to shrink below its content by default, and on a 320 px screen
+  // the row's own text would otherwise push it 8 px past the edge instead of ellipsising.
+  'flex h-[76px] min-w-0 items-center gap-3 rounded-xl2 bg-white px-4 text-left shadow-card-sm',
+  'transition-transform active:scale-95',
+  'md:h-auto md:flex-col md:justify-center md:gap-2 md:rounded-xl3 md:p-5 md:text-center md:shadow-card',
+].join(' ')
 
 /** The CTA has to carry router state, which `Button` (an anchor-props passthrough) cannot take —
- * so it is a `Link` wearing the `Button size="lg" pulse` classes. */
+ * so it is a `Link` wearing the `Button size="lg" pulse` classes. On a phone it is the design's
+ * 64 px bar filling the row next to Foxy; from the tablet breakpoint up it is `size="lg"` again. */
 const CTA_BUTTON = [
-  'inline-flex items-center justify-center gap-2 font-display font-extrabold',
+  'inline-flex flex-1 items-center justify-center gap-2 font-display font-extrabold',
   'transition-transform active:translate-y-[2px]',
-  'min-h-[72px] px-10 text-[26px] rounded-xl4',
+  'min-h-[64px] px-5 text-xl rounded-xl2',
+  'md:min-h-[72px] md:flex-none md:px-10 md:text-[26px] md:rounded-xl4',
   'bg-coral-500 text-white shadow-chunky-coral active:shadow-[0_3px_0_#E05A3A]',
   'animate-pulse-soft',
 ].join(' ')
@@ -99,19 +117,32 @@ export function DailyMission() {
   }, [celebrating, day, navigate])
 
   return (
-    <main className="relative h-full overflow-y-auto bg-cream-50 p-6">
-      <BackButton to="/" label="Về bản đồ" />
-
-      <div className="mx-auto flex w-full max-w-6xl flex-col gap-5 pt-4">
-        <header className="flex flex-col items-center gap-2 text-center">
-          <h1 className="font-display text-[40px] font-extrabold leading-tight text-ink-900">Nhiệm vụ hôm nay 🌞</h1>
-          <div className="flex items-center gap-3">
-            <Chip tone="sun">Bậc ⭐ {band}</Chip>
-            <Chip tone="teal">{status.doneCount}/{status.total}</Chip>
+    // 16 px of side padding on a phone (design M2), the 24 px the iPad cards are laid out on above.
+    // A phone also fills the viewport — the steps sit in the middle of what is left over and the
+    // CTA rests on the bottom edge — while the tablet and the iPad keep the plain block flow they
+    // were laid out in, where the content is shorter than the screen anyway.
+    <main className={`relative flex h-full flex-col overflow-y-auto bg-cream-50 px-4 md:block ipad:px-6 ${PAGE_SHELL}`}>
+      <div className="mx-auto flex w-full max-w-6xl grow flex-col gap-2.5 ipad:gap-5">
+        {/* One header row on a phone — back button, title, subtitle — and the stacked, centred
+          * header the iPad has always had from `ipad` up, where the back button takes its own line
+          * again (`ipad:flex` keeps it block-level without giving up the centred glyph). */}
+        <header className="flex flex-wrap items-center gap-2.5 ipad:block ipad:text-center">
+          <BackButton to="/" label="Về trang chủ" mdLabel="Về bản đồ" className="ipad:mb-4 ipad:flex" />
+          <div className="min-w-0 flex-1">
+            <h1 className="font-display text-[22px] font-extrabold leading-tight text-ink-900 ipad:text-[40px]">
+              Nhiệm vụ hôm nay 🌞
+            </h1>
+            <p className="font-display text-[13px] font-extrabold text-ink-500 ipad:hidden">
+              5 bước nhỏ — 15 phút thôi!
+            </p>
+          </div>
+          <div className="flex w-full items-center gap-2 ipad:mt-2 ipad:w-auto ipad:justify-center ipad:gap-3">
+            <Chip tone="sun" className="text-sm ipad:text-lg">Bậc ⭐ {band}</Chip>
+            <Chip tone="teal" className="text-sm ipad:text-lg">{status.doneCount}/{status.total}</Chip>
           </div>
         </header>
 
-        <div className={`grid gap-3 ${COLUMNS[Math.min(groups.length, MAX_GROUPS)]}`}>
+        <div className={`grid grow content-center gap-2.5 md:grow-0 ipad:gap-3 ${COLUMNS[Math.min(groups.length, MAX_GROUPS)]}`}>
           {groups.map((group, i) => {
             const kind = KIND[group.kind]
             const isCurrent = i === currentIndex
@@ -126,20 +157,31 @@ export function DailyMission() {
                 state={MISSION_STATE}
                 className={`${GROUP_CARD} ${isCurrent ? 'border-4 border-teal-500' : ''}`}
               >
-                <span aria-hidden="true" className="text-5xl">{kind.emoji}</span>
-                <div className="font-display text-2xl font-extrabold text-ink-900">
-                  {kind.title(group.items.length)}
-                </div>
-                <div className="font-display text-xl font-extrabold text-teal-600">
-                  {group.doneCount}/{group.items.length}
-                </div>
-                <div className="font-display text-base font-extrabold text-ink-500">
-                  Bước {i + 1}
-                  {isCurrent && <span className="text-teal-600"> · bắt đầu ở đây!</span>}
+                <span aria-hidden="true" className="text-3xl md:text-5xl">{kind.emoji}</span>
+                {/* On a phone the title and the step caption are the two lines of one text block;
+                  * `md:contents` dissolves both wrappers again from the tablet breakpoint up, so
+                  * the card is the same four stacked children the iPad has always drawn. */}
+                <div className="min-w-0 flex-1 md:contents">
+                  <div className="truncate font-display text-[17px] font-extrabold text-ink-900 md:overflow-visible md:whitespace-normal md:text-2xl">
+                    {kind.title(group.items.length)}
+                  </div>
+                  <div className="flex min-w-0 items-baseline gap-1.5 md:contents">
+                    <div className="font-display text-xs font-extrabold text-teal-600 md:text-xl">
+                      {group.doneCount}/{group.items.length}
+                    </div>
+                    <div className="truncate font-display text-xs font-extrabold text-ink-500 md:overflow-visible md:whitespace-normal md:text-base">
+                      Bước {i + 1}
+                      {isCurrent && <span className="text-teal-600"> · bắt đầu ở đây!</span>}
+                    </div>
+                  </div>
                 </div>
                 {group.done
-                  ? <span className="font-display text-xl font-extrabold text-good-700">✓ Xong</span>
-                  : <Chip tone={kind.tone}>≈ {kind.minutes(group.items.length)} phút</Chip>}
+                  ? (
+                    <span className="shrink-0 rounded-xl2 bg-good-50 px-3 py-1 font-display text-sm font-extrabold text-good-700 md:bg-transparent md:p-0 md:text-xl">
+                      ✓ Xong
+                    </span>
+                  )
+                  : <Chip tone={kind.tone} className="shrink-0 text-sm md:text-lg">≈ {kind.minutes(group.items.length)} phút</Chip>}
               </Link>
             )
           })}
@@ -147,11 +189,18 @@ export function DailyMission() {
 
         {/* Sticky, so a long lesson can never push the one thing the child came here to tap below
           * the fold. The cream gradient fades the cards out underneath it rather than cutting them
-          * off, and `-mx-6` lets that fade reach the screen edges through the page padding. */}
-        <div className="sticky bottom-0 -mx-6 mt-1 flex flex-wrap items-end justify-between gap-4 bg-gradient-to-t from-cream-50 from-60% to-transparent px-6 pb-3 pt-8">
-          <Foxy mood="cheer" size="md" />
+          * off, and the negative margin lets that fade reach the screen edges through the page
+          * padding — 16 px of it on a phone, 24 from `ipad` up. */}
+        <div className="sticky bottom-0 -mx-4 mt-1 flex flex-wrap items-end justify-between gap-3 bg-gradient-to-t from-cream-50 from-60% to-transparent px-4 pb-3 pt-6 md:gap-4 md:pt-8 ipad:-mx-6 ipad:px-6">
+          {/* 66 px beside the CTA on a phone (design M2), the 96 px mascot from the tablet
+            * breakpoint up: the SVG carries its size as an attribute, which only CSS can bend. */}
+          <Foxy
+            mood="cheer"
+            size="md"
+            className="shrink-0 [&_svg]:h-[63px] [&_svg]:w-[66px] md:[&_svg]:h-[93px] md:[&_svg]:w-[96px]"
+          />
           {status.done
-            ? <Button to="/" size="lg" variant="secondary">Về bản đồ 🏝️</Button>
+            ? <Button to="/" size="lg" variant="secondary"><HomeLabel /></Button>
             : currentIndex !== -1
               ? (
                 <Link to={groups[currentIndex].route} state={MISSION_STATE} className={CTA_BUTTON}>

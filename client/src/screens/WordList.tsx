@@ -2,7 +2,7 @@ import { Link, useParams } from 'react-router-dom'
 import type { Word } from '../content/words/types'
 import { findTopic, findWord } from '../content/words'
 import { getBox, dueWords } from '../progress/leitner'
-import { BackButton, CARD_LINK, Chip } from '../components/ui'
+import { BackButton, CARD_LINK, Chip, PAGE_SHELL } from '../components/ui'
 
 export function WordList() {
   const { topic = '' } = useParams()
@@ -11,7 +11,7 @@ export function WordList() {
 
   if (!isReview && !t) {
     return (
-      <main className="h-full overflow-y-auto bg-cream-50 p-6">
+      <main className={`h-full overflow-y-auto bg-cream-50 px-6 ${PAGE_SHELL}`}>
         <p className="mb-4 font-display text-2xl font-extrabold text-ink-900">Không tìm thấy chủ đề</p>
         <BackButton to="/words" label="Từ vựng" />
       </main>
@@ -24,7 +24,7 @@ export function WordList() {
   const title = isReview ? 'Ôn tập hôm nay' : t!.title
 
   return (
-    <main className="h-full overflow-y-auto bg-cream-50 p-6">
+    <main className={`h-full overflow-y-auto bg-cream-50 px-6 ${PAGE_SHELL}`}>
       <div className="mx-auto flex w-full max-w-5xl flex-col gap-5">
         {/* A map topic was reached from its island, so back goes to the island — the flat word
           * index is only ever the review deck's home now. */}

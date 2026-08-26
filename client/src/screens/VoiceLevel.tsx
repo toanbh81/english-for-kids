@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom'
 import { STORY_VOICE } from '../content'
 import { getStars } from '../progress/store'
-import { BackButton, CARD_LINK, Chip, StarRow } from '../components/ui'
+import { BackButton, CARD_LINK, Chip, PAGE_SHELL, StarRow } from '../components/ui'
 
 /** The first sentence is enough to recognise a passage by, and keeps every card the same height. */
 const firstSentence = (text: string) => text.split(/(?<=[.!?])\s+/)[0] ?? text
@@ -10,7 +10,7 @@ const firstSentence = (text: string) => text.split(/(?<=[.!?])\s+/)[0] ?? text
  * a feeling, shown by its mood emoji. Stars live on `voice:<id>`. */
 export function VoiceLevel() {
   return (
-    <main className="h-full overflow-y-auto bg-cream-50 p-6">
+    <main className={`h-full overflow-y-auto bg-cream-50 px-6 ${PAGE_SHELL}`}>
       <div className="mx-auto flex w-full max-w-5xl flex-col gap-5">
         <BackButton to="/levels" label="Các bậc" className="self-start" />
 
@@ -19,7 +19,7 @@ export function VoiceLevel() {
           <p className="mt-1 text-lg font-bold text-ink-500">Đọc có hồn — vui, buồn, ngạc nhiên!</p>
         </header>
 
-        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-3">
           {STORY_VOICE.map((v, i) => (
             <Link
               key={v.id}

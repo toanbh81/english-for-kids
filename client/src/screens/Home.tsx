@@ -10,7 +10,7 @@ import { Foxy } from '../components/Foxy'
 import type { FoxyMood } from '../components/Foxy'
 import { MissionCard } from '../components/MissionCard'
 import { StreakWeek } from '../components/StreakWeek'
-import { Chip, SpeechBubble, StarRow } from '../components/ui'
+import { Chip, PAGE_SHELL, SpeechBubble, StarRow } from '../components/ui'
 
 const CELEBRATED_KEY = 'speakup.celebrated'
 
@@ -33,21 +33,27 @@ function markCelebrated(day: string): void {
  * centre at a fixed fraction of the band on any viewport, so the trail below never drifts off the
  * discs. Column centres land at 10.5 / 34.5 / 58.5 / 82.5 %, leaving a 9 % gutter (~100 px at
  * 1194) between neighbours. The topics fill the slots in unlock order.
+ *
+ * `left`/`top` only take effect from `ipad` up, where the islands go absolute, and the colours are
+ * prefixed to match: a phone has no map, and M1b draws its islands as plain white cards with a bare
+ * emoji rather than as coloured discs. Nothing here changes what the map looks like at 1194 — every
+ * one of these classes still applies there.
  */
 const SLOTS = [
-  { left: '3%', top: '0%', color: 'bg-coral-500 shadow-[0_8px_0_#E05A3A,0_0_0_8px_#FFE9DF]' },
-  { left: '27%', top: '0%', color: 'bg-peach-400 shadow-[0_8px_0_#E07A42,0_0_0_8px_#FFE7D2]' },
-  { left: '51%', top: '0%', color: 'bg-sky-400 shadow-[0_8px_0_#5BA7D4,0_0_0_8px_#DDF0FB]' },
-  { left: '75%', top: '0%', color: 'bg-teal-500 shadow-[0_8px_0_#1FA396,0_0_0_8px_#D3F1EC]' },
-  { left: '75%', top: '52%', color: 'bg-sun-400 shadow-[0_8px_0_#E0A61A,0_0_0_8px_#FFF1C9]' },
-  { left: '51%', top: '52%', color: 'bg-[#7ED99A] shadow-[0_8px_0_#4FB56E,0_0_0_8px_#E3F6E8]' },
-  { left: '27%', top: '52%', color: 'bg-[#F8A3AE] shadow-[0_8px_0_#D97C89,0_0_0_8px_#FFE3E6]' },
-  { left: '3%', top: '52%', color: 'bg-[#B8A6E8] shadow-[0_8px_0_#8E79C8,0_0_0_8px_#EDE7FB]' },
+  { left: '3%', top: '0%', color: 'ipad:bg-coral-500 ipad:shadow-[0_8px_0_#E05A3A,0_0_0_8px_#FFE9DF]' },
+  { left: '27%', top: '0%', color: 'ipad:bg-peach-400 ipad:shadow-[0_8px_0_#E07A42,0_0_0_8px_#FFE7D2]' },
+  { left: '51%', top: '0%', color: 'ipad:bg-sky-400 ipad:shadow-[0_8px_0_#5BA7D4,0_0_0_8px_#DDF0FB]' },
+  { left: '75%', top: '0%', color: 'ipad:bg-teal-500 ipad:shadow-[0_8px_0_#1FA396,0_0_0_8px_#D3F1EC]' },
+  { left: '75%', top: '52%', color: 'ipad:bg-sun-400 ipad:shadow-[0_8px_0_#E0A61A,0_0_0_8px_#FFF1C9]' },
+  { left: '51%', top: '52%', color: 'ipad:bg-[#7ED99A] ipad:shadow-[0_8px_0_#4FB56E,0_0_0_8px_#E3F6E8]' },
+  { left: '27%', top: '52%', color: 'ipad:bg-[#F8A3AE] ipad:shadow-[0_8px_0_#D97C89,0_0_0_8px_#FFE3E6]' },
+  { left: '3%', top: '52%', color: 'ipad:bg-[#B8A6E8] ipad:shadow-[0_8px_0_#8E79C8,0_0_0_8px_#EDE7FB]' },
 ] as const
 
-/** Every disc is the same size now that there are eight of them: 96 px, 112 px from `lg` up — well
- * clear of the 64 px tap floor, and small enough that two rows fit the band without touching. */
-const ISLAND_DISC = 'h-24 w-24 text-[40px] lg:h-28 lg:w-28 lg:text-[46px]'
+/** The emoji: a bare 36 px glyph on the phone card, and from `ipad` up the 112 px coloured disc of
+ * the map — well clear of the 64 px tap floor, and small enough that two rows fit the band without
+ * touching. */
+const ISLAND_DISC = 'text-4xl ipad:h-28 ipad:w-28 ipad:text-[46px]'
 
 /**
  * One island per topic (spec §2): the map is the topic list, in unlock order.
@@ -65,10 +71,27 @@ if (TOPICS.length > SLOTS.length) {
 }
 const ISLANDS = TOPICS.map((topic, i) => ({ ...topic, ...SLOTS[i] }))
 
-// `lg:w-[15%]`: a percentage width, so an island's centre is a fixed fraction of the band on every
-// viewport and the trail below stays under the discs. The tighter `lg:gap-1` is what buys the two
-// rows their clearance on the shortest landscape iPad (1024×768).
-const ISLAND_BOX = 'flex flex-col items-center gap-1.5 lg:absolute lg:w-[15%] lg:gap-1'
+/**
+ * An island is two different things at two sizes.
+ *
+ * Below `ipad` it is one card of the M1b grid: a 128 px tile (160 from the tablet breakpoint, where
+ * the grid has room to breathe) that stands on its own chunky shadow — no map, no trail, no
+ * position. From `ipad` up every one of those card styles is unset again and the island goes
+ * absolute at its slot, which is the curved map exactly as it has always been.
+ *
+ * `ipad:w-[15%]`: a percentage width, so an island's centre is a fixed fraction of the band on every
+ * viewport and the trail below stays under the discs. The tighter `ipad:gap-1` is what buys the two
+ * rows their clearance on the shortest screen the map now runs on (1194×834).
+ */
+const ISLAND_BOX = 'flex h-32 flex-col items-center justify-center gap-1 rounded-xl3 px-2 text-center'
+  + ' md:h-40'
+  + ' ipad:absolute ipad:h-auto ipad:w-[15%] ipad:justify-start ipad:gap-1 ipad:rounded-none'
+  + ' ipad:bg-transparent ipad:px-0 ipad:shadow-none'
+
+/** Open card / locked card of the grid. Both are unset again from `ipad` up by `ISLAND_BOX`, where
+ * the island is a disc on a trail and carries no card of its own. */
+const ISLAND_OPEN = 'bg-white shadow-card'
+const ISLAND_LOCKED = 'bg-[#F3EADA] opacity-[.85] shadow-[0_8px_0_#E2D5C0] ipad:opacity-50'
 
 // The dotted trail the islands sit on. Decorative only, and drawn in the same 1194×834 frame
 // coordinates the SVG stretches over. The points are the island CENTRES, not their `left`/`top`
@@ -122,8 +145,10 @@ export function Home() {
   return (
     // `min-h-full`, never `h-full`: the stacked portrait layout is taller than the viewport, and a
     // fixed-height root would leave the mission CTA and the parent link below an unscrollable fold.
-    // The root grows with its content and the page scrolls; only the `lg` map frame is clipped.
-    <main className="relative min-h-full overflow-y-auto overflow-x-hidden bg-cream-50 p-4 sm:p-7">
+    // The root grows with its content and the page scrolls; only the `ipad` map frame is clipped.
+    // 16 px of side frame on the phone (design §1) — the vertical padding is the safe-area shell,
+    // resting at the 1 rem this screen has always used where there is no notch to clear.
+    <main className={`relative min-h-full overflow-y-auto overflow-x-hidden bg-cream-50 px-4 [--page-pad-bottom:1rem] [--page-pad-top:1rem] md:px-7 md:[--page-pad-bottom:1.75rem] md:[--page-pad-top:1.75rem] ${PAGE_SHELL}`}>
       <h1 className="sr-only">Speak Up!</h1>
 
       {/* Soft background blobs of the handoff frame. They hang off every edge, so they are clipped
@@ -134,15 +159,39 @@ export function Home() {
         <div className="absolute -bottom-32 -right-20 h-[340px] w-[340px] rounded-full bg-teal-50" />
       </div>
 
-      <div className="relative mx-auto flex w-full max-w-[1194px] flex-col gap-3">
-        <header className="flex flex-wrap items-center justify-between gap-3">
+      <div className="relative mx-auto flex w-full max-w-[1194px] flex-col gap-2.5 ipad:gap-3">
+        {/* Greeting over streak on a phone, one wide row from `ipad` up: at 390 px the week pill
+          * and the star count have nowhere to sit beside Foxy's bubble. */}
+        <header className="flex flex-col gap-2 ipad:flex-row ipad:flex-wrap ipad:items-center ipad:justify-between ipad:gap-3">
           <div className="flex items-center gap-3">
             <Foxy mood={mood} size="md" className="animate-bob" />
-            <SpeechBubble title={<span className="text-coral-text">Chào bé! 👋</span>} subtitle={say} className="flex-1" />
+            {/* M1b prints the greeting as plain text: the bubble is M1a's, and on a 390 px screen
+              * its white panel, its padding and its shadow cost ~26 px of height for decoration the
+              * grid below needs more. Only the chrome goes — the two lines themselves are the same
+              * element at every width, so the greeting is never in the page twice. `max-md:` because
+              * every one of these classes is `SpeechBubble`'s own, and an unprefixed override of
+              * ours would be a coin toss on Tailwind's utility order. */}
+            <SpeechBubble
+              title={<span className="text-coral-text">Chào bé! 👋</span>}
+              subtitle={say}
+              className="flex-1 max-md:rounded-none max-md:bg-transparent max-md:px-0 max-md:py-0 max-md:shadow-none"
+            />
           </div>
-          <div className="flex flex-wrap items-center gap-3">
+          {/* `data-today` is on the seven day circles, and only there. `StreakWeek` draws them at
+            * the map's 30 px, which with their labels and the streak count is wider than a 320 px
+            * phone — so the phone shrinks them in place to 24 px until the design's compact
+            * seven-dot variant exists (brief §16). Back to 30 px from `ipad` up, untouched. */}
+          <div className="flex flex-wrap items-center gap-2 [&_[data-today]]:h-6 [&_[data-today]]:w-6 [&_[data-today]]:text-sm ipad:gap-3 ipad:[&_[data-today]]:h-[30px] ipad:[&_[data-today]]:w-[30px] ipad:[&_[data-today]]:text-base">
             <StreakWeek dots={weekDots(now, events)} streak={streak(now, events)} />
-            <div className="inline-flex items-center gap-2 rounded-[18px] bg-sun-50 px-5 py-3 font-display text-[22px] font-extrabold text-sun-700 shadow-chunky-sun">
+            {/* The star total is the design's 13 px line under the greeting on a phone and the
+              * chunky sun pill of the map from `ipad` up — one element, restyled, so the number
+              * is never in the page twice. */}
+            {/* `ipad:leading-normal` is not decoration. `text-lg` sets a 28 px line-height as well
+              * as an 18 px size, and `ipad:text-[22px]` restores only the size — so the pill came
+              * out 52 px tall instead of the map's 57 and dragged the row 3 px down with it. Any
+              * arbitrary-size restore has to restate the leading it is stepping on (1.5 is the
+              * inherited value the 22 px pill has always resolved against). */}
+            <div className="inline-flex items-center gap-2 rounded-[18px] font-display text-lg font-extrabold text-sun-700 ipad:bg-sun-50 ipad:px-5 ipad:py-3 ipad:text-[22px] ipad:leading-normal ipad:shadow-chunky-sun">
               ⭐ {totalStars()}
             </div>
           </div>
@@ -158,21 +207,34 @@ export function Home() {
         )}
 
         {/* One set of islands serves both layouts: a 2-column grid on a phone or portrait tablet,
-          * and the absolutely positioned map from `lg` up, where the percentage offsets take
+          * and the absolutely positioned map from `ipad` up, where the percentage offsets take
           * effect. The frame keeps the handoff's 1194×834 proportions but never grows past the
-          * viewport, so on a 1024×768 iPad the whole map — mission card included — stays on
-          * screen. */}
-        <div className="relative grid grid-cols-2 gap-x-4 gap-y-4 lg:block lg:aspect-[1194/834] lg:max-h-[calc(100vh-180px)]">
-          {/* `contents` in the stacked grid, so the islands stay plain grid items; from `lg` up it
+          * viewport, so on a short landscape iPad the whole map — mission card included — stays
+          * on screen. */}
+        <div className="relative grid grid-cols-2 gap-2.5 md:gap-4 ipad:block ipad:aspect-[1194/834] ipad:max-h-[calc(100vh-180px)]">
+          {/* First in the grid, and so first under the greeting: on a phone the one thing the child
+            * is here to do must not sit below the fold. It used to be last, which put "Bắt đầu" at
+            * y≈1221 on an 844 px screen (design M1b). From `ipad` up it goes back to the bottom-left
+            * corner of the map, where DOM order stops mattering because every child is absolute. */}
+          <div className="col-span-2 ipad:absolute ipad:bottom-2 ipad:left-2 ipad:w-[380px]">
+            <MissionCard status={lesson} />
+          </div>
+
+          {/* The grid needs a heading; the map does not — the islands *are* the map. */}
+          <h2 className="col-span-2 font-display text-base font-extrabold text-ink-500 ipad:hidden">
+            🏝️ Đảo chủ đề
+          </h2>
+
+          {/* `contents` in the stacked grid, so the islands stay plain grid items; from `ipad` up it
             * becomes the top band of the map and the percentages resolve against it. The band stops
             * 200 px short of the bottom, which is the strip the mission card and the parent link
             * occupy — that keeps the trail and the island labels clear of them at any frame size. */}
-          <div className="contents lg:absolute lg:inset-x-0 lg:bottom-[200px] lg:top-0 lg:block">
+          <div className="contents ipad:absolute ipad:inset-x-0 ipad:bottom-[200px] ipad:top-0 ipad:block">
             <svg
               aria-hidden="true"
               viewBox="0 0 1194 834"
               preserveAspectRatio="none"
-              className="pointer-events-none absolute inset-0 hidden h-full w-full lg:block"
+              className="pointer-events-none absolute inset-0 hidden h-full w-full ipad:block"
             >
               <path d={TRAIL} stroke="#EAD9BE" strokeWidth={14} strokeLinecap="round" strokeDasharray="2 26" fill="none" />
             </svg>
@@ -194,12 +256,15 @@ export function Home() {
                     data-testid={`island-${island.id}`}
                     aria-disabled="true"
                     style={position}
-                    className={`${ISLAND_BOX} opacity-50`}
+                    className={`${ISLAND_BOX} ${ISLAND_LOCKED}`}
                   >
                     <span aria-hidden="true" className={`flex items-center justify-center rounded-full ${ISLAND_DISC} ${island.color}`}>
                       🔒
                     </span>
-                    <span className="font-display text-xl font-extrabold leading-tight text-ink-500">{island.name}</span>
+                    {/* `ipad:leading-tight` restates the tight leading `ipad:text-xl` would
+                      * otherwise reset from a media query — 3 px per island, which is 3 px of the
+                      * map's hard-won clearance at 1194×834. */}
+                    <span className="font-display text-base font-extrabold leading-tight text-ink-500 ipad:text-xl ipad:leading-tight">{island.name}</span>
                     <Chip tone="neutral" size="sm">Chưa mở khóa</Chip>
                   </div>
                 )
@@ -212,7 +277,7 @@ export function Home() {
                   to={`/topic/${island.id}`}
                   aria-label={`${island.name}, ${stars} sao`}
                   style={position}
-                  className={`${ISLAND_BOX} transition-transform active:scale-95`}
+                  className={`${ISLAND_BOX} ${ISLAND_OPEN} transition-transform active:scale-95`}
                 >
                   <span aria-hidden="true" className={`flex items-center justify-center rounded-full ${ISLAND_DISC} ${island.color}`}>
                     {island.emoji}
@@ -222,8 +287,8 @@ export function Home() {
                     * daily mission. Locked tiles say "Chưa mở khóa" there instead: there is
                     * nothing to practise on an island that has not opened yet. */}
                   <span aria-hidden="true" className="flex flex-col items-center leading-tight">
-                    <span className="font-display text-xl font-extrabold text-ink-900">{island.name}</span>
-                    <span className="font-display text-[13px] font-extrabold text-ink-500">Luyện thêm</span>
+                    <span className="font-display text-base font-extrabold text-ink-900 ipad:text-xl">{island.name}</span>
+                    <span className="font-display text-[11px] font-extrabold text-teal-600 ipad:text-[13px] ipad:text-ink-500">Luyện thêm</span>
                   </span>
                   <StarRow value={stars} size="sm" />
                 </Link>
@@ -231,28 +296,37 @@ export function Home() {
             })}
           </div>
 
-          {/* The way into Speak Lab. The islands are the topic map, so without this the staircase —
-            * and with it Nghe & chọn, Sentence Stars and Story Voice — would have no route in. */}
-          <div className="col-span-2 flex justify-center lg:absolute lg:bottom-6 lg:left-1/2 lg:-translate-x-1/2">
-            <Link
-              to="/levels"
-              className="inline-flex min-h-[64px] items-center gap-2 rounded-xl2 bg-teal-500 px-7 font-display text-xl font-extrabold text-white shadow-chunky-teal active:translate-y-[2px]"
-            >
-              🗣️ Các bậc luyện nói
-            </Link>
-          </div>
+          {/* One row along the foot of the grid on a phone — the wide way into Speak Lab and a
+            * 64 px square for the grown-ups — and, from `ipad` up, `contents` hands both links back
+            * to the map frame so their own corners of it still apply. */}
+          <div className="col-span-2 flex items-stretch gap-2.5 ipad:contents">
+            {/* The way into Speak Lab. The islands are the topic map, so without this the staircase —
+              * and with it Nghe & chọn, Sentence Stars and Story Voice — would have no route in. */}
+            <div className="flex flex-1 ipad:absolute ipad:bottom-6 ipad:left-1/2 ipad:flex-none ipad:-translate-x-1/2 ipad:justify-center">
+              <Link
+                to="/levels"
+                className="inline-flex min-h-[64px] w-full items-center justify-center gap-2 rounded-xl2 bg-teal-500 px-7 font-display text-xl font-extrabold text-white shadow-chunky-teal active:translate-y-[2px] ipad:w-auto"
+              >
+                🗣️ Các bậc luyện nói
+              </Link>
+            </div>
 
-          <div className="col-span-2 lg:absolute lg:bottom-2 lg:left-2 lg:w-[380px]">
-            <MissionCard status={lesson} />
-          </div>
-
-          <div className="col-span-2 flex justify-end lg:absolute lg:bottom-2 lg:right-2">
-            <Link
-              to="/parent"
-              className="flex min-h-[64px] min-w-[64px] items-center justify-center rounded-xl2 bg-white px-5 font-display text-lg font-extrabold text-ink-500 shadow-card-sm active:translate-y-[2px]"
-            >
-              👨‍👩‍👧 Phụ huynh
-            </Link>
+            <div className="flex justify-end ipad:absolute ipad:bottom-2 ipad:right-2">
+              <Link
+                to="/parent"
+                aria-label="Phụ huynh"
+                className="flex min-h-[64px] w-16 items-center justify-center rounded-xl2 bg-white font-display text-lg font-extrabold text-ink-500 shadow-card-sm active:translate-y-[2px] ipad:w-auto ipad:min-w-[64px] ipad:px-5"
+              >
+                {/* The label is the accessible name at every size (it is on the link); on a phone
+                  * the square keeps just the emoji, which is the only thing the design's 64×64
+                  * button has room for. Two whole spellings, `HomeLabel`-style, rather than one
+                  * emoji plus an `ipad:`-revealed word next to it: a flex `gap` between two items
+                  * is 8 px where the map's single text run had a 4-ish px space, and the button
+                  * came out 157 px wide instead of the 153 the corner has always been. */}
+                <span aria-hidden="true" className="ipad:hidden">👨‍👩‍👧</span>
+                <span aria-hidden="true" className="hidden ipad:inline">👨‍👩‍👧 Phụ huynh</span>
+              </Link>
+            </div>
           </div>
         </div>
       </div>

@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { LevelSelect } from './LevelSelect'
 
@@ -31,7 +31,20 @@ it('hands Tập âm over to the sound-tile screen instead of listing its 27 card
 
 it('goes back to the map, the entry point the child actually came from', () => {
   renderLevel()
-  expect(screen.getByRole('link', { name: 'Về bản đồ' })).toHaveAttribute('href', '/')
+  expect(screen.getByRole('link', { name: /Về bản đồ/ })).toHaveAttribute('href', '/')
+})
+
+// Spec decision 1: Home drops the island map below the tablet breakpoint, so the back arrow cannot
+// name a map there — not even to a screen reader. `BackButton`'s `mdLabel` puts both wordings in
+// the DOM as `sr-only` spans and lets the breakpoint take one out of the accessibility tree.
+it('names the phone destination and the map one at their own breakpoints', () => {
+  renderLevel()
+
+  const back = screen.getByRole('link', { name: /Về bản đồ/ })
+  // No `aria-label`: it is one string and could only ever say one of the two.
+  expect(back).not.toHaveAttribute('aria-label')
+  expect(within(back).getByText('Về trang chủ')).toHaveClass('sr-only', 'md:hidden')
+  expect(within(back).getByText('Về bản đồ')).toHaveClass('sr-only', 'hidden', 'md:inline')
 })
 
 it('offers the stairs as a second way into the other levels', () => {

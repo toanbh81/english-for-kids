@@ -13,11 +13,16 @@ export function ScoreBars({ result }: { result: PronunciationResult }) {
     { label: 'Đầy đủ', value: result.completeness },
     { label: 'Ngữ điệu', value: result.prosody ?? null },
   ]
+  // Four bars in one wide row is the landscape shape, and it has to stay that shape: brief §15
+  // names a 2×2 grid on the iPad as one of the ten things that break 1194×834 — it doubles the
+  // block's height and pushes "Tiếp theo" off the bottom, a bug this app has already fixed once.
+  // So the grid is the *phone* shape only, and `md:` hands the row straight back. Colours, bar
+  // radius and the teal fill are the same at every width; the design changes only the arrangement.
   return (
-    <div className="flex flex-wrap justify-center gap-6">
+    <div className="grid w-full grid-cols-2 gap-x-3.5 gap-y-2.5 md:flex md:w-auto md:flex-wrap md:justify-center md:gap-6">
       {bars.map(b => (
         <div key={b.label} className="flex flex-col items-start gap-1.5">
-          <div className="h-3 w-[130px] overflow-hidden rounded-full bg-line-200">
+          <div className="h-2.5 w-full overflow-hidden rounded-full bg-line-200 md:h-3 md:w-[130px]">
             <div
               data-testid="score-bar"
               data-value={b.value === null ? 'none' : String(clamp(b.value))}
@@ -26,7 +31,7 @@ export function ScoreBars({ result }: { result: PronunciationResult }) {
               style={{ width: b.value === null ? '0%' : `${clamp(b.value)}%` }}
             />
           </div>
-          <span className="text-[15px] font-bold text-ink-300">{b.value === null ? `${b.label} —` : b.label}</span>
+          <span className="text-xs font-bold text-ink-300 md:text-[15px] md:leading-normal">{b.value === null ? `${b.label} —` : b.label}</span>
         </div>
       ))}
     </div>

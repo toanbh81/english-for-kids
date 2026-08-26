@@ -4,6 +4,7 @@ import { MemoryRouter } from 'react-router-dom'
 import { BackButton } from './BackButton'
 import { Button } from './Button'
 import { Chip } from './Chip'
+import { PAGE_SHELL } from './pageShell'
 import { ProgressBar } from './ProgressBar'
 import { SceneDots } from './SceneDots'
 import { SpeechBubble } from './SpeechBubble'
@@ -198,5 +199,30 @@ describe('Toast', () => {
     unmount()
 
     expect(() => act(() => { vi.advanceTimersByTime(2000) })).not.toThrow()
+  })
+})
+
+describe('PAGE_SHELL', () => {
+  const TOP = 'pt-[max(var(--page-pad-top,1.5rem),calc(env(safe-area-inset-top)_+_9px))]'
+  const BOTTOM = 'pb-[max(var(--page-pad-bottom,1.5rem),calc(env(safe-area-inset-bottom)_+_10px))]'
+
+  it('pads a page by the safe-area inset plus the design breathing room', () => {
+    render(<main data-testid="page" className={`px-6 ${PAGE_SHELL}`}>xin chào</main>)
+
+    // 47 px of notch + 9 = the design's 56 px top frame; 34 px of home indicator + 10 = its 44.
+    expect(screen.getByTestId('page')).toHaveClass(TOP, BOTTOM)
+    expect(PAGE_SHELL).toContain('env(safe-area-inset-top)_+_9px')
+    expect(PAGE_SHELL).toContain('env(safe-area-inset-bottom)_+_10px')
+  })
+
+  it('falls back to the screen own padding where there is no inset, so the iPad is untouched', () => {
+    // Every inset is 0 on an iPad, a desktop browser and in a test: `max()` then hands back the
+    // screen's resting padding (1.5rem = the `p-6` the screens had) instead of a bare 9 px.
+    expect(PAGE_SHELL).toContain('max(var(--page-pad-top,1.5rem)')
+    expect(PAGE_SHELL).toContain('max(var(--page-pad-bottom,1.5rem)')
+  })
+
+  it('leaves horizontal padding to the screen, whose frame width differs per design family', () => {
+    expect(PAGE_SHELL).not.toMatch(/(^|\s)p[xlr]?-/)
   })
 })

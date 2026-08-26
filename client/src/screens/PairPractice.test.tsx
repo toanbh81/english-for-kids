@@ -346,3 +346,46 @@ it('offers the way back, not a celebration, while an earlier step is owed', asyn
   fireEvent.click(screen.getByRole('button', { name: /về nhiệm vụ/i }))
   expect(screen.getByTestId('probe')).toHaveTextContent('/mission null')
 })
+
+/** Phase 10: this screen had no phone layout at all — no breakpoint rules and no `PAGE_SHELL`,
+ * so at 390×844 the listening game measured 928 px with the "sheep" card cut off at 375×667, and
+ * its content ran under the notch. jsdom cannot lay that out, so these guard the inputs. */
+it('carries the safe-area shell at its own resting padding', () => {
+  renderPair()
+
+  const shell = document.querySelector('main')!.className
+  expect(shell).toContain('pt-[max(var(--page-pad-top,1.5rem),calc(env(safe-area-inset-top)_+_9px))]')
+  expect(shell).toContain('pb-[max(var(--page-pad-bottom,1.5rem),calc(env(safe-area-inset-bottom)_+_10px))]')
+  expect(shell).toContain('[--page-pad-top:1.25rem]')
+  expect(shell).toContain('px-5')
+  expect(shell).toContain('md:px-6')
+})
+
+/** Two 220×240 slabs side by side is the landscape pair; at 390 px they wrapped to two rows and
+ * cut the second word off the bottom. On a phone they are half-width tiles on one line — 150 px
+ * tall, still a large target — and `md:flex-initial`, never `md:flex-none`, hands the landscape
+ * sizing back untouched. */
+it('puts both answer cards on one line on a phone and restores the landscape slabs from md up', () => {
+  renderPair()
+
+  const card = screen.getByRole('button', { name: 'sheep' })
+  expect(card.className).toContain('min-h-[150px]')
+  expect(card.className).toContain('md:min-h-[240px]')
+  expect(card.className).toContain('md:w-[220px]')
+  expect(card.className).toContain('md:flex-initial')
+  expect(card.className).not.toContain('md:flex-none')
+})
+
+/** `Button` writes its own `min-h-[72px]` for `size="lg"`, and this call site's plain
+ * `min-h-[104px]` lost to it on Tailwind's utility order — the button has always been 72 px tall.
+ * Restating it as `md:min-h-[104px]` would have *won* (variants are emitted after plain
+ * utilities) and grown the iPad's button by 32 px, so the dead class is gone rather than left
+ * here reading like a promise. */
+it('does not re-assert a min height the landscape frame never had', () => {
+  renderPair()
+
+  const listen = screen.getByRole('button', { name: /Nghe$/ })
+  expect(listen.className).not.toContain('min-h-[104px]')
+  expect(listen.className).toContain('md:px-12')
+  expect(listen.className).toContain('md:text-[30px]')
+})
