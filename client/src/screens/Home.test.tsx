@@ -12,7 +12,7 @@ const DAY_MS = 24 * 60 * 60 * 1000
 /** Home is rendered inside a router that also serves a stub for the celebration screen, so the
  * once-a-day redirect can be observed without pulling in MissionComplete. */
 function renderHome() {
-  render(
+  return render(
     <MemoryRouter initialEntries={['/']}>
       <Routes>
         <Route path="/" element={<Home />} />
@@ -184,8 +184,53 @@ it('keeps the stacked layout scrollable so the mission CTA is never trapped belo
   expect(root).toHaveClass('min-h-full', 'overflow-y-auto')
   expect(root.classList.contains('h-full')).toBe(false)
   expect(root.classList.contains('overflow-hidden')).toBe(false)
-  // Only the landscape map frame may clip, and only from `lg` up.
+  // Only the landscape map frame may clip, and only from `ipad` up.
   expect(Array.from(root.classList).filter(c => c.includes('overflow-hidden'))).toEqual([])
+})
+
+/**
+ * Phase 10 / design M1b: a phone gets no curved map. The islands are a plain 2-column grid of
+ * cards, and the classes say so — nothing positions them until `ipad`. Asserting the classes is the
+ * only way to see a breakpoint in jsdom, which has no stylesheet and so no layout to measure; the
+ * geometry itself is checked in a real browser at 390×844 and 1194×834.
+ */
+it('lays the islands out as a grid on a phone, with nothing positioned until the iPad', () => {
+  renderHome()
+
+  for (const id of ['animals', 'weather']) {
+    const classes = Array.from(screen.getByTestId(`island-${id}`).classList)
+    // A card of the grid: sized, not placed.
+    expect(classes).toContain('h-32')
+    expect(classes).toContain('rounded-xl3')
+    // `absolute` only ever appears behind the `ipad:` prefix — never on its own.
+    expect(classes.filter(c => c.endsWith('absolute'))).toEqual(['ipad:absolute'])
+  }
+})
+
+it('keeps the mission CTA above the islands in the DOM, where a phone can reach it', () => {
+  renderHome()
+
+  const cta = screen.getByRole('link', { name: 'Bắt đầu ▸' })
+  const firstIsland = screen.getByTestId('island-animals')
+  // Node.DOCUMENT_POSITION_FOLLOWING: the first island comes *after* the CTA.
+  expect(cta.compareDocumentPosition(firstIsland) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+})
+
+// Dropping the map on the phone must not delete it: from `ipad` up the trail, the slot offsets and
+// the absolute island band are still the layout, exactly as in phase 9.
+it('still emits the curved map for the iPad breakpoint', () => {
+  const { container } = renderHome()
+
+  // The trail is drawn in the map's own 1194×834 frame coordinates — Foxy is the other svg here.
+  const trail = Array.from(container.querySelectorAll('svg'))
+    .find(svg => svg.getAttribute('viewBox') === '0 0 1194 834')
+  expect(trail).toBeDefined()
+  expect(Array.from(trail!.classList)).toEqual(expect.arrayContaining(['hidden', 'ipad:block']))
+  expect(trail!.querySelector('path')?.getAttribute('d')).toMatch(/^M125 103 C/)
+
+  const island = screen.getByTestId('island-animals')
+  expect(Array.from(island.classList)).toEqual(expect.arrayContaining(['ipad:absolute', 'ipad:w-[15%]']))
+  expect(island).toHaveStyle({ left: '3%', top: '0%' })
 })
 
 it('puts the eight topic islands on the map, in unlock order, each linking to its hub', () => {
