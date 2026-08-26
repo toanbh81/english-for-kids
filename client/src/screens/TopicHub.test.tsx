@@ -168,7 +168,9 @@ it('draws the island header behind the top of the phone layout, and nowhere else
   // The header itself is white-on-teal on a phone and the cream page's ink from `md` up.
   expect(screen.getByRole('heading', { name: 'Động vật' })).toHaveClass('text-white', 'md:text-ink-900')
   expect(screen.getByText(/Đảo số 1/)).toHaveClass('md:hidden')
-  expect(screen.getByRole('link', { name: /Về nhà/ })).toHaveClass('max-md:h-14', 'max-md:text-teal-600')
+  // 64 px, not the design's 56: the spec's binding rules put the tap-target floor at 64 with no
+  // exception, so the phone arrow is `h-16`/`w-16` and only its colour follows the island header.
+  expect(screen.getByRole('link', { name: /Về nhà/ })).toHaveClass('max-md:h-16', 'max-md:w-16', 'max-md:text-teal-600')
 })
 
 it('sizes the section rows for a phone and restores the landscape card from md up', () => {

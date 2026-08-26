@@ -2,7 +2,7 @@ import { Component } from 'react'
 import type { ErrorInfo, ReactNode } from 'react'
 import { clearLessons } from '../progress/lessonStore'
 import { Foxy } from './Foxy'
-import { Button } from './ui'
+import { Button, PAGE_SHELL } from './ui'
 
 /**
  * The last line of defence: anything a screen throws during render lands here instead of leaving
@@ -41,7 +41,11 @@ export class AppErrorBoundary extends Component<Props, State> {
     if (!this.state.failed) return this.props.children
 
     return (
-      <main className="flex h-full flex-col items-center justify-center gap-7 bg-cream-50 p-8 text-center">
+      // The safe-area shell, resting at this screen's own `p-8`: a fallback that runs *under* the
+      // notch is exactly as unreadable as any other screen would be, and this is the one screen a
+      // child cannot navigate away from. With no inset to clear — iPad, desktop, jsdom — it is the
+      // same 32 px it has always been.
+      <main className={`flex h-full flex-col items-center justify-center gap-7 bg-cream-50 px-8 text-center [--page-pad-bottom:2rem] [--page-pad-top:2rem] ${PAGE_SHELL}`}>
         <Foxy mood="surprised" size="lg" />
         <h1 className="font-display text-[40px] font-extrabold leading-tight text-ink-900">Ôi, có lỗi rồi 🦊</h1>
         <p className="text-xl font-bold text-ink-500">Con bấm nút bên dưới để về nhà nhé!</p>

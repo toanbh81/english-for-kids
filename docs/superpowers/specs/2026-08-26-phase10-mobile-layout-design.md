@@ -15,6 +15,15 @@ rest simply weren't removed; the story quiz answers are emoji, not the design's 
 question, Q17's 7-vs-14-day parent chart) were resolved pragmatically by whichever task touched that
 screen, per that task's own report.
 
+**Tap targets (binding rule 5), settled in the final fix wave.** The first pass had shipped three
+back arrows under the floor — 56×56 on `LevelStairs` and `TopicHub`, 48×48 on `StoryPlayer` — taken
+from the design's own numbers. They are 64×64 on a phone now, at every one of those three sites, and
+nothing measured broke: `/levels` and `/story/:id` still fit 844 and 667 exactly, `/topic/:id` still
+fits 844 and its 375×667 scroll grew from 34 px to 42 px with nothing covered at `scrollTop` 0. So
+**there is no accepted deviation from the 64 px floor anywhere in the app** — the parent dashboard
+remains the single documented exception (decision 2's disclosure summary row is itself held to 64),
+because the design calls that screen an adult interface outright.
+
 The app was built for iPad landscape and is unusable on a phone in practice: nothing overflows sideways, but every screen is 1.2–2.6 viewports tall and the primary action falls below the fold (Home's "Bắt đầu" sits at y≈1221 on a 844 px screen). Claude Design delivered `Speak Up Mobile.dc.html` (14 artboards at 390×844) on 2026-08-25.
 
 **The numbers are in the handoff brief, not here:** `docs/design/2026-08-25-mobile-handoff-brief.md` is the authority for every measurement, per-frame structure and per-file delta (§1 frame rules, §2–§12 per screen, §13 breakpoints, §15 iPad risks, §16 new components). This spec records only the decisions the design deliberately left open, and the rules that bind the whole phase.

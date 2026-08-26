@@ -26,7 +26,7 @@ export function StoryQuiz() {
   const story = findStory(id)
   if (!story) {
     return (
-      <main className="flex h-full flex-col items-center justify-center gap-6 bg-cream-50 p-8">
+      <main className={`flex h-full flex-col items-center justify-center gap-6 bg-cream-50 px-8 [--page-pad-bottom:2rem] [--page-pad-top:2rem] ${PAGE_SHELL}`}>
         <p className="font-display text-3xl font-extrabold text-ink-900">Không tìm thấy truyện</p>
         <Link to="/stories" className={BACK_LINK}>← Truyện</Link>
       </main>

@@ -174,3 +174,15 @@ it('titles the screen in Vietnamese on a phone and keeps "Speak Lab" from md up'
   expect(screen.getByText('Các bậc luyện nói 🗣️')).toHaveClass('md:hidden')
   expect(screen.getByText('Speak Lab 🗣️')).toHaveClass('hidden', 'md:inline')
 })
+
+/** The spec's binding rules put the tap-target floor at 64 px with no exception, and the first
+ * pass had shipped this arrow at the design's 56. It is 64 on a phone now, and nothing measured
+ * broke: /levels still fits 844 and 667 exactly with the CTA on the bottom edge. */
+it('holds the back arrow to the 64 px tap floor on a phone', () => {
+  renderStairs()
+
+  const back = screen.getByRole('link', { name: /Về trang chủ|Về bản đồ/ })
+  expect(back).toHaveClass('max-md:h-16', 'max-md:w-16')
+  // …and the landscape 66 px circle is `BackButton`'s own, untouched at every width from `md` up.
+  expect(back).toHaveClass('h-[66px]', 'w-[66px]')
+})

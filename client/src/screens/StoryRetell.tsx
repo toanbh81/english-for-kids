@@ -72,7 +72,10 @@ function StoryRetellInner({ story, id }: { story: Story; id: string }) {
     : stars === 3 ? 'cheer' : stars === 2 ? 'happy' : 'idle'
 
   return (
-    <main className="h-full overflow-y-auto bg-cream-50 px-6 py-5">
+    // The safe-area shell, resting at this screen's own `py-5`: the not-found fallback above got
+    // it in task 7 and the screen itself was missed, so on an iPhone the header ran under the
+    // notch. With no inset to clear it is the same 20 px it has always been.
+    <main className={`h-full overflow-y-auto bg-cream-50 px-6 [--page-pad-bottom:1.25rem] [--page-pad-top:1.25rem] ${PAGE_SHELL}`}>
       <div className="mx-auto flex min-h-full w-full max-w-4xl flex-col items-center gap-4">
         <header className="flex w-full items-center justify-between gap-4">
           <BackButton to="/stories" label="Truyện" />

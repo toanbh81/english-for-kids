@@ -707,13 +707,20 @@ implements them without regressing the iPad.
   a 1024–1193 tablet a squeezed landscape instead of its portrait one. The five `sm:` (640) call
   sites that meant "tablet column count" (`SoundPractice`, `SoundWordList`, `LevelStairs`, plus five
   level-list screens the brief's own table missed) became `md:`. `lg:` (1024) is no longer a layout
-  switch anywhere in the app — five level-list grids and one `VoicePractice` type-size step keep it
-  as pure column/scale tuning, not a breakpoint.
+  switch anywhere in the app — **four** level-list grids (`LevelSelect`, `PairLevel`, `StarLevel`,
+  `VoiceLevel`) and one `VoicePractice` type-size step keep it as pure column/scale tuning, not a
+  breakpoint. One consequence is deliberate and worth naming: a **1024–1193 px window now gets the
+  portrait layout**, which on a short one scrolls where the squeezed landscape used to fit. That is
+  what moving the switch off `lg:` was *for* — a 1024-wide tablet is not an iPad in landscape — so
+  the scroll is the ordered behaviour, not a regression.
 - **A safe-area shell**, `client/src/components/ui/pageShell.ts` (`PAGE_SHELL`) — top/bottom padding
   as `max(the screen's own resting padding, env(safe-area-inset-*) + a few px of breathing room)`.
   The `max()` is what makes it a no-op on an iPad, a desktop browser, or in a test renderer, where
   every inset reads 0: the shell just hands back the padding the screen already had. Applied to
-  every `<main>` in the app; horizontal padding stays with each screen (16/20/14/18 px per the
+  every `<main>` in the app — all of them, checked with
+  `grep -rn "<main" client/src --include=*.tsx | grep -v PAGE_SHELL` returning nothing, including
+  the `AppErrorBoundary` fallback (the one screen a child cannot navigate away from) and the two
+  story "not found" fallbacks. Horizontal padding stays with each screen (16/20/14/18 px per the
   design's frame families).
 - **Home (M1b)** — **the island map is dropped below the tablet breakpoint, replaced by a
   two-column card grid** of the eight topics; the mission card moves to the top of the column, right
@@ -769,6 +776,21 @@ implements them without regressing the iPad.
   trung bình" score-average card, the custom-minutes `<input>`, the dashed target-minutes line on
   the chart, and the "Áp dụng từ bài học ngày mai" caption — none of these were asked for by name, so
   none were removed.
+- **The other four speaking screens (M3/M3b again)** — `PracticeCard` (Sound Zoo / Word Pop),
+  `PairPractice`, `StarPractice` and `VoicePractice` had been left out of the first pass entirely:
+  no phone rules and no `PAGE_SHELL`, so their content ran under the notch and the home indicator.
+  At 390×844 they now all fit: `/practice/wp-cat` **1156 → 844** (the mic moved from y938 —
+  94 px below the fold — to y638), `/voice/sv1` **940 → 844** (mic y722→y638), `/star/ss1`
+  **864 → 844**, `/pair/pair-ship-sheep` **928 → 844**. Their *result* states were worse than their
+  idle ones — `/voice/sv1` scored was **1742 px** with "Tiếp theo →" at y1642 — and are now 844 with
+  the CTA at y752. The shape that buys that is the one `LevelStairs` introduced, not a `sticky`:
+  **on a phone the result read-out is a bounded scrolling region and the CTA row is its sibling
+  underneath**, so a fourteen-word passage's fourteen 64 px word chips can be scrolled to while the
+  way on stays on screen and nothing is ever painted over anything. The bounded height is switched
+  on for the result state only — a definite height also lets a `flex-1` section be squeezed below
+  its content, which would put the recording countdown on top of the mic. `md:contents` takes the
+  new wrapper out of the box tree from 768 up, so all four screens fingerprint **byte-identical at
+  1194×834, idle and result** (0 boxes moved; the wrapper itself has no box).
 - **Wording sweep (spec decision 1):** every "Về bản đồ 🏝️" (back to the map) string that could
   appear on a phone — where the map does not exist below `md:` — now reads "Về trang chủ 🏠"
   instead, in `DailyMission`, `LevelSelect`, `LevelStairs`, `MissionComplete` and `StoryQuiz`. The
@@ -781,7 +803,14 @@ implements them without regressing the iPad.
 on a phone rather than the design's 20 px (no phone size exists on the shared `Button` primitive
 yet); the story quiz's answer cards are emoji, not the design's `art/` photographs (the artwork
 export is a separate task); the Home streak strip's tap-to-see-detail panel the design mentions was
-not built (no design exists for it).
+not built (no design exists for it). **The parent dashboard is still 1268 px tall at 390×844 and was
+deliberately left that way:** it is the one adult screen in the app, it has no single primary action
+to keep above a fold, and a grown-up reading a week of their child's practice is expected to scroll.
+**The topic hub scrolls 42 px at 375×667** (34 of those were already there; the other 8 are the back
+arrow going from 56 px to the spec's 64) — nothing is covered at `scrollTop` 0 and the section rows
+are all reachable. **Story Voice and Sentence Stars still overflow the *iPad* in their result state**
+(`/voice/sv1` scored is 1140 px at 1194×834, `/star/ss1` 959): that predates the phone work, is
+unchanged by it, and is a landscape-frame problem for a later pass.
 
 ## iPad setup & testing (Thiết lập trên iPad)
 

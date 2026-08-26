@@ -12,7 +12,7 @@ export function StoryPlayer() {
   const story = findStory(id)
   if (!story) {
     return (
-      <main className="flex h-full flex-col items-center justify-center gap-6 bg-cream-50 p-8">
+      <main className={`flex h-full flex-col items-center justify-center gap-6 bg-cream-50 px-8 [--page-pad-bottom:2rem] [--page-pad-top:2rem] ${PAGE_SHELL}`}>
         <p className="font-display text-3xl font-extrabold text-ink-900">Không tìm thấy truyện</p>
         <Button to="/stories" variant="outline">← Truyện</Button>
       </main>
@@ -47,7 +47,9 @@ function StoryPlayerInner({ story, id }: { story: Story; id: string }) {
           means the artwork is the same shape on every phone rather than whatever is left over. */}
       <div className="relative flex aspect-[16/9] flex-none justify-center md:aspect-auto md:max-h-[52vh] md:min-h-0 md:flex-1">
         <SceneArt emoji={scene.emoji} bg={scene.bg} image={scene.image} />
-        <BackButton to="/stories" label="Truyện" className="absolute left-2.5 top-2.5 max-md:h-12 max-md:w-12 max-md:text-2xl md:left-4 md:top-4" />
+        {/* 64 px, not 48: the spec's binding rules put the tap-target floor at 64 with no
+            exception, and this arrow rides on the artwork where it is easiest to miss. */}
+        <BackButton to="/stories" label="Truyện" className="absolute left-2.5 top-2.5 max-md:h-16 max-md:w-16 max-md:text-2xl md:left-4 md:top-4" />
         <div className="absolute right-2.5 top-2.5 flex items-center gap-2 md:right-4 md:top-4">
           {/* The dots beside it are decorative, so the chip carries the position in words — and
               once the dots are gone below 768 the chip prints that position instead of only

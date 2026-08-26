@@ -122,7 +122,9 @@ export function LevelStairs() {
             wrapper is `contents` from 768 up, so both children go back to being direct children of
             the column exactly where they were. */}
         <div className="flex items-center gap-3 md:contents">
-          <BackButton to="/" label="Về trang chủ" mdLabel="Về bản đồ" className="max-md:h-14 max-md:w-14 max-md:text-2xl md:self-start" />
+          {/* 64 px, not the design's 56: the spec's binding rules put the tap-target floor at 64
+              with no exception, and a back arrow is the control a child hits most often. */}
+          <BackButton to="/" label="Về trang chủ" mdLabel="Về bản đồ" className="max-md:h-16 max-md:w-16 max-md:text-2xl md:self-start" />
 
           <header className="text-left max-md:flex-1 md:text-center">
             {/* The design titles this screen in Vietnamese, which is also what the way in from

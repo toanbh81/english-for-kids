@@ -200,3 +200,13 @@ it('shows a not-found message for an unknown story id', () => {
   renderPlayer('nope')
   expect(screen.getByText('Không tìm thấy truyện')).toBeInTheDocument()
 })
+
+/** The spec's binding rules put the tap-target floor at 64 px with no exception, and the first
+ * pass had shipped this arrow at 48 — on the artwork, where it is easiest to miss. */
+it('holds the back arrow to the 64 px tap floor on a phone', () => {
+  renderPlayer()
+
+  const back = screen.getByRole('link', { name: 'Truyện' })
+  expect(back).toHaveClass('max-md:h-16', 'max-md:w-16')
+  expect(back).toHaveClass('h-[66px]', 'w-[66px]')
+})

@@ -109,12 +109,13 @@ function TopicHubInner({ topic }: { topic: Topic }) {
       />
 
       <div className="relative mx-auto flex w-full max-w-3xl flex-col gap-3 md:gap-5">
-        {/* The back arrow is 56 px and teal-on-white against the island header on a phone, the
-            66 px ink-on-white circle of the cream page from 768 up. */}
+        {/* The back arrow is teal-on-white against the island header on a phone, the 66 px
+            ink-on-white circle of the cream page from 768 up. 64 px, not the design's 56: the
+            spec's binding rules put the tap-target floor at 64 with no exception. */}
         <BackButton
           to="/"
           label="Về nhà"
-          className="self-start max-md:h-14 max-md:w-14 max-md:text-2xl max-md:text-teal-600"
+          className="self-start max-md:h-16 max-md:w-16 max-md:text-2xl max-md:text-teal-600"
         />
 
         {/* Design M8's title block: a 92 px white disc, the island's name in white on the teal, and
