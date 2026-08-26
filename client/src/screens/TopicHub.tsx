@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { SENTENCES } from '../content'
 import { STORIES } from '../content/stories'
-import { findTopic } from '../content/topics'
+import { TOPICS, findTopic } from '../content/topics'
 import type { Topic } from '../content/topics'
 import { findTopic as findWordDeck } from '../content/words'
 import { lessonStatus } from '../progress/lesson'
@@ -10,14 +10,39 @@ import { getStars } from '../progress/store'
 import { topicStars, topicUnlocked, unlockedWords } from '../progress/topicProgress'
 import { BackButton, Chip, PAGE_SHELL, StarRow } from '../components/ui'
 
-/** Section cards are the child's tap targets, so they sit well above the 64 px floor. */
+/**
+ * Phone styles sit at the default breakpoint and `md:` (768) puts the tablet/iPad value back — the
+ * phase-10 idiom, written out in full in `screens/SoundPractice.tsx`. `max-md:` appears only where
+ * a shared primitive (`Chip`) writes the class being overridden for itself.
+ *
+ * Section cards are the child's tap targets, so both sizes sit well above the 64 px floor: the
+ * design's 84 px row on a phone (§12 M8), the 96 px the landscape frame has always had from 768 up.
+ * `flex-wrap` is the phone's safety valve — a story whose title, "hôm nay" chip and stars cannot
+ * share one 390 px line drops the trailing group onto a second line instead of crushing the title.
+ */
 const SECTION =
-  'flex min-h-[96px] items-center gap-5 rounded-xl3 bg-white px-6 py-4 shadow-card transition-transform active:scale-95'
+  'flex min-h-[84px] flex-wrap items-center gap-3.5 rounded-[24px] bg-white px-[18px] py-4 shadow-card transition-transform active:scale-95'
+  + ' md:min-h-[96px] md:flex-nowrap md:gap-5 md:rounded-xl3 md:px-6'
 const SECTION_MUTED =
-  'flex min-h-[96px] items-center gap-5 rounded-xl3 bg-cream-50 px-6 py-4 shadow-card-sm opacity-70'
-const SECTION_EMOJI = 'text-[56px] leading-none'
-const SECTION_TITLE = 'font-display text-[26px] font-extrabold text-ink-900'
-const SECTION_NOTE = 'text-lg font-bold text-ink-500'
+  'flex min-h-[84px] flex-wrap items-center gap-3.5 rounded-[24px] bg-cream-50 px-[18px] py-4 shadow-card-sm opacity-70'
+  + ' md:min-h-[96px] md:flex-nowrap md:gap-5 md:rounded-xl3 md:px-6'
+const SECTION_EMOJI = 'text-[34px] leading-none md:text-[56px]'
+const SECTION_TITLE = 'font-display text-[19px] font-extrabold text-ink-900 md:text-[26px]'
+const SECTION_NOTE = 'text-sm font-bold text-ink-500 md:text-lg'
+/** The row's right-hand group: the "hôm nay" chip, the story's stars, and the phone's chevron.
+ * It is always rendered, so at 768 up an empty one is a zero-width box and `ml-auto` a no-op. */
+const SECTION_TAIL = 'ml-auto flex shrink-0 items-center gap-2 md:gap-3'
+
+/** The design's "▸" at the end of every row — a phone affordance only: the landscape frame has
+ * never had one and is not gaining one this phase. */
+function Chevron() {
+  return <span aria-hidden="true" className="font-display text-[22px] leading-none text-ink-300 md:hidden">▸</span>
+}
+
+/** A section that holds one of today's items is outlined as well as chipped on a phone (§12 M8),
+ * where the chip alone shrinks to 11 px. `md:border-0` is the exact restore: the landscape card
+ * has no border at all. */
+const TODAY_OUTLINE = 'border-[3px] border-teal-500 md:border-0'
 
 /**
  * The badge that ties the two axes together (Phase 9 §4). The mission and the islands stay separate
@@ -26,7 +51,9 @@ const SECTION_NOTE = 'text-lg font-bold text-ink-500'
  * also part of today's lesson, so practising here ticks something off there.
  */
 function TodayChip() {
-  return <Chip tone="teal" size="sm">Có trong nhiệm vụ hôm nay</Chip>
+  // 11 px on a phone, where the chip shares an 84 px row with an emoji, a title and a chevron —
+  // `max-md:` because `px-4 py-2` and the size's `text-base` are `Chip`'s own classes.
+  return <Chip tone="teal" size="sm" className="max-md:px-2.5 max-md:py-1 max-md:text-[11px]">Có trong nhiệm vụ hôm nay</Chip>
 }
 
 function LockedTopic() {
@@ -60,36 +87,85 @@ function TopicHubInner({ topic }: { topic: Topic }) {
   const wordsToday = [...todayRoutes].some(r => r.startsWith(`/words/${topic.id}/`))
   const sentencesToday = sentences.some(s => todayRoutes.has(`/sentence/${s.id}`))
 
-  return (
-    <main className={`h-full overflow-y-auto bg-cream-50 px-6 ${PAGE_SHELL}`}>
-      <div className="mx-auto flex w-full max-w-3xl flex-col gap-5">
-        <BackButton to="/" label="Về nhà" className="self-start" />
+  // Which island this is on the map, 1-based — the design's "Đảo số 1" line, and real data rather
+  // than a second star metric: `TOPICS` is the unlock order the map itself is laid out in.
+  const islandNo = TOPICS.findIndex(t => t.id === topic.id) + 1
 
-        <header className="flex flex-wrap items-center gap-4">
-          <span aria-hidden="true" className="text-[64px] leading-none">{topic.emoji}</span>
-          <h1 className="font-display text-[40px] font-extrabold leading-tight text-ink-900">{topic.name}</h1>
-          <StarRow value={topicStars(topic.id)} />
+  return (
+    // 20 px of side frame on a phone (design §1, the M8 family), the 24 px this screen has always
+    // had from the tablet breakpoint up.
+    <main className={`relative h-full overflow-y-auto bg-cream-50 px-5 md:px-6 ${PAGE_SHELL}`}>
+      {/* The island header (§12 M8): one of the two background colours the design allows, behind the back
+          row and the title block, with the rounded foot the frame draws. Its height is the design's
+          236 px measured the way the design measures it — 180 px of content below the frame's own
+          top padding — so it tracks the safe-area shell instead of fixing a number that is only
+          right on a notched phone: 236 px on an iPhone, 204 px in a browser with no inset to clear.
+          Decorative and absolute, so it scrolls with the content it sits behind and never enters
+          the flow the sections are laid out in. */}
+      <div
+        aria-hidden="true"
+        data-testid="island-header"
+        className="pointer-events-none absolute inset-x-0 top-0 h-[calc(180px_+_max(1.5rem,calc(env(safe-area-inset-top)_+_9px)))] rounded-b-[40px] bg-teal-500 md:hidden"
+      />
+
+      <div className="relative mx-auto flex w-full max-w-3xl flex-col gap-3 md:gap-5">
+        {/* The back arrow is 56 px and teal-on-white against the island header on a phone, the
+            66 px ink-on-white circle of the cream page from 768 up. */}
+        <BackButton
+          to="/"
+          label="Về nhà"
+          className="self-start max-md:h-14 max-md:w-14 max-md:text-2xl max-md:text-teal-600"
+        />
+
+        {/* Design M8's title block: a 92 px white disc, the island's name in white on the teal, and
+            the stars beside a line that says which island this is. The two `md:contents` wrappers
+            are what let one DOM be both layouts — below 768 they are the text column, and from 768
+            up they leave the box tree entirely, so the emoji, the heading and the stars are the
+            same three flex items of the same wrapping row they have always been. */}
+        <header className="flex flex-wrap items-center gap-3.5 pb-3 md:gap-4 md:pb-0">
+          <span
+            aria-hidden="true"
+            className="flex h-[92px] w-[92px] shrink-0 items-center justify-center rounded-full bg-white text-[46px] leading-none shadow-[0_6px_0_#1FA396] md:h-auto md:w-auto md:rounded-none md:bg-transparent md:text-[64px] md:shadow-none"
+          >
+            {topic.emoji}
+          </span>
+          <div className="flex flex-1 flex-col gap-1 md:contents">
+            <h1 className="font-display text-[30px] font-extrabold leading-tight text-white md:text-[40px] md:text-ink-900">{topic.name}</h1>
+            <div className="flex items-center gap-2 md:contents">
+              {/* One star row, restyled — never a second copy of the same count. */}
+              <StarRow value={topicStars(topic.id)} size="sm" className="md:gap-1 md:text-3xl" />
+              <span className="font-display text-sm font-extrabold text-teal-50 md:hidden">
+                Đảo số {islandNo} · Luyện thêm nhé!
+              </span>
+            </div>
+          </div>
         </header>
 
-        <Link to={`/words/${topic.id}`} className={SECTION}>
+        <Link to={`/words/${topic.id}`} className={`${SECTION} ${wordsToday ? TODAY_OUTLINE : ''}`}>
           <span aria-hidden="true" className={SECTION_EMOJI}>🧩</span>
           <span className="flex flex-col">
             <span className={SECTION_TITLE}>Từ mới</span>
             <span className={SECTION_NOTE}>{words}/{deckSize} từ</span>
           </span>
-          {wordsToday && <span className="ml-auto"><TodayChip /></span>}
+          <span className={SECTION_TAIL}>
+            {wordsToday && <TodayChip />}
+            <Chevron />
+          </span>
         </Link>
 
-        <Link to={`/sentences?topic=${topic.id}`} className={SECTION}>
+        <Link to={`/sentences?topic=${topic.id}`} className={`${SECTION} ${sentencesToday ? TODAY_OUTLINE : ''}`}>
           <span aria-hidden="true" className={SECTION_EMOJI}>🧱</span>
           <span className="flex flex-col">
             <span className={SECTION_TITLE}>Ghép câu</span>
             <span className={SECTION_NOTE}>{starred}/{sentences.length} câu có sao</span>
           </span>
-          {sentencesToday && <span className="ml-auto"><TodayChip /></span>}
+          <span className={SECTION_TAIL}>
+            {sentencesToday && <TodayChip />}
+            <Chevron />
+          </span>
         </Link>
 
-        <section className="flex flex-col gap-4">
+        <section className="flex flex-col gap-3 md:gap-4">
           {stories.length === 0 ? (
             // No story for this topic yet: a muted card, never a link, so a tap cannot dead-end.
             <div className={SECTION_MUTED}>
@@ -101,15 +177,20 @@ function TopicHubInner({ topic }: { topic: Topic }) {
             </div>
           ) : (
             stories.map(story => (
-              <Link key={story.id} to={`/story/${story.id}`} className={SECTION}>
+              <Link
+                key={story.id}
+                to={`/story/${story.id}`}
+                className={`${SECTION} ${todayRoutes.has(`/story/${story.id}`) ? TODAY_OUTLINE : ''}`}
+              >
                 <span aria-hidden="true" className={SECTION_EMOJI}>🎧</span>
                 <span className="flex flex-col">
                   <span className={SECTION_TITLE}>{story.titleVi}</span>
                   <span className={SECTION_NOTE}>{story.title}</span>
                 </span>
-                <span className="ml-auto flex items-center gap-3">
+                <span className={SECTION_TAIL}>
                   {todayRoutes.has(`/story/${story.id}`) && <TodayChip />}
-                  <StarRow value={getStars(`story:${story.id}`)} />
+                  <StarRow value={getStars(`story:${story.id}`)} size="sm" className="md:gap-1 md:text-3xl" />
+                  <Chevron />
                 </span>
               </Link>
             ))

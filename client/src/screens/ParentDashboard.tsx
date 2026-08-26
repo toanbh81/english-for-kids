@@ -15,8 +15,22 @@ import { PHONEME_TIPS } from '../scoring/feedback'
 import { playBlob } from '../audio/player'
 import { Button, Card, PAGE_SHELL } from '../components/ui'
 
+/**
+ * Phone styles sit at the default breakpoint and `md:` (768) puts the tablet/iPad value back — the
+ * phase-10 idiom written out in full in `screens/SoundPractice.tsx`. `max-md:` appears only where a
+ * shared primitive (`Button`) writes the class being overridden for itself.
+ *
+ * This screen is the one place the app's 64 px tap floor does not apply, and the design says so
+ * outright (§12 M8c): it is an **adult** interface — "chữ 12–14px, vùng chạm 36–48px (không cần
+ * 64), mật độ cao hơn" — reached through a gate no child gets past. So the phone sizes below are
+ * 44 px controls and 12–14 px text, not the child screens' 64 px and 19 px. The one control still
+ * held to the child floor is the recordings disclosure's summary row, which spec decision 2 asks
+ * for by name.
+ */
 const KIND_LABEL = { speak: 'Nói', word: 'Từ vựng', sentence: 'Ghép câu' } as const
 const LIMIT_CHIPS = [15, 20, 30] as const
+/** How many of the chart's fourteen days a phone draws (design §12 M8c). */
+const PHONE_DAYS = 7
 const BAND_VALUES = [1, 2, 3, 4, 5] as const satisfies readonly Band[]
 const LENGTH_LABEL: Record<LessonLength, string> = {
   short: 'Ngắn ~8 phút',
@@ -52,6 +66,18 @@ export function ParentDashboard({ onLock }: Props) {
   const [limit, setLimit] = useState<string>(() => String(getLimitMinutes()))
   const [band, setBand] = useState(() => getBand())
   const [length, setLength] = useState<LessonLength>(() => getLessonLength())
+  /**
+   * Spec decision 2: the design drops "Bản ghi gần đây" on a phone and we do not — the last 20
+   * recordings are a working feature, not a layout. It collapses into a disclosure there instead,
+   * closed, so the two cards under it are not twenty rows away.
+   *
+   * `open` is an attribute, not a class, so it cannot follow a breakpoint: it is decided once, on
+   * mount, by the same 768 px query the classes use. Once, deliberately — the value never changes,
+   * so React never re-applies the attribute and so never fights a parent's own tap on the summary.
+   * (A tablet rotated below 768 after mount keeps the state it opened with; re-entering the screen
+   * re-reads it, and the phone the design is aimed at has nothing to rotate into.)
+   */
+  const [recordingsOpen] = useState(() => window.matchMedia?.('(min-width: 768px)').matches ?? false)
 
   const { events, now } = snapshot
   const days = minutesPerDay(14, now, events)
@@ -125,19 +151,21 @@ export function ParentDashboard({ onLock }: Props) {
   }
 
   return (
-    <main className={`h-full overflow-y-auto bg-cream-50 px-6 ${PAGE_SHELL} text-base text-ink-500`}>
-      <div className="mx-auto flex w-full max-w-5xl flex-col gap-6">
+    // 18 px of side frame on a phone — the densest of the design's five frame paddings (§1), for the
+    // one screen it draws for a grown-up — and the 24 px this screen has always had from 768 up.
+    <main className={`h-full overflow-y-auto bg-cream-50 px-[18px] ${PAGE_SHELL} text-sm text-ink-500 md:px-6 md:text-base`}>
+      <div className="mx-auto flex w-full max-w-5xl flex-col gap-3 md:gap-6">
         <Link
           to="/"
-          className="inline-flex min-h-[64px] items-center gap-2 self-start rounded-full bg-white px-6 font-display text-xl font-extrabold text-ink-900 shadow-card-sm active:translate-y-[2px]"
+          className="inline-flex min-h-[48px] items-center gap-2 self-start rounded-full bg-white px-4 font-display text-base font-extrabold text-ink-900 shadow-card-sm active:translate-y-[2px] md:min-h-[64px] md:px-6 md:text-xl"
         >
           ← Về nhà
         </Link>
 
         <header className="flex flex-wrap items-start justify-between gap-4">
           <div>
-            <h1 className="font-display text-[36px] font-extrabold text-ink-900">Góc phụ huynh</h1>
-            <p className="mt-1 font-semibold text-ink-500">
+            <h1 className="font-display text-[21px] font-extrabold text-ink-900 md:text-[36px]">Góc phụ huynh</h1>
+            <p className="mt-1 text-xs font-semibold text-ink-500 md:text-base">
               Tuần này: {weekMinutes} phút luyện · điểm phát âm trung bình {avgScoreLabel}/100
             </p>
           </div>
@@ -145,24 +173,30 @@ export function ParentDashboard({ onLock }: Props) {
           <button
             type="button"
             onClick={() => onLock?.()}
-            className="flex min-h-[64px] items-center gap-2 rounded-xl2 border border-line-200 bg-white px-5 font-semibold text-ink-500 active:translate-y-[2px]"
+            className="flex min-h-[44px] items-center gap-2 rounded-xl2 border border-line-200 bg-white px-3 text-xs font-semibold text-ink-500 active:translate-y-[2px] md:min-h-[64px] md:px-5 md:text-base"
           >
             <span>🔐 Đã mở khoá bằng câu hỏi ·</span>
             <span className="font-display font-extrabold text-ink-900">Khoá lại</span>
           </button>
         </header>
 
-        <div className="grid grid-cols-1 gap-6 ipad:grid-cols-[1.4fr_1fr]">
-          <div className="flex flex-col gap-6">
-            <Card className="p-6">
-              <h2 className="font-display text-xl font-extrabold text-ink-900">Phút luyện mỗi ngày (14 ngày)</h2>
-              <p className="mb-4 mt-1 text-sm font-semibold text-ink-500">Mục tiêu {limitMinutes} phút/ngày</p>
+        <div className="grid grid-cols-1 gap-3 md:gap-6 ipad:grid-cols-[1.4fr_1fr]">
+          <div className="flex flex-col gap-3 md:gap-6">
+            <Card className="px-4 py-3.5 md:p-6">
+              {/* The chart holds the same fourteen days at every width; a phone draws the last seven
+                  of them (design §12 M8c). Fourteen date labels cannot share 300 px — at 320 they
+                  made the card wider than the screen — and `hidden` drops a day's column and its
+                  label together, so a bar and its date can never come apart. */}
+              <h2 className="font-display text-base font-extrabold text-ink-900 md:text-xl">
+                Phút luyện mỗi ngày <span className="md:hidden">(7 ngày)</span><span className="hidden md:inline">(14 ngày)</span>
+              </h2>
+              <p className="mb-3 mt-1 text-xs font-semibold text-ink-500 md:mb-4 md:text-sm">Mục tiêu {limitMinutes} phút/ngày</p>
 
-              <div className="relative h-40">
+              <div className="relative h-24 md:h-40">
                 <div className="absolute inset-x-0 border-t-2 border-dashed border-ink-300" style={{ top: `${targetTopPct}%` }} />
                 <div className="absolute inset-0 flex items-end gap-1">
-                  {days.map(d => (
-                    <div key={d.day} className="flex h-full flex-1 items-end">
+                  {days.map((d, i) => (
+                    <div key={d.day} className={`h-full flex-1 items-end ${i < days.length - PHONE_DAYS ? 'hidden md:flex' : 'flex'}`}>
                       <div
                         data-testid="minute-bar"
                         data-minutes={d.minutes}
@@ -174,20 +208,30 @@ export function ParentDashboard({ onLock }: Props) {
                 </div>
               </div>
               <div className="mt-2 flex gap-1">
-                {days.map(d => (
-                  <span key={d.day} className="flex-1 text-center text-[10px] font-bold text-ink-300">{formatDayLabel(d.day)}</span>
+                {days.map((d, i) => (
+                  <span
+                    key={d.day}
+                    className={`flex-1 text-center text-[10px] font-bold text-ink-300 ${i < days.length - PHONE_DAYS ? 'hidden md:block' : 'block'}`}
+                  >
+                    {formatDayLabel(d.day)}
+                  </span>
                 ))}
               </div>
-              <p className="mt-3 text-sm font-semibold text-ink-500">Tổng: {totalMinutes} phút</p>
+              {/* The total counts what the chart shows, so it follows the same seven/fourteen split.
+                  `weekMinutes` is the last seven days already — the summary line at the top of the
+                  screen is built from it. */}
+              <p className="mt-2 text-xs font-semibold text-ink-500 md:mt-3 md:text-sm">
+                Tổng: <span className="md:hidden">{weekMinutes}</span><span className="hidden md:inline">{totalMinutes}</span> phút
+              </p>
             </Card>
 
             <div>
-              <h2 className="mb-3 font-display text-xl font-extrabold text-ink-900">Điểm trung bình</h2>
-              <div className="grid grid-cols-3 gap-3">
+              <h2 className="mb-2 font-display text-base font-extrabold text-ink-900 md:mb-3 md:text-xl">Điểm trung bình</h2>
+              <div className="grid grid-cols-3 gap-2 md:gap-3">
                 {(['speak', 'word', 'sentence'] as const).map(kind => (
-                  <Card key={kind} className="flex flex-col items-center gap-1 p-5 text-center">
-                    <span className="text-sm font-bold text-ink-500">{KIND_LABEL[kind]}</span>
-                    <span className="font-display text-[40px] font-extrabold text-ink-900">
+                  <Card key={kind} className="flex flex-col items-center gap-1 p-3 text-center md:p-5">
+                    <span className="text-xs font-bold text-ink-500 md:text-sm">{KIND_LABEL[kind]}</span>
+                    <span className="font-display text-[26px] font-extrabold text-ink-900 md:text-[40px]">
                       {averages[kind] != null ? Math.round(averages[kind]!) : '—'}
                     </span>
                   </Card>
@@ -196,20 +240,23 @@ export function ParentDashboard({ onLock }: Props) {
             </div>
           </div>
 
-          <div className="flex flex-col gap-6">
-            <Card className="p-6">
-              <h2 className="mb-3 font-display text-xl font-extrabold text-ink-900">Âm hay sai</h2>
+          <div className="flex flex-col gap-3 md:gap-6">
+            <Card className="px-4 py-3.5 md:p-6">
+              <h2 className="mb-2 font-display text-base font-extrabold text-ink-900 md:mb-3 md:text-xl">Âm hay sai</h2>
               {weak.length === 0 ? (
                 <p>Chưa đủ dữ liệu</p>
               ) : (
-                <ul className="flex flex-col gap-3">
+                <ul className="flex flex-col gap-2 md:gap-3">
                   {weak.map(w => (
                     <li key={w.phoneme} className="flex flex-col gap-2">
-                      <p className="inline-flex w-fit items-center rounded-full bg-fix-50 px-4 py-2 font-display text-lg font-extrabold text-fix-700">
+                      <p className="inline-flex w-fit items-center rounded-full bg-fix-50 px-3 py-1.5 font-display text-sm font-extrabold text-fix-700 md:px-4 md:py-2 md:text-lg">
                         /{w.phoneme}/ — trung bình {Math.round(w.avg)} ({w.count} lần)
                       </p>
+                      {/* The design keeps the chips and drops the coaching paragraph on a phone: the
+                          chip carries the number already, and the tip is a paragraph of reading in a
+                          card that has to leave room for the three below it. Back from 768 up. */}
                       {PHONEME_TIPS[w.phoneme] && (
-                        <p className="rounded-xl2 bg-sun-50 px-4 py-3 text-sm font-semibold text-sun-700">{PHONEME_TIPS[w.phoneme]}</p>
+                        <p className="hidden rounded-xl2 bg-sun-50 px-4 py-3 text-sm font-semibold text-sun-700 md:block">{PHONEME_TIPS[w.phoneme]}</p>
                       )}
                     </li>
                   ))}
@@ -217,34 +264,46 @@ export function ParentDashboard({ onLock }: Props) {
               )}
             </Card>
 
-            <Card className="p-6">
-              <h2 className="mb-3 font-display text-xl font-extrabold text-ink-900">Bản ghi gần đây</h2>
-              {recordings.length === 0 ? (
-                <p>Chưa có bản ghi</p>
-              ) : (
-                <ul className="flex flex-col gap-3">
-                  {recordings.map(r => (
-                    <li key={r.id} className="flex items-center gap-3 rounded-xl2 border border-line-200 p-3">
-                      <button
-                        type="button"
-                        aria-label="Phát"
-                        onClick={() => { playBlob(r.blob).catch(() => { /* ignore: playback unavailable */ }) }}
-                        className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-teal-500 text-2xl text-white shadow-chunky-teal active:translate-y-[2px]"
-                      >
-                        ▶
-                      </button>
-                      <div>
-                        <p className="text-xs font-bold text-ink-300">{formatTs(r.ts)}</p>
-                        <p className="font-semibold text-ink-900">{r.text}</p>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              )}
+            <Card className="px-4 py-3.5 md:p-6">
+              {/* The disclosure of spec decision 2. The heading lives inside the `<summary>`, so the
+                  card is titled at both sizes; `list-none` and the webkit marker rule drop the
+                  triangle, and the 64 px row is the child floor this one control is held to. From
+                  768 up the summary is a plain heading line again (block, no minimum height, no
+                  chevron) and the details is open, which is the card exactly as it was. */}
+              <details open={recordingsOpen || undefined}>
+                <summary className="flex min-h-[64px] cursor-pointer list-none items-center justify-between gap-2 md:block md:min-h-0 md:cursor-default [&::-webkit-details-marker]:hidden">
+                  <h2 className="font-display text-base font-extrabold text-ink-900 md:text-xl">Bản ghi gần đây</h2>
+                  <span aria-hidden="true" className="font-display text-lg text-ink-300 md:hidden">▾</span>
+                </summary>
+                <div className="mt-2 md:mt-3">
+                  {recordings.length === 0 ? (
+                    <p>Chưa có bản ghi</p>
+                  ) : (
+                    <ul className="flex flex-col gap-2 md:gap-3">
+                      {recordings.map(r => (
+                        <li key={r.id} className="flex items-center gap-3 rounded-xl2 border border-line-200 p-2 md:p-3">
+                          <button
+                            type="button"
+                            aria-label="Phát"
+                            onClick={() => { playBlob(r.blob).catch(() => { /* ignore: playback unavailable */ }) }}
+                            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-teal-500 text-lg text-white shadow-chunky-teal active:translate-y-[2px] md:h-16 md:w-16 md:text-2xl"
+                          >
+                            ▶
+                          </button>
+                          <div>
+                            <p className="text-xs font-bold text-ink-300">{formatTs(r.ts)}</p>
+                            <p className="font-semibold text-ink-900">{r.text}</p>
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              </details>
             </Card>
 
-            <Card className="p-6">
-              <h2 className="mb-3 font-display text-xl font-extrabold text-ink-900">Giới hạn mỗi ngày</h2>
+            <Card className="px-4 py-3.5 md:p-6">
+              <h2 className="mb-2 font-display text-base font-extrabold text-ink-900 md:mb-3 md:text-xl">Giới hạn mỗi ngày</h2>
               <div className="flex gap-2">
                 {LIMIT_CHIPS.map(n => {
                   const active = Number(limit) === n
@@ -253,7 +312,7 @@ export function ParentDashboard({ onLock }: Props) {
                       key={n}
                       type="button"
                       onClick={() => handleLimitChip(n)}
-                      className={`min-h-[64px] flex-1 rounded-xl2 font-display text-base font-extrabold active:translate-y-[2px] ${
+                      className={`min-h-[44px] flex-1 rounded-xl2 font-display text-sm font-extrabold active:translate-y-[2px] md:min-h-[64px] md:text-base ${
                         active ? 'bg-coral-500 text-white shadow-chunky-coral' : 'border-2 border-line-200 bg-cream-50 text-ink-500'
                       }`}
                     >
@@ -271,22 +330,22 @@ export function ParentDashboard({ onLock }: Props) {
                   value={limit}
                   onChange={handleLimitChange}
                   onBlur={handleLimitBlur}
-                  className="h-16 w-24 rounded-xl2 border-2 border-line-200 px-3 text-center font-display text-lg font-extrabold text-ink-900"
+                  className="h-11 w-20 rounded-xl2 border-2 border-line-200 px-3 text-center font-display text-base font-extrabold text-ink-900 md:h-16 md:w-24 md:text-lg"
                 />
                 <span className="font-semibold text-ink-500">phút / ngày</span>
               </label>
             </Card>
 
-            <Card className="p-6">
-              <h2 className="mb-3 font-display text-xl font-extrabold text-ink-900">Bài học</h2>
+            <Card className="px-4 py-3.5 md:p-6">
+              <h2 className="mb-2 font-display text-base font-extrabold text-ink-900 md:mb-3 md:text-xl">Bài học</h2>
 
               <div className="mb-2 flex items-center justify-between">
-                <span className="text-sm font-bold text-ink-500">Độ khó</span>
+                <span className="text-xs font-bold text-ink-500 md:text-sm">Độ khó</span>
                 <button
                   type="button"
                   onClick={handleBandAuto}
                   aria-pressed={band.mode === 'auto'}
-                  className={`min-h-[64px] rounded-xl2 px-4 font-display text-sm font-extrabold active:translate-y-[2px] ${
+                  className={`min-h-[44px] rounded-xl2 px-4 font-display text-sm font-extrabold active:translate-y-[2px] md:min-h-[64px] ${
                     band.mode === 'auto' ? 'bg-teal-500 text-white shadow-chunky-teal' : 'border-2 border-line-200 bg-cream-50 text-ink-500'
                   }`}
                 >
@@ -303,7 +362,7 @@ export function ParentDashboard({ onLock }: Props) {
                       onClick={() => handleBandClick(n)}
                       aria-pressed={active}
                       aria-label={`Bậc ${n}`}
-                      className={`min-h-[64px] flex-1 rounded-xl2 font-display text-base font-extrabold active:translate-y-[2px] ${
+                      className={`min-h-[44px] flex-1 rounded-xl2 font-display text-base font-extrabold active:translate-y-[2px] md:min-h-[64px] ${
                         active ? 'bg-coral-500 text-white shadow-chunky-coral' : 'border-2 border-line-200 bg-cream-50 text-ink-500'
                       }`}
                     >
@@ -313,7 +372,7 @@ export function ParentDashboard({ onLock }: Props) {
                 })}
               </div>
 
-              <span className="mb-2 block text-sm font-bold text-ink-500">Thời lượng</span>
+              <span className="mb-2 block text-xs font-bold text-ink-500 md:text-sm">Thời lượng</span>
               <div className="flex gap-2">
                 {LESSON_LENGTHS.map(value => {
                   const active = length === value
@@ -323,7 +382,7 @@ export function ParentDashboard({ onLock }: Props) {
                       type="button"
                       onClick={() => handleLengthClick(value)}
                       aria-pressed={active}
-                      className={`min-h-[64px] flex-1 rounded-xl2 font-display text-sm font-extrabold active:translate-y-[2px] ${
+                      className={`min-h-[44px] flex-1 rounded-xl2 font-display text-xs font-extrabold active:translate-y-[2px] md:min-h-[64px] md:text-sm ${
                         active ? 'bg-coral-500 text-white shadow-chunky-coral' : 'border-2 border-line-200 bg-cream-50 text-ink-500'
                       }`}
                     >
@@ -335,12 +394,13 @@ export function ParentDashboard({ onLock }: Props) {
 
               {/* Today's lesson is generated once and then frozen, so a change made now shows up
                 * tomorrow — without this line the buttons look broken. */}
-              <p className="mt-3 text-sm font-semibold text-ink-500">Áp dụng từ bài học ngày mai.</p>
+              <p className="mt-3 text-xs font-semibold text-ink-500 md:text-sm">Áp dụng từ bài học ngày mai.</p>
             </Card>
           </div>
         </div>
 
-        <Button variant="outline" onClick={handleReset} className="self-start">
+        {/* `max-md:`, because `min-h-[64px] px-8 text-[22px]` are `Button`'s own classes. */}
+        <Button variant="outline" onClick={handleReset} className="self-start max-md:min-h-[48px] max-md:px-4 max-md:text-base">
           Đặt lại tiến trình
         </Button>
       </div>

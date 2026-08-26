@@ -99,6 +99,17 @@ it('shows an idle Foxy greeting with no activity yet', () => {
   expect(screen.getByText('Hôm nay mình luyện nói nhé!')).toBeInTheDocument()
 })
 
+// Design §3: M1b prints the greeting as plain text — the speech bubble is M1a's. Only the chrome
+// is dropped, so both lines are still one element at every width; the panel comes back at `md`.
+it('drops the speech-bubble chrome from the greeting on a phone', () => {
+  renderHome()
+
+  const bubble = screen.getByText('Chào bé! 👋').closest('div')!.parentElement!
+  expect(bubble).toHaveClass('max-md:bg-transparent', 'max-md:shadow-none', 'max-md:px-0', 'max-md:py-0')
+  // The panel itself is untouched from `md` up — every override above is invisible there.
+  expect(bubble).toHaveClass('rounded-[22px]', 'bg-white', 'shadow-card-sm')
+})
+
 it('offers a replay CTA once the lesson is done and already celebrated', () => {
   completeLesson(NOW)
   localStorage.setItem('speakup.celebrated', dayKey(NOW))
@@ -204,6 +215,28 @@ it('lays the islands out as a grid on a phone, with nothing positioned until the
     expect(classes).toContain('rounded-xl3')
     // `absolute` only ever appears behind the `ipad:` prefix — never on its own.
     expect(classes.filter(c => c.endsWith('absolute'))).toEqual(['ipad:absolute'])
+  }
+})
+
+/**
+ * The same rule for the other three blocks of the M1b column. Everything the phone lays out has to
+ * stay in flow: an `absolute` that escaped its `ipad:` prefix would take a block out of the column
+ * and drop it on top of the grid, and — unlike the islands — the mission card, the stairs link and
+ * the parent link have no `data-testid` of their own, so nothing else here would notice.
+ */
+it('keeps the mission card, the stairs link and the parent link in flow on a phone', () => {
+  renderHome()
+
+  const wrappers = {
+    mission: screen.getByRole('link', { name: 'Bắt đầu ▸' }).closest('div.col-span-2')!,
+    stairs: screen.getByRole('link', { name: /Các bậc luyện nói/ }).parentElement!,
+    parent: screen.getByRole('link', { name: 'Phụ huynh' }).parentElement!,
+  }
+
+  for (const [name, wrapper] of Object.entries(wrappers)) {
+    const classes = Array.from(wrapper.classList)
+    // `absolute` only ever appears behind the `ipad:` prefix — never on its own.
+    expect(classes.filter(c => c.endsWith('absolute')), name).toEqual(['ipad:absolute'])
   }
 })
 

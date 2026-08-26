@@ -5,7 +5,7 @@ import { getLesson, lessonStatus } from '../progress/lesson'
 import type { LessonItemKind } from '../progress/lesson'
 import { MISSION_STATE, groupItems } from '../progress/missionNav'
 import { Foxy } from '../components/Foxy'
-import { BackButton, Button, Chip, PAGE_SHELL } from '../components/ui'
+import { BackButton, Button, Chip, HomeLabel, PAGE_SHELL } from '../components/ui'
 import type { ChipTone } from '../components/ui'
 
 const CELEBRATED_KEY = 'speakup.celebrated'
@@ -83,21 +83,6 @@ const CTA_BUTTON = [
   'animate-pulse-soft',
 ].join(' ')
 
-/**
- * Spec decision 1: the island map does not exist on a phone (Home drops it below the tablet
- * breakpoint), so a CTA promising to go back to it would be a lie. The wording follows the
- * breakpoint rather than the device — two spans, one of which is hidden — so the tablet and the
- * iPad keep the map wording they have always had.
- */
-function HomeLabel() {
-  return (
-    <>
-      <span className="md:hidden">Về trang chủ 🏠</span>
-      <span className="hidden md:inline">Về bản đồ 🏝️</span>
-    </>
-  )
-}
-
 /** Today's lesson as a handful of steps rather than a flat list: one card per kind ("Nghe 1
  * truyện", "4 thẻ phát âm", …) with its own progress, and a teal ring on the first group still
  * open so the child never has to decide where to start. The single CTA goes to the same place. */
@@ -142,7 +127,7 @@ export function DailyMission() {
           * header the iPad has always had from `ipad` up, where the back button takes its own line
           * again (`ipad:flex` keeps it block-level without giving up the centred glyph). */}
         <header className="flex flex-wrap items-center gap-2.5 ipad:block ipad:text-center">
-          <BackButton to="/" label="Về bản đồ" className="ipad:mb-4 ipad:flex" />
+          <BackButton to="/" label="Về trang chủ" mdLabel="Về bản đồ" className="ipad:mb-4 ipad:flex" />
           <div className="min-w-0 flex-1">
             <h1 className="font-display text-[22px] font-extrabold leading-tight text-ink-900 ipad:text-[40px]">
               Nhiệm vụ hôm nay 🌞

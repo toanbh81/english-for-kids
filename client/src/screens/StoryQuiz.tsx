@@ -7,7 +7,7 @@ import { logActivity } from '../progress/activity'
 import { speakText } from '../story/speak'
 import { Foxy } from '../components/Foxy'
 import type { FoxyMood } from '../components/Foxy'
-import { Button, Chip, PAGE_SHELL, SpeechBubble, StarRow } from '../components/ui'
+import { Button, Chip, HomeLabel, PAGE_SHELL, SpeechBubble, StarRow } from '../components/ui'
 
 const ADVANCE_MS = 900
 const TAP_TARGET = 'min-h-[64px] flex items-center'
@@ -107,7 +107,7 @@ function StoryQuizInner({ quiz, id }: { quiz: QuizQ[]; id: string }) {
           <Button to={`/story/${id}`} size="lg" variant="outline" className={CTA_PHONE}>Nghe lại</Button>
           {/* The way out. Retell and re-listen both keep the child inside this story, so without
               this the only exit was the browser's own back gesture. */}
-          <Button to="/" size="lg" variant="secondary" className={CTA_PHONE}>Về bản đồ 🏝️</Button>
+          <Button to="/" size="lg" variant="secondary" className={CTA_PHONE}><HomeLabel /></Button>
         </div>
       </main>
     )

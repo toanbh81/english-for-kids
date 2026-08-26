@@ -2,27 +2,13 @@ import { useState } from 'react'
 import { dayKey, getActivity, streak } from '../progress/activity'
 import { Confetti } from '../components/Confetti'
 import { Foxy } from '../components/Foxy'
-import { Button, PAGE_SHELL } from '../components/ui'
+import { Button, HomeLabel, PAGE_SHELL } from '../components/ui'
 
 // "Stars earned today" has no store of its own — stars are kept per card, not per day. So the
 // screen counts today's practice events that cleared the passing bar (the same 60 that unlocks a
 // word card): one well-said story line, card or sentence = one star to celebrate.
 const PASS_SCORE = 60
 const STAR_KINDS = ['speak', 'word', 'sentence'] as const
-
-/**
- * Spec decision 1: the island map does not exist on a phone (Home drops it below the tablet
- * breakpoint), so the way out of the celebration is "home" there and the map from the tablet
- * breakpoint up. The wording follows the breakpoint, not the device — two spans, one hidden.
- */
-function HomeLabel() {
-  return (
-    <>
-      <span className="md:hidden">Về trang chủ 🏠</span>
-      <span className="hidden md:inline">Về bản đồ 🏝️</span>
-    </>
-  )
-}
 
 /** Shown once a day, right after the third mission step lands. Home sends the child here instead
  * of throwing confetti over the map. */

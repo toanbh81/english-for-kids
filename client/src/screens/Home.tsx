@@ -165,7 +165,17 @@ export function Home() {
         <header className="flex flex-col gap-2 ipad:flex-row ipad:flex-wrap ipad:items-center ipad:justify-between ipad:gap-3">
           <div className="flex items-center gap-3">
             <Foxy mood={mood} size="md" className="animate-bob" />
-            <SpeechBubble title={<span className="text-coral-text">Chào bé! 👋</span>} subtitle={say} className="flex-1" />
+            {/* M1b prints the greeting as plain text: the bubble is M1a's, and on a 390 px screen
+              * its white panel, its padding and its shadow cost ~26 px of height for decoration the
+              * grid below needs more. Only the chrome goes — the two lines themselves are the same
+              * element at every width, so the greeting is never in the page twice. `max-md:` because
+              * every one of these classes is `SpeechBubble`'s own, and an unprefixed override of
+              * ours would be a coin toss on Tailwind's utility order. */}
+            <SpeechBubble
+              title={<span className="text-coral-text">Chào bé! 👋</span>}
+              subtitle={say}
+              className="flex-1 max-md:rounded-none max-md:bg-transparent max-md:px-0 max-md:py-0 max-md:shadow-none"
+            />
           </div>
           {/* `data-today` is on the seven day circles, and only there. `StreakWeek` draws them at
             * the map's 30 px, which with their labels and the streak count is wider than a 320 px

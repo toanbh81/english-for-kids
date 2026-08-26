@@ -121,7 +121,7 @@ it('shows result buttons linking to retell and to listen again', () => {
   const listenLink = screen.getByRole('link', { name: 'Nghe lại' })
   expect(listenLink).toHaveAttribute('href', '/story/little-fox')
   // Retell and re-listen both stay inside the story — the result screen must also offer a way out.
-  expect(screen.getByRole('link', { name: 'Về bản đồ 🏝️' })).toHaveAttribute('href', '/')
+  expect(screen.getByRole('link', { name: /Về bản đồ 🏝️/ })).toHaveAttribute('href', '/')
 })
 
 /* ---- Phase 10, design §10 M6b: the phone stack, with the landscape row untouched ---- */
@@ -149,8 +149,11 @@ it('drops Foxy\'s bubble on a phone, where the banner at the foot already says i
   const q0 = story.quiz[0]
   const wrong = q0.options.findIndex((_, i) => i !== q0.answer)
   fireEvent.click(screen.getByRole('button', { name: q0.options[wrong].label }))
-  // Still rendered — and still read by a screen reader at every width — only hidden below 768,
-  // because it is what pushed the third answer card under the fold.
+  // In the DOM at every width, and laid out again from 768 up, where it is the landscape frame's
+  // bubble; below 768 it goes, because it is what pushed the third answer card under the fold.
+  // `hidden` is `display:none`, so on a phone it leaves the accessibility tree too — nothing is
+  // lost, because the banner at the foot of the screen says the same thing in the same state and
+  // is the assertion on the next line.
   expect(screen.getByText('🦊 Chưa đúng, thử lại nhé').parentElement).toHaveClass('max-md:hidden')
   expect(screen.getByText('Gần đúng rồi — thử lại nhé! 💪')).toBeInTheDocument()
 })

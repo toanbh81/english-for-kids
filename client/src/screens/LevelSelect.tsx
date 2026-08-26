@@ -21,7 +21,7 @@ export function LevelSelect() {
         {/* Back goes to the map — Home is the topic map now, not a list of levels. The stairs at
             `/levels` are how the child gets from one level to the next, hence the chip beside it. */}
         <div className="flex items-center justify-between gap-4">
-          <BackButton to="/" label="Về bản đồ" />
+          <BackButton to="/" label="Về trang chủ" mdLabel="Về bản đồ" />
           <Link to="/levels" className={STAIRS_LINK}>🗣️ Xem các bậc</Link>
         </div>
 
