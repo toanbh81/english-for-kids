@@ -1,5 +1,5 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
-import { MemoryRouter, Route, Routes } from 'react-router-dom'
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import type { SpeakingAttempt } from '../speaking/useSpeakingAttempt'
 
 function baseAttempt(): SpeakingAttempt {
@@ -27,6 +27,38 @@ vi.mock('../audio/player', () => playerMock)
 import { StoryRetell } from './StoryRetell'
 import { findStory } from '../content/stories'
 import type { StoryWord } from '../content/stories/types'
+import { dayKey } from '../progress/activity'
+import { saveLesson } from '../progress/lessonStore'
+import type { LessonItem } from '../progress/lesson'
+
+/** Where a hand-off landed, and whether it was still carrying `{ mission: true }` — the flag leaves
+ * no trace in the DOM, so the probe is the only way to see it. */
+function Probe() {
+  const location = useLocation()
+  return <p data-testid="probe">{location.pathname} {JSON.stringify(location.state)}</p>
+}
+
+/** Today's lesson, written straight to storage, so the screen resolves real steps. */
+function seedLesson(...items: LessonItem[]) {
+  const now = Date.now()
+  saveLesson({ day: dayKey(now), created: now, band: 5, items })
+}
+
+/** The 🔁 step the generator writes for a retell — this screen's own exact route. */
+const RETELL_STEP: LessonItem = {
+  kind: 'review', activity: 'sentence', id: 'retell:little-fox',
+  route: '/story/little-fox/retell', label: 'Ôn lại: Chú cáo nhỏ', emoji: '🔁',
+}
+const NEXT_STEP: LessonItem =
+  { kind: 'word', activity: 'word', id: 'w-apple', route: '/words/food/w-apple', label: 'Từ mới: apple', emoji: '🧩' }
+
+/** A finished attempt, so the stars section — and with it the finish CTA — is on screen. */
+function scored(): SpeakingAttempt {
+  return {
+    ...baseAttempt(),
+    result: { overall: 90, accuracy: 90, fluency: 90, completeness: 90, words: [], engine: 'azure' },
+  }
+}
 
 /** Strip generated timings from the retell scene so the speech-synthesis fallback path is exercised. */
 function withoutRetellTimings<T>(fn: () => T): T {
@@ -41,11 +73,12 @@ function withoutRetellTimings<T>(fn: () => T): T {
   }
 }
 
-function renderRetell(id = 'little-fox') {
+function renderRetell(id = 'little-fox', mission = false) {
   render(
-    <MemoryRouter initialEntries={[`/story/${id}/retell`]}>
+    <MemoryRouter initialEntries={[{ pathname: `/story/${id}/retell`, state: mission ? { mission: true } : null }]}>
       <Routes>
         <Route path="/story/:id/retell" element={<StoryRetell />} />
+        <Route path="*" element={<Probe />} />
       </Routes>
     </MemoryRouter>,
   )
@@ -148,4 +181,49 @@ describe('speech synthesis sample fallback', () => {
       expect(utterance.lang).toBe('en-US')
     }
   })
+})
+
+// --- as part of a lesson step (fix: the story chain keeps its thread back) ---------------------
+//
+// Two different ways this screen can be inside a lesson, and they are not the same fact:
+// `/story/:id/retell` is a SUB-route of the 🎧 step (only the forwarded flag says so), and it is
+// ALSO a 🔁 review step's own exact route (where the hand-off resolves and knows what comes next).
+
+it('ends free play back on the story list, exactly as it always did', () => {
+  attemptControl.current = scored()
+  renderRetell()
+
+  expect(screen.getByRole('link', { name: 'Truyện' })).toHaveAttribute('href', '/stories')
+  expect(screen.getByRole('link', { name: 'Về danh sách truyện' })).toHaveAttribute('href', '/stories')
+})
+
+it('leads back to the mission when the child arrived from a story step', () => {
+  attemptControl.current = scored()
+  renderRetell('little-fox', true)
+
+  expect(screen.getByRole('link', { name: 'Nhiệm vụ' })).toHaveAttribute('href', '/mission')
+  expect(screen.queryByRole('link', { name: 'Truyện' })).not.toBeInTheDocument()
+  // The way out of the chain is the lesson, not the story library the child never chose.
+  expect(screen.getByRole('link', { name: /Về nhiệm vụ/ })).toHaveAttribute('href', '/mission')
+  expect(screen.queryByRole('link', { name: 'Về danh sách truyện' })).not.toBeInTheDocument()
+})
+
+/** When the retell IS today's own step, the hand-off resolves on this exact route — so the child
+ * gets the next lesson item rather than a bare trip back to the mission card. */
+it('hands straight on to the next lesson step when the retell is the step itself', () => {
+  seedLesson(RETELL_STEP, NEXT_STEP)
+  attemptControl.current = scored()
+  renderRetell('little-fox', true)
+
+  fireEvent.click(screen.getByRole('button', { name: 'Tiếp theo →' }))
+  expect(screen.getByTestId('probe')).toHaveTextContent('/words/food/w-apple {"mission":true}')
+})
+
+it('celebrates back at the mission when the retell is the last step of the lesson', () => {
+  seedLesson(RETELL_STEP)
+  attemptControl.current = scored()
+  renderRetell('little-fox', true)
+
+  fireEvent.click(screen.getByRole('button', { name: /Hoàn thành/ }))
+  expect(screen.getByTestId('probe')).toHaveTextContent('/mission null')
 })

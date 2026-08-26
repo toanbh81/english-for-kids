@@ -1,10 +1,11 @@
 import { useEffect } from 'react'
-import { useParams } from 'react-router-dom'
+import { useLocation, useParams } from 'react-router-dom'
 import type { Story } from '../content/stories/types'
 import type { PronunciationResult } from '../scoring/types'
 import { findStory } from '../content/stories'
 import { setStars } from '../progress/store'
 import { logActivity } from '../progress/activity'
+import { useMissionNext } from '../progress/missionNav'
 import { saveRecording } from '../progress/recordings'
 import { playUrl, playBlob } from '../audio/player'
 import { useSpeakingAttempt } from '../speaking/useSpeakingAttempt'
@@ -52,6 +53,22 @@ function playSample(story: Story) {
 }
 
 function StoryRetellInner({ story, id }: { story: Story; id: string }) {
+  /**
+   * Two different ways this screen can be inside a lesson, and they are not the same fact.
+   *
+   * `/story/:id/retell` is a SUB-route of the 🎧 listen step's `/story/:id`, and `missionNav`
+   * matches item routes whole on purpose (its `routeIs`), so a child who walked the story chain
+   * from the mission resolves nothing here — the flag forwarded down the chain is all there is.
+   *
+   * The very same path is ALSO a 🔁 review step's own exact route, and on a day whose lesson holds
+   * that step the hand-off *does* resolve: it knows which item comes next and what to call the
+   * button. That is worth more to the child than a bare trip back to the mission card, so it is
+   * preferred wherever it exists, exactly as on every other practice screen.
+   */
+  const mission = useMissionNext()
+  const { state } = useLocation()
+  const inMission = mission !== null || (state as { mission?: unknown } | null)?.mission === true
+
   function handleResult(result: PronunciationResult, blob: Blob | null) {
     logActivity({ ts: Date.now(), kind: 'sentence', id: `retell:${id}`, score: result.overall })
     if (blob) saveRecording({ id: `retell:${id}:${Date.now()}`, ts: Date.now(), text: story.retell.text, blob }).catch(() => {})
@@ -78,7 +95,7 @@ function StoryRetellInner({ story, id }: { story: Story; id: string }) {
     <main className={`h-full overflow-y-auto bg-cream-50 px-6 [--page-pad-bottom:1.25rem] [--page-pad-top:1.25rem] ${PAGE_SHELL}`}>
       <div className="mx-auto flex min-h-full w-full max-w-4xl flex-col items-center gap-4">
         <header className="flex w-full items-center justify-between gap-4">
-          <BackButton to="/stories" label="Truyện" />
+          <BackButton to={inMission ? '/mission' : '/stories'} label={inMission ? 'Nhiệm vụ' : 'Truyện'} />
           <h1 className="font-display text-[36px] font-extrabold leading-tight text-ink-900">Bé kể lại nhé</h1>
           <span className="min-w-[66px] text-right text-base font-bold text-ink-300">
             {a.engine === 'webspeech' ? 'chế độ đơn giản' : ''}
@@ -109,7 +126,14 @@ function StoryRetellInner({ story, id }: { story: Story; id: string }) {
                 <Button variant="outline" onClick={() => playBlob(a.lastBlob!).catch(() => {})}>🎧 Nghe mình</Button>
               )}
               <Button variant="outline" onClick={a.reset}>Thử lại</Button>
-              <Button size="lg" pulse to="/stories">Về danh sách truyện</Button>
+              {/* The end of the story chain. In a lesson it hands the child on rather than out:
+                  the next step when this route is the lesson's own (so the hand-off knows one),
+                  the mission card otherwise. Free play still ends back on the story list. */}
+              {mission
+                ? <Button size="lg" pulse onClick={mission.go}>{mission.label}</Button>
+                : inMission
+                  ? <Button size="lg" pulse to="/mission">Về nhiệm vụ →</Button>
+                  : <Button size="lg" pulse to="/stories">Về danh sách truyện</Button>}
             </div>
           </section>
         )}

@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useLocation, useParams } from 'react-router-dom'
 import type { QuizQ } from '../content/stories/types'
 import { findStory } from '../content/stories'
 import { setStars } from '../progress/store'
 import { logActivity } from '../progress/activity'
+import { MISSION_STATE } from '../progress/missionNav'
 import { speakText } from '../story/speak'
 import { Foxy } from '../components/Foxy'
 import type { FoxyMood } from '../components/Foxy'
@@ -44,6 +45,17 @@ const CARD_STATE: Record<Exclude<Feedback, 'idle'>, string> = {
 }
 
 function StoryQuizInner({ quiz, id }: { quiz: QuizQ[]; id: string }) {
+  /**
+   * This screen sits on `/story/:id/quiz` — a SUB-route of the lesson's `/story/:id` step — and
+   * `missionNav` matches item routes whole by design (its `routeIs`), so `useMissionNext()` would
+   * find nothing here. The forwarded flag is the only thing that knows the child is inside a
+   * lesson, so the screen reads it straight off the location and passes it on down every hop it
+   * owns: back to the story, on to the retell, and the replay in the result row.
+   */
+  const { state } = useLocation()
+  const inMission = (state as { mission?: unknown } | null)?.mission === true
+  const missionState = inMission ? MISSION_STATE : undefined
+
   const [qIndex, setQIndex] = useState(0)
   const [selected, setSelected] = useState<number | null>(null)
   const [feedback, setFeedback] = useState<Feedback>('idle')
@@ -103,11 +115,15 @@ function StoryQuizInner({ quiz, id }: { quiz: QuizQ[]; id: string }) {
         <StarRow value={result.stars} size="lg" animate={result.stars === 3} />
         <p className="font-display text-2xl font-extrabold text-ink-900">Bé trả lời đúng {result.correctCount}/3</p>
         <div className="flex w-full flex-col gap-3 md:w-auto md:flex-row md:flex-wrap md:justify-center md:gap-4">
-          <Button to={`/story/${id}/retell`} size="lg" className={CTA_PHONE}>Kể lại câu chuyện →</Button>
-          <Button to={`/story/${id}`} size="lg" variant="outline" className={CTA_PHONE}>Nghe lại</Button>
+          <Button to={`/story/${id}/retell`} state={missionState} size="lg" className={CTA_PHONE}>Kể lại câu chuyện →</Button>
+          <Button to={`/story/${id}`} state={missionState} size="lg" variant="outline" className={CTA_PHONE}>Nghe lại</Button>
           {/* The way out. Retell and re-listen both keep the child inside this story, so without
-              this the only exit was the browser's own back gesture. */}
-          <Button to="/" size="lg" variant="secondary" className={CTA_PHONE}><HomeLabel /></Button>
+              this the only exit was the browser's own back gesture. In a lesson the way out is the
+              lesson: `/` is the one place a child with steps still owed must not be dropped, and
+              the map is not even drawn there on a phone. */}
+          {inMission
+            ? <Button to="/mission" size="lg" variant="secondary" className={CTA_PHONE}>Về nhiệm vụ →</Button>
+            : <Button to="/" size="lg" variant="secondary" className={CTA_PHONE}><HomeLabel /></Button>}
         </div>
       </main>
     )
@@ -121,7 +137,10 @@ function StoryQuizInner({ quiz, id }: { quiz: QuizQ[]; id: string }) {
     // 768 up.
     <main className={`flex h-full flex-col items-center gap-3 overflow-y-auto bg-cream-50 px-5 md:gap-5 md:px-6 ${PAGE_SHELL}`}>
       <div className="flex w-full items-center justify-between max-md:shrink-0">
-        <Link to={`/story/${id}`} className={BACK_LINK}>← Truyện</Link>
+        {/* Not `/mission`, even in a lesson: this arrow says "Truyện" and means it — it is the way
+            to hear the tale again, and the player it lands on is the screen that carries the arrow
+            home. It only has to hand the flag on so that trip back is still inside the lesson. */}
+        <Link to={`/story/${id}`} state={missionState} className={BACK_LINK}>← Truyện</Link>
         <Chip tone="teal">Câu {qIndex + 1}/3</Chip>
       </div>
 

@@ -1,5 +1,5 @@
 import { render, screen, fireEvent, cleanup } from '@testing-library/react'
-import { MemoryRouter, Route, Routes } from 'react-router-dom'
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 
 const state = vi.hoisted(() => ({
   sceneIndex: 0,
@@ -31,18 +31,42 @@ vi.mock('../story/useStoryPlayer', () => ({
 
 import { StoryPlayer } from './StoryPlayer'
 import { findStory } from '../content/stories'
+import { dayKey } from '../progress/activity'
+import { saveLesson } from '../progress/lessonStore'
+import type { LessonItem } from '../progress/lesson'
 
-function renderPlayer(id = 'little-fox') {
+/** Where a link landed, and whether it was still carrying `{ mission: true }` — the flag leaves no
+ * trace in the DOM, so the probe is the only way to see it. */
+function Probe() {
+  const location = useLocation()
+  return <p data-testid="probe">{location.pathname} {JSON.stringify(location.state)}</p>
+}
+
+/** Today's lesson, written straight to storage, so the screen resolves real steps. */
+function seedLesson(...items: LessonItem[]) {
+  const now = Date.now()
+  saveLesson({ day: dayKey(now), created: now, band: 5, items })
+}
+
+/** The 🎧 step the generator writes for a story: the player's own exact route. */
+const LISTEN_STEP: LessonItem =
+  { kind: 'listen', activity: 'story', id: 'little-fox', route: '/story/little-fox', label: 'Nghe: Chú cáo nhỏ', emoji: '🎧' }
+const NEXT_STEP: LessonItem =
+  { kind: 'word', activity: 'word', id: 'w-apple', route: '/words/food/w-apple', label: 'Từ mới: apple', emoji: '🧩' }
+
+function renderPlayer(id = 'little-fox', mission = false) {
   return render(
-    <MemoryRouter initialEntries={[`/story/${id}`]}>
+    <MemoryRouter initialEntries={[{ pathname: `/story/${id}`, state: mission ? { mission: true } : null }]}>
       <Routes>
         <Route path="/story/:id" element={<StoryPlayer />} />
+        <Route path="*" element={<Probe />} />
       </Routes>
     </MemoryRouter>,
   )
 }
 
 beforeEach(() => {
+  localStorage.clear()
   Object.assign(state, {
     sceneIndex: 0, playing: false, rate: 1, tMs: 0, wordIndex: 1, hasTimings: false,
     hasAudio: false, subtitles: false, ended: false, timings: [],
@@ -209,4 +233,48 @@ it('holds the back arrow to the 64 px tap floor on a phone', () => {
   const back = screen.getByRole('link', { name: 'Truyện' })
   expect(back).toHaveClass('max-md:h-16', 'max-md:w-16')
   expect(back).toHaveClass('h-[66px]', 'w-[66px]')
+})
+
+// --- as a step of today's lesson (fix: the story chain keeps its thread back) ------------------
+//
+// The player sits on the 🎧 step's own exact route, so `useMissionNext()` resolves here and the
+// screen can behave like every other practice screen: the arrow leads back to the lesson, not out
+// of it, and the flag travels on to the quiz so the rest of the chain knows where the child is.
+
+it('sends the back arrow to the mission, not to the story library, when the child came from the lesson', () => {
+  seedLesson(LISTEN_STEP, NEXT_STEP)
+  renderPlayer('little-fox', true)
+
+  const back = screen.getByRole('link', { name: 'Nhiệm vụ' })
+  expect(back).toHaveAttribute('href', '/mission')
+  expect(screen.queryByRole('link', { name: 'Truyện' })).not.toBeInTheDocument()
+  // The arrow moved destination, not place: it is still the 64 px circle on the artwork.
+  expect(back).toHaveClass('max-md:h-16', 'max-md:w-16', 'h-[66px]', 'w-[66px]')
+})
+
+it('carries the mission on to the quiz, before the story ends and after it', () => {
+  seedLesson(LISTEN_STEP, NEXT_STEP)
+  renderPlayer('little-fox', true)
+
+  fireEvent.click(screen.getByRole('link', { name: /Bỏ qua/ }))
+  expect(screen.getByTestId('probe')).toHaveTextContent('/story/little-fox/quiz {"mission":true}')
+
+  cleanup()
+  state.ended = true
+  renderPlayer('little-fox', true)
+  fireEvent.click(screen.getByRole('link', { name: /Tiếp tục/ }))
+  expect(screen.getByTestId('probe')).toHaveTextContent('/story/little-fox/quiz {"mission":true}')
+})
+
+/** Today's lesson may well hold this very story — but a child who walked in from the library did
+ * not arrive carrying the flag, and nothing about the screen may change for them. */
+it('stays free play without the flag, lesson or no lesson', () => {
+  seedLesson(LISTEN_STEP, NEXT_STEP)
+  renderPlayer()
+
+  expect(screen.getByRole('link', { name: 'Truyện' })).toHaveAttribute('href', '/stories')
+  expect(screen.queryByRole('link', { name: 'Nhiệm vụ' })).not.toBeInTheDocument()
+
+  fireEvent.click(screen.getByRole('link', { name: /Bỏ qua/ }))
+  expect(screen.getByTestId('probe')).toHaveTextContent('/story/little-fox/quiz null')
 })

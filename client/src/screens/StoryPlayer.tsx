@@ -1,6 +1,7 @@
 import { useParams } from 'react-router-dom'
 import type { Story } from '../content/stories/types'
 import { findStory } from '../content/stories'
+import { MISSION_STATE, useMissionNext } from '../progress/missionNav'
 import { useStoryPlayer } from '../story/useStoryPlayer'
 import { SceneArt } from '../components/SceneArt'
 import { Karaoke } from '../components/Karaoke'
@@ -23,6 +24,17 @@ export function StoryPlayer() {
 
 function StoryPlayerInner({ story, id }: { story: Story; id: string }) {
   const p = useStoryPlayer(story)
+  /**
+   * Null unless the child arrived from today's lesson. The 🎧 step's route is exactly this one, so
+   * the hand-off resolves here and the story can behave like every other practice screen: the
+   * arrow leads back to the mission rather than out of the lesson into the story library.
+   *
+   * The chain past this screen is the reason the flag is also forwarded below. `/story/:id/quiz`
+   * and `/story/:id/retell` are SUB-routes, and `missionNav` matches item routes whole on purpose
+   * (see its `routeIs`), so nothing downstream can rediscover the lesson for itself — if this link
+   * drops the flag, the mission dies at the first question.
+   */
+  const mission = useMissionNext()
   const scene = story.scenes[p.sceneIndex]
 
   const scenePct = ((p.sceneIndex + 1) / story.scenes.length) * 100
@@ -49,7 +61,11 @@ function StoryPlayerInner({ story, id }: { story: Story; id: string }) {
         <SceneArt emoji={scene.emoji} bg={scene.bg} image={scene.image} />
         {/* 64 px, not 48: the spec's binding rules put the tap-target floor at 64 with no
             exception, and this arrow rides on the artwork where it is easiest to miss. */}
-        <BackButton to="/stories" label="Truyện" className="absolute left-2.5 top-2.5 max-md:h-16 max-md:w-16 max-md:text-2xl md:left-4 md:top-4" />
+        <BackButton
+          to={mission ? '/mission' : '/stories'}
+          label={mission ? 'Nhiệm vụ' : 'Truyện'}
+          className="absolute left-2.5 top-2.5 max-md:h-16 max-md:w-16 max-md:text-2xl md:left-4 md:top-4"
+        />
         <div className="absolute right-2.5 top-2.5 flex items-center gap-2 md:right-4 md:top-4">
           {/* The dots beside it are decorative, so the chip carries the position in words — and
               once the dots are gone below 768 the chip prints that position instead of only
@@ -116,9 +132,9 @@ function StoryPlayerInner({ story, id }: { story: Story; id: string }) {
       {/* The quiz is always one tap away; once the story ends the same link stops whispering
           and starts pulsing. */}
       {p.ended ? (
-        <Button to={`/story/${id}/quiz`} pulse className="mx-auto">Tiếp tục ▸</Button>
+        <Button to={`/story/${id}/quiz`} state={mission ? MISSION_STATE : undefined} pulse className="mx-auto">Tiếp tục ▸</Button>
       ) : (
-        <Button to={`/story/${id}/quiz`} variant="ghost" className="mx-auto">Bỏ qua ▸</Button>
+        <Button to={`/story/${id}/quiz`} state={mission ? MISSION_STATE : undefined} variant="ghost" className="mx-auto">Bỏ qua ▸</Button>
       )}
     </main>
   )
