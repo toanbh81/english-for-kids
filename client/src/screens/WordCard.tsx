@@ -25,11 +25,6 @@ const UNLOCK_SCORE = 60
 /** Matches the .animate-shake keyframe duration in styles.css. */
 const SHAKE_MS = 400
 
-/** How long "Đoán đúng rồi! 🎉" stays up. Long enough to read, short enough that it is plainly
- * about the guess and gone before the child records — it used to linger until the first flip,
- * where it read as praise for a pronunciation that had not happened yet (spec §8). */
-const PRAISE_MS = 1500
-
 /** Two wrong Vietnamese meanings to go with the right one, picked deterministically from the
  * word's own topic so a repeat visit to the same card sees the same three options. */
 function pickDistractors(word: Word, topic: string): Word[] {
@@ -37,9 +32,40 @@ function pickDistractors(word: Word, topic: string): Word[] {
   return shuffleTiles(others, `${word.id}-distractors`).slice(0, 2)
 }
 
-/** Both faces sit on top of each other inside the rotating shell; only the one facing the
- * child is painted (`backface-visibility`). */
-const FACE = 'absolute inset-0 flex flex-col items-center justify-center gap-3 rounded-xl4 [backface-visibility:hidden]'
+/**
+ * Both faces sit on top of each other inside the rotating shell; only the one facing the
+ * child is painted (`backface-visibility`).
+ *
+ * The phone breakpoint idiom is `SoundPractice.tsx`'s (phase 10, task 4): **phone rules live at
+ * the default breakpoint and `md:` (768) puts the exact previous value back**, so 1194×834 renders
+ * as it always did. `max-md:` is used only to override a class one of the shared primitives writes
+ * for itself (`Button`'s `px-8` / `min-h-[64px]` / `rounded-xl3`), where an unprefixed override of
+ * ours would be a coin toss on Tailwind's utility order.
+ *
+ * The gap comes down to 8 px on the phone because the card is no longer a fixed 360 px tall: at
+ * 320 px wide the 16/17 shell is only ~244 px, and the four things on the front face have to stay
+ * inside it.
+ */
+const FACE = 'absolute inset-0 flex flex-col items-center justify-center gap-2 rounded-xl4 [backface-visibility:hidden] md:gap-3'
+
+/** `Button`'s own size map is off-limits (brief §15 risk 5), so a phone-sized CTA is written as an
+ * override of it: the design's 64 px row instead of the landscape frame's 72. */
+const CTA_PHONE = 'max-md:min-h-[64px] max-md:px-4 max-md:text-lg'
+
+/**
+ * The short-phone rules — `[@media(max-width:767px)_and_(max-height:700px)]:…`, spelled out at
+ * every use because Tailwind reads the source as text and would never see an interpolated one.
+ * They are this screen's version of the design's "375×667" line (M3 shrinks its picture card, M4
+ * drops the word's IPA): the flip card comes down a size, the guess step loses its written
+ * question, and the answer rows lose 8 px.
+ *
+ * They exist to keep the bottom block from being *stuck on first paint*. A `sticky bottom-0` row
+ * with an opaque background that starts life above its own place in the flow covers whatever is
+ * behind it — here the last 48 px of the tip card — and no amount of space reserved *below* it
+ * moves it back down; the only thing that does is content that ends above the pinned row. That is
+ * what these rules buy. The width bound is deliberate: a height-only query would also catch a
+ * short laptop window, which renders the landscape layout. Grep `max-height:700px` for all four.
+ */
 
 const SPEAK_CHIP =
   'inline-flex min-h-[64px] items-center gap-2 rounded-full bg-white px-6 font-display text-lg font-extrabold text-teal-600 shadow-[0_4px_0_#F2DFC9] active:translate-y-[2px]'
@@ -83,10 +109,11 @@ function WordCardInner({ word, topic, isReview, list }: { word: Word; topic: str
   // shows. Read once on mount (like wordsToday above): a word that unlocks mid-session must not
   // suddenly grow a guess step, and one already unlocked when the card opened must never show it.
   const [guessPending, setGuessPending] = useState(() => !isReview && getBox(word.id) === 0)
-  const [guessJustCorrect, setGuessJustCorrect] = useState(false)
+  // The guess has been answered correctly and the praise is up — the step is still on screen and
+  // waits for "Tiếp theo →" (spec decision 3).
+  const [guessSolved, setGuessSolved] = useState(false)
   const [wrongOption, setWrongOption] = useState<number | null>(null)
   const wrongTimerRef = useRef<number | null>(null)
-  const praiseTimerRef = useRef<number | null>(null)
   const [hintRevealed, setHintRevealed] = useState(false)
 
   const guessOptions = useMemo(
@@ -96,21 +123,18 @@ function WordCardInner({ word, topic, isReview, list }: { word: Word; topic: str
 
   useEffect(() => () => {
     if (wrongTimerRef.current) clearTimeout(wrongTimerRef.current)
-    if (praiseTimerRef.current) clearTimeout(praiseTimerRef.current)
   }, [])
 
-  /** Wrong guess shakes just that option and invites another try; right guess retires the whole
-   * step so the flip card + mic can take over. */
+  /** Wrong guess shakes just that option and invites another try; right guess praises and stops
+   * the step there. It used to retire itself after 1.5 s and drop the child straight onto the flip
+   * card — the praise, the card and the mic all arrived while nobody had asked for them. The step
+   * now ends when the child says so, by tapping "Tiếp theo →" (spec decision 3, design §8). */
   function handleGuess(option: Word) {
+    if (guessSolved) return
     if (wrongTimerRef.current) { clearTimeout(wrongTimerRef.current); wrongTimerRef.current = null }
     if (option.id === word.id) {
       setWrongOption(null)
-      setGuessPending(false)
-      setGuessJustCorrect(true)
-      praiseTimerRef.current = window.setTimeout(() => {
-        setGuessJustCorrect(false)
-        praiseTimerRef.current = null
-      }, PRAISE_MS)
+      setGuessSolved(true)
       return
     }
     const idx = guessOptions.indexOf(option)
@@ -119,6 +143,13 @@ function WordCardInner({ word, topic, isReview, list }: { word: Word; topic: str
       setWrongOption(null)
       wrongTimerRef.current = null
     }, SHAKE_MS)
+  }
+
+  /** The child's own hand-off from the guess to the speaking step. The praise goes with the step
+   * that earned it: it is about the meaning they picked, not about a word they have yet to say. */
+  function startSpeaking() {
+    setGuessSolved(false)
+    setGuessPending(false)
   }
 
   function handleResult(result: PronunciationResult, blob: Blob | null) {
@@ -190,17 +221,19 @@ function WordCardInner({ word, topic, isReview, list }: { word: Word; topic: str
     ? 'listening'
     : outcome === 'unlocked' ? 'cheer'
     : outcome === 'retry' ? 'surprised'
-    : guessJustCorrect ? 'happy'
     : 'idle'
-  // "Đoán", not just "Đúng": the bare praise landed right where the pronunciation score lands and
-  // read as a score for a word the child had not spoken yet (spec §8).
-  const say = outcome === 'retry' ? 'Thử lại nhé' : guessJustCorrect ? 'Đoán đúng rồi! 🎉' : undefined
+  const say = outcome === 'retry' ? 'Thử lại nhé' : undefined
   const score = attempt.result && Number.isFinite(attempt.result.overall) ? Math.round(attempt.result.overall) : null
-  /** The shrunken result-state card keeps its content off the rounded edge. */
-  const facePad = attempt.result ? 'p-4' : 'p-6'
+  /** The shrunken result-state card keeps its content off the rounded edge — a landscape rule
+   * only: on a phone the shell keeps its size through the result (design §7, "không đổi bố cục"),
+   * so the padding has nothing to give back. */
+  const facePad = attempt.result ? 'p-5 md:p-4' : 'p-5 md:p-6'
 
   return (
-    <main className="h-full overflow-y-auto bg-cream-50 px-6 py-4">
+    // 20 px of side frame on a phone (design §1, the speak-frame family), the 24 px this screen has
+    // always had from the tablet breakpoint up. The shell rests at the 1 rem of the old `py-4`, so
+    // with no notch to clear — iPad, desktop, jsdom — the vertical padding is unchanged.
+    <main className={`h-full overflow-y-auto bg-cream-50 px-5 [--page-pad-bottom:1rem] [--page-pad-top:1rem] md:px-6 ${PAGE_SHELL}`}>
       <div className="mx-auto flex min-h-full w-full max-w-4xl flex-col items-center gap-3">
         <header className="flex w-full items-center justify-between gap-4">
           <BackButton to={backTo} label={backLabel} />
@@ -210,8 +243,13 @@ function WordCardInner({ word, topic, isReview, list }: { word: Word; topic: str
                 {missionNoun(mission.pos, 'Từ mới')} {mission.pos.index}/{mission.pos.total}
               </Chip>
             )}
-            <h1 className="font-display text-[30px] font-extrabold leading-none text-ink-900">Từ mới hôm nay 🧩</h1>
-            <p className="font-display text-lg font-extrabold text-ink-500">Chạm thẻ để lật — nói đúng để mở khoá!</p>
+            {/* The design's phone header is back + chip only: a 30 px title that wraps to two lines
+                inside a 178 px column costs the card more height than the words are worth, and the
+                card below says "Từ mới hôm nay" by simply being there. The line that teaches the
+                gesture stays at every width — it is the only thing on the screen that says the card
+                turns over — just smaller. Both are untouched from `md` up. */}
+            <h1 className="hidden font-display text-[30px] font-extrabold leading-none text-ink-900 md:block">Từ mới hôm nay 🧩</h1>
+            <p className="text-center font-display text-sm font-extrabold leading-snug text-ink-500 md:text-lg md:leading-7">Chạm thẻ để lật — nói đúng để mở khoá!</p>
           </div>
           <span className="min-w-[66px] text-right text-base font-bold text-ink-300">
             {attempt.engine === 'webspeech' ? 'chế độ đơn giản' : ''}
@@ -219,35 +257,65 @@ function WordCardInner({ word, topic, isReview, list }: { word: Word; topic: str
         </header>
 
         {guessPending ? (
-          <div className="flex flex-1 flex-col items-center justify-center gap-6 py-4">
-            <span aria-hidden="true" className="text-[96px] leading-none">{word.emoji}</span>
-            <span className="font-display text-[44px] font-extrabold leading-none text-ink-900">{word.word}</span>
-            <p className="font-display text-xl font-extrabold text-ink-500">Từ này nghĩa là gì?</p>
-            <div className="flex flex-wrap justify-center gap-4">
+          /* M5b on a phone (design §8): the prompt shrinks a little and the three Vietnamese
+             answers stop being a wrapping row of pills — they are three full-width 76 px rows, each
+             led by its own emoji, which is the only shape a five-year-old can hit reliably with a
+             thumb. From `md` up this is the wrapping row of `min-w-[160px]` pills it has always
+             been, emoji and all removed from the box tree. */
+          <div className="flex w-full flex-1 flex-col items-center justify-center gap-4 py-2 md:w-auto md:gap-6 md:py-4">
+            <span aria-hidden="true" className="text-[74px] leading-none [@media(max-width:767px)_and_(max-height:700px)]:text-[56px] md:text-[96px]">{word.emoji}</span>
+            <span className="font-display text-[40px] font-extrabold leading-none text-ink-900 md:text-[44px]">{word.word}</span>
+            {/* The design drops this line on the phone outright and lets the three answers ask the
+                question. It is kept where there is room for it — a child who has met the step once
+                does not need the sentence, a child meeting it for the first time does. */}
+            <p className="font-display text-lg font-extrabold text-ink-500 [@media(max-width:767px)_and_(max-height:700px)]:hidden md:text-xl">Từ này nghĩa là gì?</p>
+            <div className="flex w-full flex-col gap-3 md:w-auto md:flex-row md:flex-wrap md:justify-center md:gap-4">
               {guessOptions.map((option, idx) => (
                 <Button
                   key={option.id}
                   variant="outline"
-                  className={`min-w-[160px] font-display text-2xl ${wrongOption === idx ? 'animate-shake' : ''}`}
+                  className={`w-full font-display text-2xl max-md:min-h-[76px] max-md:justify-start max-md:gap-3.5 max-md:rounded-[22px] max-md:px-5 max-md:text-xl [@media(max-width:767px)_and_(max-height:700px)]:min-h-[68px] md:w-auto md:min-w-[160px] ${
+                    wrongOption === idx ? 'animate-shake' : ''
+                  } ${option.id === word.id && guessSolved ? 'border-good-300 text-ink-900 shadow-[0_6px_0_#7ED99A]' : ''}`}
                   onClick={() => handleGuess(option)}
                 >
+                  <span aria-hidden="true" className="text-[32px] leading-none md:hidden">{option.emoji}</span>
                   {option.vi}
+                  {option.id === word.id && guessSolved && <span aria-hidden="true" className="ml-auto text-2xl">✅</span>}
                 </Button>
               ))}
             </div>
             <Foxy
-              mood={wrongOption !== null ? 'surprised' : 'idle'}
+              mood={guessSolved ? 'happy' : wrongOption !== null ? 'surprised' : 'idle'}
               size="sm"
-              say={wrongOption !== null ? 'Thử lại nhé' : undefined}
+              // "Đoán", not just "Đúng": a bare "Đúng rồi" lands where the pronunciation score lands
+              // and reads as a score for a word the child has not spoken yet (spec §8).
+              say={guessSolved ? 'Đoán đúng rồi! 🎉' : wrongOption !== null ? 'Thử lại nhé' : undefined}
             />
+            {/* The step is over when the child says it is. On a phone the CTA takes the bottom
+                edge of the frame; from `md` up it is a centred button under Foxy. */}
+            {guessSolved && (
+              <div className="sticky bottom-0 z-10 flex w-full justify-center bg-cream-50 pt-1 max-md:mt-auto md:static md:bg-transparent md:pt-0">
+                <Button size="lg" pulse className={`${CTA_PHONE} max-md:w-full`} onClick={startSpeaking}>
+                  Tiếp theo →
+                </Button>
+              </div>
+            )}
           </div>
         ) : (
           <>
-            {/* The card shrinks once it has been spoken to: the result rows below it are what the
-                child is reading now, and the full 360 px shell would spend the height they need on
-                a card whose job is done. The faces lose a little padding with it, or their own
-                content (96 px emoji, 58 px 🔊) would spill past the rounded edge. */}
-            <div className={`${attempt.result ? 'h-[300px]' : 'h-[360px]'} w-[320px] shrink-0 [perspective:1200px]`}>
+            {/* On a phone the shell is the design's elastic card (§7): `min(320px, 82%)` wide at
+                the 16/17 ratio the frame is drawn on, so a 320 px screen gets ~230×244 and a 390 px
+                one ~287×305 instead of a 320 px card pressed against both margins. It keeps that
+                size through the result — "không đổi bố cục" — because the rows underneath it are
+                the compressed M3b ones, which do not need the height back.
+
+                From `md` up it is the fixed 320×360 it has always been, and it still shrinks to 300
+                once it has been spoken to: the result rows of the landscape frame are what the
+                child is reading then, and the full shell would spend the height they need on a card
+                whose job is done. The faces lose a little padding with it, or their own content
+                (96 px emoji, 58 px 🔊) would spill past the rounded edge. */}
+            <div className={`aspect-[16/17] w-[min(320px,82%)] shrink-0 [perspective:1200px] [@media(max-width:767px)_and_(max-height:700px)]:w-[min(320px,68%)] md:aspect-auto md:w-[320px] ${attempt.result ? 'md:h-[300px]' : 'md:h-[360px]'}`}>
               {/* The card *is* the control now: a 🔄 button in the corner plus a "MẶT TRƯỚC" label
                   asked a five-year-old to read two labels before touching anything, and they read
                   as decoration. One tap target the size of the whole card, announced as "Lật thẻ",
@@ -272,20 +340,23 @@ function WordCardInner({ word, topic, isReview, list }: { word: Word; topic: str
                   inert={flipped}
                   aria-hidden={flipped ? 'true' : undefined}
                 >
-                  <span aria-hidden="true" className="text-[96px] leading-none">{word.emoji}</span>
+                  {/* The design's phone type scale for the face (§7: emoji 90, từ 38, IPA 16, 🔊
+                      64) — the four of them plus the 8 px gaps are what fits the 16/17 shell all
+                      the way down to 320 px. `md:` is the landscape face, unchanged. */}
+                  <span aria-hidden="true" className="text-[90px] leading-none [@media(max-width:767px)_and_(max-height:700px)]:text-[64px] md:text-[96px]">{word.emoji}</span>
                   {isReview && !hintRevealed ? (
                     <>
-                      <span className="text-center font-display text-[36px] font-extrabold leading-tight text-coral-600">{word.vi}</span>
-                      <span aria-hidden="true" className="font-display text-[44px] font-extrabold leading-none text-ink-300">?</span>
-                      <Button variant="ghost" onClick={e => onFaceButton(e, () => setHintRevealed(true))}>Gợi ý</Button>
+                      <span className="text-center font-display text-[30px] font-extrabold leading-tight text-coral-600 md:text-[36px]">{word.vi}</span>
+                      <span aria-hidden="true" className="font-display text-[38px] font-extrabold leading-none text-ink-300 md:text-[44px]">?</span>
+                      <Button variant="ghost" className={CTA_PHONE} onClick={e => onFaceButton(e, () => setHintRevealed(true))}>Gợi ý</Button>
                     </>
                   ) : (
                     <>
                       {isReview && (
-                        <span className="text-center font-display text-[36px] font-extrabold leading-tight text-coral-600">{word.vi}</span>
+                        <span className="text-center font-display text-[30px] font-extrabold leading-tight text-coral-600 md:text-[36px]">{word.vi}</span>
                       )}
-                      <span className="font-display text-[44px] font-extrabold leading-none text-ink-900">{word.word}</span>
-                      <span className="text-xl font-bold text-ink-300">{word.ipa}</span>
+                      <span className="font-display text-[38px] font-extrabold leading-none text-ink-900 md:text-[44px]">{word.word}</span>
+                      <span className="text-base font-bold text-ink-300 md:text-xl">{word.ipa}</span>
                     </>
                   )}
                   {/* 58 px circle inside a 64 px tap target — the handoff's size without shrinking the
@@ -297,7 +368,11 @@ function WordCardInner({ word, topic, isReview, list }: { word: Word; topic: str
                       type="button"
                       aria-label="Nghe mẫu"
                       onClick={e => onFaceButton(e, playSample)}
-                      className="flex h-16 w-16 items-center justify-center active:translate-y-[2px]"
+                      // `shrink-0` on the phone only: the elastic card can be shorter than its own
+                      // face content at 375×667, and the first thing flex takes it out of is this
+                      // button — which is the one thing on the face that may not go under 64 px.
+                      // `md:shrink` hands the landscape card back the flex it has always had.
+                      className="flex h-16 w-16 shrink-0 items-center justify-center active:translate-y-[2px] md:shrink"
                     >
                       <span aria-hidden="true" className="flex h-[58px] w-[58px] items-center justify-center rounded-full bg-teal-500 text-3xl text-white shadow-chunky-teal">
                         🔊
@@ -312,8 +387,8 @@ function WordCardInner({ word, topic, isReview, list }: { word: Word; topic: str
                   inert={!flipped}
                   aria-hidden={flipped ? undefined : 'true'}
                 >
-                  <span className="text-center font-display text-[36px] font-extrabold leading-tight text-coral-600">{word.vi}</span>
-                  <span className="text-center text-[22px] font-bold leading-snug text-ink-500">{word.example}</span>
+                  <span className="text-center font-display text-[30px] font-extrabold leading-tight text-coral-600 md:text-[36px]">{word.vi}</span>
+                  <span className="text-center text-lg font-bold leading-snug text-ink-500 md:text-[22px] md:leading-snug">{word.example}</span>
                   <button type="button" onClick={e => onFaceButton(e, () => speakText(word.example))} className={SPEAK_CHIP}>
                     🔊 Nghe câu ví dụ
                   </button>
@@ -350,16 +425,22 @@ function WordCardInner({ word, topic, isReview, list }: { word: Word; topic: str
                 theo" below the fold of the iPad's 834 px landscape, and a control a child cannot
                 see is a control they do not have. Aligned on their bottom edges so the mic, Foxy
                 and the two buttons sit on one line. */}
-            <div className="flex flex-wrap items-end justify-center gap-6 pb-2">
+            {/* `mt-auto` on the phone: the card no longer stretches, so this block takes the free
+                height and sits on the bottom edge of the frame, which is where the design pins it.
+                Once a result is in, the phone drops the mic (design §5 M3b: "ở M3b, mic biến mất")
+                and the two CTAs become the bottom row, `flex-1` / `flex-[1.35]` — "Thử lại" is the
+                way back to recording, and it brings the mic with it. Every one of those rules is
+                undone from `md` up, where this is the one landscape row it has always been. */}
+            <div className="sticky bottom-0 z-10 flex w-full flex-wrap items-end justify-center gap-3 bg-cream-50 pb-2 pt-1 max-md:mt-auto md:static md:w-auto md:bg-transparent md:pt-0 md:gap-6">
               <Foxy mood={mood} size="sm" say={say} />
-              <div className="flex flex-col items-center gap-2">
+              <div className={`flex flex-col items-center gap-2 ${outcome ? 'max-md:hidden' : ''}`}>
                 <MicButton state={attempt.micState} level={attempt.level} onPress={attempt.onMic} />
-                <p className="font-display text-xl font-extrabold text-ink-500">🎤 Nói để mở khoá</p>
+                <p className="font-display text-base font-extrabold text-ink-500 md:text-xl">🎤 Nói để mở khoá</p>
               </div>
               {outcome && (
-                <div className="flex flex-wrap justify-center gap-4">
-                  <Button variant="outline" onClick={retry}>Thử lại</Button>
-                  <Button size="lg" pulse onClick={goNext}>
+                <div className="flex w-full flex-wrap justify-center gap-3 md:w-auto md:gap-4">
+                  <Button variant="outline" className={`${CTA_PHONE} max-md:flex-1`} onClick={retry}>Thử lại</Button>
+                  <Button size="lg" pulse className={`${CTA_PHONE} max-md:flex-[1.35]`} onClick={goNext}>
                     {mission ? mission.label : 'Tiếp theo →'}
                   </Button>
                 </div>
