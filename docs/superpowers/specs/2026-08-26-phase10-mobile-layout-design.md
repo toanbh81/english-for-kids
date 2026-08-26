@@ -1,5 +1,20 @@
 # Phase 10 — Phone layout
 
+**Implemented 2026-08-26 on branch `phase10-mobile-layout` (tasks 1–7).** Accepted deviations from
+this spec and the design, recorded in the SDD ledger
+(`.superpowers/sdd/2026-08-26-phase10-mobile-layout/progress.md`) and in the README's Phase 10
+section: the mic stays 150/190 px on a phone, not the design's 124 (`MicButton` is off-limits, brief
+§15 risk 4); `Button size="lg"` keeps its 34 px landscape radius on a phone (no phone size exists on
+the shared primitive yet); the topic hub's bottom-pinned "Học tiếp ▸" CTA (design §12 M8) was not
+built; the parent dashboard also keeps "Điểm trung bình", the custom-minutes input, the chart's
+dashed target line and "Áp dụng từ bài học ngày mai" — none of the design's other "bỏ trên phone"
+items were asked for by name, so only "Bản ghi gần đây" (decision 2) was deliberately kept and the
+rest simply weren't removed; the story quiz answers are emoji, not the design's `art/` photographs
+(export is a separate task, brief Q14); and several open questions the brief left for "Design" or
+"Product" (Q3 streak tap-detail panel, Q9's flip-card chip label debate, Q11's karaoke tap-target
+question, Q17's 7-vs-14-day parent chart) were resolved pragmatically by whichever task touched that
+screen, per that task's own report.
+
 The app was built for iPad landscape and is unusable on a phone in practice: nothing overflows sideways, but every screen is 1.2–2.6 viewports tall and the primary action falls below the fold (Home's "Bắt đầu" sits at y≈1221 on a 844 px screen). Claude Design delivered `Speak Up Mobile.dc.html` (14 artboards at 390×844) on 2026-08-25.
 
 **The numbers are in the handoff brief, not here:** `docs/design/2026-08-25-mobile-handoff-brief.md` is the authority for every measurement, per-frame structure and per-file delta (§1 frame rules, §2–§12 per screen, §13 breakpoints, §15 iPad risks, §16 new components). This spec records only the decisions the design deliberately left open, and the rules that bind the whole phase.
