@@ -116,6 +116,31 @@ it('shows the sentence card in lesson order, after the new words', () => {
   expect(order).toEqual(['group-listen', 'group-speak', 'group-word', 'group-sentence', 'group-review'])
 })
 
+// Phase 10 §4 (design M2): five 256 px columns stacked made this screen 1759 px tall on an 844 px
+// phone. On a phone a step is a 76 px row — emoji, title, progress and chip on one line — and it
+// is the iPad column card again from the tablet breakpoint up.
+it('draws each step as a row on a phone and as a column from the tablet breakpoint up', () => {
+  const groups = groupsOf(getLesson(NOW))
+
+  renderMission()
+
+  for (const group of groups) {
+    const el = card(group.kind)
+    // The phone default: a row of fixed height, laid out left to right.
+    expect(el).toHaveClass('flex', 'h-[76px]', 'items-center', 'text-left')
+    expect(el).not.toHaveClass('flex-col')
+    // …and the column card from `md` up.
+    expect(el).toHaveClass('md:flex-col', 'md:h-auto', 'md:text-center', 'md:p-5')
+  }
+
+  // The two text wrappers the row needs dissolve again on the tablet, so the card is the same four
+  // stacked children it has always been on the iPad.
+  const first = groups[0]
+  expect(within(card(first.kind)).getByText(TITLE[first.kind](first.items.length)).parentElement)
+    .toHaveClass('md:contents')
+  expect(within(card(first.kind)).getByText(/^Bước/).parentElement).toHaveClass('md:contents')
+})
+
 /** Five groups since 🧱 joined them, and the grid has to hold all five side by side: a row that
  * wrapped pushed the CTA off a 1194×834 iPad, which is the one thing the child came here to tap. */
 it('keeps all five groups on a single row from ipad up', () => {
@@ -294,7 +319,22 @@ it('shows the finish state on a revisit once every step is done', () => {
 
   expect(screen.queryByText(/bắt đầu ở đây!/)).not.toBeInTheDocument()
   expect(screen.getAllByText('✓ Xong')).toHaveLength(groupsOf(lesson).length)
-  expect(screen.getByRole('link', { name: 'Về bản đồ 🏝️' })).toHaveAttribute('href', '/')
+  expect(screen.getByRole('link', { name: /Về bản đồ 🏝️/ })).toHaveAttribute('href', '/')
+})
+
+// Spec decision 1: Home drops the island map below the tablet breakpoint, so the way out of the
+// mission cannot promise a map there. Both wordings are in the DOM and the breakpoint picks one.
+it('offers the map on a tablet and the home screen on a phone', () => {
+  const lesson = getLesson(NOW)
+  complete(lesson, lesson.items)
+  localStorage.setItem('speakup.celebrated', dayKey(NOW))
+
+  renderMission()
+
+  const back = screen.getByRole('link', { name: /Về bản đồ 🏝️/ })
+  expect(back).toHaveAttribute('href', '/')
+  expect(within(back).getByText('Về trang chủ 🏠')).toHaveClass('md:hidden')
+  expect(within(back).getByText('Về bản đồ 🏝️')).toHaveClass('hidden', 'md:inline')
 })
 
 it('sends the child to the celebration screen when the last step lands here', () => {

@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { logActivity } from '../progress/activity'
 import { MissionComplete } from './MissionComplete'
@@ -34,7 +34,20 @@ it('celebrates with confetti, a cheering Foxy and a way back to the map', () => 
   expect(screen.getByTestId('confetti')).toBeInTheDocument()
   expect(screen.getByTestId('foxy')).toHaveAttribute('data-mood', 'cheer')
   expect(screen.getByRole('heading', { name: 'Nhiệm vụ hoàn thành! 🎉' })).toBeInTheDocument()
-  expect(screen.getByRole('link', { name: 'Về bản đồ 🏝️' })).toHaveAttribute('href', '/')
+  expect(screen.getByRole('link', { name: /Về bản đồ 🏝️/ })).toHaveAttribute('href', '/')
+})
+
+// Spec decision 1: Home drops the island map below the tablet breakpoint, so the way out of the
+// celebration cannot promise a map there. Both wordings are in the DOM and the breakpoint picks one.
+it('offers the map on a tablet and the home screen on a phone', () => {
+  seedDoneDay(NOW - 1000)
+
+  renderDone()
+
+  const back = screen.getByRole('link', { name: /Về bản đồ 🏝️/ })
+  expect(back).toHaveAttribute('href', '/')
+  expect(within(back).getByText('Về trang chủ 🏠')).toHaveClass('md:hidden')
+  expect(within(back).getByText('Về bản đồ 🏝️')).toHaveClass('hidden', 'md:inline')
 })
 
 it("counts today's passing attempts as the stars just earned", () => {
