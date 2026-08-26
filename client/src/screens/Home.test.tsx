@@ -385,3 +385,31 @@ it('refuses to build a map with more topics than island slots', async () => {
   vi.doUnmock('../content/topics')
   vi.resetModules()
 })
+
+/**
+ * `text-lg` sets a 28 px line-height as well as an 18 px size, and the phone pass restored only
+ * the size — so at 1194×834 the star pill came out 52 px tall instead of the map's 57 and dragged
+ * the row 3 px down. jsdom cannot lay that out, so the guard is on the class list: any
+ * `ipad:text-[...]` restore of a `text-<scale>` phone value has to restate the leading too.
+ */
+it('restores the iPad leading, not just the size, on the star pill', () => {
+  renderHome()
+
+  const pill = screen.getByText(/^⭐/)
+  expect(pill).toHaveClass('text-lg', 'ipad:text-[22px]', 'ipad:leading-normal')
+})
+
+/**
+ * Two whole spellings, `HomeLabel`-style, rather than one emoji plus an `ipad:`-revealed word next
+ * to it: a flex `gap` between two items is 8 px where the map's single text run had a 4-ish px
+ * space, and the corner button measured 157 px wide instead of the 153 it has always been.
+ */
+it('spells the parent link out twice rather than growing the map corner by a gap', () => {
+  renderHome()
+
+  const parent = screen.getByRole('link', { name: 'Phụ huynh' })
+  expect(parent.className).not.toContain('ipad:gap-')
+  expect(parent.className).toContain('ipad:min-w-[64px]')
+  expect(within(parent).getByText('👨‍👩‍👧')).toHaveClass('ipad:hidden')
+  expect(within(parent).getByText('👨‍👩‍👧 Phụ huynh')).toHaveClass('hidden', 'ipad:inline')
+})

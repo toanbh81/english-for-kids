@@ -186,7 +186,12 @@ export function Home() {
             {/* The star total is the design's 13 px line under the greeting on a phone and the
               * chunky sun pill of the map from `ipad` up — one element, restyled, so the number
               * is never in the page twice. */}
-            <div className="inline-flex items-center gap-2 rounded-[18px] font-display text-lg font-extrabold text-sun-700 ipad:bg-sun-50 ipad:px-5 ipad:py-3 ipad:text-[22px] ipad:shadow-chunky-sun">
+            {/* `ipad:leading-normal` is not decoration. `text-lg` sets a 28 px line-height as well
+              * as an 18 px size, and `ipad:text-[22px]` restores only the size — so the pill came
+              * out 52 px tall instead of the map's 57 and dragged the row 3 px down with it. Any
+              * arbitrary-size restore has to restate the leading it is stepping on (1.5 is the
+              * inherited value the 22 px pill has always resolved against). */}
+            <div className="inline-flex items-center gap-2 rounded-[18px] font-display text-lg font-extrabold text-sun-700 ipad:bg-sun-50 ipad:px-5 ipad:py-3 ipad:text-[22px] ipad:leading-normal ipad:shadow-chunky-sun">
               ⭐ {totalStars()}
             </div>
           </div>
@@ -310,12 +315,16 @@ export function Home() {
               <Link
                 to="/parent"
                 aria-label="Phụ huynh"
-                className="flex min-h-[64px] w-16 items-center justify-center rounded-xl2 bg-white font-display text-lg font-extrabold text-ink-500 shadow-card-sm active:translate-y-[2px] ipad:w-auto ipad:gap-2 ipad:px-5"
+                className="flex min-h-[64px] w-16 items-center justify-center rounded-xl2 bg-white font-display text-lg font-extrabold text-ink-500 shadow-card-sm active:translate-y-[2px] ipad:w-auto ipad:min-w-[64px] ipad:px-5"
               >
-                👨‍👩‍👧
-                {/* The label is the accessible name at every size; on a phone the square keeps just
-                  * the emoji, which is the only thing the design's 64×64 button has room for. */}
-                <span className="hidden ipad:inline">Phụ huynh</span>
+                {/* The label is the accessible name at every size (it is on the link); on a phone
+                  * the square keeps just the emoji, which is the only thing the design's 64×64
+                  * button has room for. Two whole spellings, `HomeLabel`-style, rather than one
+                  * emoji plus an `ipad:`-revealed word next to it: a flex `gap` between two items
+                  * is 8 px where the map's single text run had a 4-ish px space, and the button
+                  * came out 157 px wide instead of the 153 the corner has always been. */}
+                <span aria-hidden="true" className="ipad:hidden">👨‍👩‍👧</span>
+                <span aria-hidden="true" className="hidden ipad:inline">👨‍👩‍👧 Phụ huynh</span>
               </Link>
             </div>
           </div>

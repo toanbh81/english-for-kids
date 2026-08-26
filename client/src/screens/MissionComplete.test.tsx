@@ -68,3 +68,19 @@ it('shows the streak built by consecutive completed days', () => {
 
   expect(screen.getByText('🔥 Chuỗi 2 ngày liên tiếp — giỏi lắm!')).toBeInTheDocument()
 })
+
+/**
+ * `text-2xl` sets a 32 px line-height as well as a 24 px size, and the phone pass restored only
+ * the size — so at 1194×834 the pill came out 56 px tall instead of the 69 it has always been, and
+ * the whole centred stack moved with it (mascot and title 6 px down, streak line and CTA 7 px up).
+ * jsdom cannot lay that out, so the guard is on the class list: any `md:text-[...]` restore of a
+ * `text-<scale>` phone value has to restate the leading it is stepping on.
+ */
+it('restores the iPad leading, not just the size, on the star pill', () => {
+  seedDoneDay(NOW - 1000)
+
+  renderDone()
+
+  const pill = screen.getByText(/^\+\d+ ⭐$/)
+  expect(pill).toHaveClass('text-2xl', 'md:text-[30px]', 'md:leading-normal')
+})

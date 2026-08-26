@@ -34,7 +34,13 @@ export function MissionComplete() {
         Nhiệm vụ hoàn thành! 🎉
       </h1>
 
-      <div className="inline-flex items-center gap-2 rounded-full bg-sun-50 px-8 py-3 font-display text-2xl font-extrabold text-sun-700 shadow-chunky-sun md:text-[30px]">
+      {/* `md:leading-normal` is not decoration. `text-2xl` sets a 32 px line-height as well as a
+          24 px size, and `md:text-[30px]` restores only the size — so the pill came out 56 px tall
+          instead of the 69 it has always been, and the whole centred stack shifted with it (the
+          mascot and the title 6 px down, the streak line and the way out 7 px up). Any
+          arbitrary-size restore has to restate the leading it is stepping on; 1.5 is the inherited
+          value the 30 px pill has always resolved against. */}
+      <div className="inline-flex items-center gap-2 rounded-full bg-sun-50 px-8 py-3 font-display text-2xl font-extrabold text-sun-700 shadow-chunky-sun md:text-[30px] md:leading-normal">
         +{starsToday} ⭐
       </div>
 
