@@ -14,11 +14,20 @@ export default {
   ],
   theme: {
     extend: {
-      // The real iPad-landscape breakpoint. Tailwind's `lg` is 1024, which switched the curved
-      // map, the diagonal stairs and the mission row on 170 px too early: a 1024–1193 tablet got a
-      // squeezed landscape layout instead of the portrait one. Phase 10 moves those layouts here,
-      // so `md` (768) is "tablet portrait" and `ipad` (1194) is "iPad landscape, the original".
-      screens: { ipad: '1194px' },
+      // The iPad-landscape breakpoint: the curved map, the diagonal stairs and the five-across
+      // mission row.
+      //
+      // It asks about ORIENTATION, not a width alone, because the width alone cannot answer the
+      // question. Phase 10 first set this to 1194 — the width of the design's own frame — and that
+      // silently took the map away from every iPad narrower than an 11" Pro: a 10.2" is 1080 pt
+      // across in landscape, a mini 1133, an Air 1180. They landed in the tablet band and lost the
+      // layout they had had all along.
+      //
+      // A plain 1024 would not do either: a 12.9" iPad is exactly 1024 pt wide in PORTRAIT, which
+      // is the squeezed-map case this breakpoint exists to prevent. Landscape-and-wide is the real
+      // condition — every iPad is ≥ 1080 across in landscape, every phone is < 1024 in either
+      // orientation, and every iPad in portrait is ≤ 1024.
+      screens: { ipad: { raw: '(min-width: 1024px) and (orientation: landscape)' } },
       colors: {
         cream: { DEFAULT: '#FFF7EA', 50: '#FFF7EA' },
         canvas: '#EFE5D6',
