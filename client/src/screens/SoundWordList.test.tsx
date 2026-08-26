@@ -81,6 +81,32 @@ it('plays the sound on its own, and says so when that sample is missing', async 
   await screen.findByText('Chưa có audio âm này')
 })
 
+// --- the phone frame (phase 10) ---------------------------------------------------------------
+
+/** The design draws no frame for this screen, so the check is that it follows the drill it feeds:
+ * a row per word below 768, the three-column deck of tiles from 768 up. jsdom cannot measure
+ * either, so it checks the breakpoint each rule is written at — see the drill's suite for why. */
+it('lays each word out as a row on a phone and as a tile from `md` up', () => {
+  renderList()
+
+  const link = screen.getByRole('link', { name: 'Từ three' })
+  expect(link.className).toContain('max-md:flex-row')
+  expect(link.className).toContain('min-h-[96px]')
+  expect(link.className).toContain('md:min-h-[184px]')
+  // The three-column deck is still the tablet layout and still starts at 768.
+  expect(link.parentElement!.className).toContain('md:grid-cols-3')
+})
+
+/** The tip sits under the symbol on a phone and back between the symbol and the button from `md`
+ * up — the order the landscape header has always read in. */
+it('keeps the landscape header order from `md` up', () => {
+  renderList()
+
+  expect(screen.getByText(PHONEME_TIPS.th).className).toContain('md:order-2')
+  expect(screen.getByRole('button', { name: /nghe âm lẻ/i }).className).toContain('md:order-3')
+  expect(screen.getByText('/θ/').className).toContain('md:order-1')
+})
+
 it('goes back to the stairs', () => {
   renderList()
   expect(screen.getByRole('link', { name: 'Các bậc' })).toHaveAttribute('href', '/levels')

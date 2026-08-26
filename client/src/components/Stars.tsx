@@ -1,10 +1,14 @@
 export type StarsSize = 'md' | 'sm'
 
 /** `sm` is the row size: on a short landscape screen the stars share a line with the score and the
- * unlock badge instead of taking a band of their own, and 58 px would push the CTA off the fold. */
+ * unlock badge instead of taking a band of their own, and 58 px would push the CTA off the fold.
+ *
+ * Both sizes come down on a phone, to the 36 px the design gives the stars in the compressed
+ * result card (brief §5 M3b). `md:` puts the landscape number back, so from the tablet breakpoint
+ * up — every width an iPad ever renders at — this is the same row it always was. */
 const SIZE: Record<StarsSize, string> = {
-  md: 'gap-3 text-[58px]',
-  sm: 'gap-2 text-[40px]',
+  md: 'gap-2 text-[36px] md:gap-3 md:text-[58px]',
+  sm: 'gap-2 text-[36px] md:text-[40px]',
 }
 
 /** Result stars. `animate` drops them in one after another (.22 s apart) so the child watches

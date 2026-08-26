@@ -126,6 +126,84 @@ it('lays the sound and the word out as two rows sharing a tile column', () => {
   expect(wordB).toHaveTextContent('Từ 1/3')
 })
 
+// --- the phone frame (phase 10, brief §5 M3/M3b + §6 M4) -------------------------------------
+//
+// jsdom has no layout, so these assert the one thing that decides the layout: which breakpoint
+// each rule is written at. The geometry itself is measured in a browser (see the phase-10 task
+// report) — what these guard is that nobody ever moves a phone rule up to where an iPad sees it,
+// which is the failure mode brief §15 is entirely about.
+
+it('reads the sound and word cells as two stacked tiers on a phone and as grid cells from `md` up', () => {
+  renderWord()
+
+  // The tier wrappers ARE the cards below 768 and stop being boxes at all from 768 up, which is
+  // what lets one DOM be both layouts: `md:contents` takes them out of the grid.
+  for (const id of ['sound-tier', 'word-tier']) {
+    const tier = screen.getByTestId(id)
+    expect(tier.className).toContain('md:contents')
+    expect(tier.className).toMatch(/rounded-/)
+  }
+  // The two-column grid is still the tablet/iPad layout and still starts at 768.
+  expect(screen.getByTestId('sound-word-grid').className).toContain('md:grid-cols-[minmax(180px,auto)_1fr]')
+})
+
+/** The 168×200 tile is the one element the design cuts outright: it is what pushed the mic under
+ * the fold. The mouth shape itself is not lost — it moves into the sound row at 64 px. */
+it('swaps the big mouth tile for a 64 px one in the sound row, below `md` only', () => {
+  renderWord()
+
+  const small = screen.getByTestId('mouth-tile')
+  expect(screen.getByTestId('sound-cell-a')).toContainElement(small)
+  expect(small.className).toContain('md:hidden')
+
+  const big = screen.getByText('Khẩu hình miệng').closest('section')!
+  expect(big.className).toContain('hidden')
+  expect(big.className).toContain('md:flex')
+})
+
+/** Both counters still exist on a phone; only the deck they sit in folds away. */
+it('folds the whole deck away on a phone once a result lands, and only on a phone', () => {
+  renderWord()
+  expect(screen.getByTestId('sound-word-grid').className).not.toContain('max-md:hidden')
+
+  score(result(55))
+
+  expect(screen.getByTestId('sound-word-grid').className).toContain('max-md:hidden')
+  // The sound and its tip are not lost with it — the result state reprints both.
+  expect(screen.getByTestId('sound-chip')).toHaveTextContent('/θ/')
+  expect(screen.getByTestId('sound-tip')).toHaveTextContent(PHONEME_TIPS.th)
+})
+
+/** Every phone override on a shared primitive has to be `max-md:`, because an unprefixed one
+ * would be a coin-toss against the class the primitive writes for itself — and, unlike a plain
+ * rule, `max-md:` provably cannot reach the iPad. */
+it('keeps the result CTAs a phone-only size, and never touches the button primitive above it', () => {
+  renderWord()
+  score(result(55))
+
+  // "Tiếp theo" is a link in free play and a button under the mission, so ask for either.
+  for (const name of [/thử lại/i, /tiếp theo/i]) {
+    const cta = screen.getByRole(/thử lại/.test(name.source) ? 'button' : 'link', { name })
+    expect(cta.className).toContain('max-md:min-h-[64px]')
+    expect(cta.className).toMatch(/max-md:flex-(1|\[1\.35\])/)
+    // The landscape size map is untouched: 72 px and 64 px are still what `Button` hands out.
+    expect(cta.className).toMatch(/min-h-\[(64|72)px\]/)
+  }
+})
+
+/** The mic is never the thing a child has to scroll for: it takes the free space at 844 and
+ * sticks to the bottom edge where the deck does not fit (375×667). Neither applies from `md` up,
+ * where the mouth tile is back and already holds the column open. */
+it('pins the mic to the bottom of the phone frame and leaves the landscape column alone', () => {
+  renderWord()
+
+  const micBlock = screen.getByRole('button', { name: /bấm để nói/i }).parentElement!
+  expect(micBlock.className).toContain('mt-auto')
+  expect(micBlock.className).toContain('md:mt-0')
+  expect(micBlock.className).toContain('sticky')
+  expect(micBlock.className).toContain('md:static')
+})
+
 it('plays the sound on its own, and says so when that sample is missing', async () => {
   playerControl.playUrl.mockReturnValue(new Promise<void>(() => {})) // still playing: no state change yet
   renderWord()
