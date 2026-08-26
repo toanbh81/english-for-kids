@@ -25,9 +25,20 @@ function isExcluded(pathname: string): boolean {
  * `/sound/<ph>` step while the tap lands on `/sound/<ph>/<cardId>`, so the screen found no mission,
  * the chip assumed it had, and the child was left on a word with nothing leading back.
  *
- * Stories are the exception in the other direction. They are excluded from the mission-aware
- * screens on purpose — a story keeps its own player flow — so nothing inside one knows it is a
- * lesson step even when the routes do match, and the chip is the only thread back to the mission.
+ * Stories are the exception, and no longer for the original reason. They used to be excluded from
+ * the mission-aware screens outright, so nothing inside one knew it was a lesson step and the chip
+ * was the only thread back. That is fixed: the player, the quiz and the retell all read the flag
+ * now and all lead home.
+ *
+ * The exception stays because the story is the one step spread over three routes, only the first of
+ * which `isItemRoute` matches. The chip's own reason to hide is "this screen already grew the
+ * controls" — and on `/story/:id/quiz` and `/story/:id/retell` that is true only while the flag is
+ * still being forwarded hop by hop. Any future link into the middle of a story that forgets it, or
+ * a reload that drops the router state, lands the child on a sub-route with a back arrow pointing
+ * at the story library and nothing else. Suppressing the chip there would cost them the last thread
+ * back, and it costs a mission-aware story screen nothing but a redundant pill in a corner it does
+ * not use. So the rule is deliberately asymmetric: hide where the screen is *proven* to lead home,
+ * show where it merely usually does.
  */
 function isRedundant(pathname: string, inMission: boolean, items: LessonItem[]): boolean {
   return inMission && !pathname.startsWith('/story/') && isItemRoute(items, pathname)

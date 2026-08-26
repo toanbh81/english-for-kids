@@ -92,6 +92,15 @@ beforeEach(() => {
 it('shows a not-found message for an unknown story id', () => {
   renderRetell('nope')
   expect(screen.getByText('Không tìm thấy truyện')).toBeInTheDocument()
+  expect(screen.getByRole('link', { name: 'Truyện' })).toHaveAttribute('href', '/stories')
+})
+
+/** No story means no lesson position, so `LessonChip` suppresses itself here too and this arrow is
+ * the only way off the screen. It may not point out of the lesson. */
+it('leads a mission child home even when the story itself is missing', () => {
+  renderRetell('nope', true)
+  expect(screen.getByRole('link', { name: 'Nhiệm vụ' })).toHaveAttribute('href', '/mission')
+  expect(screen.queryByRole('link', { name: 'Truyện' })).not.toBeInTheDocument()
 })
 
 it('shows the retell sentence and its translation', () => {
@@ -189,12 +198,21 @@ describe('speech synthesis sample fallback', () => {
 // `/story/:id/retell` is a SUB-route of the 🎧 step (only the forwarded flag says so), and it is
 // ALSO a 🔁 review step's own exact route (where the hand-off resolves and knows what comes next).
 
-it('ends free play back on the story list, exactly as it always did', () => {
+/**
+ * The lesson is SEEDED here, and holds this very retell as its 🔁 step — an empty store would let
+ * every mission branch pass by never resolving anything, which is not the guarantee this guard is
+ * for. What it pins is that a child who walked in from the story list sees free play even on a day
+ * whose lesson names this exact route: the flag decides, never the lesson.
+ */
+it('ends free play back on the story list, even when the lesson holds this very retell', () => {
+  seedLesson(RETELL_STEP, NEXT_STEP)
   attemptControl.current = scored()
   renderRetell()
 
   expect(screen.getByRole('link', { name: 'Truyện' })).toHaveAttribute('href', '/stories')
   expect(screen.getByRole('link', { name: 'Về danh sách truyện' })).toHaveAttribute('href', '/stories')
+  expect(screen.queryByRole('link', { name: 'Nhiệm vụ' })).not.toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: /Tiếp theo/ })).not.toBeInTheDocument()
 })
 
 it('leads back to the mission when the child arrived from a story step', () => {

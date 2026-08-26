@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
-import { Link, useLocation, useParams } from 'react-router-dom'
+import { Link, useParams } from 'react-router-dom'
 import type { QuizQ } from '../content/stories/types'
 import { findStory } from '../content/stories'
 import { setStars } from '../progress/store'
 import { logActivity } from '../progress/activity'
-import { MISSION_STATE } from '../progress/missionNav'
+import { MISSION_ROUTE, MISSION_STATE, RETURN_LABEL, useMissionFlag } from '../progress/missionNav'
 import { speakText } from '../story/speak'
 import { Foxy } from '../components/Foxy'
 import type { FoxyMood } from '../components/Foxy'
@@ -24,16 +24,19 @@ const CTA_PHONE = 'max-md:min-h-[64px] max-md:w-full max-md:px-4 max-md:text-lg'
 
 export function StoryQuiz() {
   const { id = '' } = useParams()
+  // Before the guard: a story that cannot be found has no lesson position, so `LessonChip`
+  // suppresses itself here too and this link is the only way off the screen.
+  const mission = useMissionFlag()
   const story = findStory(id)
   if (!story) {
     return (
       <main className={`flex h-full flex-col items-center justify-center gap-6 bg-cream-50 px-8 [--page-pad-bottom:2rem] [--page-pad-top:2rem] ${PAGE_SHELL}`}>
         <p className="font-display text-3xl font-extrabold text-ink-900">Không tìm thấy truyện</p>
-        <Link to="/stories" className={BACK_LINK}>← Truyện</Link>
+        <Link to={mission ? MISSION_ROUTE : '/stories'} className={BACK_LINK}>{mission ? '← Nhiệm vụ' : '← Truyện'}</Link>
       </main>
     )
   }
-  return <StoryQuizInner quiz={story.quiz} id={id} />
+  return <StoryQuizInner quiz={story.quiz} id={id} mission={mission} />
 }
 
 type Feedback = 'idle' | 'correct' | 'wrong'
@@ -44,16 +47,14 @@ const CARD_STATE: Record<Exclude<Feedback, 'idle'>, string> = {
   wrong: 'shadow-[0_8px_0_#F8A3AE,0_0_0_6px_#FFD4DA]',
 }
 
-function StoryQuizInner({ quiz, id }: { quiz: QuizQ[]; id: string }) {
-  /**
-   * This screen sits on `/story/:id/quiz` — a SUB-route of the lesson's `/story/:id` step — and
-   * `missionNav` matches item routes whole by design (its `routeIs`), so `useMissionNext()` would
-   * find nothing here. The forwarded flag is the only thing that knows the child is inside a
-   * lesson, so the screen reads it straight off the location and passes it on down every hop it
-   * owns: back to the story, on to the retell, and the replay in the result row.
-   */
-  const { state } = useLocation()
-  const inMission = (state as { mission?: unknown } | null)?.mission === true
+/**
+ * This screen sits on `/story/:id/quiz` — a SUB-route of the lesson's `/story/:id` step — and
+ * `missionNav` matches item routes whole by design (its `routeIs`), so `useMissionNext()` would
+ * find nothing here. The forwarded flag is the only thing that knows the child is inside a lesson,
+ * so the screen passes it on down every hop it owns: back to the story, on to the retell, and the
+ * replay in the result row.
+ */
+function StoryQuizInner({ quiz, id, mission: inMission }: { quiz: QuizQ[]; id: string; mission: boolean }) {
   const missionState = inMission ? MISSION_STATE : undefined
 
   const [qIndex, setQIndex] = useState(0)
@@ -122,7 +123,7 @@ function StoryQuizInner({ quiz, id }: { quiz: QuizQ[]; id: string }) {
               lesson: `/` is the one place a child with steps still owed must not be dropped, and
               the map is not even drawn there on a phone. */}
           {inMission
-            ? <Button to="/mission" size="lg" variant="secondary" className={CTA_PHONE}>Về nhiệm vụ →</Button>
+            ? <Button to={MISSION_ROUTE} size="lg" variant="secondary" className={CTA_PHONE}>{RETURN_LABEL}</Button>
             : <Button to="/" size="lg" variant="secondary" className={CTA_PHONE}><HomeLabel /></Button>}
         </div>
       </main>

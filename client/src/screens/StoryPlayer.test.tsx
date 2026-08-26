@@ -223,6 +223,15 @@ it('offers a quiet "Bỏ qua ▸" to the same quiz before the story ends', () =>
 it('shows a not-found message for an unknown story id', () => {
   renderPlayer('nope')
   expect(screen.getByText('Không tìm thấy truyện')).toBeInTheDocument()
+  expect(screen.getByRole('link', { name: '← Truyện' })).toHaveAttribute('href', '/stories')
+})
+
+/** The one screen with no lesson position at all, so `LessonChip` suppresses itself here too: an
+ * unconditional "← Truyện" would be a dead end for a child in the middle of a lesson. */
+it('leads a mission child home even when the story itself is missing', () => {
+  renderPlayer('nope', true)
+  expect(screen.getByRole('link', { name: '← Nhiệm vụ' })).toHaveAttribute('href', '/mission')
+  expect(screen.queryByRole('link', { name: '← Truyện' })).not.toBeInTheDocument()
 })
 
 /** The spec's binding rules put the tap-target floor at 64 px with no exception, and the first

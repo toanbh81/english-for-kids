@@ -1,11 +1,11 @@
 import { useEffect } from 'react'
-import { useLocation, useParams } from 'react-router-dom'
+import { useParams } from 'react-router-dom'
 import type { Story } from '../content/stories/types'
 import type { PronunciationResult } from '../scoring/types'
 import { findStory } from '../content/stories'
 import { setStars } from '../progress/store'
 import { logActivity } from '../progress/activity'
-import { useMissionNext } from '../progress/missionNav'
+import { MISSION_ROUTE, RETURN_LABEL, useMissionFlag, useMissionNext } from '../progress/missionNav'
 import { saveRecording } from '../progress/recordings'
 import { playUrl, playBlob } from '../audio/player'
 import { useSpeakingAttempt } from '../speaking/useSpeakingAttempt'
@@ -19,16 +19,19 @@ import { speakText } from '../story/speak'
 
 export function StoryRetell() {
   const { id = '' } = useParams()
+  // Before the guard: a story that cannot be found has no lesson position, so `LessonChip`
+  // suppresses itself here too and this arrow is the only way off the screen.
+  const mission = useMissionFlag()
   const story = findStory(id)
   if (!story) {
     return (
       <main className={`h-full overflow-y-auto bg-cream-50 px-6 ${PAGE_SHELL}`}>
         <p className="mb-4 font-display text-2xl font-extrabold text-ink-900">Không tìm thấy truyện</p>
-        <BackButton to="/stories" label="Truyện" />
+        <BackButton to={mission ? MISSION_ROUTE : '/stories'} label={mission ? 'Nhiệm vụ' : 'Truyện'} />
       </main>
     )
   }
-  return <StoryRetellInner story={story} id={id} />
+  return <StoryRetellInner story={story} id={id} inMission={mission} />
 }
 
 /** The scene whose narration matches the retell sentence, if any — used to reuse its recorded
@@ -52,22 +55,21 @@ function playSample(story: Story) {
   }
 }
 
-function StoryRetellInner({ story, id }: { story: Story; id: string }) {
-  /**
-   * Two different ways this screen can be inside a lesson, and they are not the same fact.
-   *
-   * `/story/:id/retell` is a SUB-route of the 🎧 listen step's `/story/:id`, and `missionNav`
-   * matches item routes whole on purpose (its `routeIs`), so a child who walked the story chain
-   * from the mission resolves nothing here — the flag forwarded down the chain is all there is.
-   *
-   * The very same path is ALSO a 🔁 review step's own exact route, and on a day whose lesson holds
-   * that step the hand-off *does* resolve: it knows which item comes next and what to call the
-   * button. That is worth more to the child than a bare trip back to the mission card, so it is
-   * preferred wherever it exists, exactly as on every other practice screen.
-   */
+/**
+ * `inMission` is the flag; `mission` is the hand-off, and it is strictly narrower — `useMissionNext`
+ * needs the flag too, so it can never resolve where `inMission` is false.
+ *
+ * They differ because `/story/:id/retell` is two things. It is a SUB-route of the 🎧 listen step's
+ * `/story/:id`, and `missionNav` matches item routes whole on purpose (its `routeIs`), so a child
+ * who walked the story chain here resolves nothing — the forwarded flag is all there is, and it is
+ * enough to know where "back" goes. But the very same path is ALSO a 🔁 review step's own exact
+ * route, and on a day whose lesson holds that step the hand-off *does* resolve: it knows which item
+ * comes next and what to call the button. That is worth more to the child than a bare trip back to
+ * the mission card, so it is preferred wherever it exists, exactly as on every other practice
+ * screen — and where it is absent the flag still answers for the way out.
+ */
+function StoryRetellInner({ story, id, inMission }: { story: Story; id: string; inMission: boolean }) {
   const mission = useMissionNext()
-  const { state } = useLocation()
-  const inMission = mission !== null || (state as { mission?: unknown } | null)?.mission === true
 
   function handleResult(result: PronunciationResult, blob: Blob | null) {
     logActivity({ ts: Date.now(), kind: 'sentence', id: `retell:${id}`, score: result.overall })
@@ -95,7 +97,7 @@ function StoryRetellInner({ story, id }: { story: Story; id: string }) {
     <main className={`h-full overflow-y-auto bg-cream-50 px-6 [--page-pad-bottom:1.25rem] [--page-pad-top:1.25rem] ${PAGE_SHELL}`}>
       <div className="mx-auto flex min-h-full w-full max-w-4xl flex-col items-center gap-4">
         <header className="flex w-full items-center justify-between gap-4">
-          <BackButton to={inMission ? '/mission' : '/stories'} label={inMission ? 'Nhiệm vụ' : 'Truyện'} />
+          <BackButton to={inMission ? MISSION_ROUTE : '/stories'} label={inMission ? 'Nhiệm vụ' : 'Truyện'} />
           <h1 className="font-display text-[36px] font-extrabold leading-tight text-ink-900">Bé kể lại nhé</h1>
           <span className="min-w-[66px] text-right text-base font-bold text-ink-300">
             {a.engine === 'webspeech' ? 'chế độ đơn giản' : ''}
@@ -132,7 +134,7 @@ function StoryRetellInner({ story, id }: { story: Story; id: string }) {
               {mission
                 ? <Button size="lg" pulse onClick={mission.go}>{mission.label}</Button>
                 : inMission
-                  ? <Button size="lg" pulse to="/mission">Về nhiệm vụ →</Button>
+                  ? <Button size="lg" pulse to={MISSION_ROUTE}>{RETURN_LABEL}</Button>
                   : <Button size="lg" pulse to="/stories">Về danh sách truyện</Button>}
             </div>
           </section>

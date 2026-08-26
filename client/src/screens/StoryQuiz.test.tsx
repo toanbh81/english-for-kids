@@ -100,6 +100,15 @@ it('never tints the answer keyword inside the question, in any story', () => {
 it('shows a not-found message for an unknown story id', () => {
   renderQuiz('nope')
   expect(screen.getByText('Không tìm thấy truyện')).toBeInTheDocument()
+  expect(screen.getByRole('link', { name: '← Truyện' })).toHaveAttribute('href', '/stories')
+})
+
+/** No story means no lesson position, so `LessonChip` suppresses itself here too and this link is
+ * the only way off the screen. It may not point out of the lesson. */
+it('leads a mission child home even when the story itself is missing', () => {
+  renderQuiz('nope', true)
+  expect(screen.getByRole('link', { name: '← Nhiệm vụ' })).toHaveAttribute('href', '/mission')
+  expect(screen.queryByRole('link', { name: '← Truyện' })).not.toBeInTheDocument()
 })
 
 it('shows the question progress indicator', () => {
