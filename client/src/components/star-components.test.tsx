@@ -4,13 +4,16 @@ import { StressedSentence } from './StressedSentence'
 const WORDS = ['I', 'have', 'a', 'red', 'apple.']
 
 describe('StressedSentence', () => {
+  // The sizes come in pairs now: the phone value unprefixed and the landscape one restored at
+  // `md:`. Both halves are asserted, because dropping either is the bug — an unprefixed 48 px
+  // wraps a five-word sentence to four lines on a phone, and a missing `md:` shrinks the iPad.
   it('makes the stressed words bigger and coral, and leaves the rest alone', () => {
     render(<StressedSentence words={WORDS} stress={[1, 3, 4]} />)
 
-    expect(screen.getByText('have')).toHaveClass('text-coral-text', 'text-[48px]')
-    expect(screen.getByText('apple.')).toHaveClass('text-coral-text', 'text-[48px]')
-    expect(screen.getByText('I')).toHaveClass('text-ink-900', 'text-[40px]')
-    expect(screen.getByText('a')).toHaveClass('text-ink-900', 'text-[40px]')
+    expect(screen.getByText('have')).toHaveClass('text-coral-text', 'text-[32px]', 'md:text-[48px]')
+    expect(screen.getByText('apple.')).toHaveClass('text-coral-text', 'text-[32px]', 'md:text-[48px]')
+    expect(screen.getByText('I')).toHaveClass('text-ink-900', 'text-[27px]', 'md:text-[40px]')
+    expect(screen.getByText('a')).toHaveClass('text-ink-900', 'text-[27px]', 'md:text-[40px]')
   })
 
   it('draws one ‿ between each linked pair, hidden from screen readers', () => {

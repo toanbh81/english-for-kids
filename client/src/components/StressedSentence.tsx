@@ -18,20 +18,24 @@ export function StressedSentence({ words, stress, link = [] }: {
   return (
     <p
       aria-label={words.join(' ')}
-      className="flex flex-wrap items-baseline justify-center gap-x-3 gap-y-1 text-center font-display font-extrabold leading-tight"
+      // The phone sizes are two thirds of the landscape ones (design §5, the speak-frame family):
+      // a five-word sentence at 48/40 px wraps to four lines in a 350 px column and takes the
+      // room the mic needs. `md:` puts the landscape numbers back exactly, so 1194×834 is
+      // untouched. `leading-tight` is unprefixed here, so no `text-*` step can reset it.
+      className="flex flex-wrap items-baseline justify-center gap-x-2 gap-y-1 text-center font-display font-extrabold leading-tight md:gap-x-3"
     >
       {words.map((w, i) => (
         <span key={i} className="inline-flex items-baseline">
           <span
             data-testid="star-word"
             className={stressed.has(i)
-              ? 'font-display text-[48px] text-coral-text'
-              : 'font-display text-[40px] text-ink-900'}
+              ? 'font-display text-[32px] text-coral-text md:text-[48px]'
+              : 'font-display text-[27px] text-ink-900 md:text-[40px]'}
           >
             {w}
           </span>
           {linked.has(i) && (
-            <span aria-hidden="true" data-testid="link-mark" className="px-1 text-[32px] text-teal-600">‿</span>
+            <span aria-hidden="true" data-testid="link-mark" className="px-1 text-[22px] text-teal-600 md:text-[32px]">‿</span>
           )}
         </span>
       ))}

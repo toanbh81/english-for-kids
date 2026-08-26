@@ -452,3 +452,51 @@ it('stays a free-play card without the flag, lesson or no lesson', async () => {
   expect(screen.queryByText('Thẻ 1/2')).not.toBeInTheDocument()
   expect(screen.getByRole('link', { name: 'Quay lại' })).toHaveAttribute('href', '/level/sound-zoo')
 })
+
+/** Phase 10: this screen had no phone layout at all — no breakpoint rules and, worse, no
+ * `PAGE_SHELL`, so at 390×844 it measured 1156 px with the mic at y938 and its content ran under
+ * the notch. jsdom cannot lay that out, so these guard the inputs the measurement depends on. */
+it('carries the safe-area shell and its own resting padding', async () => {
+  renderCard()
+  await scorerReady()
+
+  const shell = document.querySelector('main')!.className
+  expect(shell).toContain('pt-[max(var(--page-pad-top,1.5rem),calc(env(safe-area-inset-top)_+_9px))]')
+  expect(shell).toContain('pb-[max(var(--page-pad-bottom,1.5rem),calc(env(safe-area-inset-bottom)_+_10px))]')
+  // The resting value is the `py-5` this screen has always had, so the iPad is untouched.
+  expect(shell).toContain('[--page-pad-top:1.25rem]')
+  expect(shell).toContain('[--page-pad-bottom:1.25rem]')
+  // …and 20 px of side frame on a phone, the 24 px of the landscape frame from `md` up.
+  expect(shell).toContain('px-5')
+  expect(shell).toContain('md:px-6')
+})
+
+/** The 220 px meaning tile and the 220 px mouth tile are what wrapped to three rows at 390 px and
+ * pushed the mic below the fold. Both come down on a phone and both are restored at `md:`. */
+it('stacks the deck on a phone and restores the landscape tiles from md up', async () => {
+  renderCard()
+  await scorerReady()
+
+  const meaning = screen.getByText('nghĩa của từ').closest('div')!
+  expect(meaning.className).toContain('h-[96px]')
+  expect(meaning.className).toContain('md:h-[220px]')
+  expect(meaning.className).toContain('md:w-[220px]')
+
+  const mouth = screen.getByText('Khẩu hình miệng').closest('div')!
+  expect(mouth.className).toContain('h-16')
+  expect(mouth.className).toContain('md:h-[220px]')
+})
+
+/** The result read-out scrolls *inside* a bounded region on a phone, with the CTA row as its
+ * sibling underneath — never a `sticky` panel, which would paint over a word chip. `md:contents`
+ * is what makes the landscape frame the same flat column it has always been. */
+it('gives the phone result a bounded scroller and never a sticky', async () => {
+  renderCard()
+  await scoreOnce()
+
+  const region = document.querySelector('[class*="md:contents"]')!
+  expect(region.className).toContain('max-md:flex-1')
+  expect(region.className).toContain('max-md:min-h-0')
+  expect(region.className).toContain('max-md:overflow-y-auto')
+  expect(document.querySelector('main')!.innerHTML).not.toContain('sticky')
+})

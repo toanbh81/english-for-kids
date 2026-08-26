@@ -18,8 +18,16 @@ import { ProsodyChip } from '../components/ProsodyChip'
 import { HintCard } from '../components/HintCard'
 import { Confetti } from '../components/Confetti'
 import { Foxy } from '../components/Foxy'
-import { BackButton, Button, Card, Chip } from '../components/ui'
+import { BackButton, Button, Card, Chip, PAGE_SHELL } from '../components/ui'
 import { useSpeakingAttempt } from '../speaking/useSpeakingAttempt'
+
+/**
+ * Phone layout follows `SoundPractice`'s idiom to the letter (see the comment block at the top of
+ * that file): phone values sit unprefixed, `md:` restores the exact landscape value, and `max-md:`
+ * appears only where a shared primitive writes a competing class of its own. Nothing here is
+ * `sticky` — a bottom-pinned panel paints over whatever happens to sit at its y.
+ */
+const CTA_PHONE = 'max-md:min-h-[64px] max-md:px-4 max-md:text-lg'
 
 /** Passages run 2–3 sentences read *slowly, with feeling*, so the mic stays open longer here than
  * anywhere else: at 10 s a careful reader was still mid-passage when it closed, and the unsaid
@@ -71,12 +79,15 @@ const MOOD_TIPS: Record<VoicePassage['mood'], string[]> = {
 export function Passage({ text }: { text: string }) {
   // The long passages run to three full lines at 34 px and push the mic off the bottom of a
   // landscape iPad. On a wide screen they drop to 30 px — the short ones keep the bigger type.
+  // On a phone every passage starts at 24 px: 34 px wraps a three-sentence passage to six lines
+  // in a 350 px column, which is most of the room the mic needs. `leading-snug` is spelled out
+  // unprefixed, so no `text-*` step can quietly reset it at a breakpoint.
   const long = text.trim().split(/\s+/).length > 12
   return (
     <p
       aria-label={text}
       data-testid="voice-passage"
-      className={`max-w-3xl text-center font-display font-extrabold leading-snug text-ink-900 ${long ? 'text-[34px] lg:text-[30px]' : 'text-[34px]'}`}
+      className={`max-w-3xl text-center font-display font-extrabold leading-snug text-ink-900 ${long ? 'text-[24px] md:text-[34px] lg:text-[30px]' : 'text-[24px] md:text-[34px]'}`}
     >
       {text.split(/([!?](?=\s|$))/).map((part, i) =>
         part === '!' || part === '?' ? (
@@ -154,11 +165,24 @@ function VoiceRun({ passage }: { passage: VoicePassage }) {
   const message = stars === 3 ? 'Đọc có hồn quá!' : stars === 2 ? 'Hay lắm!' : 'Thử lại nhé'
 
   return (
-    <main className="h-full overflow-y-auto bg-cream-50 px-6 py-5">
+    // 20 px of side frame on a phone (design §1, the speak-frame family), the 24 px this screen
+    // has always had from the tablet breakpoint up. The vertical padding is the safe-area shell
+    // resting at the 1.25 rem of the old `py-5`, so with no notch to clear — iPad, desktop,
+    // jsdom — it is the same 20 px it was.
+    <main className={`h-full overflow-y-auto bg-cream-50 px-5 [--page-pad-bottom:1.25rem] [--page-pad-top:1.25rem] md:px-6 ${PAGE_SHELL}`}>
       {/* Everything down to the mic has to fit a landscape iPad (1194×834) without scrolling:
         * a mic below the fold reads as "there is nothing to do here". Hence gap-3 rather than
         * gap-4, the smaller mood emoji, and the compact tips list. */}
-      <div className="mx-auto flex min-h-full w-full max-w-5xl flex-col items-center gap-3">
+      {/* A *definite* height on the phone is what lets the result read-out below take the leftover
+        * space and scroll inside it; with `min-h-full` alone the column simply grows and the CTA
+        * row walks off the bottom of the screen, which is the bug this screen had.
+        *
+        * It is switched on only for the result, and deliberately. A definite height also lets a
+        * `flex-1` section be squeezed *below* its content — harmless for a read-out that scrolls,
+        * but the recording state has no scroller and its countdown and Foxy would then be painted
+        * over the mic. Idle and recording keep the growing `min-h-full` column they have always
+        * had, so the worst they can ever do is make the page scroll. */}
+      <div className={`mx-auto flex min-h-full w-full max-w-5xl flex-col items-center gap-2 md:gap-3 ${result ? 'max-md:h-full' : ''}`}>
         <header className="flex w-full items-center justify-between gap-4">
           {mission
             ? <BackButton to="/mission" label="Nhiệm vụ" />
@@ -173,73 +197,87 @@ function VoiceRun({ passage }: { passage: VoicePassage }) {
           </span>
         </header>
 
-        {/* The mood is the instruction on this screen — bigger than the passage's own words. */}
-        <section className="flex flex-col items-center gap-1">
-          <span aria-hidden="true" data-testid="mood-emoji" className="text-[56px] leading-none">{passage.emoji}</span>
-          <p className="font-display text-2xl font-extrabold text-ink-900">Đọc với giọng: {passage.moodVi}</p>
+        {/* The mood is the instruction on this screen — bigger than the passage's own words.
+            A phone result folds the whole brief away (mood, passage, translation, tips): the word
+            chips below reprint every word of the passage and the mood has already been read, so
+            the block would only be repeating itself over the room the CTA needs (§5 M3b). */}
+        <section className={`flex flex-col items-center gap-1 ${result ? 'max-md:hidden' : ''}`}>
+          <span aria-hidden="true" data-testid="mood-emoji" className="text-[38px] leading-none md:text-[56px]">{passage.emoji}</span>
+          <p className="font-display text-lg font-extrabold text-ink-900 md:text-2xl">Đọc với giọng: {passage.moodVi}</p>
         </section>
 
-        <section className="flex w-full flex-col items-center gap-2">
+        <section className={`flex w-full flex-col items-center gap-1.5 md:gap-2 ${result ? 'max-md:hidden' : ''}`}>
           <Passage text={passage.text} />
-          <p className="max-w-2xl text-center text-lg font-bold text-ink-500">{passage.vi}</p>
-          <Button variant="secondary" onClick={playSample}>🔊 Nghe mẫu</Button>
-          {audioMissing && <p className="text-lg font-bold text-ink-300">Chưa có audio mẫu</p>}
+          <p className="max-w-2xl text-center text-sm font-bold leading-snug text-ink-500 md:text-lg md:leading-7">{passage.vi}</p>
+          <Button variant="secondary" onClick={playSample} className={CTA_PHONE}>🔊 Nghe mẫu</Button>
+          {audioMissing && <p className="text-sm font-bold text-ink-300 md:text-lg">Chưa có audio mẫu</p>}
         </section>
 
         {/* Three tips, three lines, 14 px: read once before the attempt and then ignored, so it
-          * buys its height back for the mic rather than shouting over the passage. */}
-        <Card className="flex w-full max-w-2xl flex-col gap-0.5 px-6 py-3">
-          <p className="font-display text-lg font-extrabold text-ink-900">🎭 Gợi ý giọng</p>
+          * buys its height back for the mic rather than shouting over the passage. On a phone the
+          * card is the design's compact tip block — and the 375×667 rules drop it outright, the
+          * one thing on this screen that is genuinely read-once. */}
+        <Card className={`flex w-full max-w-2xl flex-col gap-0.5 px-4 py-2 [@media(max-width:767px)_and_(max-height:700px)]:hidden md:px-6 md:py-3 ${result ? 'max-md:hidden' : ''}`}>
+          <p className="font-display text-base font-extrabold text-ink-900 md:text-lg">🎭 Gợi ý giọng</p>
           <ul className="flex flex-col">
             {tips.map(tip => (
-              <li key={tip} data-testid="mood-tip" className="text-[14px] font-bold leading-snug text-ink-500">• {tip}</li>
+              <li key={tip} data-testid="mood-tip" className="text-[13px] font-bold leading-snug text-ink-500 md:text-[14px]">• {tip}</li>
             ))}
           </ul>
         </Card>
 
         {result && feedback && stars ? (
-          <section className="flex flex-col items-center gap-4 pb-2">
+          /* On a phone the read-out is a bounded scrolling region with the CTA row as its
+             *sibling* underneath — never a `sticky` overlay, which would paint over whichever
+             word chip happened to sit at its y. A passage is up to fourteen words and fourteen
+             64 px chips cannot be made to fit 844 by shrinking type; what can be guaranteed is
+             that the way on is on screen and nothing is hidden behind anything. `md:contents`
+             takes the wrapper out of the box tree from 768 up, so the landscape frame is the same
+             flat column of the same section it has always been. */
+          <section className="flex w-full flex-col items-center gap-2.5 pb-2 max-md:min-h-0 max-md:flex-1 md:w-auto md:gap-4">
             {stars === 3 && <Confetti />}
-            <ProsodyChip score={prosody} engine={engine} />
-            <Stars value={stars} animate={stars === 3} />
-            <p className="font-display text-3xl font-extrabold text-ink-900">{message}</p>
-            <ScoreBars result={result} />
-            <ScoredWords words={feedback.words} />
-            {feedback.hint && <HintCard hint={feedback.hint} />}
-            <div className="flex flex-wrap justify-center gap-4 pt-1">
+            <div className="flex w-full flex-col items-center gap-2.5 max-md:min-h-0 max-md:flex-1 max-md:overflow-y-auto md:contents">
+              <ProsodyChip score={prosody} engine={engine} />
+              <Stars value={stars} animate={stars === 3} />
+              <p className="font-display text-xl font-extrabold text-ink-900 md:text-3xl">{message}</p>
+              <ScoreBars result={result} />
+              <ScoredWords words={feedback.words} />
+              {feedback.hint && <HintCard hint={feedback.hint} />}
+            </div>
+            <div className="flex w-full flex-wrap justify-center gap-2 pt-1 md:w-auto md:gap-4">
               {attempt.lastBlob && (
-                <Button variant="outline" onClick={() => playBlob(attempt.lastBlob!).catch(() => {})}>🎧 Nghe mình</Button>
+                <Button variant="outline" className={`${CTA_PHONE} max-md:flex-1`} onClick={() => playBlob(attempt.lastBlob!).catch(() => {})}>🎧 Nghe mình</Button>
               )}
-              <Button variant="outline" onClick={playSample}>🔊 Nghe mẫu</Button>
-              <Button variant="outline" onClick={attempt.reset}>↻ Thử lại</Button>
+              <Button variant="outline" className={`${CTA_PHONE} max-md:flex-1`} onClick={playSample}>🔊 Nghe mẫu</Button>
+              <Button variant="outline" className={`${CTA_PHONE} max-md:flex-1`} onClick={attempt.reset}>↻ Thử lại</Button>
               {mission
-                ? <Button size="lg" pulse onClick={mission.go}>{mission.label}</Button>
+                ? <Button size="lg" pulse className={`${CTA_PHONE} max-md:w-full`} onClick={mission.go}>{mission.label}</Button>
                 : next
-                  ? <Button size="lg" pulse onClick={() => nav(`/voice/${next.id}`)}>Tiếp theo →</Button>
-                  : <Button size="lg" pulse onClick={() => nav('/level/story-voice')}>Hoàn thành 🎉</Button>}
+                  ? <Button size="lg" pulse className={`${CTA_PHONE} max-md:w-full`} onClick={() => nav(`/voice/${next.id}`)}>Tiếp theo →</Button>
+                  : <Button size="lg" pulse className={`${CTA_PHONE} max-md:w-full`} onClick={() => nav('/level/story-voice')}>Hoàn thành 🎉</Button>}
             </div>
           </section>
         ) : (
           /* 112 px of reserved blank space here was what pushed the mic off a landscape iPad. The
            * countdown state outgrows any reserve anyway, so it only ever padded the idle line. */
-          <section className="flex min-h-[64px] flex-1 flex-col items-center justify-center gap-3">
+          <section className="flex min-h-[64px] flex-1 flex-col items-center justify-center gap-3 max-md:min-h-0">
             {recording ? (
               <>
-                <div aria-hidden="true" className="font-display text-[56px] font-extrabold leading-none text-coral-text">{secondsLeft}</div>
+                <div aria-hidden="true" className="font-display text-[44px] font-extrabold leading-none text-coral-text md:text-[56px]">{secondsLeft}</div>
                 <Foxy mood="listening" size="sm" say="Foxy đang lắng nghe…" />
               </>
             ) : (
-              <p className="font-display text-2xl font-extrabold text-ink-900">Đọc cả đoạn thật có hồn nhé!</p>
+              <p className="font-display text-base font-extrabold text-ink-900 [@media(max-width:767px)_and_(max-height:700px)]:hidden md:text-2xl">Đọc cả đoạn thật có hồn nhé!</p>
             )}
           </section>
         )}
 
-        {attempt.error && <p className="font-display text-2xl font-extrabold text-fix-700">{attempt.error}</p>}
+        {attempt.error && <p className="font-display text-xl font-extrabold text-fix-700 md:text-2xl">{attempt.error}</p>}
 
         {!result && (
-          <div className="flex flex-col items-center gap-3 pb-2 pt-1">
+          <div className="mt-auto flex flex-col items-center gap-2 pb-1 pt-1 [@media(max-width:767px)_and_(max-height:700px)]:pb-0 [@media(max-width:767px)_and_(max-height:700px)]:pt-0 md:mt-0 md:gap-3 md:pb-2">
             <MicButton state={attempt.micState} level={attempt.level} onPress={attempt.onMic} />
-            {!recording && <p className="font-display text-xl font-extrabold text-ink-500">Chạm để nói nào!</p>}
+            {!recording && <p className="font-display text-base font-extrabold text-ink-500 [@media(max-width:767px)_and_(max-height:700px)]:hidden md:text-xl">Chạm để nói nào!</p>}
           </div>
         )}
       </div>
