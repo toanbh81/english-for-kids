@@ -47,6 +47,46 @@ function onItemRoute(pathname: string, route: string): boolean {
 }
 
 /**
+ * Where the chip stands, and why the phone does not put it in the bottom-right corner.
+ *
+ * The landscape frame really does keep that corner empty, and from `md` up this is the same pill
+ * in the same place it has always been — the phase's binding rule is that 1194×834 renders
+ * byte-for-byte as it did, so every `md:` below restores the *exact* previous value.
+ *
+ * Below 768 the corner is the busiest part of the screen. Every phone layout this phase built pins
+ * its hand-off to the bottom edge — the flashcard's "Tiếp theo →", the sound result's CTA pair,
+ * the story's "Tiếp tục ▸" — and a 204×64 pill floating over them covered 49–94% of the one
+ * control the child is meant to press, so the tap went to `/mission` and threw them out of the
+ * step they were finishing. A floating element cannot be pushed aside by the content under it;
+ * the only fix is to stand somewhere the screens do not use.
+ *
+ * That place is the top-right. Every screen that can carry the chip ends its header with the same
+ * reserved gutter — `min-w-[66px] text-right`, the engine badge, empty unless the simple engine is
+ * running (WordCard, SoundPractice, PracticeCard, PairPractice, StarPractice, VoicePractice,
+ * StoryRetell and Ghép câu all write it) — and the header's centre column is bounded by it, so a
+ * 64 px badge dropped into that gutter covers no control at any phone width. It is `top`-anchored
+ * through the same safe-area expression `PAGE_SHELL` uses, so it lands on the header's own first
+ * line rather than under the notch.
+ *
+ * At 64 px wide the words do not fit beside the sun, so the count goes under it and "Nhiệm vụ"
+ * stays in the accessibility tree (`sr-only`) — the name a screen reader reads is the same string
+ * at every width. `md:not-sr-only` puts the words back in the flow, and `md:text-xl`/`md:leading-7`
+ * restore the size *and* the leading of the `text-xl` the pill carries, which a bare size restore
+ * would have left on the phone's.
+ *
+ * The two story screens are the one place this trades something: they print their own "Cảnh 2/4" /
+ * "Câu 1/3" counter in that corner and the badge sits on it. Both are plain read-outs, not
+ * controls — and on the story player the chip is the child's only thread back to the lesson, which
+ * is worth more than the scene number they can also read from the progress bar under the picture.
+ */
+const CHIP_BOX
+  = 'fixed right-5 top-[max(1rem,calc(env(safe-area-inset-top)_+_9px))] z-40 inline-flex h-16 w-16'
+  + ' min-h-[64px] flex-col items-center justify-center gap-0 rounded-full bg-sun-50 px-0'
+  + ' font-display font-extrabold text-sun-700 shadow-chunky-sun active:translate-y-[2px]'
+  + ' md:bottom-4 md:right-4 md:top-auto md:h-auto md:w-auto md:flex-row md:justify-normal'
+  + ' md:gap-2 md:px-6 md:text-xl'
+
+/**
  * The thread back to the lesson. A mission item drops the child onto an ordinary practice screen
  * whose own back button goes wherever that screen belongs — the story list, the word deck — so
  * without this, finishing a step left them off the lesson with no sign it was still running.
@@ -77,13 +117,17 @@ function LessonChipInner({ pathname, inMission }: { pathname: string; inMission:
   if (!status) return null
 
   return (
-    <Link
-      to="/mission"
-      // `z-40` clears the screens' own content but stays under a full-screen overlay; the fixed
-      // bottom-right corner is the one place no screen puts its primary control.
-      className="fixed bottom-4 right-4 z-40 inline-flex min-h-[64px] items-center gap-2 rounded-full bg-sun-50 px-6 font-display text-xl font-extrabold text-sun-700 shadow-chunky-sun active:translate-y-[2px]"
-    >
-      🌞 Nhiệm vụ {status.doneCount}/{status.total}
+    // `z-40` clears the screens' own content but stays under a full-screen overlay.
+    <Link to="/mission" className={CHIP_BOX}>
+      {/* Three spans, and from `md` up exactly one of them is rendered: the middle one, carrying
+          the whole line as a single text run. That is deliberate. Splitting the label and the
+          count into two visible spans made them two flex items, and the pill's own `gap-2` then
+          stood where the space between the words used to — 4 px wider on the iPad, which this
+          phase may not move. The phone's two lines are the outer pair; the middle span stays in
+          the accessibility tree at both widths, so the name a screen reader reads never changes. */}
+      <span aria-hidden="true" className="text-[22px] leading-none md:hidden">🌞</span>
+      <span className="sr-only md:not-sr-only">🌞 Nhiệm vụ {status.doneCount}/{status.total}</span>
+      <span aria-hidden="true" className="text-[13px] leading-none md:hidden">{status.doneCount}/{status.total}</span>
     </Link>
   )
 }

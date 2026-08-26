@@ -27,6 +27,11 @@ beforeEach(() => {
 
 afterEach(() => vi.useRealTimers())
 
+/** An element's classes as exact tokens. `className.includes('bottom-4')` also matches
+ * `md:bottom-4` — which is the whole thing the placement tests below exist to catch — so every
+ * breakpoint assertion compares tokens, never substrings. */
+const classes = (el: Element) => el.className.split(/\s+/).filter(Boolean)
+
 it('shows the chip on a lesson item route, counting the steps done', () => {
   const lesson = lessonWith(2)
 
@@ -36,6 +41,53 @@ it('shows the chip on a lesson item route, counting the steps done', () => {
   expect(chip).toHaveAttribute('href', '/mission')
   expect(chip.className).toContain('min-h-[64px]')
   expect(chip.className).toContain('z-40')
+})
+
+// --- where it stands (phase 10 final review, C1) ----------------------------------------------
+//
+// jsdom has no layout, so these assert the one thing that decides the placement: which breakpoint
+// each rule is written at. The geometry is measured in a browser (see the phase-10 fix report);
+// what these guard is that the bottom-right corner never comes back below `md`, where every phone
+// screen of this phase pins its own hand-off button and the chip covered 51–94% of it.
+
+it('leaves the bottom-right corner to the screens below `md` and keeps it from `md` up', () => {
+  const lesson = lessonWith(2)
+
+  renderAt(lesson.items[3].route)
+  const chip = classes(screen.getByRole('link', { name: /Nhiệm vụ/ }))
+
+  // The phone rule is unprefixed and top-anchored, through the same safe-area expression the
+  // page shell uses — so the badge lands on the header line, not under the notch.
+  expect(chip).not.toContain('bottom-4')
+  expect(chip).toContain('top-[max(1rem,calc(env(safe-area-inset-top)_+_9px))]')
+  expect(chip).toContain('h-16')
+  expect(chip).toContain('w-16')
+  // …and `md:` puts the landscape pill back, exactly where it has always been.
+  expect(chip).toContain('md:bottom-4')
+  expect(chip).toContain('md:top-auto')
+  expect(chip).toContain('md:h-auto')
+  expect(chip).toContain('md:w-auto')
+  expect(chip).toContain('md:px-6')
+  expect(chip).toContain('md:text-xl')
+})
+
+/** The 64 px badge cannot fit the words beside the sun, so it stacks the sun over the count and
+ * keeps the whole sentence for a screen reader. The name it is read out by is the same string at
+ * every width — the tests above and below both look it up by that name. */
+it('prints the count on the phone badge without changing the name it is announced by', () => {
+  const lesson = lessonWith(2)
+
+  renderAt(lesson.items[3].route)
+  const [sun, spoken, count] = [...screen.getByRole('link', { name: /Nhiệm vụ/ }).children]
+
+  expect(sun).toHaveAttribute('aria-hidden', 'true')
+  expect(classes(sun)).toContain('md:hidden')
+  expect(spoken).toHaveTextContent(`🌞 Nhiệm vụ 2/${lesson.items.length}`)
+  expect(classes(spoken)).toContain('sr-only')
+  expect(classes(spoken)).toContain('md:not-sr-only')
+  expect(count).toHaveTextContent(`2/${lesson.items.length}`)
+  expect(count).toHaveAttribute('aria-hidden', 'true')
+  expect(classes(count)).toContain('md:hidden')
 })
 
 it('stays away from screens the child did not reach through the lesson', () => {
