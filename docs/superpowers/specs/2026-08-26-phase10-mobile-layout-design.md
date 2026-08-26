@@ -20,9 +20,18 @@ back arrows under the floor — 56×56 on `LevelStairs` and `TopicHub`, 48×48 o
 from the design's own numbers. They are 64×64 on a phone now, at every one of those three sites, and
 nothing measured broke: `/levels` and `/story/:id` still fit 844 and 667 exactly, `/topic/:id` still
 fits 844 and its 375×667 scroll grew from 34 px to 42 px with nothing covered at `scrollTop` 0. So
-**there is no accepted deviation from the 64 px floor anywhere in the app** — the parent dashboard
-remains the single documented exception (decision 2's disclosure summary row is itself held to 64),
-because the design calls that screen an adult interface outright.
+**the child's screens hold the 64 px floor everywhere.** The one accepted exception is the parent
+dashboard, whose controls run 44–48 px tall (measured, and quantified in README.md's phone
+checklist) because the design calls that screen an adult interface outright — decision 2's
+disclosure summary row is still held to 64.
+
+**The mission chip's corner (final fix wave, C1).** Below the tablet breakpoint the floating
+"🌞 Nhiệm vụ" chip becomes a 64×64 badge in the top-right gutter every practice header reserves,
+because at its old bottom-right anchor it covered 51–94% of the phone CTA this phase had just
+pulled above the fold. It covers no control at any phone width, but it does sit on three
+read-outs: the story player's "Cảnh n/m", the quiz's "Câu n/m", and — whenever the simple engine
+is running — the "chế độ đơn giản" engine badge whose gutter it occupies (53–86% covered). All
+three are plain text, and all three are readable again from the tablet breakpoint up.
 
 The app was built for iPad landscape and is unusable on a phone in practice: nothing overflows sideways, but every screen is 1.2–2.6 viewports tall and the primary action falls below the fold (Home's "Bắt đầu" sits at y≈1221 on a 844 px screen). Claude Design delivered `Speak Up Mobile.dc.html` (14 artboards at 390×844) on 2026-08-25.
 

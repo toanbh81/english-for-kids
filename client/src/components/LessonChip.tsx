@@ -70,14 +70,17 @@ function onItemRoute(pathname: string, route: string): boolean {
  *
  * At 64 px wide the words do not fit beside the sun, so the count goes under it and "Nhiệm vụ"
  * stays in the accessibility tree (`sr-only`) — the name a screen reader reads is the same string
- * at every width. `md:not-sr-only` puts the words back in the flow, and `md:text-xl`/`md:leading-7`
- * restore the size *and* the leading of the `text-xl` the pill carries, which a bare size restore
- * would have left on the phone's.
+ * at every width. `md:not-sr-only` puts the words back in the flow and `md:text-xl` restores the
+ * pill's size; `text-xl` carries its own 28 px leading and no unprefixed `leading-*` competes with
+ * it here, so the size restore is enough.
  *
- * The two story screens are the one place this trades something: they print their own "Cảnh 2/4" /
- * "Câu 1/3" counter in that corner and the badge sits on it. Both are plain read-outs, not
- * controls — and on the story player the chip is the child's only thread back to the lesson, which
- * is worth more than the scene number they can also read from the progress bar under the picture.
+ * What the corner trades, in full — three read-outs, no controls:
+ * - the story player's "Cảnh 2/4" and the quiz's "Câu 1/3" counters. On the player the chip is the
+ *   child's only thread back to the lesson, worth more than a scene number the progress bar under
+ *   the picture also gives them.
+ * - the engine badge itself, the gutter this sits in: "chế độ đơn giản" is covered 53–86% whenever
+ *   the simple engine is running. That line is written for the parent, not the child, and it is
+ *   readable again the moment the screen is wider than a phone.
  */
 const CHIP_BOX
   = 'fixed right-5 top-[max(1rem,calc(env(safe-area-inset-top)_+_9px))] z-40 inline-flex h-16 w-16'
