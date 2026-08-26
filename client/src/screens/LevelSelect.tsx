@@ -1,7 +1,7 @@
 import { Link, useParams } from 'react-router-dom'
 import { LEVELS } from '../content'
 import { getStars } from '../progress/store'
-import { BackButton, StarRow } from '../components/ui'
+import { BackButton, PAGE_SHELL, StarRow } from '../components/ui'
 import { SoundLevel } from './SoundLevel'
 
 /** 64 px pill — a tap target, not just a label, so it is a chip in look only. */
@@ -16,7 +16,7 @@ export function LevelSelect() {
   const level = LEVELS.find(l => l.id === levelId)
   if (!level) return <p>Không tìm thấy</p>
   return (
-    <main className="h-full overflow-y-auto bg-cream-50 p-6">
+    <main className={`h-full overflow-y-auto bg-cream-50 px-6 ${PAGE_SHELL}`}>
       <div className="mx-auto flex w-full max-w-5xl flex-col gap-5">
         {/* Back goes to the map — Home is the topic map now, not a list of levels. The stairs at
             `/levels` are how the child gets from one level to the next, hence the chip beside it. */}
@@ -30,7 +30,7 @@ export function LevelSelect() {
           <p className="mt-1 text-lg font-bold text-ink-500">Chạm vào một thẻ để luyện nói nhé!</p>
         </header>
 
-        <div className="grid grid-cols-2 gap-5 sm:grid-cols-3 lg:grid-cols-4">
+        <div className="grid grid-cols-2 gap-5 md:grid-cols-3 lg:grid-cols-4">
           {level.cards.map(c => (
             <Link
               key={c.id}

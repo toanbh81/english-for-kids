@@ -2,21 +2,21 @@ import { Link } from 'react-router-dom'
 import { LEVELS, PAIRS, SENTENCE_STARS, SOUNDS, STORY_VOICE } from '../content'
 import { getStars, soundStars as starsForSound } from '../progress/store'
 import { Foxy } from '../components/Foxy'
-import { BackButton, Chip, StarRow } from '../components/ui'
+import { BackButton, Chip, PAGE_SHELL, StarRow } from '../components/ui'
 
 type Stars = 0 | 1 | 2 | 3
 
 type Step = { key: string; emoji: string; name: string; to?: string; lift: string }
 
 /** Bottom-left to top-right: each step sits a little higher than the one before, so the five
- * games read as a staircase the child climbs. The lifts only apply from `lg` up — below that the
+ * games read as a staircase the child climbs. The lifts only apply from `ipad` up — below that the
  * steps stack into a plain list. */
 const STEPS: Step[] = [
-  { key: 'sound-zoo', emoji: '🦁', name: 'Tập âm', to: '/level/sound-zoo', lift: 'lg:mt-[240px]' },
-  { key: 'word-pop', emoji: '🎈', name: 'Đọc từ', to: '/level/word-pop', lift: 'lg:mt-[180px]' },
-  { key: 'minimal-pairs', emoji: '👯', name: 'Nghe & chọn', to: '/level/minimal-pairs', lift: 'lg:mt-[120px]' },
-  { key: 'sentence-stars', emoji: '⭐', name: 'Sentence Stars', to: '/level/sentence-stars', lift: 'lg:mt-[60px]' },
-  { key: 'story-voice', emoji: '🎭', name: 'Story Voice', to: '/level/story-voice', lift: 'lg:mt-0' },
+  { key: 'sound-zoo', emoji: '🦁', name: 'Tập âm', to: '/level/sound-zoo', lift: 'ipad:mt-[240px]' },
+  { key: 'word-pop', emoji: '🎈', name: 'Đọc từ', to: '/level/word-pop', lift: 'ipad:mt-[180px]' },
+  { key: 'minimal-pairs', emoji: '👯', name: 'Nghe & chọn', to: '/level/minimal-pairs', lift: 'ipad:mt-[120px]' },
+  { key: 'sentence-stars', emoji: '⭐', name: 'Sentence Stars', to: '/level/sentence-stars', lift: 'ipad:mt-[60px]' },
+  { key: 'story-voice', emoji: '🎭', name: 'Story Voice', to: '/level/story-voice', lift: 'ipad:mt-0' },
 ]
 
 const TILE = 'flex h-[180px] w-full max-w-[220px] flex-col items-center justify-center gap-2 rounded-xl3'
@@ -80,7 +80,7 @@ export function LevelStairs() {
   const foxyOn = (STEPS.find(s => s.to && stars[s.key] < 3) ?? STEPS[STEPS.length - 1]).key
 
   return (
-    <main className="relative h-full overflow-y-auto bg-cream-50 p-6">
+    <main className={`relative h-full overflow-y-auto bg-cream-50 px-6 ${PAGE_SHELL}`}>
       <div aria-hidden="true" className="pointer-events-none absolute -right-20 -top-24 h-[320px] w-[320px] rounded-full bg-teal-50" />
 
       <div className="relative flex flex-col gap-6">
@@ -91,7 +91,7 @@ export function LevelStairs() {
           <p className="mt-1 text-lg font-bold text-ink-500">Leo từng bậc — mỗi bậc một trò mới!</p>
         </header>
 
-        <div className="grid grid-cols-1 items-end justify-items-center gap-5 sm:grid-cols-2 lg:grid-cols-5 lg:items-start">
+        <div className="grid grid-cols-1 items-end justify-items-center gap-5 md:grid-cols-2 ipad:grid-cols-5 ipad:items-start">
           {STEPS.map(step => (
             <div key={step.key} data-testid={`step-${step.key}`} className={`flex w-full flex-col items-center gap-2 ${step.lift}`}>
               <div className={`h-[96px] ${foxyOn === step.key ? 'animate-bob' : 'invisible'}`}>

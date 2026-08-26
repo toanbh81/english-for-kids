@@ -8,7 +8,7 @@ import { findTopic as findWordDeck } from '../content/words'
 import { lessonStatus } from '../progress/lesson'
 import { getStars } from '../progress/store'
 import { topicStars, topicUnlocked, unlockedWords } from '../progress/topicProgress'
-import { BackButton, Chip, StarRow } from '../components/ui'
+import { BackButton, Chip, PAGE_SHELL, StarRow } from '../components/ui'
 
 /** Section cards are the child's tap targets, so they sit well above the 64 px floor. */
 const SECTION =
@@ -31,7 +31,7 @@ function TodayChip() {
 
 function LockedTopic() {
   return (
-    <main className="h-full overflow-y-auto bg-cream-50 p-6">
+    <main className={`h-full overflow-y-auto bg-cream-50 px-6 ${PAGE_SHELL}`}>
       <div className="mx-auto flex w-full max-w-2xl flex-col items-center gap-6 pt-10 text-center">
         <span aria-hidden="true" className="text-[96px] leading-none">🔒</span>
         <h1 className="font-display text-[40px] font-extrabold leading-tight text-ink-900">Chưa mở khóa</h1>
@@ -61,7 +61,7 @@ function TopicHubInner({ topic }: { topic: Topic }) {
   const sentencesToday = sentences.some(s => todayRoutes.has(`/sentence/${s.id}`))
 
   return (
-    <main className="h-full overflow-y-auto bg-cream-50 p-6">
+    <main className={`h-full overflow-y-auto bg-cream-50 px-6 ${PAGE_SHELL}`}>
       <div className="mx-auto flex w-full max-w-3xl flex-col gap-5">
         <BackButton to="/" label="Về nhà" className="self-start" />
 

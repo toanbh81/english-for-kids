@@ -13,7 +13,7 @@ import { clearStars } from '../progress/store'
 import { getLimitMinutes, setLimitMinutes } from '../progress/limit'
 import { PHONEME_TIPS } from '../scoring/feedback'
 import { playBlob } from '../audio/player'
-import { Button, Card } from '../components/ui'
+import { Button, Card, PAGE_SHELL } from '../components/ui'
 
 const KIND_LABEL = { speak: 'Nói', word: 'Từ vựng', sentence: 'Ghép câu' } as const
 const LIMIT_CHIPS = [15, 20, 30] as const
@@ -125,7 +125,7 @@ export function ParentDashboard({ onLock }: Props) {
   }
 
   return (
-    <main className="h-full overflow-y-auto bg-cream-50 p-6 text-base text-ink-500">
+    <main className={`h-full overflow-y-auto bg-cream-50 px-6 ${PAGE_SHELL} text-base text-ink-500`}>
       <div className="mx-auto flex w-full max-w-5xl flex-col gap-6">
         <Link
           to="/"
@@ -152,7 +152,7 @@ export function ParentDashboard({ onLock }: Props) {
           </button>
         </header>
 
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1.4fr_1fr]">
+        <div className="grid grid-cols-1 gap-6 ipad:grid-cols-[1.4fr_1fr]">
           <div className="flex flex-col gap-6">
             <Card className="p-6">
               <h2 className="font-display text-xl font-extrabold text-ink-900">Phút luyện mỗi ngày (14 ngày)</h2>

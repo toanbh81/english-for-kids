@@ -7,7 +7,7 @@ import { logActivity } from '../progress/activity'
 import { speakText } from '../story/speak'
 import { Foxy } from '../components/Foxy'
 import type { FoxyMood } from '../components/Foxy'
-import { Button, Chip, SpeechBubble, StarRow } from '../components/ui'
+import { Button, Chip, PAGE_SHELL, SpeechBubble, StarRow } from '../components/ui'
 
 const ADVANCE_MS = 900
 const TAP_TARGET = 'min-h-[64px] flex items-center'
@@ -107,7 +107,7 @@ function StoryQuizInner({ quiz, id }: { quiz: QuizQ[]; id: string }) {
   const foxySays = feedback === 'correct' ? '🦊 Đúng rồi!' : feedback === 'wrong' ? '🦊 Chưa đúng, thử lại nhé' : null
 
   return (
-    <main className="flex h-full flex-col items-center gap-5 overflow-y-auto bg-cream-50 p-6">
+    <main className={`flex h-full flex-col items-center gap-5 overflow-y-auto bg-cream-50 px-6 ${PAGE_SHELL}`}>
       <div className="flex w-full items-center justify-between">
         <Link to={`/story/${id}`} className={BACK_LINK}>← Truyện</Link>
         <Chip tone="teal">Câu {qIndex + 1}/3</Chip>

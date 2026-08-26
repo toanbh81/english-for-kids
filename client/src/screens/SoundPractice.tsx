@@ -236,7 +236,7 @@ function SoundWord({ sound, idx }: { sound: SoundGroup; idx: number }) {
             blocks. Row 2 only exists while idle — once recording starts or a result lands, the
             word's slot is doing something else entirely (countdown, score chip) and stops being
             "a tile to line up". */}
-        <div data-testid="sound-word-grid" className="grid w-full grid-cols-1 gap-3 sm:grid-cols-[minmax(180px,auto)_1fr] sm:items-center sm:gap-x-6 sm:gap-y-3">
+        <div data-testid="sound-word-grid" className="grid w-full grid-cols-1 gap-3 md:grid-cols-[minmax(180px,auto)_1fr] md:items-center md:gap-x-6 md:gap-y-3">
           {/* Row 1, cell A — the sound stays put through every word. */}
           <div data-testid="sound-cell-a" className="flex flex-col items-center gap-2">
             <div className="font-display text-[72px] font-extrabold leading-none text-coral-text">/{ipa}/</div>
@@ -244,7 +244,7 @@ function SoundWord({ sound, idx }: { sound: SoundGroup; idx: number }) {
             {soundMissing && <p className="text-lg font-bold text-ink-300">Chưa có audio âm này</p>}
           </div>
           {/* Row 1, cell B — what the sound is. */}
-          <div data-testid="sound-cell-b" className="flex flex-col items-center gap-2 text-center sm:items-start sm:text-left">
+          <div data-testid="sound-cell-b" className="flex flex-col items-center gap-2 text-center md:items-start md:text-left">
             {tip && <p className="max-w-xl text-lg font-bold text-ink-500">{tip}</p>}
           </div>
 
@@ -260,7 +260,7 @@ function SoundWord({ sound, idx }: { sound: SoundGroup; idx: number }) {
                   the header so it lives with the word it counts; while the screen is scoring or
                   recording, the word slot is doing something else and the header shows it instead
                   (see above) so the counter is never lost, just relocated. */}
-              <div data-testid="word-cell-b" className="flex flex-col items-center gap-2 text-center sm:items-start sm:text-left">
+              <div data-testid="word-cell-b" className="flex flex-col items-center gap-2 text-center md:items-start md:text-left">
                 <div className="font-display text-[56px] font-extrabold leading-none text-ink-900">{card.text}</div>
                 <div className="text-[22px] font-bold text-ink-300">{card.ipa}</div>
                 <Chip tone="coral">Từ {idx + 1}/{cards.length}</Chip>

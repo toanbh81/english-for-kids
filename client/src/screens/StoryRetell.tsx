@@ -12,7 +12,7 @@ import { MicButton } from '../components/MicButton'
 import { Stars } from '../components/Stars'
 import { Foxy } from '../components/Foxy'
 import type { FoxyMood } from '../components/Foxy'
-import { BackButton, Button, Card } from '../components/ui'
+import { BackButton, Button, Card, PAGE_SHELL } from '../components/ui'
 import { retellStars, RETELL_MESSAGE } from '../story/retellStars'
 import { speakText } from '../story/speak'
 
@@ -21,7 +21,7 @@ export function StoryRetell() {
   const story = findStory(id)
   if (!story) {
     return (
-      <main className="h-full overflow-y-auto bg-cream-50 p-6">
+      <main className={`h-full overflow-y-auto bg-cream-50 px-6 ${PAGE_SHELL}`}>
         <p className="mb-4 font-display text-2xl font-extrabold text-ink-900">Không tìm thấy truyện</p>
         <BackButton to="/stories" label="Truyện" />
       </main>

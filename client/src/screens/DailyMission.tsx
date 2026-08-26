@@ -5,7 +5,7 @@ import { getLesson, lessonStatus } from '../progress/lesson'
 import type { LessonItemKind } from '../progress/lesson'
 import { MISSION_STATE, groupItems } from '../progress/missionNav'
 import { Foxy } from '../components/Foxy'
-import { BackButton, Button, Chip } from '../components/ui'
+import { BackButton, Button, Chip, PAGE_SHELL } from '../components/ui'
 import type { ChipTone } from '../components/ui'
 
 const CELEBRATED_KEY = 'speakup.celebrated'
@@ -41,12 +41,12 @@ const KIND: Record<LessonItemKind, {
   review: { emoji: '🔁', tone: 'neutral', title: n => `${n} bài ôn tập`, minutes: n => n },
 }
 
-/** The cards sit side by side from `lg` up — one column per group — and stack below that. Phase 9
+/** The cards sit side by side from `ipad` up — one column per group — and stack below that. Phase 9
  * added the 🧱 group, so a lesson now has five: the table runs to five columns, because a row that
  * wrapped would push the CTA off a 834 px-tall screen. Written out in full because Tailwind reads
  * the class names from the source. */
 const COLUMNS = [
-  '', 'lg:grid-cols-1', 'lg:grid-cols-2', 'lg:grid-cols-3', 'lg:grid-cols-4', 'lg:grid-cols-5',
+  '', 'ipad:grid-cols-1', 'ipad:grid-cols-2', 'ipad:grid-cols-3', 'ipad:grid-cols-4', 'ipad:grid-cols-5',
 ]
 /** Longest lesson shape there is: 🎧 🗣️ 🧩 🧱 🔁 (spec §2). */
 const MAX_GROUPS = 5
@@ -99,7 +99,7 @@ export function DailyMission() {
   }, [celebrating, day, navigate])
 
   return (
-    <main className="relative h-full overflow-y-auto bg-cream-50 p-6">
+    <main className={`relative h-full overflow-y-auto bg-cream-50 px-6 ${PAGE_SHELL}`}>
       <BackButton to="/" label="Về bản đồ" />
 
       <div className="mx-auto flex w-full max-w-6xl flex-col gap-5 pt-4">

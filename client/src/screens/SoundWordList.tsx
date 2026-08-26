@@ -6,7 +6,7 @@ import { playUrl } from '../audio/player'
 import { PHONEME_TIPS } from '../scoring/feedback'
 import { getStars } from '../progress/store'
 import { MISSION_STATE } from '../progress/missionNav'
-import { BackButton, Button, CARD_LINK, StarRow } from '../components/ui'
+import { BackButton, Button, CARD_LINK, PAGE_SHELL, StarRow } from '../components/ui'
 
 /**
  * The sound's own sub-level (Phase 9 §1): the sound at the top, then one card per word of it.
@@ -44,7 +44,7 @@ function WordList({ sound }: { sound: SoundGroup }) {
   }
 
   return (
-    <main className="h-full overflow-y-auto bg-cream-50 p-6">
+    <main className={`h-full overflow-y-auto bg-cream-50 px-6 ${PAGE_SHELL}`}>
       <div className="mx-auto flex w-full max-w-5xl flex-col gap-5">
         {/* One sound is a sub-level of the bậc Tập âm, and Tập âm hangs off the stairs — unless
             the child got here from a stale mission step, which has its own way home. */}
@@ -61,7 +61,7 @@ function WordList({ sound }: { sound: SoundGroup }) {
 
         <p className="text-center text-lg font-bold text-ink-500">Chọn một từ để luyện nhé!</p>
 
-        <div className="grid grid-cols-1 gap-5 sm:grid-cols-3">
+        <div className="grid grid-cols-1 gap-5 md:grid-cols-3">
           {cards.map(c => (
             <Link
               key={c.id}

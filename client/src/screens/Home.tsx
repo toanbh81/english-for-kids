@@ -45,9 +45,9 @@ const SLOTS = [
   { left: '3%', top: '52%', color: 'bg-[#B8A6E8] shadow-[0_8px_0_#8E79C8,0_0_0_8px_#EDE7FB]' },
 ] as const
 
-/** Every disc is the same size now that there are eight of them: 96 px, 112 px from `lg` up — well
+/** Every disc is the same size now that there are eight of them: 96 px, 112 px from `ipad` up — well
  * clear of the 64 px tap floor, and small enough that two rows fit the band without touching. */
-const ISLAND_DISC = 'h-24 w-24 text-[40px] lg:h-28 lg:w-28 lg:text-[46px]'
+const ISLAND_DISC = 'h-24 w-24 text-[40px] ipad:h-28 ipad:w-28 ipad:text-[46px]'
 
 /**
  * One island per topic (spec §2): the map is the topic list, in unlock order.
@@ -65,10 +65,10 @@ if (TOPICS.length > SLOTS.length) {
 }
 const ISLANDS = TOPICS.map((topic, i) => ({ ...topic, ...SLOTS[i] }))
 
-// `lg:w-[15%]`: a percentage width, so an island's centre is a fixed fraction of the band on every
-// viewport and the trail below stays under the discs. The tighter `lg:gap-1` is what buys the two
-// rows their clearance on the shortest landscape iPad (1024×768).
-const ISLAND_BOX = 'flex flex-col items-center gap-1.5 lg:absolute lg:w-[15%] lg:gap-1'
+// `ipad:w-[15%]`: a percentage width, so an island's centre is a fixed fraction of the band on every
+// viewport and the trail below stays under the discs. The tighter `ipad:gap-1` is what buys the two
+// rows their clearance on the shortest screen the map now runs on (1194×834).
+const ISLAND_BOX = 'flex flex-col items-center gap-1.5 ipad:absolute ipad:w-[15%] ipad:gap-1'
 
 // The dotted trail the islands sit on. Decorative only, and drawn in the same 1194×834 frame
 // coordinates the SVG stretches over. The points are the island CENTRES, not their `left`/`top`
@@ -122,8 +122,8 @@ export function Home() {
   return (
     // `min-h-full`, never `h-full`: the stacked portrait layout is taller than the viewport, and a
     // fixed-height root would leave the mission CTA and the parent link below an unscrollable fold.
-    // The root grows with its content and the page scrolls; only the `lg` map frame is clipped.
-    <main className="relative min-h-full overflow-y-auto overflow-x-hidden bg-cream-50 p-4 sm:p-7">
+    // The root grows with its content and the page scrolls; only the `ipad` map frame is clipped.
+    <main className="relative min-h-full overflow-y-auto overflow-x-hidden bg-cream-50 p-4 md:p-7">
       <h1 className="sr-only">Speak Up!</h1>
 
       {/* Soft background blobs of the handoff frame. They hang off every edge, so they are clipped
@@ -158,21 +158,21 @@ export function Home() {
         )}
 
         {/* One set of islands serves both layouts: a 2-column grid on a phone or portrait tablet,
-          * and the absolutely positioned map from `lg` up, where the percentage offsets take
+          * and the absolutely positioned map from `ipad` up, where the percentage offsets take
           * effect. The frame keeps the handoff's 1194×834 proportions but never grows past the
-          * viewport, so on a 1024×768 iPad the whole map — mission card included — stays on
-          * screen. */}
-        <div className="relative grid grid-cols-2 gap-x-4 gap-y-4 lg:block lg:aspect-[1194/834] lg:max-h-[calc(100vh-180px)]">
-          {/* `contents` in the stacked grid, so the islands stay plain grid items; from `lg` up it
+          * viewport, so on a short landscape iPad the whole map — mission card included — stays
+          * on screen. */}
+        <div className="relative grid grid-cols-2 gap-x-4 gap-y-4 ipad:block ipad:aspect-[1194/834] ipad:max-h-[calc(100vh-180px)]">
+          {/* `contents` in the stacked grid, so the islands stay plain grid items; from `ipad` up it
             * becomes the top band of the map and the percentages resolve against it. The band stops
             * 200 px short of the bottom, which is the strip the mission card and the parent link
             * occupy — that keeps the trail and the island labels clear of them at any frame size. */}
-          <div className="contents lg:absolute lg:inset-x-0 lg:bottom-[200px] lg:top-0 lg:block">
+          <div className="contents ipad:absolute ipad:inset-x-0 ipad:bottom-[200px] ipad:top-0 ipad:block">
             <svg
               aria-hidden="true"
               viewBox="0 0 1194 834"
               preserveAspectRatio="none"
-              className="pointer-events-none absolute inset-0 hidden h-full w-full lg:block"
+              className="pointer-events-none absolute inset-0 hidden h-full w-full ipad:block"
             >
               <path d={TRAIL} stroke="#EAD9BE" strokeWidth={14} strokeLinecap="round" strokeDasharray="2 26" fill="none" />
             </svg>
@@ -233,7 +233,7 @@ export function Home() {
 
           {/* The way into Speak Lab. The islands are the topic map, so without this the staircase —
             * and with it Nghe & chọn, Sentence Stars and Story Voice — would have no route in. */}
-          <div className="col-span-2 flex justify-center lg:absolute lg:bottom-6 lg:left-1/2 lg:-translate-x-1/2">
+          <div className="col-span-2 flex justify-center ipad:absolute ipad:bottom-6 ipad:left-1/2 ipad:-translate-x-1/2">
             <Link
               to="/levels"
               className="inline-flex min-h-[64px] items-center gap-2 rounded-xl2 bg-teal-500 px-7 font-display text-xl font-extrabold text-white shadow-chunky-teal active:translate-y-[2px]"
@@ -242,11 +242,11 @@ export function Home() {
             </Link>
           </div>
 
-          <div className="col-span-2 lg:absolute lg:bottom-2 lg:left-2 lg:w-[380px]">
+          <div className="col-span-2 ipad:absolute ipad:bottom-2 ipad:left-2 ipad:w-[380px]">
             <MissionCard status={lesson} />
           </div>
 
-          <div className="col-span-2 flex justify-end lg:absolute lg:bottom-2 lg:right-2">
+          <div className="col-span-2 flex justify-end ipad:absolute ipad:bottom-2 ipad:right-2">
             <Link
               to="/parent"
               className="flex min-h-[64px] min-w-[64px] items-center justify-center rounded-xl2 bg-white px-5 font-display text-lg font-extrabold text-ink-500 shadow-card-sm active:translate-y-[2px]"

@@ -118,14 +118,14 @@ it('shows the sentence card in lesson order, after the new words', () => {
 
 /** Five groups since 🧱 joined them, and the grid has to hold all five side by side: a row that
  * wrapped pushed the CTA off a 1194×834 iPad, which is the one thing the child came here to tap. */
-it('keeps all five groups on a single row from lg up', () => {
+it('keeps all five groups on a single row from ipad up', () => {
   const groups = groupsOf(getLesson(NOW))
   expect(groups).toHaveLength(5)
 
   renderMission()
 
   const grid = card('listen').parentElement
-  expect(grid).toHaveClass('grid', 'lg:grid-cols-5')
+  expect(grid).toHaveClass('grid', 'ipad:grid-cols-5')
   expect(within(grid!).getAllByTestId(/^group-/)).toHaveLength(5)
 })
 

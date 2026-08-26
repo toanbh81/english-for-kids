@@ -1,14 +1,14 @@
 import { Link } from 'react-router-dom'
 import { SOUNDS } from '../content'
 import { soundStars } from '../progress/store'
-import { BackButton, StarRow } from '../components/ui'
+import { BackButton, PAGE_SHELL, StarRow } from '../components/ui'
 
 /** Tập âm is organised by SOUND, not by word: one tile per phoneme, each holding its 3 words.
  * The stars are the sound's derived value — the WEAKEST of its words — so a tile only fills up
  * once the child has said all three of its words well, not once they have been lucky on one. */
 export function SoundLevel() {
   return (
-    <main className="h-full overflow-y-auto bg-cream-50 p-6">
+    <main className={`h-full overflow-y-auto bg-cream-50 px-6 ${PAGE_SHELL}`}>
       <div className="mx-auto flex w-full max-w-5xl flex-col gap-5">
         {/* Tập âm is a bậc of the Speak Lab stairs, so back goes to the stairs. */}
         <BackButton to="/levels" label="Các bậc" className="self-start" />
@@ -18,7 +18,7 @@ export function SoundLevel() {
           <p className="mt-1 text-lg font-bold text-ink-500">Mỗi ô là một âm — luyện đến khi cả 3 từ đều xanh!</p>
         </header>
 
-        <div className="grid grid-cols-2 gap-5 sm:grid-cols-3">
+        <div className="grid grid-cols-2 gap-5 md:grid-cols-3">
           {SOUNDS.map(s => (
             <Link
               key={s.ph}

@@ -2,7 +2,7 @@ import { Link } from 'react-router-dom'
 import { TOPICS, ALL_WORDS } from '../content/words'
 import { getBox, dueWords } from '../progress/leitner'
 import { topicUnlocked } from '../progress/topicProgress'
-import { BackButton, CARD_LINK, Chip } from '../components/ui'
+import { BackButton, CARD_LINK, Chip, PAGE_SHELL } from '../components/ui'
 
 /**
  * The flat vocabulary index, kept from phases 1–6 as the way into the review deck. Since Phase 7
@@ -14,7 +14,7 @@ export function WordTopics() {
   const topics = TOPICS.filter(t => topicUnlocked(t.id))
 
   return (
-    <main className="h-full overflow-y-auto bg-cream-50 p-6">
+    <main className={`h-full overflow-y-auto bg-cream-50 px-6 ${PAGE_SHELL}`}>
       <div className="mx-auto flex w-full max-w-5xl flex-col gap-5">
         <BackButton to="/" label="Về nhà" className="self-start" />
 

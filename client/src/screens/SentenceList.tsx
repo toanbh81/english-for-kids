@@ -3,7 +3,7 @@ import { SENTENCES } from '../content'
 import { TOPICS, findTopic } from '../content/topics'
 import { getStars } from '../progress/store'
 import { topicUnlocked } from '../progress/topicProgress'
-import { BackButton, StarRow } from '../components/ui'
+import { BackButton, PAGE_SHELL, StarRow } from '../components/ui'
 
 const ROW =
   'flex min-h-[80px] items-center justify-between gap-4 rounded-xl3 bg-white px-6 py-3 shadow-card transition-transform active:scale-95'
@@ -19,7 +19,7 @@ export function SentenceList() {
   const shown = topic ? [topic] : TOPICS.filter(t => topicUnlocked(t.id))
 
   return (
-    <main className="h-full overflow-y-auto bg-cream-50 p-6">
+    <main className={`h-full overflow-y-auto bg-cream-50 px-6 ${PAGE_SHELL}`}>
       <div className="mx-auto flex w-full max-w-4xl flex-col gap-5">
         <BackButton
           to={topic ? `/topic/${topic.id}` : '/'}

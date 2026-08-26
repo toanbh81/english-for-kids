@@ -1,11 +1,11 @@
 import { Link } from 'react-router-dom'
 import { STORIES } from '../content/stories'
 import { getStars } from '../progress/store'
-import { BackButton, CARD_LINK, StarRow } from '../components/ui'
+import { BackButton, CARD_LINK, PAGE_SHELL, StarRow } from '../components/ui'
 
 export function StoryList() {
   return (
-    <main className="h-full overflow-y-auto bg-cream-50 p-6">
+    <main className={`h-full overflow-y-auto bg-cream-50 px-6 ${PAGE_SHELL}`}>
       <div className="mx-auto flex w-full max-w-5xl flex-col gap-5">
         <BackButton to="/" label="Về nhà" className="self-start" />
         <h1 className="font-display text-[40px] font-extrabold leading-tight text-ink-900">🎧 Nghe kể chuyện</h1>

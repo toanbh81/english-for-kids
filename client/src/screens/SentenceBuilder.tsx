@@ -17,7 +17,7 @@ import { HintCard } from '../components/HintCard'
 import { Stars } from '../components/Stars'
 import { ScoredWords } from '../components/ScoredWords'
 import { ScoreBars } from '../components/ScoreBars'
-import { BackButton, Button, Chip } from '../components/ui'
+import { BackButton, Button, Chip, PAGE_SHELL } from '../components/ui'
 import { shuffleTiles } from '../content/shuffle'
 
 const SHAKE_MS = 400 // matches the .animate-shake keyframe duration in styles.css
@@ -53,7 +53,7 @@ export function SentenceBuilder() {
 
   if (!sentence) {
     return (
-      <main className="h-full overflow-y-auto bg-cream-50 p-6">
+      <main className={`h-full overflow-y-auto bg-cream-50 px-6 ${PAGE_SHELL}`}>
         <p className="mb-4 font-display text-2xl font-extrabold text-ink-900">Không tìm thấy câu</p>
         <BackButton to="/sentences" label="Ghép câu" />
       </main>
