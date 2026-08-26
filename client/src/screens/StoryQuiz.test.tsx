@@ -1,19 +1,35 @@
 import { render, screen, fireEvent, act } from '@testing-library/react'
-import { MemoryRouter, Route, Routes } from 'react-router-dom'
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import { findStory, STORIES } from '../content/stories'
 import { StoryQuiz } from './StoryQuiz'
 
-function renderQuiz(id = 'little-fox') {
+/** Where a link landed, and whether it was still carrying `{ mission: true }` — the flag leaves no
+ * trace in the DOM, so the probe is the only way to see it. */
+function Probe() {
+  const location = useLocation()
+  return <p data-testid="probe">{location.pathname} {JSON.stringify(location.state)}</p>
+}
+
+function renderQuiz(id = 'little-fox', mission = false) {
   return render(
-    <MemoryRouter initialEntries={[`/story/${id}/quiz`]}>
+    <MemoryRouter initialEntries={[{ pathname: `/story/${id}/quiz`, state: mission ? { mission: true } : null }]}>
       <Routes>
         <Route path="/story/:id/quiz" element={<StoryQuiz />} />
+        <Route path="*" element={<Probe />} />
       </Routes>
     </MemoryRouter>,
   )
 }
 
 const story = findStory('little-fox')!
+
+/** Answer all three correctly — the quickest way to the result screen and its three exits. */
+function finishQuiz() {
+  story.quiz.forEach(q => {
+    fireEvent.click(screen.getByRole('button', { name: q.options[q.answer].label }))
+    act(() => { vi.advanceTimersByTime(900) })
+  })
+}
 
 beforeEach(() => {
   localStorage.clear()
@@ -84,6 +100,15 @@ it('never tints the answer keyword inside the question, in any story', () => {
 it('shows a not-found message for an unknown story id', () => {
   renderQuiz('nope')
   expect(screen.getByText('Không tìm thấy truyện')).toBeInTheDocument()
+  expect(screen.getByRole('link', { name: '← Truyện' })).toHaveAttribute('href', '/stories')
+})
+
+/** No story means no lesson position, so `LessonChip` suppresses itself here too and this link is
+ * the only way off the screen. It may not point out of the lesson. */
+it('leads a mission child home even when the story itself is missing', () => {
+  renderQuiz('nope', true)
+  expect(screen.getByRole('link', { name: '← Nhiệm vụ' })).toHaveAttribute('href', '/mission')
+  expect(screen.queryByRole('link', { name: '← Truyện' })).not.toBeInTheDocument()
 })
 
 it('shows the question progress indicator', () => {
@@ -160,14 +185,73 @@ it('drops Foxy\'s bubble on a phone, where the banner at the foot already says i
 
 it('stacks the three result exits full width on a phone and keeps the row from md up', () => {
   renderQuiz()
-  story.quiz.forEach(q => {
-    fireEvent.click(screen.getByRole('button', { name: q.options[q.answer].label }))
-    act(() => { vi.advanceTimersByTime(900) })
-  })
+  finishQuiz()
   const row = screen.getByRole('link', { name: 'Nghe lại' }).parentElement!
   expect(row).toHaveClass('w-full', 'flex-col', 'md:w-auto', 'md:flex-row', 'md:flex-wrap', 'md:gap-4')
   for (const name of [/Kể lại câu chuyện/, /^Nghe lại$/, /Về bản đồ/]) {
     // `max-md:` only, so `Button`'s own `min-h-[72px] px-10 text-[26px]` is what 1194 still gets.
     expect(screen.getByRole('link', { name })).toHaveClass('max-md:w-full', 'max-md:min-h-[64px]')
   }
+})
+
+// --- as part of a lesson step (fix: the story chain keeps its thread back) ---------------------
+//
+// `/story/:id/quiz` is a SUB-route of the 🎧 step's `/story/:id`, and `missionNav` matches item
+// routes whole on purpose, so nothing resolves here: the forwarded flag is the only thing that
+// knows the child is inside a lesson, and every hop this screen owns has to pass it on.
+
+it('keeps the mission alive on the hop back to the story', () => {
+  renderQuiz('little-fox', true)
+
+  const back = screen.getByRole('link', { name: '← Truyện' })
+  // Still the story, not the mission: this arrow is the way to hear the tale again, and the
+  // player it lands on is the screen that carries the arrow home.
+  expect(back).toHaveAttribute('href', '/story/little-fox')
+
+  fireEvent.click(back)
+  expect(screen.getByTestId('probe')).toHaveTextContent('/story/little-fox {"mission":true}')
+})
+
+it('forwards the mission from the result screen to the retell and to the replay', () => {
+  renderQuiz('little-fox', true)
+  finishQuiz()
+
+  fireEvent.click(screen.getByRole('link', { name: /Kể lại câu chuyện/ }))
+  expect(screen.getByTestId('probe')).toHaveTextContent('/story/little-fox/retell {"mission":true}')
+})
+
+it('replays the story still in the lesson', () => {
+  renderQuiz('little-fox', true)
+  finishQuiz()
+
+  fireEvent.click(screen.getByRole('link', { name: 'Nghe lại' }))
+  expect(screen.getByTestId('probe')).toHaveTextContent('/story/little-fox {"mission":true}')
+})
+
+/** The third exit is the one that leaves the story. In a lesson that is the mission, never the
+ * map: the child still has steps to do and `/` is where they lose them. */
+it('swaps the way out for the mission when the child is in a lesson', () => {
+  renderQuiz('little-fox', true)
+  finishQuiz()
+
+  expect(screen.queryByRole('link', { name: /Về bản đồ|Về trang chủ/ })).not.toBeInTheDocument()
+  const out = screen.getByRole('link', { name: /Về nhiệm vụ/ })
+  expect(out).toHaveAttribute('href', '/mission')
+  // The exit keeps the phone sizing the other two have — it is the same row.
+  expect(out).toHaveClass('max-md:w-full', 'max-md:min-h-[64px]')
+})
+
+/** Free play is byte-identical: no flag, no change to a single target or label. */
+it('leaves every free-play exit exactly where it was', () => {
+  renderQuiz()
+  expect(screen.getByRole('link', { name: '← Truyện' })).toHaveAttribute('href', '/story/little-fox')
+  finishQuiz()
+
+  expect(screen.getByRole('link', { name: /Kể lại câu chuyện/ })).toHaveAttribute('href', '/story/little-fox/retell')
+  expect(screen.getByRole('link', { name: 'Nghe lại' })).toHaveAttribute('href', '/story/little-fox')
+  expect(screen.getByRole('link', { name: /Về bản đồ/ })).toHaveAttribute('href', '/')
+  expect(screen.queryByRole('link', { name: /Về nhiệm vụ/ })).not.toBeInTheDocument()
+
+  fireEvent.click(screen.getByRole('link', { name: /Kể lại câu chuyện/ }))
+  expect(screen.getByTestId('probe')).toHaveTextContent('/story/little-fox/retell null')
 })

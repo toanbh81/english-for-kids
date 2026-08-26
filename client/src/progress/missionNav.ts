@@ -134,10 +134,17 @@ export type MissionNext = {
 
 const NEXT_LABEL = 'Tiếp theo →'
 const FINISH_LABEL = 'Hoàn thành 🎉'
-/** Neither "next" nor "finished": the chain ends here, but the lesson does not. */
-const RETURN_LABEL = 'Về nhiệm vụ →'
+/**
+ * Neither "next" nor "finished": the chain ends here, but the lesson does not.
+ *
+ * Exported because the story chain says it too. `/story/:id/quiz` and `/story/:id/retell` are
+ * sub-routes, so no `MissionNext` resolves there to hand them the wording — but a child leaving a
+ * story mid-lesson is in exactly the state this label names, and three screens spelling the same
+ * sentence out by hand is three chances for them to drift apart.
+ */
+export const RETURN_LABEL = 'Về nhiệm vụ →'
 /** The lesson itself — the one destination that is not a step, so it travels without the flag. */
-const MISSION_ROUTE = '/mission'
+export const MISSION_ROUTE = '/mission'
 
 /**
  * The hand-off for `pathname`, or `null` when it is not one of today's steps.
@@ -168,6 +175,24 @@ export function missionNext(pathname: string, now = Date.now()): MissionNext | n
   }
 }
 
+/** The one reading of the flag, so no screen can invent a second one. */
+const hasFlag = (state: unknown) => (state as { mission?: unknown } | null)?.mission === true
+
+/**
+ * Whether this navigation arrived carrying `MISSION_STATE` — the whole of "the child came from the
+ * mission", and a different question from `useMissionNext()` below.
+ *
+ * That difference is the whole point of having both. This one is a fact about how the child got
+ * here and stays true however today's lesson changes underneath them; the hand-off additionally
+ * requires the path to still be one of today's steps, because it has to name the step that comes
+ * next. A screen that only needs a way *back* — the story chain's sub-routes, a screen the lesson
+ * has moved past, a not-found fallback that has no lesson position at all — must ask this one, or
+ * a regenerated lesson strands the child on a screen with no thread home.
+ */
+export function useMissionFlag(): boolean {
+  return hasFlag(useLocation().state)
+}
+
 /**
  * The mission hand-off for the screen calling it — `null` for free play, which is every visit that
  * did not arrive carrying `MISSION_STATE`. `go` is the whole navigation: forward to the next step
@@ -180,7 +205,7 @@ export function missionNext(pathname: string, now = Date.now()): MissionNext | n
 export function useMissionNext(): (MissionNext & { go: () => void }) | null {
   const nav = useNavigate()
   const { pathname, state } = useLocation()
-  const inMission = (state as { mission?: unknown } | null)?.mission === true
+  const inMission = hasFlag(state)
   const next = useMemo(() => (inMission ? missionNext(pathname) : null), [inMission, pathname])
 
   const go = useCallback(() => {

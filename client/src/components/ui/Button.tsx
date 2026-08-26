@@ -25,11 +25,15 @@ type Props = ButtonHTMLAttributes<HTMLButtonElement> & {
   pulse?: boolean
   /** Renders a react-router `Link` styled as a button instead of a `<button>`. */
   to?: string
+  /** Router state to carry along with `to` — in practice `MISSION_STATE`, the flag that has to
+   * travel with the navigation because the destination screen is the same screen either way
+   * (`progress/missionNav`). Ignored without `to`: a `<button>` navigates nowhere. */
+  state?: unknown
 }
 
 /** The chunky handoff button: hard offset shadow that the press sinks into
  * (`active:translate-y-[2px]`), Baloo display type and a ≥64 px tap target. */
-export function Button({ variant = 'primary', size = 'md', pulse, to, className = '', children, ...rest }: Props) {
+export function Button({ variant = 'primary', size = 'md', pulse, to, state, className = '', children, ...rest }: Props) {
   const classes = [
     'inline-flex items-center justify-center gap-2 font-display font-extrabold',
     'transition-transform active:translate-y-[2px] disabled:opacity-60 disabled:active:translate-y-0',
@@ -42,7 +46,7 @@ export function Button({ variant = 'primary', size = 'md', pulse, to, className 
   if (to !== undefined) {
     // A link never takes `disabled`/`type`, so the button attributes that survive are anchor-safe.
     const anchorProps = rest as unknown as AnchorHTMLAttributes<HTMLAnchorElement>
-    return <Link to={to} className={classes} {...anchorProps}>{children}</Link>
+    return <Link to={to} state={state} className={classes} {...anchorProps}>{children}</Link>
   }
 
   return <button type="button" className={classes} {...rest}>{children}</button>

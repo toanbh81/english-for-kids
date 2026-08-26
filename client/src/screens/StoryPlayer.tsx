@@ -1,6 +1,7 @@
 import { useParams } from 'react-router-dom'
 import type { Story } from '../content/stories/types'
 import { findStory } from '../content/stories'
+import { MISSION_ROUTE, MISSION_STATE, useMissionFlag } from '../progress/missionNav'
 import { useStoryPlayer } from '../story/useStoryPlayer'
 import { SceneArt } from '../components/SceneArt'
 import { Karaoke } from '../components/Karaoke'
@@ -9,19 +10,40 @@ import { BackButton, Button, Chip, PAGE_SHELL, SceneDots } from '../components/u
 
 export function StoryPlayer() {
   const { id = '' } = useParams()
+  // Read before the guard, because the guard is exactly where it matters most: a story that cannot
+  // be found has no lesson position, so `LessonChip` suppresses itself too, and an unconditional
+  // "← Truyện" would leave a child mid-lesson on a dead end with no thread back at all.
+  const mission = useMissionFlag()
   const story = findStory(id)
   if (!story) {
     return (
       <main className={`flex h-full flex-col items-center justify-center gap-6 bg-cream-50 px-8 [--page-pad-bottom:2rem] [--page-pad-top:2rem] ${PAGE_SHELL}`}>
         <p className="font-display text-3xl font-extrabold text-ink-900">Không tìm thấy truyện</p>
-        <Button to="/stories" variant="outline">← Truyện</Button>
+        <Button to={mission ? MISSION_ROUTE : '/stories'} variant="outline">{mission ? '← Nhiệm vụ' : '← Truyện'}</Button>
       </main>
     )
   }
-  return <StoryPlayerInner story={story} id={id} />
+  return <StoryPlayerInner story={story} id={id} mission={mission} />
 }
 
-function StoryPlayerInner({ story, id }: { story: Story; id: string }) {
+/**
+ * `mission` is the flag the child arrived carrying — not whether today's lesson still lists this
+ * story.
+ *
+ * The story chain names no next step of its own: the player hands on to the quiz, the quiz to the
+ * retell, and only the retell (which can be a 🔁 step's own exact route) ever needs
+ * `useMissionNext()` to say what comes after. So there is nothing here that has to resolve against
+ * today's items, and asking anyway would be a second, weaker rule for the same fact: a lesson
+ * regenerated mid-session, or persisted in an older shape, would answer "no mission" for a child
+ * who is plainly in one — and drop them back in the story library, which is the very bug this chain
+ * was fixed for. `SoundWordList` settled this precedent: honour the flag.
+ *
+ * That is also why it travels on below. `/story/:id/quiz` and `/story/:id/retell` are SUB-routes,
+ * and `missionNav` matches item routes whole on purpose (see its `routeIs`), so nothing downstream
+ * can rediscover the lesson for itself — if this link drops the flag, the mission dies at the first
+ * question.
+ */
+function StoryPlayerInner({ story, id, mission }: { story: Story; id: string; mission: boolean }) {
   const p = useStoryPlayer(story)
   const scene = story.scenes[p.sceneIndex]
 
@@ -49,7 +71,11 @@ function StoryPlayerInner({ story, id }: { story: Story; id: string }) {
         <SceneArt emoji={scene.emoji} bg={scene.bg} image={scene.image} />
         {/* 64 px, not 48: the spec's binding rules put the tap-target floor at 64 with no
             exception, and this arrow rides on the artwork where it is easiest to miss. */}
-        <BackButton to="/stories" label="Truyện" className="absolute left-2.5 top-2.5 max-md:h-16 max-md:w-16 max-md:text-2xl md:left-4 md:top-4" />
+        <BackButton
+          to={mission ? MISSION_ROUTE : '/stories'}
+          label={mission ? 'Nhiệm vụ' : 'Truyện'}
+          className="absolute left-2.5 top-2.5 max-md:h-16 max-md:w-16 max-md:text-2xl md:left-4 md:top-4"
+        />
         <div className="absolute right-2.5 top-2.5 flex items-center gap-2 md:right-4 md:top-4">
           {/* The dots beside it are decorative, so the chip carries the position in words — and
               once the dots are gone below 768 the chip prints that position instead of only
@@ -116,9 +142,9 @@ function StoryPlayerInner({ story, id }: { story: Story; id: string }) {
       {/* The quiz is always one tap away; once the story ends the same link stops whispering
           and starts pulsing. */}
       {p.ended ? (
-        <Button to={`/story/${id}/quiz`} pulse className="mx-auto">Tiếp tục ▸</Button>
+        <Button to={`/story/${id}/quiz`} state={mission ? MISSION_STATE : undefined} pulse className="mx-auto">Tiếp tục ▸</Button>
       ) : (
-        <Button to={`/story/${id}/quiz`} variant="ghost" className="mx-auto">Bỏ qua ▸</Button>
+        <Button to={`/story/${id}/quiz`} state={mission ? MISSION_STATE : undefined} variant="ghost" className="mx-auto">Bỏ qua ▸</Button>
       )}
     </main>
   )

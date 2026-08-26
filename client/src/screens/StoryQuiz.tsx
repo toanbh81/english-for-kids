@@ -4,6 +4,7 @@ import type { QuizQ } from '../content/stories/types'
 import { findStory } from '../content/stories'
 import { setStars } from '../progress/store'
 import { logActivity } from '../progress/activity'
+import { MISSION_ROUTE, MISSION_STATE, RETURN_LABEL, useMissionFlag } from '../progress/missionNav'
 import { speakText } from '../story/speak'
 import { Foxy } from '../components/Foxy'
 import type { FoxyMood } from '../components/Foxy'
@@ -23,16 +24,19 @@ const CTA_PHONE = 'max-md:min-h-[64px] max-md:w-full max-md:px-4 max-md:text-lg'
 
 export function StoryQuiz() {
   const { id = '' } = useParams()
+  // Before the guard: a story that cannot be found has no lesson position, so `LessonChip`
+  // suppresses itself here too and this link is the only way off the screen.
+  const mission = useMissionFlag()
   const story = findStory(id)
   if (!story) {
     return (
       <main className={`flex h-full flex-col items-center justify-center gap-6 bg-cream-50 px-8 [--page-pad-bottom:2rem] [--page-pad-top:2rem] ${PAGE_SHELL}`}>
         <p className="font-display text-3xl font-extrabold text-ink-900">Không tìm thấy truyện</p>
-        <Link to="/stories" className={BACK_LINK}>← Truyện</Link>
+        <Link to={mission ? MISSION_ROUTE : '/stories'} className={BACK_LINK}>{mission ? '← Nhiệm vụ' : '← Truyện'}</Link>
       </main>
     )
   }
-  return <StoryQuizInner quiz={story.quiz} id={id} />
+  return <StoryQuizInner quiz={story.quiz} id={id} mission={mission} />
 }
 
 type Feedback = 'idle' | 'correct' | 'wrong'
@@ -43,7 +47,16 @@ const CARD_STATE: Record<Exclude<Feedback, 'idle'>, string> = {
   wrong: 'shadow-[0_8px_0_#F8A3AE,0_0_0_6px_#FFD4DA]',
 }
 
-function StoryQuizInner({ quiz, id }: { quiz: QuizQ[]; id: string }) {
+/**
+ * This screen sits on `/story/:id/quiz` — a SUB-route of the lesson's `/story/:id` step — and
+ * `missionNav` matches item routes whole by design (its `routeIs`), so `useMissionNext()` would
+ * find nothing here. The forwarded flag is the only thing that knows the child is inside a lesson,
+ * so the screen passes it on down every hop it owns: back to the story, on to the retell, and the
+ * replay in the result row.
+ */
+function StoryQuizInner({ quiz, id, mission: inMission }: { quiz: QuizQ[]; id: string; mission: boolean }) {
+  const missionState = inMission ? MISSION_STATE : undefined
+
   const [qIndex, setQIndex] = useState(0)
   const [selected, setSelected] = useState<number | null>(null)
   const [feedback, setFeedback] = useState<Feedback>('idle')
@@ -103,11 +116,15 @@ function StoryQuizInner({ quiz, id }: { quiz: QuizQ[]; id: string }) {
         <StarRow value={result.stars} size="lg" animate={result.stars === 3} />
         <p className="font-display text-2xl font-extrabold text-ink-900">Bé trả lời đúng {result.correctCount}/3</p>
         <div className="flex w-full flex-col gap-3 md:w-auto md:flex-row md:flex-wrap md:justify-center md:gap-4">
-          <Button to={`/story/${id}/retell`} size="lg" className={CTA_PHONE}>Kể lại câu chuyện →</Button>
-          <Button to={`/story/${id}`} size="lg" variant="outline" className={CTA_PHONE}>Nghe lại</Button>
+          <Button to={`/story/${id}/retell`} state={missionState} size="lg" className={CTA_PHONE}>Kể lại câu chuyện →</Button>
+          <Button to={`/story/${id}`} state={missionState} size="lg" variant="outline" className={CTA_PHONE}>Nghe lại</Button>
           {/* The way out. Retell and re-listen both keep the child inside this story, so without
-              this the only exit was the browser's own back gesture. */}
-          <Button to="/" size="lg" variant="secondary" className={CTA_PHONE}><HomeLabel /></Button>
+              this the only exit was the browser's own back gesture. In a lesson the way out is the
+              lesson: `/` is the one place a child with steps still owed must not be dropped, and
+              the map is not even drawn there on a phone. */}
+          {inMission
+            ? <Button to={MISSION_ROUTE} size="lg" variant="secondary" className={CTA_PHONE}>{RETURN_LABEL}</Button>
+            : <Button to="/" size="lg" variant="secondary" className={CTA_PHONE}><HomeLabel /></Button>}
         </div>
       </main>
     )
@@ -121,7 +138,10 @@ function StoryQuizInner({ quiz, id }: { quiz: QuizQ[]; id: string }) {
     // 768 up.
     <main className={`flex h-full flex-col items-center gap-3 overflow-y-auto bg-cream-50 px-5 md:gap-5 md:px-6 ${PAGE_SHELL}`}>
       <div className="flex w-full items-center justify-between max-md:shrink-0">
-        <Link to={`/story/${id}`} className={BACK_LINK}>← Truyện</Link>
+        {/* Not `/mission`, even in a lesson: this arrow says "Truyện" and means it — it is the way
+            to hear the tale again, and the player it lands on is the screen that carries the arrow
+            home. It only has to hand the flag on so that trip back is still inside the lesson. */}
+        <Link to={`/story/${id}`} state={missionState} className={BACK_LINK}>← Truyện</Link>
         <Chip tone="teal">Câu {qIndex + 1}/3</Chip>
       </div>
 
