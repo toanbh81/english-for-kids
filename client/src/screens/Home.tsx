@@ -53,7 +53,13 @@ const SLOTS = [
 /** The emoji: a bare 36 px glyph on the phone card, and from `ipad` up the 112 px coloured disc of
  * the map — well clear of the 64 px tap floor, and small enough that two rows fit the band without
  * touching. */
-const ISLAND_DISC = 'text-4xl ipad:h-28 ipad:w-28 ipad:text-[46px]'
+/** The disc is 112 px on the frame the map was drawn for (1194×834) and scales down with the
+ * viewport below that, because the island band is what is left of the screen after the header and
+ * the control strip — it shrinks, and fixed-size furniture inside it does not. `13vh` keeps the
+ * original 112 from 862 pt up and hands back ~88 at the 680 pt floor, which is where two rows plus
+ * the controls stop fitting at all (see the `ipad` screen in tailwind.config.ts). */
+const ISLAND_DISC = 'text-4xl ipad:h-[min(7rem,13vh)] ipad:w-[min(7rem,13vh)] ipad:text-[min(46px,5.4vh)]'
+  + ' ipad:[@media(max-height:800px)]:h-[11vh] ipad:[@media(max-height:800px)]:w-[11vh]'
 
 /**
  * One island per topic (spec §2): the map is the topic list, in unlock order.
@@ -216,7 +222,14 @@ export function Home() {
             * is here to do must not sit below the fold. It used to be last, which put "Bắt đầu" at
             * y≈1221 on an 844 px screen (design M1b). From `ipad` up it goes back to the bottom-left
             * corner of the map, where DOM order stops mattering because every child is absolute. */}
-          <div className="col-span-2 ipad:absolute ipad:bottom-2 ipad:left-2 ipad:w-[380px]">
+          {/* `w-[min(380px,32%)]`, not a flat 380: the three controls along the foot of the map are
+            * positioned independently — this one from the left, Speak Lab centred, the parent link
+            * from the right — so the only thing keeping them apart is their widths. 380 px was
+            * measured against the design's 1194 frame; on a 10.2" iPad (1080 pt, and less again
+            * once Safari takes its tab and bookmark bars) the card reached past the centre and sat
+            * under the Speak Lab button. A percentage cap keeps the gap proportional at every
+            * iPad width instead of only at the one the design was drawn on. */}
+          <div className="col-span-2 ipad:absolute ipad:bottom-2 ipad:left-2 ipad:w-[min(380px,32%)]">
             <MissionCard status={lesson} />
           </div>
 
@@ -227,9 +240,9 @@ export function Home() {
 
           {/* `contents` in the stacked grid, so the islands stay plain grid items; from `ipad` up it
             * becomes the top band of the map and the percentages resolve against it. The band stops
-            * 200 px short of the bottom, which is the strip the mission card and the parent link
+            * 244 px short of the bottom, which is the strip the mission card and the parent link
             * occupy — that keeps the trail and the island labels clear of them at any frame size. */}
-          <div className="contents ipad:absolute ipad:inset-x-0 ipad:bottom-[200px] ipad:top-0 ipad:block">
+          <div className="contents ipad:absolute ipad:inset-x-0 ipad:bottom-[244px] ipad:top-0 ipad:block">
             <svg
               aria-hidden="true"
               viewBox="0 0 1194 834"
@@ -265,7 +278,11 @@ export function Home() {
                       * otherwise reset from a media query — 3 px per island, which is 3 px of the
                       * map's hard-won clearance at 1194×834. */}
                     <span className="font-display text-base font-extrabold leading-tight text-ink-500 ipad:text-xl ipad:leading-tight">{island.name}</span>
-                    <Chip tone="neutral" size="sm">Chưa mở khóa</Chip>
+                    {/* `ipad:whitespace-nowrap`: an island is 15% of the map band, which is ~141 px
+                      * on a 10.2" iPad. The chip wraps to two lines there and the second line
+                      * pushes out of the island band and over the mission card — the map is fitted
+                      * to the band's height, so a label that grows has nowhere to go but down. */}
+                    <Chip tone="neutral" size="sm" className="ipad:whitespace-nowrap">Chưa mở khóa</Chip>
                   </div>
                 )
               }
@@ -286,9 +303,15 @@ export function Home() {
                     * free-choice library the child dips into, next to — never instead of — the
                     * daily mission. Locked tiles say "Chưa mở khóa" there instead: there is
                     * nothing to practise on an island that has not opened yet. */}
+                  {/* The two rows of the map get half the island band each, and that band is what
+                    * is left of the viewport after the header and the control strip. On a short
+                    * landscape iPad — a mini is ~634 pt tall once Safari takes its bars — half is
+                    * about 127 px, which a 76 px disc plus three lines of label overruns. So the
+                    * label sheds its least load-bearing line there: the name and the stars stay,
+                    * the job description goes. Above 720 pt nothing changes. */}
                   <span aria-hidden="true" className="flex flex-col items-center leading-tight">
-                    <span className="font-display text-base font-extrabold text-ink-900 ipad:text-xl">{island.name}</span>
-                    <span className="font-display text-[11px] font-extrabold text-teal-600 ipad:text-[13px] ipad:text-ink-500">Luyện thêm</span>
+                    <span className="font-display text-base font-extrabold text-ink-900 ipad:text-[min(20px,2.5vh)]">{island.name}</span>
+                    <span className="font-display text-[11px] font-extrabold text-teal-600 ipad:text-[13px] ipad:text-ink-500 ipad:[@media(max-height:720px)]:hidden">Luyện thêm</span>
                   </span>
                   <StarRow value={stars} size="sm" />
                 </Link>

@@ -27,7 +27,14 @@ export default {
       // is the squeezed-map case this breakpoint exists to prevent. Landscape-and-wide is the real
       // condition — every iPad is ≥ 1080 across in landscape, every phone is < 1024 in either
       // orientation, and every iPad in portrait is ≤ 1024.
-      screens: { ipad: { raw: '(min-width: 1024px) and (orientation: landscape)' } },
+      // The height floor is the second half of the same lesson. The map needs two rows of islands
+      // AND the control strip inside one screen: below ~692 pt — an iPad mini in landscape once Safari
+      // takes its tab and bookmark bars leaves 634 — the two rows and the control strip stop fitting and the
+      // rows collide. Below the floor the stacked card grid is the honest answer: everything is
+      // reachable, it just scrolls.
+      screens: {
+        ipad: { raw: '(min-width: 1024px) and (orientation: landscape) and (min-height: 692px)' },
+      },
       colors: {
         cream: { DEFAULT: '#FFF7EA', 50: '#FFF7EA' },
         canvas: '#EFE5D6',
