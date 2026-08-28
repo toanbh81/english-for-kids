@@ -50,6 +50,16 @@ const SAMPLE_CHIP =
  * make the frame fit. That is what the `[@media(max-width:767px)_and_(max-height:700px)]` rules
  * below are: the design's own 667 shrink list, taken far enough that `mt-auto` has real slack to
  * hand out and the panel never has to float. Copy the trims, not a sticky.
+ *
+ * **`ipad:` is the third value, and it is a SPLIT, not another trim.** The `md:` column above was
+ * fitted at 1194×834 — the design's own frame — and a real iPad in Safari landscape is 1080×700
+ * once the tab and bookmark bars have taken their ~110 pt. At that height the single column is
+ * 816 px tall and the mic sits 52 px below the fold, while the right half of the screen holds
+ * nothing at all: `sound-cell-b` measured 784×28, a one-line description in a box wider than a
+ * phone. Growing downwards is what does not fit; the width is what is going spare. So from the
+ * `ipad` breakpoint (landscape, ≥1024 wide, ≥692 tall — see `tailwind.config.ts`) the frame is two
+ * columns: LEFT is what the child is learning, RIGHT is what the child does. Nothing else moves —
+ * `ipad:` cannot match a phone or a tablet in portrait, by construction.
  */
 const CTA_PHONE = 'max-md:min-h-[64px] max-md:px-4 max-md:text-lg'
 
@@ -236,7 +246,11 @@ function SoundWord({ sound, idx }: { sound: SoundGroup; idx: number }) {
     // at the 1 rem of the old `py-4`, so with no notch to clear — iPad, desktop, jsdom — it is the
     // same 16 px it was.
     <main className={`h-full overflow-y-auto bg-cream-50 px-5 [--page-pad-bottom:1rem] [--page-pad-top:1rem] md:px-6 ${PAGE_SHELL}`}>
-      <div className="mx-auto flex min-h-full w-full max-w-5xl flex-col items-center gap-3">
+      {/* `ipad:h-full` is what makes the split's `flex-1`/`min-h-0` mean anything: `min-h-full`
+          alone is a floor, not a height, so a flex child's base size is still its own content and
+          the column grows past the screen exactly as it did before. A *definite* height is what
+          lets the row take the leftover and hand a long column a scrollbar of its own instead. */}
+      <div className="mx-auto flex min-h-full w-full max-w-5xl flex-col items-center gap-3 ipad:h-full">
         <header className="flex w-full items-center justify-between gap-4">
           {mission
             ? <BackButton to="/mission" label="Nhiệm vụ" />
@@ -269,174 +283,198 @@ function SoundWord({ sound, idx }: { sound: SoundGroup; idx: number }) {
           </span>
         </header>
 
-        {/* Two rows, one shared cell-A column: the sound's tile (row 1) and the word's tile (row
-            2) line up their left edges so the child reads them as one deck, not two unrelated
-            blocks. Row 2 only exists while idle — once recording starts or a result lands, the
-            word's slot is doing something else entirely (countdown, score chip) and stops being
-            "a tile to line up".
+        {/* The iPad split. Both wrappers are `display: contents` at every other width, so below
+            the breakpoint this is byte-for-byte the single column it has always been — the same
+            trick the tier cards play with `md:contents`, read the other way round.
 
-            On a phone there is no room for a shared column, so the same four cells are read as the
-            design's two stacked tiers (§6 M4): a warm sound card and a white word card. The two
-            `md:contents` wrappers are what make that one DOM instead of two — below 768 they are
-            the cards, and from 768 up they leave the box tree entirely, so cell A and cell B are
-            grid items in exactly the order and at exactly the size they always were. A result
-            folds the whole deck away on the phone: the score chip already carries the sound and
-            the tip is reprinted under it, so the tier would only be repeating itself (§5 M3b). */}
-        <div data-testid="sound-word-grid" className={`grid w-full grid-cols-1 gap-3 md:grid-cols-[minmax(180px,auto)_1fr] md:items-center md:gap-x-6 md:gap-y-3 ${result ? 'max-md:hidden' : ''}`}>
-          <div data-testid="sound-tier" className="flex w-full flex-col rounded-[24px] bg-[#FFF1E6] px-4 py-3.5 shadow-[0_6px_0_#F2DFC9] [@media(max-width:767px)_and_(max-height:700px)]:py-2 md:contents">
-            {/* Row 1, cell A — the sound stays put through every word. On the phone this is the
-                design's sound row: mouth, symbol, speaker, all on one 64 px line. */}
-            <div data-testid="sound-cell-a" className="flex w-full flex-wrap items-center gap-3.5 md:w-auto md:flex-col md:flex-nowrap md:gap-2">
-              {/* The mouth shape the landscape frame gives a 168×200 tile of its own. The design
-                  cuts that tile precisely so the mic stays above the fold, and folds the shape
-                  into this row at 64 px instead — where, unlike the big tile, it is on screen
-                  while the child is recording too. */}
-              <span
-                data-testid="mouth-tile"
-                aria-hidden="true"
-                className="flex h-16 w-16 shrink-0 items-center justify-center rounded-[18px] bg-white text-[34px] leading-none md:hidden"
-              >
-                <span className="animate-wiggle">👄</span>
-              </span>
-              <div className="flex-1 font-display text-[40px] font-extrabold leading-none text-[#C08457] md:flex-initial md:text-[72px] md:text-coral-text">/{ipa}/</div>
-              {/* One control, two shapes: a 64 px speaker button on the phone row, the full
-                  labelled button of the landscape frame from `md` up. The label is spelled out for
-                  assistive tech at both sizes, so the round version is not a mystery glyph. */}
-              <Button
-                variant="secondary"
-                aria-label="Nghe âm lẻ"
-                onClick={playIsolated}
-                className={`shrink-0 max-md:h-16 max-md:w-16 max-md:rounded-full max-md:px-0 max-md:text-[26px] md:shrink`}
-              >
-                <span aria-hidden="true" className="md:hidden">🔊</span>
-                <span aria-hidden="true" className="hidden md:inline">🔊 Nghe âm lẻ</span>
-              </Button>
-              {soundMissing && <p className="w-full text-sm font-bold text-ink-300 md:w-auto md:text-lg">Chưa có audio âm này</p>}
-            </div>
-            {/* Row 1, cell B — what the sound is. Never dropped, at any width: how to put the
-                tongue is the thing this screen teaches (design §6). */}
-            <div data-testid="sound-cell-b" className="flex w-full flex-col items-start gap-2 pt-2.5 text-left md:w-auto md:pt-0">
-              {tip && <p className="max-w-xl text-sm font-bold leading-relaxed text-sun-700 md:text-lg md:leading-7 md:text-ink-500">{tip}</p>}
-            </div>
-          </div>
+            `min-h-0` on the row and on both columns is what makes the promise keepable: a flex
+            item's default `min-height:auto` is its own content, so without it a column that ran
+            long would push the frame past `min-h-full` and hand the page its scrollbar back —
+            which is the bug. With it, the columns are bounded by the screen and a column that
+            still cannot fit says so by scrolling *inside itself*, never by moving the mic. */}
+        <div className="contents ipad:flex ipad:min-h-0 ipad:w-full ipad:flex-1 ipad:items-stretch ipad:gap-6">
+          {/* LEFT — what the child is learning. */}
+          <div data-testid="teach-col" className="contents ipad:flex ipad:min-h-0 ipad:min-w-0 ipad:flex-1 ipad:flex-col ipad:justify-center ipad:gap-3">
 
-          {!result && !recording && (
-            <div data-testid="word-tier" className="flex w-full flex-col items-center gap-2.5 rounded-xl3 bg-white px-4 py-5 shadow-card [@media(max-width:767px)_and_(max-height:700px)]:gap-1.5 [@media(max-width:767px)_and_(max-height:700px)]:py-2.5 md:contents">
-              {/* Row 2, cell A — the word tile, directly under the sound tile. `contents` on the
-                  phone so the card can put the sample button *after* the word instead of between
-                  the emoji and it: the order the design reads top to bottom is emoji, word, IPA,
-                  then the thing to press. The cells keep their DOM shape, only the boxes go. */}
-              <div data-testid="word-cell-a" className="contents md:flex md:flex-col md:items-center md:gap-2">
-                <span aria-hidden="true" className="order-1 text-[76px] leading-none [@media(max-width:767px)_and_(max-height:700px)]:text-[56px] md:order-none md:text-[84px]">{card.emoji}</span>
-                <button onClick={playSample} className={`${SAMPLE_CHIP} order-4 md:order-none`}>🔊 Nghe mẫu</button>
-                {sampleMissing && <p className="order-4 text-sm font-bold text-ink-300 md:order-none md:text-lg">Chưa có audio mẫu</p>}
+            {/* Two rows, one shared cell-A column: the sound's tile (row 1) and the word's tile (row
+                2) line up their left edges so the child reads them as one deck, not two unrelated
+                blocks. Row 2 only exists while idle — once recording starts or a result lands, the
+                word's slot is doing something else entirely (countdown, score chip) and stops being
+                "a tile to line up".
+
+                On a phone there is no room for a shared column, so the same four cells are read as the
+                design's two stacked tiers (§6 M4): a warm sound card and a white word card. The two
+                `md:contents` wrappers are what make that one DOM instead of two — below 768 they are
+                the cards, and from 768 up they leave the box tree entirely, so cell A and cell B are
+                grid items in exactly the order and at exactly the size they always were. A result
+                folds the whole deck away on the phone: the score chip already carries the sound and
+                the tip is reprinted under it, so the tier would only be repeating itself (§5 M3b). */}
+            <div data-testid="sound-word-grid" className={`grid w-full grid-cols-1 gap-3 md:grid-cols-[minmax(180px,auto)_1fr] md:items-center md:gap-x-6 md:gap-y-3 ${result ? 'max-md:hidden' : ''}`}>
+              <div data-testid="sound-tier" className="flex w-full flex-col rounded-[24px] bg-[#FFF1E6] px-4 py-3.5 shadow-[0_6px_0_#F2DFC9] [@media(max-width:767px)_and_(max-height:700px)]:py-2 md:contents">
+                {/* Row 1, cell A — the sound stays put through every word. On the phone this is the
+                    design's sound row: mouth, symbol, speaker, all on one 64 px line. */}
+                <div data-testid="sound-cell-a" className="flex w-full flex-wrap items-center gap-3.5 md:w-auto md:flex-col md:flex-nowrap md:gap-2">
+                  {/* The mouth shape the landscape frame gives a 168×200 tile of its own. The design
+                      cuts that tile precisely so the mic stays above the fold, and folds the shape
+                      into this row at 64 px instead — where, unlike the big tile, it is on screen
+                      while the child is recording too. */}
+                  <span
+                    data-testid="mouth-tile"
+                    aria-hidden="true"
+                    className="flex h-16 w-16 shrink-0 items-center justify-center rounded-[18px] bg-white text-[34px] leading-none md:hidden"
+                  >
+                    <span className="animate-wiggle">👄</span>
+                  </span>
+                  <div className="flex-1 font-display text-[40px] font-extrabold leading-none text-[#C08457] md:flex-initial md:text-[72px] md:text-coral-text">/{ipa}/</div>
+                  {/* One control, two shapes: a 64 px speaker button on the phone row, the full
+                      labelled button of the landscape frame from `md` up. The label is spelled out for
+                      assistive tech at both sizes, so the round version is not a mystery glyph. */}
+                  <Button
+                    variant="secondary"
+                    aria-label="Nghe âm lẻ"
+                    onClick={playIsolated}
+                    className={`shrink-0 max-md:h-16 max-md:w-16 max-md:rounded-full max-md:px-0 max-md:text-[26px] md:shrink`}
+                  >
+                    <span aria-hidden="true" className="md:hidden">🔊</span>
+                    <span aria-hidden="true" className="hidden md:inline">🔊 Nghe âm lẻ</span>
+                  </Button>
+                  {soundMissing && <p className="w-full text-sm font-bold text-ink-300 md:w-auto md:text-lg">Chưa có audio âm này</p>}
+                </div>
+                {/* Row 1, cell B — what the sound is. Never dropped, at any width: how to put the
+                    tongue is the thing this screen teaches (design §6). */}
+                <div data-testid="sound-cell-b" className="flex w-full flex-col items-start gap-2 pt-2.5 text-left md:w-auto md:pt-0">
+                  {tip && <p className="max-w-xl text-sm font-bold leading-relaxed text-sun-700 md:text-lg md:leading-7 md:text-ink-500">{tip}</p>}
+                </div>
               </div>
-              {/* Row 2, cell B — the word itself, plus its "Từ n/3" place in the sound. Kept out of
-                  the header so it lives with the word it counts; while the screen is scoring or
-                  recording, the word slot is doing something else and the header shows it instead
-                  (see above) so the counter is never lost, just relocated. */}
-              <div data-testid="word-cell-b" className="contents md:flex md:flex-col md:items-start md:gap-2 md:text-left">
-                <div className="order-2 font-display text-[42px] font-extrabold leading-none text-ink-900 [@media(max-width:767px)_and_(max-height:700px)]:text-[32px] md:order-none md:text-[56px]">{card.text}</div>
-                {/* The 375×667 rules of the design, and the only two things it lets this screen
-                    drop there: the word's IPA and (below) the "chạm để nói" caption. The mouth
-                    description is explicitly NOT droppable — it is what the screen teaches — so
-                    the query is spelled out per element rather than hung on a container. It names
-                    its own width bound because a height query alone would also catch a short
-                    laptop window, where the landscape layout is the one being rendered. */}
-                <div className="order-3 text-base font-bold text-ink-300 [@media(max-width:767px)_and_(max-height:700px)]:hidden md:order-none md:text-[22px] md:leading-normal">{card.ipa}</div>
-                <Chip tone="coral" className="order-5 md:order-none">Từ {idx + 1}/{cards.length}</Chip>
-              </div>
-            </div>
-          )}
-        </div>
 
-        {result ? (
-          <>
-            {earned === 3 && <Confetti />}
-            {/* The result state on a phone is the design's compressed M3b: the score band, the
-                tip, the two listening buttons and then a spacer, so the pair of CTAs sits on the
-                bottom edge instead of wherever the content happens to end. `flex-1` only exists
-                below 768 — from there up the section is the same content-height block it was. */}
-            <section className="flex w-full flex-col items-center gap-3 pb-1 max-md:flex-1 md:w-auto">
-              <SoundChip ipa={ipa} score={score} engine={attempt.engine} />
-              {tone !== 'good' && tip && (
-                <p data-testid="sound-tip" className="max-w-xl rounded-[18px] border-[3px] border-[#FFDF9E] bg-[#FFF6E0] px-3.5 py-2.5 text-center text-sm font-bold leading-relaxed text-ink-500 md:rounded-xl3 md:px-5 md:text-lg md:leading-7">
-                  👅 {tip}
-                </p>
-              )}
-              <p className="text-base font-bold text-ink-300 md:text-lg">
-                Từ <span className="font-display font-extrabold text-ink-900">{card.text}</span> · {Math.round(result.overall)} điểm
-              </p>
-
-              <div className="flex flex-wrap justify-center gap-3 md:gap-4">
-                {attempt.lastBlob && (
-                  <Button variant="outline" className="max-md:px-3 max-md:text-base" onClick={() => playBlob(attempt.lastBlob!).catch(() => {})}>🎧 Nghe mình</Button>
-                )}
-                <Button variant="outline" className="max-md:px-3 max-md:text-base" onClick={playSample}>🔊 Nghe mẫu</Button>
-              </div>
-              {sampleMissing && <p className="text-sm font-bold text-ink-300 md:text-lg">Chưa có audio mẫu</p>}
-
-              {/* Stars and the sentence about them are one white card on a phone — the design's
-                  "thẻ điểm gộp", read across in a single row rather than down two. Every one of
-                  those card styles is unset again from `md` up, where this is the bare stacked
-                  pair it has always been. */}
-              {earned !== null && (
-                <div className="flex w-full items-center justify-between gap-3 rounded-[24px] bg-white px-4 py-3.5 shadow-card md:w-auto md:flex-col md:justify-center md:gap-1 md:rounded-none md:bg-transparent md:p-0 md:shadow-none">
-                  <Stars value={earned} animate size="sm" />
-                  <p className="text-right font-display text-base font-extrabold text-ink-900 md:text-center md:text-2xl">
-                    {earned === 3 ? 'Từ này tuyệt lắm!' : earned === 2 ? 'Gần được rồi, luyện thêm nhé!' : 'Nghe mẫu rồi thử lại nhé!'}
-                  </p>
+              {!result && !recording && (
+                <div data-testid="word-tier" className="flex w-full flex-col items-center gap-2.5 rounded-xl3 bg-white px-4 py-5 shadow-card [@media(max-width:767px)_and_(max-height:700px)]:gap-1.5 [@media(max-width:767px)_and_(max-height:700px)]:py-2.5 md:contents">
+                  {/* Row 2, cell A — the word tile, directly under the sound tile. `contents` on the
+                      phone so the card can put the sample button *after* the word instead of between
+                      the emoji and it: the order the design reads top to bottom is emoji, word, IPA,
+                      then the thing to press. The cells keep their DOM shape, only the boxes go. */}
+                  <div data-testid="word-cell-a" className="contents md:flex md:flex-col md:items-center md:gap-2">
+                    <span aria-hidden="true" className="order-1 text-[76px] leading-none [@media(max-width:767px)_and_(max-height:700px)]:text-[56px] md:order-none md:text-[84px]">{card.emoji}</span>
+                    <button onClick={playSample} className={`${SAMPLE_CHIP} order-4 md:order-none`}>🔊 Nghe mẫu</button>
+                    {sampleMissing && <p className="order-4 text-sm font-bold text-ink-300 md:order-none md:text-lg">Chưa có audio mẫu</p>}
+                  </div>
+                  {/* Row 2, cell B — the word itself, plus its "Từ n/3" place in the sound. Kept out of
+                      the header so it lives with the word it counts; while the screen is scoring or
+                      recording, the word slot is doing something else and the header shows it instead
+                      (see above) so the counter is never lost, just relocated. */}
+                  <div data-testid="word-cell-b" className="contents md:flex md:flex-col md:items-start md:gap-2 md:text-left">
+                    <div className="order-2 font-display text-[42px] font-extrabold leading-none text-ink-900 [@media(max-width:767px)_and_(max-height:700px)]:text-[32px] md:order-none md:text-[56px]">{card.text}</div>
+                    {/* The 375×667 rules of the design, and the only two things it lets this screen
+                        drop there: the word's IPA and (below) the "chạm để nói" caption. The mouth
+                        description is explicitly NOT droppable — it is what the screen teaches — so
+                        the query is spelled out per element rather than hung on a container. It names
+                        its own width bound because a height query alone would also catch a short
+                        laptop window, where the landscape layout is the one being rendered. */}
+                    <div className="order-3 text-base font-bold text-ink-300 [@media(max-width:767px)_and_(max-height:700px)]:hidden md:order-none md:text-[22px] md:leading-normal">{card.ipa}</div>
+                    <Chip tone="coral" className="order-5 md:order-none">Từ {idx + 1}/{cards.length}</Chip>
+                  </div>
                 </div>
               )}
-
-              <div className="flex w-full flex-wrap justify-center gap-3 pt-1 max-md:mt-auto md:w-auto md:gap-4">
-                <Button variant="outline" className={`${CTA_PHONE} max-md:flex-1`} onClick={attempt.reset}>↻ Thử lại</Button>
-                {/* One word is one lesson step now, so the mission hand-off owns the CTA outright:
-                    a child working through today's lesson must not be walked into the sound's
-                    other two words instead of the step the lesson has lined up next. Free play
-                    still strolls along the sound and ends back on its word list. */}
-                {mission
-                  ? <Button size="lg" pulse className={`${CTA_PHONE} max-md:flex-[1.35]`} onClick={mission.go}>{mission.label}</Button>
-                  : !isLast
-                    ? <Button size="lg" pulse className={`${CTA_PHONE} max-md:flex-[1.35]`} to={nextRoute}>Tiếp theo →</Button>
-                    : <Button size="lg" pulse className={`${CTA_PHONE} max-md:flex-[1.35]`} to={nextRoute}>Hoàn thành 🎉</Button>}
-              </div>
-            </section>
-          </>
-        ) : recording ? (
-          <section className="flex flex-1 flex-col items-center justify-center gap-3">
-            <div className="font-display text-[32px] font-extrabold text-[#D9C9AE] md:text-[44px]">{card.text}</div>
-            <div aria-hidden="true" className="font-display text-[44px] font-extrabold leading-none text-coral-text md:text-[56px]">{secondsLeft}</div>
-            <Foxy mood="listening" size="sm" say="Foxy đang lắng nghe…" />
-          </section>
-        ) : (
-          /* The 168×200 mouth tile is the one thing the design cuts outright from this screen: it
-             is what pushed the mic under the fold. Below 768 the shape lives in the sound row
-             instead (see `mouth-tile`); the tile itself is untouched from 768 up. */
-          <section className="hidden w-full flex-1 items-center justify-center md:flex">
-            <div className="flex h-[168px] w-[200px] shrink-0 flex-col items-center justify-center gap-2 rounded-xl3 bg-[#FFF1E6] shadow-[0_8px_0_#F2DFC9]">
-              <span aria-hidden="true" className="animate-wiggle text-[68px] leading-none">👄</span>
-              <span className="text-base font-bold text-ink-500">Khẩu hình miệng</span>
             </div>
-          </section>
-        )}
-
-        {attempt.error && <p className="font-display text-xl font-extrabold text-fix-700 md:text-2xl">{attempt.error}</p>}
-
-        {/* `mt-auto`: with the big mouth tile gone there is no stretching block left on a phone, so
-            the mic would otherwise float directly under the word card. It takes the free space
-            instead and sits on the bottom edge, which is where the design pins it. From 768 up the
-            tile is back and takes the space, so the margin goes to nothing.
-
-            This block is deliberately NOT `sticky bottom-0` — see the gotcha at the top of the
-            file. The design's "trên 667 thì ghim đáy" is bought by making the frame FIT 667 (the
-            `max-height:700px` trims above), not by floating an opaque panel over the deck. */}
-        {!result && (
-          <div className="mt-auto flex flex-col items-center gap-3 pb-2 pt-1 [@media(max-width:767px)_and_(max-height:700px)]:pb-0 [@media(max-width:767px)_and_(max-height:700px)]:pt-0 md:mt-0">
-            <MicButton state={attempt.micState} level={attempt.level} onPress={attempt.onMic} />
-            {!recording && <p className="font-display text-base font-extrabold text-ink-500 [@media(max-width:767px)_and_(max-height:700px)]:hidden md:text-xl">Chạm để nói nào!</p>}
           </div>
-        )}
+
+          {/* RIGHT — what the child does: the mouth card, the mic and its countdown, Foxy, and in
+              the result state the score block and the CTA row in that same place. */}
+          <div data-testid="do-col" className="contents ipad:flex ipad:min-h-0 ipad:w-[400px] ipad:shrink-0 ipad:flex-col ipad:items-center ipad:justify-center ipad:gap-3">
+
+            {result ? (
+              <>
+                {earned === 3 && <Confetti />}
+                {/* The result state on a phone is the design's compressed M3b: the score band, the
+                    tip, the two listening buttons and then a spacer, so the pair of CTAs sits on the
+                    bottom edge instead of wherever the content happens to end. `flex-1` only exists
+                    below 768 — from there up the section is the same content-height block it was. */}
+                <section className="flex w-full flex-col items-center gap-3 pb-1 max-md:flex-1 md:w-auto ipad:w-full">
+                  <SoundChip ipa={ipa} score={score} engine={attempt.engine} />
+                  {tone !== 'good' && tip && (
+                    <p data-testid="sound-tip" className="max-w-xl rounded-[18px] border-[3px] border-[#FFDF9E] bg-[#FFF6E0] px-3.5 py-2.5 text-center text-sm font-bold leading-relaxed text-ink-500 md:rounded-xl3 md:px-5 md:text-lg md:leading-7">
+                      👅 {tip}
+                    </p>
+                  )}
+                  <p className="text-base font-bold text-ink-300 md:text-lg">
+                    Từ <span className="font-display font-extrabold text-ink-900">{card.text}</span> · {Math.round(result.overall)} điểm
+                  </p>
+
+                  <div className="flex flex-wrap justify-center gap-3 md:gap-4">
+                    {attempt.lastBlob && (
+                      <Button variant="outline" className="max-md:px-3 max-md:text-base" onClick={() => playBlob(attempt.lastBlob!).catch(() => {})}>🎧 Nghe mình</Button>
+                    )}
+                    <Button variant="outline" className="max-md:px-3 max-md:text-base" onClick={playSample}>🔊 Nghe mẫu</Button>
+                  </div>
+                  {sampleMissing && <p className="text-sm font-bold text-ink-300 md:text-lg">Chưa có audio mẫu</p>}
+
+                  {/* Stars and the sentence about them are one white card on a phone — the design's
+                      "thẻ điểm gộp", read across in a single row rather than down two. Every one of
+                      those card styles is unset again from `md` up, where this is the bare stacked
+                      pair it has always been. */}
+                  {earned !== null && (
+                    <div className="flex w-full items-center justify-between gap-3 rounded-[24px] bg-white px-4 py-3.5 shadow-card md:w-auto md:flex-col md:justify-center md:gap-1 md:rounded-none md:bg-transparent md:p-0 md:shadow-none">
+                      <Stars value={earned} animate size="sm" />
+                      <p className="text-right font-display text-base font-extrabold text-ink-900 md:text-center md:text-2xl">
+                        {earned === 3 ? 'Từ này tuyệt lắm!' : earned === 2 ? 'Gần được rồi, luyện thêm nhé!' : 'Nghe mẫu rồi thử lại nhé!'}
+                      </p>
+                    </div>
+                  )}
+
+                  <div className="flex w-full flex-wrap justify-center gap-3 pt-1 max-md:mt-auto md:w-auto md:gap-4">
+                    <Button variant="outline" className={`${CTA_PHONE} max-md:flex-1`} onClick={attempt.reset}>↻ Thử lại</Button>
+                    {/* One word is one lesson step now, so the mission hand-off owns the CTA outright:
+                        a child working through today's lesson must not be walked into the sound's
+                        other two words instead of the step the lesson has lined up next. Free play
+                        still strolls along the sound and ends back on its word list. */}
+                    {mission
+                      ? <Button size="lg" pulse className={`${CTA_PHONE} max-md:flex-[1.35]`} onClick={mission.go}>{mission.label}</Button>
+                      : !isLast
+                        ? <Button size="lg" pulse className={`${CTA_PHONE} max-md:flex-[1.35]`} to={nextRoute}>Tiếp theo →</Button>
+                        : <Button size="lg" pulse className={`${CTA_PHONE} max-md:flex-[1.35]`} to={nextRoute}>Hoàn thành 🎉</Button>}
+                  </div>
+                </section>
+              </>
+            ) : recording ? (
+              /* `ipad:flex-none`: in the two-column frame this block is no longer the thing holding
+                 a whole page column open — the column's own `justify-center` places the countdown,
+                 Foxy and the mic as one group, and a stretching section would push the mic to the
+                 very bottom edge of the screen instead. */
+              <section className="flex flex-1 flex-col items-center justify-center gap-3 ipad:flex-none">
+                <div className="font-display text-[32px] font-extrabold text-[#D9C9AE] md:text-[44px]">{card.text}</div>
+                <div aria-hidden="true" className="font-display text-[44px] font-extrabold leading-none text-coral-text md:text-[56px]">{secondsLeft}</div>
+                <Foxy mood="listening" size="sm" say="Foxy đang lắng nghe…" />
+              </section>
+            ) : (
+              /* The 168×200 mouth tile is the one thing the design cuts outright from this screen: it
+                 is what pushed the mic under the fold. Below 768 the shape lives in the sound row
+                 instead (see `mouth-tile`); the tile itself is untouched from 768 up. */
+              <section className="hidden w-full flex-1 items-center justify-center md:flex ipad:flex-none">
+                <div className="flex h-[168px] w-[200px] shrink-0 flex-col items-center justify-center gap-2 rounded-xl3 bg-[#FFF1E6] shadow-[0_8px_0_#F2DFC9]">
+                  <span aria-hidden="true" className="animate-wiggle text-[68px] leading-none">👄</span>
+                  <span className="text-base font-bold text-ink-500">Khẩu hình miệng</span>
+                </div>
+              </section>
+            )}
+
+            {attempt.error && <p className="font-display text-xl font-extrabold text-fix-700 md:text-2xl">{attempt.error}</p>}
+
+            {/* `mt-auto`: with the big mouth tile gone there is no stretching block left on a phone, so
+                the mic would otherwise float directly under the word card. It takes the free space
+                instead and sits on the bottom edge, which is where the design pins it. From 768 up the
+                tile is back and takes the space, so the margin goes to nothing.
+
+                This block is deliberately NOT `sticky bottom-0` — see the gotcha at the top of the
+                file. The design's "trên 667 thì ghim đáy" is bought by making the frame FIT 667 (the
+                `max-height:700px` trims above), not by floating an opaque panel over the deck. */}
+            {!result && (
+              <div className="mt-auto flex flex-col items-center gap-3 pb-2 pt-1 [@media(max-width:767px)_and_(max-height:700px)]:pb-0 [@media(max-width:767px)_and_(max-height:700px)]:pt-0 md:mt-0">
+                <MicButton state={attempt.micState} level={attempt.level} onPress={attempt.onMic} />
+                {!recording && <p className="font-display text-base font-extrabold text-ink-500 [@media(max-width:767px)_and_(max-height:700px)]:hidden md:text-xl">Chạm để nói nào!</p>}
+              </div>
+            )}
+          </div>
+        </div>
       </div>
     </main>
   )
