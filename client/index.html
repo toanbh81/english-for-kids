@@ -6,7 +6,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-    <link rel="apple-touch-icon" href="/icon-512.png" />
+    <!-- 180 px is the size iOS actually wants for a home-screen icon; handed a 512 it downsamples
+         once per launch and the fox's outlines soften. Full-bleed on purpose — iOS rounds the
+         corners itself. -->
+    <link rel="apple-touch-icon" sizes="180x180" href="/icon-180.png" />
+    <link rel="mask-icon" href="/favicon.svg" color="#FF7A59" />
+    <meta name="apple-mobile-web-app-title" content="Speak Up!" />
     <title>Speak Up!</title>
   </head>
   <body>

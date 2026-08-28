@@ -18,7 +18,13 @@ export default defineConfig(({ mode }) => ({
         orientation: 'any',
         background_color: '#FFF8EE',
         theme_color: '#FF7A59',
-        icons: [{ src: 'icon-512.png', sizes: '512x512', type: 'image/png' }],
+        // `any` and `maskable` are listed separately on purpose: Android crops a maskable icon to
+        // whatever shape the launcher uses, so declaring the same square as both is what turns a
+        // mascot into a cropped chin on some phones. The 192 is the size a launcher grid asks for.
+        icons: [
+          { src: 'icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
+          { src: 'icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
+        ],
       },
       workbox: {
         // The sample word audio is .mp3 and must be precached, or offline practice has no "Nghe mẫu".
