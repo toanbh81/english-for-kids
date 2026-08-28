@@ -216,6 +216,63 @@ it('pins the mic with layout, never with an overlay, and leaves the landscape co
   expect(micBlock).not.toContain('bg-cream-50')
 })
 
+// --- the iPad frame: two columns, not a taller one -------------------------------------------
+//
+// Same reasoning as the phone block above, and the same limits: jsdom has no layout, so these
+// assert which breakpoint each rule is written at and which column each block sits in. The
+// geometry is measured in a browser — .superpowers/fix/ipad-practice-report.md carries the table.
+
+it('splits the frame into a learning column and a doing column, and only from `ipad` up', () => {
+  renderWord()
+
+  const teach = screen.getByTestId('teach-col')
+  const doing = screen.getByTestId('do-col')
+  for (const col of [teach, doing]) {
+    // Below the breakpoint both wrappers leave the box tree entirely, so the phone frame is the
+    // same single flow it has always been — no new box, no new rule to get in its way.
+    expect(classes(col)).toContain('contents')
+    expect(classes(col)).toContain('ipad:flex')
+    // `min-h-0` is what bounds a column to the screen instead of letting it push the page taller.
+    expect(classes(col)).toContain('ipad:min-h-0')
+    // Nothing floats: a pinned panel paints over whatever sits at its y (see the file header).
+    for (const bad of ['sticky', 'fixed', 'absolute']) expect(classes(col)).not.toContain(bad)
+  }
+  expect(classes(teach)).toContain('ipad:flex-1')
+  expect(classes(doing)).toContain('ipad:w-[400px]')
+})
+
+it('puts the teaching deck on the left and the mouth card, the mic and Foxy on the right', () => {
+  renderWord()
+
+  expect(screen.getByTestId('teach-col')).toContainElement(screen.getByTestId('sound-word-grid'))
+  const doing = screen.getByTestId('do-col')
+  expect(doing).toContainElement(screen.getByRole('button', { name: /bấm để nói/i }))
+  expect(doing).toContainElement(screen.getByText('Khẩu hình miệng'))
+})
+
+it('keeps the score block and the CTA row in the doing column once a result lands', () => {
+  renderWord()
+  score(result(55))
+
+  const doing = screen.getByTestId('do-col')
+  expect(doing).toContainElement(screen.getByTestId('sound-chip'))
+  expect(doing).toContainElement(screen.getByRole('button', { name: /thử lại/i }))
+  expect(doing).toContainElement(screen.getByRole('link', { name: /tiếp theo/i }))
+  // …and the deck stays on the left, where the child is still reading it.
+  expect(screen.getByTestId('teach-col')).toContainElement(screen.getByTestId('sound-word-grid'))
+})
+
+/** `min-h-full` is a floor, not a height. Without a definite one the split's `flex-1`/`min-h-0`
+ * bound nothing — a flex child's base size is its own content — and the column grows past the
+ * screen exactly as it did before, which is the whole bug. */
+it('gives the iPad column a definite height to divide', () => {
+  renderWord()
+
+  const column = classes(screen.getByTestId('sound-word-grid').closest('main')!.firstElementChild!)
+  expect(column).toContain('ipad:h-full')
+  expect(column).toContain('min-h-full')
+})
+
 it('plays the sound on its own, and says so when that sample is missing', async () => {
   playerControl.playUrl.mockReturnValue(new Promise<void>(() => {})) // still playing: no state change yet
   renderWord()

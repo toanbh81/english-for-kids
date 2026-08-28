@@ -1,4 +1,5 @@
 import type { Config } from 'tailwindcss'
+import plugin from 'tailwindcss/plugin'
 
 /** Tokens from the Claude Design handoff (docs/design/README.md). The single-word keys
  * (`cream`, `coral`, `teal`, `star`, `good`, `ok`, `fix`) are the Phase-1 aliases: they keep
@@ -14,27 +15,8 @@ export default {
   ],
   theme: {
     extend: {
-      // The iPad-landscape breakpoint: the curved map, the diagonal stairs and the five-across
-      // mission row.
-      //
-      // It asks about ORIENTATION, not a width alone, because the width alone cannot answer the
-      // question. Phase 10 first set this to 1194 — the width of the design's own frame — and that
-      // silently took the map away from every iPad narrower than an 11" Pro: a 10.2" is 1080 pt
-      // across in landscape, a mini 1133, an Air 1180. They landed in the tablet band and lost the
-      // layout they had had all along.
-      //
-      // A plain 1024 would not do either: a 12.9" iPad is exactly 1024 pt wide in PORTRAIT, which
-      // is the squeezed-map case this breakpoint exists to prevent. Landscape-and-wide is the real
-      // condition — every iPad is ≥ 1080 across in landscape, every phone is < 1024 in either
-      // orientation, and every iPad in portrait is ≤ 1024.
-      // The height floor is the second half of the same lesson. The map needs two rows of islands
-      // AND the control strip inside one screen: below ~692 pt — an iPad mini in landscape once Safari
-      // takes its tab and bookmark bars leaves 634 — the two rows and the control strip stop fitting and the
-      // rows collide. Below the floor the stacked card grid is the honest answer: everything is
-      // reachable, it just scrolls.
-      screens: {
-        ipad: { raw: '(min-width: 1024px) and (orientation: landscape) and (min-height: 692px)' },
-      },
+      // (The `ipad` breakpoint is a PLUGIN VARIANT, not a screen — see `plugins` at the bottom of
+      // this file for what it means and why it cannot live here.)
       colors: {
         cream: { DEFAULT: '#FFF7EA', 50: '#FFF7EA' },
         canvas: '#EFE5D6',
@@ -107,5 +89,24 @@ export default {
       },
     },
   },
-  plugins: [],
+  plugins: [
+    // The iPad-landscape breakpoint: the curved map, the diagonal stairs, the five-across mission
+    // row and the two-column practice screens.
+    //
+    // It asks about ORIENTATION and HEIGHT, not a width alone, because a width alone cannot answer
+    // the question. 1194 — the width of the design's own frame — silently took the map away from
+    // every iPad narrower than an 11" Pro (a 10.2" is 1080 pt across in landscape, a mini 1133, an
+    // Air 1180). A plain 1024 would not do either: a 12.9" iPad is exactly 1024 pt wide in
+    // PORTRAIT, the squeezed-map case this exists to prevent. And the height floor is real: below
+    // ~692 pt — which is what a mini in landscape has left once Safari takes its bars — two rows of
+    // islands and the control strip stop fitting, and the stacked grid is the honest answer.
+    //
+    // It is a variant rather than an entry in `theme.extend.screens` because a `raw` screen makes
+    // Tailwind 3 stop emitting EVERY `max-*` variant in the project. That is not a warning: it
+    // silently deleted all 276 `max-md:` rules — the phone-only overrides of Phase 10 — from the
+    // build, and nothing failed. A variant registered here has no such side effect.
+    plugin(({ addVariant }) => {
+      addVariant('ipad', '@media (min-width: 1024px) and (orientation: landscape) and (min-height: 692px)')
+    }),
+  ],
 } satisfies Config
