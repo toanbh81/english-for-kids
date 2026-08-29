@@ -60,7 +60,11 @@ const isLessonLength: ShapeCheck = raw => (LESSON_LENGTHS as readonly string[]).
  * > **Changing the shape of a key here is a deliberate migration, not an edit.** Devices running the
  * > old build are still validating against the old shape; a value in the new shape reaching one of
  * > them is "invalid", and the pull will heal it away — replacing the new value with the old one and
- * > pushing that back up. To change a shape safely: either write the new shape under a NEW key name
+ * > pushing that back up **with a winning clock**. So the damage is not confined to the old device:
+ * > it overwrites the new value centrally, for every device, and it wins that fight every time. A
+ * > new shape cannot stick anywhere while one un-upgraded device is still syncing. (The winning
+ * > clock is deliberate — repairing junk with a losing clock would leave the junk in place, which is
+ * > the problem this rule exists to solve.) To change a shape safely: write the new shape under a NEW key name
  * > and leave the old one alone until the old build is gone, or ship a release whose validator
  * > accepts BOTH shapes, wait for it to roll out, and only then start writing the new one.
  *
