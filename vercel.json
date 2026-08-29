@@ -5,6 +5,12 @@
   "buildCommand": "node $( [ -f scripts/vercel-build.mjs ] && echo scripts/vercel-build.mjs || echo ../scripts/vercel-build.mjs )",
   "outputDirectory": "dist",
   "framework": null,
+  "crons": [
+    {
+      "path": "/api/ping",
+      "schedule": "0 3 * * *"
+    }
+  ],
   "rewrites": [
     {
       "source": "/((?!api/).*)",
