@@ -472,6 +472,64 @@ describe('the email door', () => {
     expect(auth.signInWithEmail).toHaveBeenLastCalledWith('fixed@example.com', {})
   })
 
+  /**
+   * M1. The placeholder this device minted on launch must not outlive the restore.
+   *
+   * Nothing here is corrupt and nothing races: site data cleared, launch mints the empty profile M
+   * and gives it a server row, the parent restores the real child C, and the roster is left holding
+   * both. That was reasoned about once and called harmless - before flow 6 wired the app-start
+   * picker, which is the moment the roster stopped being bookkeeping and became a screen the CHILD
+   * reads. Two identical foxes every launch, and half the time the child lands in M: no stars, no
+   * streak, an empty Leitner set that teaches every word as new, all of it mirrored up under M's
+   * own row where nothing merges it back.
+   */
+  it('leaves one child on the roster after a restore, not two', async () => {
+    profileState.fetchRemoteProfiles.mockResolvedValue([profile(MINTED), profile(SOC, 'Soc')])
+
+    await goToEmail()
+    await act(async () => {
+      fireEvent.change(screen.getByLabelText('Mã xác nhận'), { target: { value: '123456' } })
+      fireEvent.submit(screen.getByLabelText('Mã xác nhận').closest('form')!)
+    })
+    await waitFor(() => expect(profileState.switchProfile).toHaveBeenCalledWith(SOC))
+
+    // The real roster, read through the real module: one child, and it is the restored one. That
+    // is also the read-out that ProfileGate shows no picker - it asks `listProfiles().length < 2`.
+    expect(listProfiles().map(p => p.id)).toEqual([SOC])
+  })
+
+  it('drops the placeholder only once the pull has actually landed', async () => {
+    sync.pullProfile.mockResolvedValue(false)
+    profileState.fetchRemoteProfiles.mockResolvedValue([profile(MINTED), profile(SOC, 'Soc')])
+
+    await goToEmail()
+    await act(async () => {
+      fireEvent.change(screen.getByLabelText('Mã xác nhận'), { target: { value: '123456' } })
+      fireEvent.submit(screen.getByLabelText('Mã xác nhận').closest('form')!)
+    })
+
+    // The restore failed, so the device is still on the placeholder - removing it would leave the
+    // child on a profile the roster no longer names.
+    expect(listProfiles().map(p => p.id).sort()).toEqual([MINTED, SOC].sort())
+  })
+
+  it('keeps a local profile that is not the empty placeholder', async () => {
+    // Same shape, except this device's own child has progress: `mintedId` is null, and nobody is
+    // dropped on the strength of an inference about an empty namespace.
+    setStars('sword:cat', 3)
+    auth.currentEmail.mockResolvedValue('bome@example.com')
+    profileState.fetchRemoteProfiles.mockResolvedValue([profile(MINTED), profile(SOC, 'Soc')])
+
+    await goToEmail()
+    await act(async () => {
+      fireEvent.change(screen.getByLabelText('Mã xác nhận'), { target: { value: '123456' } })
+      fireEvent.submit(screen.getByLabelText('Mã xác nhận').closest('form')!)
+    })
+    await act(async () => { fireEvent.click(await screen.findByText('Soc')) })
+
+    expect(listProfiles().map(p => p.id).sort()).toEqual([MINTED, SOC].sort())
+  })
+
   it('restores straight to the one profile the account owns', async () => {
     profileState.fetchRemoteProfiles.mockResolvedValue([profile(SOC, 'Sóc')])
     await goToEmail()

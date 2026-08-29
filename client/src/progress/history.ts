@@ -22,9 +22,18 @@ export type History = {
   stars: number
   /** How many activity events that child's log holds. */
   events: number
+  /**
+   * A value was there and could not be read — storage refused, or the bytes do not parse (the
+   * mid-`setItem` damage this codebase models everywhere else).
+   *
+   * Zero and unreadable are not the same child. Every caller of this module is deciding something
+   * one-way — whether a restore door may appear, whether an account may be abandoned, whether a
+   * roster entry may be dropped — so an unreadable namespace must never be counted as an empty one.
+   */
+  damaged: boolean
 }
 
-const EMPTY: History = { stars: 0, events: 0 }
+const EMPTY: History = { stars: 0, events: 0, damaged: false }
 
 /**
  * `profileId` is nullable on purpose: `null` reads the legacy, un-namespaced keys, which is what a
@@ -33,45 +42,75 @@ const EMPTY: History = { stars: 0, events: 0 }
  * prefix, so this is one call either way.
  */
 export function profileHistory(profileId: string | null): History {
-  return {
-    stars: readStars(profileId),
-    events: readEventCount(profileId),
-  }
+  const stars = readStars(profileId)
+  const events = readEventCount(profileId)
+  return { stars: stars.value, events: events.value, damaged: stars.damaged || events.damaged }
 }
 
 /** The same question over a whole roster, summed. An empty list reads as an empty history. */
 export function sumHistory(profileIds: readonly (string | null)[]): History {
   return profileIds.reduce<History>((total, id) => {
     const one = profileHistory(id)
-    return { stars: total.stars + one.stars, events: total.events + one.events }
+    return {
+      stars: total.stars + one.stars,
+      events: total.events + one.events,
+      damaged: total.damaged || one.damaged,
+    }
   }, EMPTY)
 }
 
-export const hasAnyHistory = (history: History): boolean => history.stars > 0 || history.events > 0
+/**
+ * "Might this child have done something?" — and `damaged` answers yes.
+ *
+ * Every caller uses this to decide whether it is safe to do something irreversible, so the unknown
+ * case has to land on the side that does nothing: the restore door stays hidden, the account counts
+ * as holding a child, and the placeholder profile a restore would drop is left alone.
+ */
+export const hasAnyHistory = (history: History): boolean =>
+  history.stars > 0 || history.events > 0 || history.damaged
 
-function readRaw(profileId: string | null, name: string): string | null {
+/** A count, or the admission that there was something there and it could not be counted. */
+type Read = { value: number; damaged: boolean }
+
+const NOTHING: Read = { value: 0, damaged: false }
+const UNREADABLE: Read = { value: 0, damaged: true }
+
+/** `null` = no such key (an answer); `undefined` = storage refused to say (not an answer). */
+function readRaw(profileId: string | null, name: string): string | null | undefined {
   try { return localStorage.getItem(profileStorageKey(profileId ?? '', name)) }
-  catch { return null }
+  catch { return undefined }
 }
 
-function readStars(profileId: string | null): number {
+function readStars(profileId: string | null): Read {
+  const raw = readRaw(profileId, 'stars')
+  if (raw === undefined) return UNREADABLE
+  const trimmed = raw?.trim() ?? ''
+  if (trimmed === '') return NOTHING
   try {
-    const parsed: unknown = JSON.parse(readRaw(profileId, 'stars') ?? '{}')
-    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return 0
-    return Object.values(parsed).reduce<number>(
-      (sum, v) => sum + (typeof v === 'number' && Number.isFinite(v) ? v : 0),
-      0,
-    )
+    const parsed: unknown = JSON.parse(trimmed)
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return UNREADABLE
+    return {
+      value: Object.values(parsed).reduce<number>(
+        (sum, v) => sum + (typeof v === 'number' && Number.isFinite(v) ? v : 0),
+        0,
+      ),
+      damaged: false,
+    }
   } catch {
-    return 0
+    // Bytes are there and they are not a star map: this child may have any number of stars.
+    return UNREADABLE
   }
 }
 
-function readEventCount(profileId: string | null): number {
+function readEventCount(profileId: string | null): Read {
+  const raw = readRaw(profileId, 'activity')
+  if (raw === undefined) return UNREADABLE
+  const trimmed = raw?.trim() ?? ''
+  if (trimmed === '') return NOTHING
   try {
-    const parsed: unknown = JSON.parse(readRaw(profileId, 'activity') ?? '[]')
-    return Array.isArray(parsed) ? parsed.length : 0
+    const parsed: unknown = JSON.parse(trimmed)
+    return Array.isArray(parsed) ? { value: parsed.length, damaged: false } : UNREADABLE
   } catch {
-    return 0
+    return UNREADABLE
   }
 }

@@ -80,6 +80,19 @@ describe('one child on the iPad', () => {
   })
 })
 
+describe('after a restore', () => {
+  it('shows nothing, because the placeholder is gone', () => {
+    // The read-out of M1, on the screen that suffered it: a restored device holds ONE child, so the
+    // child who picks the iPad up next goes straight into their own lesson.
+    seedRoster([{ id: SOC, name: 'Soc' }], SOC)
+
+    renderGate()
+
+    expect(screen.getByText('màn hình chính')).toBeInTheDocument()
+    expect(screen.queryByText(/Ai đang học nào/)).not.toBeInTheDocument()
+  })
+})
+
 describe('two children, one iPad', () => {
   beforeEach(() => {
     seedRoster([{ id: SOC, name: 'Sóc' }, { id: CAO, name: 'Cáo' }], SOC)

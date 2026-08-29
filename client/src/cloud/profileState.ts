@@ -89,15 +89,52 @@ function toProfile(value: unknown): Profile | null {
   }
 }
 
+/**
+ * The roster, and whether the answer can be trusted.
+ *
+ * **"I could not read it" and "there are no children" are different facts.** Every other stored
+ * value in this codebase already says so — `copyValue` guards it, `mergeStored` models it as
+ * `damaged` — and the roster was the one that did not: a `speakup.profiles` value that iOS killed
+ * halfway through a `setItem` parsed as nothing, read as "no children yet", and then
+ * `ensureLocalProfile` minted a fresh child over it and called `rescueOrphanNamespaces` with a
+ * roster of one. The rescue does what it says: every OTHER child's namespace on that iPad is folded
+ * into the newcomer and deleted. Two children become one, `leitner` has no merge rule so the second
+ * child's whole schedule is the loser, and none of it is recoverable locally.
+ *
+ * So a non-empty value that yields no child is `damaged`, and the callers that would otherwise
+ * write, mint or rescue must do none of those things — the bytes on disk may still be readable by
+ * someone, and they are certainly not ours to overwrite.
+ */
+type RosterRead = { profiles: Profile[]; damaged: boolean }
+
+function readRoster(): RosterRead {
+  let raw: string | null
+  try {
+    raw = localStorage.getItem(PROFILES_KEY)
+  } catch {
+    // Storage refused the read outright: unknown, not empty.
+    return { profiles: [], damaged: true }
+  }
+  // Genuinely nothing on disk — a first launch, or an account that has never had a child. `[]` is
+  // this module's own way of writing "no children", so it is an answer, not damage.
+  const trimmed = raw?.trim() ?? ''
+  if (trimmed === '' || trimmed === '[]') return { profiles: [], damaged: false }
+
+  try {
+    const parsed: unknown = JSON.parse(trimmed)
+    if (Array.isArray(parsed)) {
+      const profiles = parsed.map(toProfile).filter((p): p is Profile => p !== null)
+      // Something was written there. If not one child survived the read, the value is not an empty
+      // roster — it is a roster we cannot read, and the difference decides whether a rescue runs.
+      return { profiles, damaged: profiles.length === 0 }
+    }
+  } catch { /* fall through: unknown */ }
+  return { profiles: [], damaged: true }
+}
+
 /** Corrupt or unavailable storage must not crash the app: no roster reads as "no children yet". */
 export function listProfiles(): Profile[] {
-  try {
-    const parsed: unknown = JSON.parse(localStorage.getItem(PROFILES_KEY) ?? '[]')
-    if (!Array.isArray(parsed)) return []
-    return parsed.map(toProfile).filter((p): p is Profile => p !== null)
-  } catch {
-    return []
-  }
+  return readRoster().profiles
 }
 
 function writeProfiles(profiles: Profile[]): boolean {
@@ -129,9 +166,19 @@ function mergeIntoRoster(additions: Profile[]): Profile[] {
   return listProfiles()
 }
 
-/** Read-filter-write in one turn. Only ever used on an id this document minted moments ago. */
-function dropProfile(id: string): void {
-  const roster = listProfiles()
+/**
+ * Take one child off this device's roster. Read-filter-write in one turn.
+ *
+ * **Only ever for an id THIS document minted and knows to be empty** — the loser of the mint race
+ * above, and the placeholder profile a restore replaces (`CloudStart`). It removes a roster entry
+ * and nothing else: the namespace, if there somehow is one, stays on disk, where the next launch's
+ * `rescueOrphanNamespaces` folds it into the active child rather than dropping it.
+ *
+ * An unreadable roster (see `readRoster`) filters to nothing and is therefore never written over.
+ */
+export function dropProfile(id: string): void {
+  const { profiles: roster, damaged } = readRoster()
+  if (damaged) return
   if (roster.some(p => p.id === id)) writeProfiles(roster.filter(p => p.id !== id))
 }
 
@@ -171,10 +218,24 @@ export function addProfile(name?: string, avatar?: string): Profile {
  * Safe to call on every launch: the migration is idempotent, and re-running it also repairs a
  * device where an old cached bundle wrote a legacy key after the first migration.
  */
-export function ensureLocalProfile(): Profile {
-  const roster = listProfiles()
+export function ensureLocalProfile(): Profile | null {
+  const { profiles: roster, damaged } = readRoster()
   const active = activeProfileId()
   let profile = (active ? roster.find(p => p.id === active) : undefined) ?? roster[0]
+
+  // An unreadable roster is the one case where the right move is to do nothing at all. Minting
+  // would write over bytes somebody may yet recover; pointing `speakup.profile` somewhere new would
+  // hide whichever child is on this iPad; and the rescue below would fold EVERY namespace on the
+  // device into the newcomer and delete the originals — two children merged into one, locally
+  // irreversible. The app carries on reading whatever namespace it was already reading.
+  if (!profile && damaged) {
+    if (!active) return null
+    // The id is known good (`activeProfileId` validates it); only the label is unreadable, so the
+    // defaults stand in for it. The legacy migration is still safe — it is idempotent and only
+    // moves un-namespaced keys into the child already being read.
+    migrateKeysInto(active)
+    return { id: active, name: DEFAULT_PROFILE_NAME, avatar: DEFAULT_PROFILE_AVATAR, created: 0 }
+  }
 
   if (!profile) {
     const minted: Profile = {
@@ -381,7 +442,10 @@ export async function connectCloud(options: BootstrapOptions = {}): Promise<void
  * child's namespace by the time the first screen reads a star. The cloud half is fired and
  * forgotten.
  */
-export function bootstrapProfiles(options: BootstrapOptions = {}): Profile {
+export function bootstrapProfiles(options: BootstrapOptions = {}): Profile | null {
+  // `null` when the roster is on disk but unreadable: nothing was minted, nothing was rescued and
+  // nothing was overwritten. The caller (`main.tsx`) does not use the value; it is here for tests
+  // and for whoever next needs to know that this launch deliberately changed nothing.
   const profile = ensureLocalProfile()
   void connectCloud(options)
   return profile

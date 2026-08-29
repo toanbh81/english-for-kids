@@ -437,13 +437,23 @@ const statusListeners = new Set<(status: SyncStatus) => void>()
 const isOnline = (): boolean => typeof navigator === 'undefined' || navigator.onLine !== false
 
 /**
- * Every child this device might be holding data for: the ones the outbox remembers, plus whoever is
- * using the iPad now (whose meta may not exist yet on a first launch).
+ * Every child this device might be holding data for: the ones the outbox remembers, whoever is
+ * using the iPad now (whose meta may not exist yet on a first launch), **and everyone else on the
+ * roster**.
+ *
+ * The roster is the third source because the first two can both be empty for a child who has a
+ * log on disk. `writeOutbox`'s last-resort attempt under storage pressure keeps the queue alive by
+ * dropping `meta` entirely — that is deliberate, the child's progress matters more than the
+ * bookkeeping — and a sibling who is not the active profile then appears in neither set. The cost
+ * was not only a status line reading "Đã đồng bộ ✓" over forty unsent events: `runFlush`'s re-open
+ * loop walks this same set, so nothing re-queued them until that child next became active, which on
+ * a shared iPad can be a week.
  */
 function trackedProfiles(box: Outbox): string[] {
   const ids = new Set(Object.keys(box.meta))
   const active = activeProfileId()
   if (active) ids.add(active)
+  for (const profile of listProfiles()) ids.add(profile.id)
   return [...ids]
 }
 

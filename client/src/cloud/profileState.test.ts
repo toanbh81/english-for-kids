@@ -26,6 +26,7 @@ import {
   adoptProfiles,
   bootstrapProfiles,
   connectCloud,
+  dropProfile,
   ensureLocalProfile,
   ensureRemoteProfiles,
   fetchRemoteProfiles,
@@ -99,7 +100,7 @@ describe('the first launch after the update', () => {
   it('gives the child a profile and carries every value they had into it', () => {
     seedLegacyProgress()
 
-    const profile = ensureLocalProfile()
+    const profile = ensureLocalProfile()!
 
     expect(profile.name).toBe(DEFAULT_PROFILE_NAME)
     expect(profile.avatar).toBe(DEFAULT_PROFILE_AVATAR)
@@ -120,13 +121,13 @@ describe('the first launch after the update', () => {
 
   it('is the same profile on every launch after that, and writes keep landing in it', () => {
     seedLegacyProgress()
-    const first = bootstrapProfiles()
+    const first = bootstrapProfiles()!
 
     setStars('sword:dog', 2)
     logActivity({ ts: 2000, kind: 'speak', id: 'hello', score: 88 })
     setLimitMinutes(45)
 
-    const second = bootstrapProfiles()
+    const second = bootstrapProfiles()!
     expect(second.id).toBe(first.id)
     expect(listProfiles()).toHaveLength(1)
     expect(getStars('sword:cat')).toBe(3)
@@ -155,7 +156,7 @@ describe('the first launch after the update', () => {
       return value
     })
 
-    const profile = ensureLocalProfile()
+    const profile = ensureLocalProfile()!
     getItem.mockRestore()
 
     // Both documents settle on the same child, so the progress is migrated once, into a namespace
@@ -172,7 +173,7 @@ describe('the first launch after the update', () => {
     // gets all the way through — roster, active profile, migration — and then B's write, computed
     // from the empty roster it read a moment earlier, lands on top.
     seedLegacyProgress()
-    const a = ensureLocalProfile()
+    const a = ensureLocalProfile()!
     setStars('sword:dog', 2)
     expect(getStars('sword:cat')).toBe(3)
 
@@ -186,7 +187,7 @@ describe('the first launch after the update', () => {
     expect(localStorage.getItem(`speakup.${a.id}.stars`)).not.toBeNull()
 
     // B's boot continues. One key scan later, nothing has been lost.
-    const settled = ensureLocalProfile()
+    const settled = ensureLocalProfile()!
 
     expect(settled.id).toBe(b.id)
     expect(activeProfileId()).toBe(b.id)
@@ -199,7 +200,7 @@ describe('the first launch after the update', () => {
     expect(localStorage.getItem(`speakup.${a.id}.stars`)).toBeNull()
 
     // And a second launch has nothing left to do.
-    expect(ensureLocalProfile().id).toBe(b.id)
+    expect(ensureLocalProfile()!.id).toBe(b.id)
     expect(getStars('sword:cat')).toBe(3)
   })
 
@@ -209,7 +210,7 @@ describe('the first launch after the update', () => {
       throw new DOMException('quota', 'QuotaExceededError')
     })
 
-    const profile = ensureLocalProfile()
+    const profile = ensureLocalProfile()!
     setItem.mockRestore()
 
     // Nothing was moved, because nothing could be pointed at: the child keeps reading the same
@@ -227,7 +228,7 @@ describe('two children, one iPad', () => {
   // (see switchProfile) and which jsdom has no navigation to perform.
   it('keeps their progress apart', () => {
     seedLegacyProgress()
-    const first = ensureLocalProfile()
+    const first = ensureLocalProfile()!
     expect(getStars('sword:cat')).toBe(3)
 
     const second = addProfile('Bơ', '🐨')
@@ -256,7 +257,7 @@ describe('two children, one iPad', () => {
   })
 
   it('refuses to switch to a child who does not live here', () => {
-    const first = ensureLocalProfile()
+    const first = ensureLocalProfile()!
     expect(switchProfile('11111111-2222-4333-8444-555555555555', { reload: false })).toBe(false)
     expect(switchProfile('not-an-id', { reload: false })).toBe(false)
     expect(activeProfileId()).toBe(first.id)
@@ -273,22 +274,101 @@ describe('two children, one iPad', () => {
 
     const profiles = listProfiles()
     expect(profiles).toEqual([{ id, name: DEFAULT_PROFILE_NAME, avatar: DEFAULT_PROFILE_AVATAR, created: 0 }])
-    expect(ensureLocalProfile().id).toBe(id)
+    expect(ensureLocalProfile()!.id).toBe(id)
     expect(getStars('sword:cat')).toBe(3)
   })
 
-  it('reads no roster at all out of corrupt storage', () => {
-    localStorage.setItem('speakup.profiles', '{not json')
+  it('still mints a child when there is genuinely no roster on disk', () => {
+    // The ordinary first launch, and the case the damaged one below must not be confused with.
     expect(listProfiles()).toEqual([])
     expect(activeProfile()).toBeNull()
-    expect(ensureLocalProfile().id).toBeTruthy()
+
+    const minted = ensureLocalProfile()!
+
+    expect(minted.id).toBeTruthy()
+    expect(listProfiles().map(p => p.id)).toEqual([minted.id])
+    expect(activeProfileId()).toBe(minted.id)
+  })
+
+  /**
+   * The roster is the one stored value that had no "damaged" reading, and it is the one where the
+   * cost is highest. A `speakup.profiles` value that iOS killed halfway through a `setItem` parsed
+   * as nothing, read as "no children yet", and then `ensureLocalProfile` minted a fresh child over
+   * it and ran `rescueOrphanNamespaces` with a roster of one - which folds EVERY other namespace on
+   * the iPad into the newcomer and deletes the originals. Two children become one, `leitner` has no
+   * merge rule so the second child's whole schedule is the loser, and none of it is recoverable.
+   */
+  describe('a roster that is on disk and unreadable', () => {
+    const A = '11111111-2222-4333-8444-555555555555'
+    const B = '22222222-3333-4444-8555-666666666666'
+
+    function twoChildrenThenTruncateTheRoster() {
+      const roster = JSON.stringify([
+        { id: A, name: 'Soc', avatar: 'S', created: 1 },
+        { id: B, name: 'Cao', avatar: 'C', created: 2 },
+      ])
+      localStorage.setItem(`speakup.${A}.stars`, JSON.stringify({ 'sword:cat': 3 }))
+      localStorage.setItem(`speakup.${A}.leitner`, JSON.stringify({ 'w-a': { box: 3, due: 10 } }))
+      localStorage.setItem(`speakup.${B}.stars`, JSON.stringify({ 'sword:dog': 2 }))
+      localStorage.setItem(`speakup.${B}.leitner`, JSON.stringify({ 'w-b': { box: 5, due: 20 } }))
+      localStorage.setItem('speakup.profile', A)
+      // What a killed `setItem` leaves: the same value, short of its tail.
+      localStorage.setItem('speakup.profiles', roster.slice(0, -12))
+    }
+
+    it('changes nothing at all rather than minting over it', () => {
+      twoChildrenThenTruncateTheRoster()
+      const damagedBytes = localStorage.getItem('speakup.profiles')
+
+      const profile = ensureLocalProfile()
+
+      // The child the device was already reading is still the child it reads.
+      expect(profile?.id).toBe(A)
+      expect(activeProfileId()).toBe(A)
+      // No mint: the damaged bytes are still there, byte for byte, for whoever can recover them.
+      expect(localStorage.getItem('speakup.profiles')).toBe(damagedBytes)
+    })
+
+    it('never folds the children into one another', () => {
+      twoChildrenThenTruncateTheRoster()
+
+      ensureLocalProfile()
+
+      // Both namespaces survive, unmerged and undeleted. `leitner` is the one that proves it: it
+      // has no merge rule, so a rescue would have taken B's schedule outright.
+      expect(JSON.parse(localStorage.getItem(`speakup.${A}.stars`)!)).toEqual({ 'sword:cat': 3 })
+      expect(JSON.parse(localStorage.getItem(`speakup.${B}.stars`)!)).toEqual({ 'sword:dog': 2 })
+      expect(JSON.parse(localStorage.getItem(`speakup.${A}.leitner`)!)).toEqual({ 'w-a': { box: 3, due: 10 } })
+      expect(JSON.parse(localStorage.getItem(`speakup.${B}.leitner`)!)).toEqual({ 'w-b': { box: 5, due: 20 } })
+    })
+
+    it('does not point the device at a child it cannot see, with nothing active', () => {
+      twoChildrenThenTruncateTheRoster()
+      localStorage.removeItem('speakup.profile')
+      const damagedBytes = localStorage.getItem('speakup.profiles')
+
+      // Nothing to return and nothing safe to do: the launch says so instead of inventing a child.
+      expect(ensureLocalProfile()).toBeNull()
+      expect(activeProfileId()).toBeNull()
+      expect(localStorage.getItem('speakup.profiles')).toBe(damagedBytes)
+      expect(JSON.parse(localStorage.getItem(`speakup.${B}.leitner`)!)).toEqual({ 'w-b': { box: 5, due: 20 } })
+    })
+
+    it('adds nobody to a roster it cannot read', () => {
+      twoChildrenThenTruncateTheRoster()
+      const damagedBytes = localStorage.getItem('speakup.profiles')
+
+      dropProfile(A)
+
+      expect(localStorage.getItem('speakup.profiles')).toBe(damagedBytes)
+    })
   })
 })
 
 describe('the server side', () => {
   it('does nothing at all without a cloud', async () => {
     seedLegacyProgress()
-    const profile = bootstrapProfiles()
+    const profile = bootstrapProfiles()!
     await connectCloud()
 
     expect(auth.startAnonymousSession).not.toHaveBeenCalled()
@@ -301,7 +381,7 @@ describe('the server side', () => {
   })
 
   it('signs in silently, then makes sure the children and the recovery code exist', async () => {
-    const profile = ensureLocalProfile()
+    const profile = ensureLocalProfile()!
     const client = makeClient(ownedRows([profile.id]))
     cloud.client = client
     auth.currentUserId.mockResolvedValue('anon-1')
@@ -323,7 +403,7 @@ describe('the server side', () => {
 
   it('finishes the whole connection when the network comes back, not just the sign-in', async () => {
     // The device booted offline: signed in nowhere, so no profile row and no recovery code either.
-    const profile = ensureLocalProfile()
+    const profile = ensureLocalProfile()!
     const client = makeClient(ownedRows([profile.id]))
     cloud.client = client
     let onlineAgain: (() => void) | undefined
@@ -350,7 +430,7 @@ describe('the server side', () => {
   it('does not report success for rows that belong to an account this device has left', async () => {
     // A recovery re-parented this device onto a new user: the profile row still exists, so an
     // `on conflict do nothing` writes nothing and errors not at all — and the row is not ours.
-    const profile = ensureLocalProfile()
+    const profile = ensureLocalProfile()!
     cloud.client = makeClient(ownedRows([]))
     auth.currentUserId.mockResolvedValue('anon-2')
 
@@ -411,7 +491,7 @@ describe('the server side', () => {
       error: null,
     })
     auth.currentUserId.mockResolvedValue('anon-1')
-    const local = ensureLocalProfile()
+    const local = ensureLocalProfile()!
 
     const remote = await fetchRemoteProfiles()
     expect(remote).toEqual([{ id: remoteId, name: 'Bơ', avatar: '🐨', created: Date.parse('2026-08-01T00:00:00Z') }])
@@ -424,7 +504,7 @@ describe('the server side', () => {
   })
 
   it('renames on the server with UPDATE, never an upsert that could conflict', async () => {
-    const profile = ensureLocalProfile()
+    const profile = ensureLocalProfile()!
     const client = makeClient({ data: [], error: null }, { data: null, error: null })
     cloud.client = client
     auth.currentUserId.mockResolvedValue('anon-1')
@@ -442,7 +522,7 @@ describe('the server side', () => {
   })
 
   it('does not rename on the server with no cloud, no session, or a blank name', async () => {
-    const profile = ensureLocalProfile()
+    const profile = ensureLocalProfile()!
     expect(await renameRemoteProfile(profile.id, 'Sóc')).toBe(false)
 
     cloud.client = makeClient()

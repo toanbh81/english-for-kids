@@ -1404,6 +1404,38 @@ describe('reset', () => {
 })
 
 describe('the parent dashboard line', () => {
+  /**
+   * W1. "Da dong bo" was blind to a child who is neither active nor in the outbox's meta.
+   *
+   * That shape is not exotic: `writeOutbox`'s last-resort attempt under storage pressure keeps the
+   * queue and drops `meta` entirely - deliberately, because the child's progress matters more than
+   * the bookkeeping - and a sibling who is not the active profile then appears in neither set. The
+   * status line said everything was safe over forty unsent events, and worse, `runFlush`'s re-open
+   * loop walks the same set, so nothing re-queued them until that child next became active.
+   */
+  it('counts a rostered sibling the outbox has forgotten', async () => {
+    bootProfile()
+    localStorage.setItem('speakup.profiles', JSON.stringify([
+      { id: PROFILE, name: 'A', avatar: 'A', created: 1 },
+      { id: OTHER, name: 'B', avatar: 'B', created: 2 },
+    ]))
+    // The sibling's log is on disk; the outbox remembers nothing about them.
+    localStorage.setItem(key('activity', OTHER), JSON.stringify(
+      Array.from({ length: 40 }, (_, i) => ({ ts: 1000 + i, kind: 'word', id: `w-${i}` })),
+    ))
+    localStorage.setItem('speakup.outbox', JSON.stringify({ v: 1, next: 1, ops: [], meta: {}, resets: [] }))
+
+    expect(syncStatus()).toMatchObject({ state: 'pending', pending: 1 })
+
+    // …and the flush re-opens the queue for them rather than waiting for them to become active.
+    server.profiles.set(OTHER, 'user-1')
+    startSync()
+    await flush()
+
+    expect(server.events.filter(e => e.profile_id === OTHER)).toHaveLength(40)
+    expect(syncStatus()).toMatchObject({ state: 'synced', pending: 0 })
+  })
+
   it('reports offline, then pending, then synced', async () => {
     bootProfile()
     startSync()

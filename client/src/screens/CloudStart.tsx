@@ -3,7 +3,7 @@ import type { FormEvent } from 'react'
 import { Link, Navigate } from 'react-router-dom'
 import { currentAccessToken, currentEmail, signInWithEmail, verifyEmailOtp } from '../cloud/auth'
 import type { Profile } from '../cloud/profileState'
-import { activeProfileId, adoptProfiles, fetchRemoteProfiles, listProfiles, switchProfile } from '../cloud/profileState'
+import { activeProfileId, adoptProfiles, dropProfile, fetchRemoteProfiles, listProfiles, switchProfile } from '../cloud/profileState'
 import { hasMirroredData, pullProfile } from '../cloud/sync'
 import { isCloudConfigured } from '../cloud/supabase'
 import { hasAnyHistory, profileHistory, sumHistory } from '../progress/history'
@@ -248,6 +248,18 @@ export function CloudStart() {
       return
     }
     setRetryId(null)
+    // The placeholder this device minted on launch has done its job and must not outlive the
+    // restore. Leaving it was reasoned about once and called harmless — before flow 6 wired the
+    // app-start picker, which turned the roster from bookkeeping into a screen the CHILD reads:
+    // two identical foxes every launch, one of them a namespace with no stars, no streak and an
+    // empty Leitner set that teaches every word as new, mirrored up under its own server row where
+    // nothing merges it back. A nine-year-old cannot pick a storage namespace by creation date.
+    //
+    // Safe by construction: `mintedId` is only ever non-null when that namespace has no history AND
+    // both of its values were readable (`hasAnyHistory` counts `damaged` as history). Nothing is
+    // deleted from disk either — a namespace the roster stops naming is folded into the active
+    // child by the next launch's `rescueOrphanNamespaces`, not dropped.
+    if (mintedId && mintedId !== id) dropProfile(mintedId)
     // Reloads by default — the one move that guarantees no screen still holds the previous
     // (empty) child's numbers in React state or a module cache. See `switchProfile`.
     switchProfile(id)
