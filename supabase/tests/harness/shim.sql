@@ -45,6 +45,12 @@ $$;
 
 grant usage on schema auth to anon, authenticated, service_role;
 
+-- A stock project names the client roles on `public` explicitly rather than
+-- leaving them to inherit PUBLIC's USAGE. USAGE only — CREATE on this schema
+-- would let a client build its own tables and functions, and rls.test.sql's
+-- inventory fails if it ever finds that.
+grant usage on schema public to anon, authenticated, service_role;
+
 -- --- the part that matters --------------------------------------------------
 -- A real Supabase project ships with these three lines already in place, so
 -- every table, function and sequence a migration creates in `public` is born

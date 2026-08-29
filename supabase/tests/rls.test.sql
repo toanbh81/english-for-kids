@@ -718,7 +718,7 @@ begin
 end $$;
 
 -- ---------------------------------------------------------------------------
--- 11. The inventory: what the two client roles hold in `public`, all of it.
+-- 11. The inventory: everything a client can reach in `public`, all of it.
 --
 -- The sections above probe the holes we know about. This one exists because of
 -- the ones we did not: a real project's default privileges hand every NEW
@@ -728,12 +728,36 @@ end $$;
 -- what may be allowed and fail on anything else — including on an object this
 -- migration never created, because such an object is wide open too and that is
 -- itself the finding.
+--
+-- THREE grantees, not two. `PUBLIC` is the one that is easy to forget and the
+-- one Postgres hands out by itself: every function is born executable by
+-- PUBLIC, and a grant to PUBLIC is a grant to `anon` and `authenticated` both,
+-- so a `revoke ... from anon, authenticated` that leaves PUBLIC alone has
+-- revoked nothing. `aclexplode` reports PUBLIC as grantee 0, which
+-- `pg_get_userbyid` renders as `unknown (OID=0)` — spelled out below, because
+-- a failure message has to name the culprit.
+--
+-- Schema privileges are in here too. CREATE on `public` is the one that
+-- matters: with it a client can make its own tables and functions, and the
+-- TRIGGER and REFERENCES privileges this migration just revoked become
+-- reachable again by another route. `postgres` and `pg_database_owner`
+-- legitimately hold CREATE and are not client roles, so they are not counted.
+--
+-- Type USAGE is deliberately out of scope: every table has a composite type
+-- that PUBLIC may use by definition, and using it grants no access to a single
+-- row. Rows come from the table privileges above.
 -- ---------------------------------------------------------------------------
 do $$
 declare
-  -- role | object | privilege. Nothing for `anon`: a request with no session
-  -- reaches nothing here at all.
+  -- role | object | privilege. Nothing for `anon` beyond reaching the schema
+  -- itself: a request with no session reads nothing here at all.
   allowed constant text[] := array[
+    -- Being able to NAME the schema is not being able to read anything in it;
+    -- Supabase grants this to both client roles on a stock project, and PUBLIC
+    -- has held it since the schema existed.
+    'anon|schema public|USAGE',
+    'authenticated|schema public|USAGE',
+    'PUBLIC|schema public|USAGE',
     'authenticated|table profiles|SELECT',
     'authenticated|table profiles|INSERT',
     'authenticated|table profiles|UPDATE',
@@ -766,7 +790,7 @@ begin
   select string_agg(h.role || ' holds ' || h.priv || ' on ' || h.obj, '; ' order by h.obj, h.priv)
     into extra
   from (
-    select pg_get_userbyid(a.grantee) as role,
+    select case when a.grantee = 0 then 'PUBLIC' else pg_get_userbyid(a.grantee) end as role,
            'table ' || c.relname as obj,
            a.privilege_type as priv
     from pg_class c
@@ -774,7 +798,7 @@ begin
     where c.relnamespace = 'public'::regnamespace
       and c.relkind in ('r', 'p', 'v', 'm', 'f', 'S')
     union all
-    select pg_get_userbyid(a.grantee),
+    select case when a.grantee = 0 then 'PUBLIC' else pg_get_userbyid(a.grantee) end,
            'column ' || c.relname || '.' || at.attname,
            a.privilege_type
     from pg_attribute at
@@ -782,19 +806,27 @@ begin
     cross join lateral aclexplode(at.attacl) a
     where c.relnamespace = 'public'::regnamespace
     union all
-    select pg_get_userbyid(a.grantee),
+    select case when a.grantee = 0 then 'PUBLIC' else pg_get_userbyid(a.grantee) end,
            'function ' || p.proname,
            a.privilege_type
     from pg_proc p
     cross join lateral aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) a
     where p.pronamespace = 'public'::regnamespace
+    union all
+    select case when a.grantee = 0 then 'PUBLIC' else pg_get_userbyid(a.grantee) end,
+           'schema public',
+           a.privilege_type
+    from pg_namespace n
+    cross join lateral aclexplode(coalesce(n.nspacl, acldefault('n', n.nspowner))) a
+    where n.nspname = 'public'
   ) h
-  where h.role in ('anon', 'authenticated')
+  where h.role in ('anon', 'authenticated', 'PUBLIC')
     and (h.role || '|' || h.obj || '|' || h.priv) <> all (allowed);
 
   assert extra is null,
     'SECURITY FAIL: privileges nobody asked for (a default-privilege inheritance '
-    'that the migration did not revoke, or a new object born wide open): ' || extra;
+    'that the migration did not revoke, a grant to PUBLIC — which is a grant to '
+    'both client roles — or a new object born wide open): ' || extra;
 end $$;
 
 select 'ALL RLS + MERGE TESTS PASSED' as result;

@@ -63,6 +63,19 @@ turning the `UNIQUE` index into a code oracle inside the database where
 So: when this shim and a real project disagree, the shim is wrong. If you find
 another such difference, add it here rather than working around it in a test.
 
+## One artifact that looks alarming and is not
+
+In this harness `set role postgres` succeeds from any role, because PGlite runs
+everything as a superuser and a superuser may become anybody. That is the
+embedded engine, not the schema: on a real project the role is chosen by
+PostgREST from the JWT before your SQL is parsed, `authenticated` is `nologin`
+and `nosuperuser`, and there is no statement a PostgREST client can send that
+switches it. Do not read a successful `set role` here as a finding — but do
+remember that it means **a probe written as `set role x; …` proves nothing in
+this harness unless the role was reached the way a request would reach it.**
+The tests set `request.jwt.claims` and use `set local role`, which is the same
+pair PostgREST sets, and that is as close as this gets.
+
 ## What is not modelled
 
 GoTrue itself (sign-up, JWT issuance, OTP), PostgREST's request handling and
