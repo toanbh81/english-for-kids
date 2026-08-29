@@ -61,3 +61,36 @@ grant usage on schema public to anon, authenticated, service_role;
 alter default privileges in schema public grant all on tables    to anon, authenticated, service_role;
 alter default privileges in schema public grant all on functions to anon, authenticated, service_role;
 alter default privileges in schema public grant all on sequences to anon, authenticated, service_role;
+
+-- --- Automatic RLS ----------------------------------------------------------
+-- A stock Supabase project also ships this: an event trigger that turns RLS on
+-- for every table created in `public`, whether or not the migration that
+-- creates it remembers to. It is Supabase's feature, not this migration's —
+-- installed by the platform, owned by its superuser — and it is exactly the
+-- kind of thing this shim exists to imitate rather than omit, the same way the
+-- default-privilege lines above are. Its own privileges are untidy rather than
+-- exploitable (see supabase/README.md, "PUBLIC/anon/authenticated hold EXECUTE
+-- on rls_auto_enable" for the full story and the one-line fix): calling it
+-- directly refuses with `trigger functions can only be called as triggers`
+-- regardless of who holds EXECUTE, because Postgres itself restricts an
+-- event-trigger function to firing as a trigger.
+create or replace function public.rls_auto_enable()
+returns event_trigger
+language plpgsql
+security definer
+set search_path to 'pg_catalog'
+as $$
+declare
+  obj record;
+begin
+  for obj in select * from pg_event_trigger_ddl_commands() loop
+    if obj.command_tag = 'CREATE TABLE' and obj.schema_name = 'public' then
+      execute format('alter table %s enable row level security', obj.object_identity);
+    end if;
+  end loop;
+end;
+$$;
+
+create event trigger ensure_rls
+  on ddl_command_end
+  execute function public.rls_auto_enable();

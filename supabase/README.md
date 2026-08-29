@@ -224,3 +224,88 @@ first and then hands back exactly what each needs. A shim without those lines
 made three real holes invisible — `TRUNCATE` on every family's rows (RLS never
 sees a `TRUNCATE`), a writable `kv_merge_rules`, and a client free to choose
 its own recovery code. See `tests/harness/README.md`.
+
+## Expected findings the first time you run `rls.test.sql` on a real project
+
+`tests/rls.test.sql` §11 asserts the *exact* privilege inventory of schema
+`public` — not "nothing we know is dangerous", but "nothing beyond this named
+list". That is deliberately stricter than listing known holes, and strictness
+is the point: it is what catches the next object born wide open. It also means
+§11 fires on objects this migration does not own — Supabase's own
+platform-managed objects in `public`. Two are expected on a stock project.
+Re-pasting `0001_profiles_sync.sql` does not fix either one, because neither
+object is this migration's to revoke; both fixes below are one-off statements
+you run yourself, as `postgres`.
+
+### `PUBLIC`/`anon`/`authenticated` hold `EXECUTE` on `rls_auto_enable`
+
+```
+SECURITY FAIL: privileges nobody asked for ...: PUBLIC holds EXECUTE on function rls_auto_enable;
+anon holds EXECUTE on function rls_auto_enable; authenticated holds EXECUTE on function rls_auto_enable
+```
+
+`public.rls_auto_enable()` is Supabase's "Automatic RLS": an event trigger
+(`ensure_rls`, on `ddl_command_end`, owned by `postgres`) that turns row level
+security on for every table created in `public`, so a migration that forgets
+to enable it does not leave a table exposed. The platform installs it, not
+this repo — `0001_profiles_sync.sql` never created it and has no business
+revoking it silently.
+
+**It is untidy, not exploitable.** Calling it directly —
+`select public.rls_auto_enable()`, or `perform`ing it inside a `do` block —
+refuses with `0A000 trigger functions can only be called as triggers`,
+*regardless* of who holds `EXECUTE`. Postgres itself restricts an
+event-trigger function to firing as a trigger; the grant was never a way in.
+§11 is right to name it anyway: an unnecessary grant on a `SECURITY DEFINER`
+function is exactly the shape of thing this assertion exists to catch, and
+"turned out to be harmless this time" is not a reason to weaken the guard for
+the next one.
+
+**The fix, run once as `postgres`:**
+
+```sql
+revoke all on function public.rls_auto_enable() from public, anon, authenticated;
+```
+
+This is safe and proven, not just plausible: after this revoke, a client
+still creating a table still gets RLS auto-enabled on it (the event trigger
+fires at DDL time regardless of the caller's `EXECUTE` privilege on the
+function it invokes — the check that matters happened back when `ensure_rls`
+was created, by whoever ran `create event trigger`, not on every table
+creation after), while a direct call now fails with `42501 permission denied`
+instead of `0A000`. The revoke turns an impostor's refusal into a privilege
+refusal without disabling the feature — the exact standard `0001` already
+applies to its own trigger functions (`prune_events`, `enforce_profile_cap`,
+etc. — see §9c of the test file).
+
+This finding can return: if Supabase ever re-provisions or reinstalls
+Automatic RLS on this project, `EXECUTE` may come back. Re-running
+`rls.test.sql` is how you would notice.
+
+### `authenticated` holds `CREATE` on schema `public`
+
+```
+SECURITY FAIL: privileges nobody asked for ...: authenticated holds CREATE on schema public
+```
+
+Some older Supabase project templates granted `CREATE` on `public` to the
+client roles more generously than current ones do. If your project is one of
+them, this is a true finding: with `CREATE`, a client can build its own table
+or function in `public`, which reopens the `TRIGGER` and `REFERENCES` routes
+`0001` otherwise closes (a client-owned object can be the thing a trigger is
+attached to, or the thing a foreign key points at). It is project
+configuration this migration does not own, so re-pasting it does not fix this
+either. **The fix, run once as `postgres`:**
+
+```sql
+revoke create on schema public from anon, authenticated;
+```
+
+## Known limitation of §11's strictness
+
+Neither finding above gets an allowlist entry in §11, and none should: an
+allowlist for "platform objects" would give the *next* platform object a free
+pass too, which defeats the assertion's whole purpose. The cost is that a
+fresh real-project run of `rls.test.sql` is expected to fail here until you
+apply the two revokes above — that is a feature of a strict guard, not a bug
+in it.

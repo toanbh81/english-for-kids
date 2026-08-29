@@ -63,6 +63,26 @@ turning the `UNIQUE` index into a code oracle inside the database where
 So: when this shim and a real project disagree, the shim is wrong. If you find
 another such difference, add it here rather than working around it in a test.
 
+`shim.sql` also installs `rls_auto_enable()` and the `ensure_rls` event
+trigger — Supabase's "Automatic RLS" feature, which turns RLS on for every
+table created in `public` whether or not the migration that creates it
+remembers to. It changes nothing observable here: every table
+`0001_profiles_sync.sql` creates, `heartbeat` and `kv_merge_rules` included,
+already carries its own explicit `enable row level security` statement, so
+`ensure_rls` firing first is redundant, not corrective (confirmed by querying
+`pg_class.relrowsecurity` for all six tables with and without the trigger
+installed — identical, all `true`). What it *does* change is `rls.test.sql`
+§11: `rls_auto_enable()` is born with `EXECUTE` for `PUBLIC`/`anon`/
+`authenticated` like every function in this schema, nobody revokes it because
+this migration does not own it, and §11 is strict enough to name it. That is
+this harness correctly reproducing a real finding rather than a harness bug —
+see `supabase/README.md`, "Expected findings the first time you run
+`rls.test.sql` on a real project", for the full story and why it is untidy
+rather than exploitable. **This means `node run.mjs` no longer ends in `PASS`
+as of that shim addition** — the `FAIL` at §11 naming `rls_auto_enable` is the
+harness telling the truth about a stock project's first-run state, not
+something to route around here.
+
 ## One artifact that looks alarming and is not
 
 In this harness `set role postgres` succeeds from any role, because PGlite runs
