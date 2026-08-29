@@ -1136,8 +1136,9 @@ two builds' `cloud-vendor-*.js` files are not byte-identical** — diffed direct
 exactly 8 bytes: the chunk imports shared runtime helpers back from the main chunk, and the main
 chunk's own content-hashed filename differs between the two builds, so the import specifier embedded
 in `cloud-vendor` differs too. Same `@supabase/supabase-js` code either way, different file, different
-hash, different name — which is also *why* each build needs its own precache entry rather than one
-being able to stand in for the other. The main chunk contains no `SupabaseClient`/`GoTrueClient`
+hash, different name — so a build's precache manifest can only ever name its own copy, never the
+other's. (The unconfigured build names it nowhere, which is the point of this section.) The main
+chunk contains no `SupabaseClient`/`GoTrueClient`
 symbol in either build, confirming the code split is real and not just the naming.
 
 ### The kv merge contract, in one line
@@ -1162,7 +1163,7 @@ OTP email.
 | 71 (cross-device) | On a SECOND device (or a private window): open the app, tap "Đã dùng Speak Up rồi?" → "Tôi có email đã liên kết" → the SAME linked email → the 6-digit code from the inbox → (a profile picker appears if the account owns more than one profile — pick any) | The device switches to the picked profile with its progress pulled down; from Home, answer the math gate → Parent Dashboard. If the account owns a SECOND profile, its card appears automatically, no toggle needed; press "Xem từ xa" either way to additionally show THIS device's own active child's server-side numbers, for comparing them against the local ones above (with only one profile on the account, this is the only way the section appears at all) | ⏳ pending |
 | 72 (cache wipe, linked) | On the FIRST device: note today's stars/streak, then clear all site data (iPad Safari: Settings → Safari → Advanced → Website Data → Speak Up) and reload | Fresh-install screen; tap "Đã dùng Speak Up rồi?" → "Tôi có email đã liên kết" → the same email → OTP → (a profile picker if the account has more than one child) → the same stars/streak reappear | ⏳ pending |
 | 73 (cache wipe, not linked) | On a device that has never linked an email: screenshot its recovery code (Parent Dashboard → "Tài khoản"), note its stars/streak, then clear all site data and reload | "Đã dùng Speak Up rồi?" → "Tôi có mã khôi phục" → the 8-character code → the same stars/streak reappear; trying the same code again afterwards fails with "Không tìm thấy mã này" | ⏳ pending |
-| 74 (two profiles, one iPad) | Parent Dashboard → "+ Thêm hồ sơ" to add a second child, then open the app again **in a fresh tab/window** (a same-tab reload keeps this device's "already chosen" mark for up to 5 minutes and would skip the picker) | "Ai đang học nào? 👋" — an avatar picker — appears before anything else loads; tapping a face opens that child's own stars/streak, untouched by the other child's | ⏳ pending |
+| 74 (two profiles, one iPad) | Parent Dashboard → "+ Thêm hồ sơ" to add a second child, then reload (a plain reload is enough the first time — this device has never shown the picker, so it holds no "already chosen" mark; to *repeat* the drill within 5 minutes, use a fresh tab, because that mark survives a same-tab reload) | "Ai đang học nào? 👋" — an avatar picker — appears before anything else loads; tapping a face opens that child's own stars/streak, untouched by the other child's | ⏳ pending |
 | 75 (offline honesty) | Turn Wi-Fi off, use the app for a few minutes, open Parent Dashboard | Sync line reads "Ngoại tuyến", never "Đã đồng bộ ✓", while offline; turning Wi-Fi back on and reopening the dashboard eventually shows "Đã đồng bộ ✓" | ⏳ pending |
 | 76 (milestone banner) | On a device that has never linked an email, reach a 3-day streak (a multi-day drill — the app offers no way to fast-forward it) | Home shows a dismissible banner — "Tiến độ mới lưu trên máy này — nhờ bố mẹ liên kết email để giữ an toàn" — linking to Parent Dashboard | ⏳ pending |
 
