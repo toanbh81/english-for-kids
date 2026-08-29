@@ -4,9 +4,11 @@ import { TOPICS } from '../content/topics'
 import { totalStars } from '../progress/store'
 import { dayKey, getActivity, missionStatus, streak, weekDots, minutesToday } from '../progress/activity'
 import { lessonStatus } from '../progress/lesson'
+import { hasAnyHistory, sumHistory } from '../progress/history'
 import { getLimitMinutes } from '../progress/limit'
-import { storageKey } from '../progress/storageKeys'
+import { activeProfileId, storageKey } from '../progress/storageKeys'
 import { topicStars, topicUnlocked } from '../progress/topicProgress'
+import { listProfiles } from '../cloud/profileState'
 import { isAnonymous } from '../cloud/auth'
 import { isCloudConfigured } from '../cloud/supabase'
 import { Foxy } from '../components/Foxy'
@@ -186,13 +188,21 @@ export function Home() {
       ? 'Giỏi lắm, tiếp tục nhé!'
       : 'Hôm nay mình luyện nói nhé!'
   /**
-   * Has this child EVER done anything on this device — the whole log, not today's slice of it.
+   * Has ANY child on this iPad ever done anything — the whole log, and every namespace, not today's
+   * slice of the active one.
    *
-   * The restore link below hangs off this, and a today-scoped answer made it reappear every
-   * morning before the child's first tap, however many months of history sat underneath. That is
-   * the one thing it must never do: it is the door that abandons an account.
+   * Two narrowings, both fixed here, because the restore link below is the door that abandons an
+   * account and it may only appear on a device with nothing to lose:
+   *
+   *  - **Not today-scoped.** `missionStatus`/`lessonStatus` filter to the current day, so this used
+   *    to reappear every morning before the child's first tap, on top of months of history.
+   *  - **Not active-profile-scoped.** Every child on this iPad belongs to the SAME account, so a
+   *    sibling's stars are exactly as strandable as this child's. Asking only about the active
+   *    namespace put the link on the empty sibling's Home — which flow 6's picker makes a one-tap
+   *    everyday destination — while the first child's months of progress sat one namespace away.
    */
-  const hasHistory = events.length > 0 || totalStars() > 0
+  const roster = listProfiles()
+  const hasHistory = hasAnyHistory(sumHistory(roster.length ? roster.map(p => p.id) : [activeProfileId()]))
   const overLimit = minutesToday(now, events) >= getLimitMinutes()
 
   // Decided once per mount, then remembered in storage by the effect below, so the trip to the

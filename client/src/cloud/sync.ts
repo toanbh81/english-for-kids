@@ -1109,6 +1109,17 @@ export function hasPendingReset(profileId: string): boolean {
  * an emptied store, and a flush would push whatever the child has done since into a profile that is
  * about to be wiped. Anything written after the reset was recorded is left alone: it got its own
  * ops like any other write, and this only removes what the parent asked to be removed.
+ *
+ * **What a deferred reset means for the family's other devices — read this before changing it.**
+ * A reset has always been global: it deletes that child's rows for the whole account, so device A
+ * loses them too, the moment device A next pulls. What is new is the DELAY. A reset made offline on
+ * device B is carried out whenever B next comes online, which can be days later, and it takes
+ * everything device A pushed in between — a week of lessons A's child did after the reset, gone
+ * with rows the parent asked to delete a week ago. That is arithmetically what "delete this child's
+ * cloud copy" means once the request can be queued, and the alternative (expiring the intent) is
+ * worse: it silently turns a reset the parent watched happen into no reset at all, which is the bug
+ * this whole mechanism exists to fix. The honest mitigation is in the UI, not here — the parent
+ * screen says the deletion is still owed for as long as it is owed.
  */
 async function settlePendingResets(): Promise<void> {
   const pending = readOutbox().resets

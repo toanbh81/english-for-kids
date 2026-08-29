@@ -3,11 +3,10 @@ import type { FormEvent } from 'react'
 import { Link, Navigate } from 'react-router-dom'
 import { currentAccessToken, currentEmail, signInWithEmail, verifyEmailOtp } from '../cloud/auth'
 import type { Profile } from '../cloud/profileState'
-import { activeProfileId, adoptProfiles, fetchRemoteProfiles, switchProfile } from '../cloud/profileState'
+import { activeProfileId, adoptProfiles, fetchRemoteProfiles, listProfiles, switchProfile } from '../cloud/profileState'
 import { hasMirroredData, pullProfile } from '../cloud/sync'
 import { isCloudConfigured } from '../cloud/supabase'
-import { getActivity } from '../progress/activity'
-import { totalStars } from '../progress/store'
+import { hasAnyHistory, profileHistory, sumHistory } from '../progress/history'
 import { ProfilePicker } from '../components/ProfilePicker'
 import { ParentQuestion } from '../components/ParentQuestion'
 import { Button, Card, PAGE_SHELL } from '../components/ui'
@@ -27,16 +26,18 @@ import { Button, Card, PAGE_SHELL } from '../components/ui'
  * **`{ abandonAnonymous: true }` is never passed on spec.** The contract in `cloud/auth.ts` is that
  * this screen only passes it once the parent has said, in Vietnamese and in as many words, that
  * this iPad's progress is not the progress they are after — so the sign-in is attempted WITHOUT it
- * first and the guard is allowed to answer. What happens next depends on what is actually on this
- * device, which is read rather than assumed: nothing at all (the empty profile `ensureLocalProfile`
- * minted seconds ago) continues silently, and anything real stops and asks. See `handleSendEmail`.
+ * first and the guard is allowed to answer. What happens next depends on what the ACCOUNT is
+ * actually holding, which is read rather than assumed and is read across every child, not just the
+ * one using the iPad: nothing anywhere (the empty profile `ensureLocalProfile` minted seconds ago
+ * being the only thing under this owner) continues silently, and anything real stops and asks.
+ * See `assessStranding` and `handleSendEmail`.
  */
 
 type Stage = 'menu' | 'gate' | 'email' | 'email-otp' | 'code' | 'abandon'
 type Door = 'email' | 'code'
 
-/** What this device would leave behind by signing in as somebody else. */
-type Stranding = { stars: number; events: number; mirrored: boolean }
+/** What the ACCOUNT on this device would be left holding, unreachably, after signing in elsewhere. */
+type Stranding = { profiles: number; stars: number; events: number; mirrored: boolean }
 
 function describeAuthError(code: string): string {
   const lower = code.toLowerCase()
@@ -71,26 +72,52 @@ function describeRecoverError(status: number): string {
 }
 
 /**
- * What signing in as another account would strand on this device — or null if there is nothing.
+ * What signing in as another account would strand — or null if there is genuinely nothing.
  *
- * Read, never assumed. "There is nothing here to lose" was the justification for passing
- * `abandonAnonymous` unconditionally, and it was never once checked: an established family landing
- * here lost every star, every day of history and every synced row to it, unreachably, because the
- * rows belong to an anonymous user id that only this session could ever read.
+ * **The question is what the ACCOUNT loses, not what the device loses**, and the difference is a
+ * whole child. Every profile on this iPad belongs to the same anonymous owner, so the first version
+ * of this — `totalStars()`, `getActivity()`, `hasMirroredData(activeProfileId())`, all three
+ * resolving through the ACTIVE namespace — was blind to a sibling. That is not a corner: flow 6's
+ * picker makes "hand the iPad to the other child" a one-tap everyday action, and the empty child's
+ * Home is where the restore link appears. Parent taps it in good faith with their real linked
+ * address, this returns null, the screen abandons the account by itself, and the first child's
+ * months of progress belong to an owner nothing can reach again.
+ *
+ * So the scan is every id this device knows about AND every id the account actually owns — the
+ * second read `fetchRemoteProfiles()`, which answers rather than infers, and catches a child whose
+ * roster entry this device has lost (its rows are still up there, still about to be orphaned).
  *
  * A device whose parent has ALREADY linked an email is not at risk — signing in there is the same
  * account or a deliberate second one, and the guard in `auth.ts` never fires for it either.
  */
 async function assessStranding(): Promise<Stranding | null> {
   if (await currentEmail()) return null
-  const profileId = activeProfileId()
-  const stars = totalStars()
-  const events = getActivity().length
-  // Local progress is only half of it: a child who used this iPad for a month and then had their
-  // cache trimmed can have rows on the server and almost nothing on disk. Those rows are exactly
-  // what becomes unreachable.
-  const mirrored = profileId !== null && hasMirroredData(profileId)
-  return stars > 0 || events > 0 || mirrored ? { stars, events, mirrored } : null
+
+  const ids = new Set<string | null>(listProfiles().map(p => p.id))
+  const active = activeProfileId()
+  if (active) ids.add(active)
+  // A device that never got a namespace (storage refused the migration) keeps its progress under
+  // the legacy keys, and `profileHistory(null)` is how those are read.
+  if (!ids.size) ids.add(null)
+
+  const owned = await fetchRemoteProfiles()
+  // A child the account owns but this roster does not name. There is nothing local left to count
+  // for them, and that is exactly why they matter: only the server still has them.
+  const forgotten = owned.filter(p => !ids.has(p.id)).length
+  for (const p of owned) ids.add(p.id)
+
+  let profiles = 0
+  let mirrored = forgotten > 0
+  for (const id of ids) {
+    const history = profileHistory(id)
+    const mirroredHere = id !== null && hasMirroredData(id)
+    if (hasAnyHistory(history) || mirroredHere) profiles++
+    mirrored ||= mirroredHere
+  }
+  profiles += forgotten
+
+  const { stars, events } = sumHistory([...ids])
+  return profiles > 0 || mirrored ? { profiles, stars, events, mirrored } : null
 }
 
 export function CloudStart() {
@@ -122,7 +149,7 @@ export function CloudStart() {
   const [mintedId] = useState<string | null>(() => {
     const id = activeProfileId()
     if (!id) return null
-    return totalStars() === 0 && getActivity().length === 0 ? id : null
+    return hasAnyHistory(profileHistory(id)) ? null : id
   })
 
   // A build with no cloud has nothing for this screen to do — a direct link (bookmarked, typed by
@@ -341,9 +368,14 @@ export function CloudStart() {
           * is something real to lose — the numbers below are read off this device, not guessed. */}
         {stage === 'abandon' && stranding && (
           <div className="flex flex-col gap-3 text-left">
-            <h2 className="font-display text-base font-extrabold text-ink-900">Máy này đang có tiến độ của một bé</h2>
+            {/* "hồ sơ", counted — the account can be holding a child who is not the one using the
+              * iPad right now, and a parent reading "một bé" would picture the wrong one. */}
+            <h2 className="font-display text-base font-extrabold text-ink-900">
+              Tài khoản trên máy này đang giữ tiến độ của {stranding.profiles} hồ sơ
+            </h2>
             <p className="text-sm font-semibold text-ink-500">
-              Trên máy này có {stranding.stars} sao và {stranding.events} lượt luyện, đang thuộc một tài khoản chưa liên kết email.
+              Tổng cộng {stranding.stars} sao và {stranding.events} lượt luyện, thuộc một tài khoản chưa liên kết email —
+              kể cả hồ sơ của bé khác trên máy này.
               {stranding.mirrored && ' Một phần đã được lưu lên máy chủ dưới tài khoản đó.'}
             </p>
             <p className="rounded-xl2 bg-fix-50 p-3 text-sm font-semibold text-fix-700">

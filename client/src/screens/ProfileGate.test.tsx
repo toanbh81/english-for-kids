@@ -1,5 +1,5 @@
 import { fireEvent, render, screen } from '@testing-library/react'
-import { describe, it, expect, beforeEach, vi } from 'vitest'
+import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest'
 
 /**
  * Spec flow 6's app-start picker.
@@ -39,6 +39,13 @@ beforeEach(() => {
   localStorage.clear()
   sessionStorage.clear()
   vi.clearAllMocks()
+})
+
+afterEach(() => {
+  // The resume tests stub `Date.now` and `document.visibilityState`; neither may survive into the
+  // next test, or the failure lands somewhere that has nothing to do with the cause.
+  vi.restoreAllMocks()
+  Object.defineProperty(document, 'visibilityState', { value: 'visible', configurable: true })
 })
 
 describe('one child on the iPad', () => {
@@ -116,6 +123,109 @@ describe('two children, one iPad', () => {
     renderGate()
 
     expect(screen.getByText('màn hình chính')).toBeInTheDocument()
+  })
+
+  /**
+   * "App start" on an installed iPad PWA is mostly a RESUME: the child taps the icon, iOS restores
+   * the same document, nothing re-mounts. A mount-only gate hands the second child whoever was
+   * chosen that morning — the exact failure the picker exists to prevent, in the common case rather
+   * than the rare one.
+   */
+  describe('coming back to a warm iPad', () => {
+    function goAway(ms: number) {
+      const start = Date.now()
+      vi.spyOn(Date, 'now').mockReturnValue(start)
+      Object.defineProperty(document, 'visibilityState', { value: 'hidden', configurable: true })
+      fireEvent(document, new Event('visibilitychange'))
+
+      vi.spyOn(Date, 'now').mockReturnValue(start + ms)
+      Object.defineProperty(document, 'visibilityState', { value: 'visible', configurable: true })
+      fireEvent(document, new Event('visibilitychange'))
+    }
+
+    beforeEach(() => {
+      // Already answered this session: the mount-time gate is satisfied, which is the state a
+      // resume actually finds.
+      sessionStorage.setItem('speakup.profileChosen', SOC)
+    })
+
+    it('asks again after the iPad has been put down', () => {
+      renderGate()
+      expect(screen.queryByTestId('profile-reask')).not.toBeInTheDocument()
+
+      goAway(10 * 60 * 1000)
+
+      expect(screen.getByTestId('profile-reask')).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /Cáo/ })).toBeInTheDocument()
+    })
+
+    it('does not interrupt a child who switched apps for a moment', () => {
+      renderGate()
+
+      goAway(30 * 1000)
+
+      expect(screen.queryByTestId('profile-reask')).not.toBeInTheDocument()
+    })
+
+    it('leaves the lesson underneath mounted, so answering costs nothing', () => {
+      renderGate()
+      goAway(10 * 60 * 1000)
+
+      // The app is still there behind the overlay…
+      expect(screen.getByText('màn hình chính')).toBeInTheDocument()
+
+      // …and the child who was already using it taps their own face and carries on.
+      fireEvent.click(screen.getByRole('button', { name: /Sóc/ }))
+      expect(screen.queryByTestId('profile-reask')).not.toBeInTheDocument()
+      expect(profileState.switchProfile).not.toHaveBeenCalled()
+      expect(screen.getByText('màn hình chính')).toBeInTheDocument()
+    })
+
+    it('hands over to the sibling from the resume ask', () => {
+      renderGate()
+      goAway(10 * 60 * 1000)
+
+      fireEvent.click(screen.getByRole('button', { name: /Cáo/ }))
+
+      expect(profileState.switchProfile).toHaveBeenCalledWith(CAO)
+      expect(sessionStorage.getItem('speakup.profileChosen')).toBe(CAO)
+    })
+
+    it('asks on a document restored from the back/forward cache', () => {
+      renderGate()
+
+      const start = Date.now()
+      vi.spyOn(Date, 'now').mockReturnValue(start)
+      Object.defineProperty(document, 'visibilityState', { value: 'hidden', configurable: true })
+      fireEvent(document, new Event('visibilitychange'))
+      vi.spyOn(Date, 'now').mockReturnValue(start + 10 * 60 * 1000)
+      Object.defineProperty(document, 'visibilityState', { value: 'visible', configurable: true })
+      fireEvent(window, Object.assign(new Event('pageshow'), { persisted: true }))
+
+      expect(screen.getByTestId('profile-reask')).toBeInTheDocument()
+    })
+
+    it('stays silent for a one-profile family however long they were away', () => {
+      seedRoster([{ id: SOC, name: 'Sóc' }], SOC)
+      renderGate()
+
+      goAway(60 * 60 * 1000)
+
+      expect(screen.queryByTestId('profile-reask')).not.toBeInTheDocument()
+      expect(screen.getByText('màn hình chính')).toBeInTheDocument()
+    })
+
+    it('notices a sibling added while the app was in the background', () => {
+      // The parent adds the second child from the dashboard, then hands the iPad over: the roster
+      // is re-read on resume rather than captured at mount.
+      seedRoster([{ id: SOC, name: 'Sóc' }], SOC)
+      renderGate()
+      seedRoster([{ id: SOC, name: 'Sóc' }, { id: CAO, name: 'Cáo' }], SOC)
+
+      goAway(10 * 60 * 1000)
+
+      expect(screen.getByTestId('profile-reask')).toBeInTheDocument()
+    })
   })
 
   it('asks again on the next app start, when the mark is for a different child', () => {

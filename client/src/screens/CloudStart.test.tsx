@@ -209,12 +209,54 @@ describe('the email door', () => {
     // One attempt, without the flag, and it stopped there.
     expect(auth.signInWithEmail).toHaveBeenCalledTimes(1)
     expect(auth.signInWithEmail).toHaveBeenCalledWith('bome@example.com', {})
-    expect(screen.getByText('Máy này đang có tiến độ của một bé')).toBeInTheDocument()
-    // Named, in numbers read off this device — not a vague warning.
+    expect(screen.getByText(/đang giữ tiến độ của 1 hồ sơ/)).toBeInTheDocument()
+    // Named, in numbers read off this account — not a vague warning.
     expect(screen.getByText(/3 sao và 2 lượt luyện/)).toBeInTheDocument()
     expect(screen.getByText(/sẽ không mở lại được nữa/)).toBeInTheDocument()
     // …and the way to keep it.
     expect(screen.getByRole('link', { name: 'Góc phụ huynh' })).toHaveAttribute('href', '/parent')
+  })
+
+  /**
+   * The whole chain, through ordinary UI, with the parent acting in good faith and no typed URL:
+   * a two-child family, the iPad handed to the newly added (empty) sibling by flow 6's picker, the
+   * restore link on that child's Home, the math question answered by the adult, and their real
+   * linked address in the box. Every step is intended behaviour. Asking the ACTIVE namespace what
+   * would be lost answers "nothing" — and the first child's months of progress end up under an
+   * owner that nothing can reach again.
+   *
+   * The question is what the ACCOUNT loses. Every profile on this iPad has the same owner.
+   */
+  it('sees the sibling whose namespace is not the active one', async () => {
+    localStorage.setItem('speakup.profiles', JSON.stringify([profile(MINTED), profile(SOC, 'Sóc')]))
+    localStorage.setItem('speakup.profile', MINTED) // the empty child is the one using the iPad
+    // Child A's months of progress, one namespace away.
+    localStorage.setItem(`speakup.${SOC}.stars`, JSON.stringify({ 'sword:cat': 3, 'sword:dog': 2 }))
+    localStorage.setItem(`speakup.${SOC}.activity`, JSON.stringify(
+      Array.from({ length: 40 }, (_, i) => ({ ts: 1000 + i, kind: 'word', id: `w-${i}` })),
+    ))
+    auth.signInWithEmail.mockResolvedValue({ ok: false, error: 'anonymous-session-in-use' })
+
+    await goToEmail()
+
+    // Not abandoned by itself: one attempt, no flag, and a confirmation naming the sibling's work.
+    expect(auth.signInWithEmail).toHaveBeenCalledTimes(1)
+    expect(auth.signInWithEmail).toHaveBeenCalledWith('bome@example.com', {})
+    expect(screen.getByText(/đang giữ tiến độ của 1 hồ sơ/)).toBeInTheDocument()
+    expect(screen.getByText(/5 sao và 40 lượt luyện/)).toBeInTheDocument()
+    expect(screen.getByText(/kể cả hồ sơ của bé khác trên máy này/)).toBeInTheDocument()
+  })
+
+  it('sees a child the account owns that this roster has forgotten', async () => {
+    // Nothing local for them at all — the roster entry is gone. Their rows are still up there under
+    // the owner about to be abandoned, which is exactly why they count.
+    profileState.fetchRemoteProfiles.mockResolvedValue([profile(MINTED), profile(SOC, 'Sóc')])
+    auth.signInWithEmail.mockResolvedValue({ ok: false, error: 'anonymous-session-in-use' })
+
+    await goToEmail()
+
+    expect(auth.signInWithEmail).toHaveBeenCalledTimes(1)
+    expect(screen.getByText(/đã được lưu lên máy chủ dưới tài khoản đó/)).toBeInTheDocument()
   })
 
   it('counts rows that only exist on the server as something to lose', async () => {

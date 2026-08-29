@@ -30,7 +30,17 @@ const byTime = (p: Profile): string | null => {
   const d = new Date(p.created)
   return `Tạo ${pad(d.getDate())}/${pad(d.getMonth() + 1)} ${pad(d.getHours())}:${pad(d.getMinutes())}`
 }
-const byId = (p: Profile): string => `Mã ${p.id.slice(0, 4)}`
+/**
+ * The last resort: the first block of the UUID.
+ *
+ * Eight hex digits, not four. Four is 16 bits, and a collision between two profiles on one device
+ * is a 1-in-65536 coincidence — rare enough to never see in testing and common enough to happen to
+ * somebody, which is the worst kind of odds to build on when the whole job of this label is to be
+ * different. Eight makes it 1 in four billion. It is still not a proof: if two ids ever did share a
+ * first block, the two rows would read alike again, and this comment would rather say so than
+ * claim otherwise.
+ */
+const byId = (p: Profile): string => `Mã ${p.id.slice(0, 8)}`
 
 /**
  * A second line for rows that would otherwise be identical — and never two identical rows.
@@ -40,7 +50,7 @@ const byId = (p: Profile): string => `Mã ${p.id.slice(0, 4)}`
  * parent in an empty profile and reads as a failed restore. The discriminator is always a FACT
  * about the profile, and it steps up until the rows really are different: the creation date, then
  * the date and time (two profiles made the same afternoon — the ordinary case for a parent adding
- * a sibling), then the head of the id, which is ugly but is never ambiguous.
+ * a sibling), then the head of the id, which is ugly but is as good as unique (see `byId`).
  *
  * Only colliding rows get one. A picker of "Sóc" and "Cáo" needs no explaining, and dating every
  * row would be noise on a screen a child taps every morning.

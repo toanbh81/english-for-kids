@@ -70,18 +70,23 @@ describe('ProfilePicker', () => {
     })
 
     it('falls back to something that cannot collide when there is no usable date', () => {
+      // A whole UUID block, not four characters: four is 16 bits, which collides once in 65536 —
+      // rare enough to never see in testing and common enough to happen to somebody.
       render(<ProfilePicker
-        profiles={[same('abcd-1', 0), same('efgh-2', 0)]}
+        profiles={[same('a1b2c3d4-1111-4111-8111-111111111111', 0), same('e5f6a7b8-2222-4222-8222-222222222222', 0)]}
         onSelect={() => undefined}
       />)
 
-      expect(screen.getByText('Mã abcd')).toBeInTheDocument()
-      expect(screen.getByText('Mã efgh')).toBeInTheDocument()
+      expect(screen.getByText('Mã a1b2c3d4')).toBeInTheDocument()
+      expect(screen.getByText('Mã e5f6a7b8')).toBeInTheDocument()
     })
 
     it('never leaves two rows reading the same', () => {
       const stamp = new Date('2026-03-04T09:12:00').getTime()
-      render(<ProfilePicker profiles={[same('abcd-1', stamp), same('efgh-2', stamp)]} onSelect={() => undefined} />)
+      render(<ProfilePicker
+        profiles={[same('a1b2c3d4-1111-4111-8111-111111111111', stamp), same('e5f6a7b8-2222-4222-8222-222222222222', stamp)]}
+        onSelect={() => undefined}
+      />)
 
       const rows = screen.getAllByRole('button').map(b => b.textContent)
       expect(new Set(rows).size).toBe(rows.length)

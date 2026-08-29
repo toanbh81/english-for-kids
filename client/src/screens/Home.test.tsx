@@ -14,7 +14,15 @@ import { getLesson } from '../progress/lesson'
 const cloud = vi.hoisted(() => ({ configured: false }))
 vi.mock('../cloud/supabase', () => ({ isCloudConfigured: () => cloud.configured }))
 
-const auth = vi.hoisted(() => ({ isAnonymous: vi.fn(async () => true) }))
+// Home reads `isAnonymous` itself; the other three are what the REAL `cloud/profileState` imports
+// (Home asks it for the roster now), stubbed so a future caller gets a no-op rather than vitest's
+// "no export defined on the mock" from somewhere unrelated.
+const auth = vi.hoisted(() => ({
+  isAnonymous: vi.fn(async () => true),
+  currentUserId: vi.fn(async () => null),
+  ensureRecoveryCode: vi.fn(async () => null),
+  startAnonymousSession: vi.fn(async () => undefined),
+}))
 vi.mock('../cloud/auth', () => auth)
 
 import { Home } from './Home'
@@ -358,6 +366,43 @@ describe('Phase 11: "Đã dùng Speak Up rồi?"', () => {
     renderHome()
 
     expect(screen.queryByRole('link', { name: 'Đã dùng Speak Up rồi?' })).not.toBeInTheDocument()
+  })
+
+  /**
+   * The second narrowing, and the one that made flow 6's picker a route into the first: this link
+   * asked the ACTIVE namespace. A parent adds a sibling, the picker hands the iPad to that empty
+   * child, and the restore door — the one that can abandon the account both children share —
+   * appears on their Home as if the device were brand new.
+   */
+  it('stays away when a SIBLING on this device has history', () => {
+    cloud.configured = true
+    const active = '11111111-2222-4333-8444-555555555555'
+    const sibling = '22222222-3333-4444-8555-666666666666'
+    localStorage.setItem('speakup.profiles', JSON.stringify([
+      { id: active, name: 'Bé', avatar: '🦊', created: 1 },
+      { id: sibling, name: 'Sóc', avatar: '🐿️', created: 2 },
+    ]))
+    localStorage.setItem('speakup.profile', active)
+    // Child A's progress, one namespace away. The active child's own namespace is empty.
+    localStorage.setItem(`speakup.${sibling}.stars`, JSON.stringify({ 'sword:cat': 3 }))
+
+    renderHome()
+
+    expect(screen.queryByRole('link', { name: 'Đã dùng Speak Up rồi?' })).not.toBeInTheDocument()
+  })
+
+  it('still offers it when every child on the device is genuinely new', () => {
+    cloud.configured = true
+    const active = '11111111-2222-4333-8444-555555555555'
+    localStorage.setItem('speakup.profiles', JSON.stringify([
+      { id: active, name: 'Bé', avatar: '🦊', created: 1 },
+      { id: '22222222-3333-4444-8555-666666666666', name: 'Sóc', avatar: '🐿️', created: 2 },
+    ]))
+    localStorage.setItem('speakup.profile', active)
+
+    renderHome()
+
+    expect(screen.getByRole('link', { name: 'Đã dùng Speak Up rồi?' })).toBeInTheDocument()
   })
 
   it('keeps Foxy today-scoped even so', () => {
