@@ -38,7 +38,7 @@ spells out `instance_id`, `aud` and `role`.)
 | `VITE_SUPABASE_ANON_KEY` | `client/.env`, Vercel | No — public by design |
 | `SUPABASE_URL` | `server/.env`, Vercel | No |
 | `SUPABASE_SERVICE_ROLE` | `server/.env`, Vercel | **YES.** Bypasses every policy below |
-| `CRON_SECRET` | Vercel (optional) | Yes-ish; only guards `/api/ping` |
+| `CRON_SECRET` | Vercel — **set it** | Yes. Without it `/api/ping` is open to anyone |
 
 The anon key is safe in the browser *because* of the policies in the migration —
 it is a ticket to the API, not to the data. The service-role key is the
@@ -46,8 +46,10 @@ opposite: it ignores RLS entirely, so it exists only inside `api/*.mjs` on the
 server. `scripts/check-secrets.sh` blocks a commit that contains one (both the
 `sb_secret_…` format and the legacy JWT shape, including the nasty case of a
 service key pasted into a variable named like the anon key). Its one known
-blind spot: an unrecognised 20-character opaque secret on a line that also
-contains the word "example" is exempted by the placeholder rule.
+blind spot: an unrecognised opaque secret written on a line that itself
+contains a placeholder word ("example", "your-key", …) is exempted. A file's
+NAME no longer buys any exemption — `.env.example` files are scanned like every
+other file.
 
 ## The security model in one paragraph
 
@@ -92,6 +94,32 @@ Events are plain upserts — the primary key `(profile_id, ts, kind, item_id)`
 *is* the dedupe rule — and a statement-level trigger prunes each profile's log
 to the newest 2000 rows, mirroring the client's own cap.
 
+**Client clocks are input, not truth.** `updated_at` and `events.ts` are capped
+at 24 hours ahead of the server (`clamp_client_ts`, applied inside `merge_kv`
+and by a trigger on `events`). An iPad set to 2030 would otherwise freeze every
+LWW key for ever — nothing would ever be "newer" — and park its events at the
+top of the pruning order for a decade. The cap is quantised to the hour so a
+replayed event still lands on the same primary key instead of multiplying.
+
+**Resetting a child's progress is a DELETE, not a merge.** There is no
+tombstone verb: stars merge by max, so an "empty" write would simply be
+out-merged by the next device to sync and the stars would come back. A reset is
+
+```sql
+delete from public.kv     where profile_id = '<profile>';
+delete from public.events where profile_id = '<profile>';
+```
+
+which the owner's grants and policies already allow (and which Task 3's sync
+layer calls alongside clearing localStorage). Deleting the profile row cascades
+to both and is the "remove this child" case.
+
+**Floors under a modified client.** `kv` keys are ≤ 64 chars and values ≤ 16 KB,
+`events.item_id` ≤ 128 chars, `kind` ≤ 24, `score` within 0–100, phoneme blobs
+≤ 8 KB, and one account may hold at most 10 profiles. These are not validation
+— the client validates — they stop one authenticated account filling a free
+project's disk and taking every family's sync down with it.
+
 ## The serverless functions
 
 - `api/ping.mjs` — the daily cron in `vercel.json` (`0 3 * * *`, i.e. 10:00 giờ
@@ -101,9 +129,41 @@ to the newest 2000 rows, mirroring the client's own cap.
 - `api/recover.mjs` — redeems a recovery code (spec flow 4: cache wiped, email
   never linked). The caller must send **their own** Supabase JWT; profiles are
   re-parented to whoever that token says they are, never to an id in the body.
-  Rate-limited per IP in memory, which is per lambda instance and resets on a
-  cold start — enough against a hand-typed 2^40 code, and the place to harden
-  first (a counter in Postgres) if this ever faces real traffic.
+  It claims the code by DELETEing it (so two racing requests cannot both win)
+  and puts it back on every refusal. Rate-limited per IP in memory, which is
+  per lambda instance and resets on a cold start — enough against a hand-typed
+  2^40 code, and the place to harden first (a counter in Postgres) if this ever
+  faces real traffic.
+
+## The recovery code is only ever an ANONYMOUS account's credential
+
+A code is a way into an account that has no password. The moment a parent links
+an email, the email becomes the way back in and the code must stop being one —
+otherwise a screenshot in a class group chat is enough to take the family's
+account over and delete the parent's login with it. Three layers say so:
+
+1. `api/recover.mjs` refuses a code whose account has an email, a phone, a
+   pending email change, `is_anonymous: false`, or any non-anonymous identity,
+   and never deletes an account it has not proved anonymous.
+2. A trigger on `auth.users` (`on_auth_user_email_linked`) deletes the code the
+   moment the account gains an email or phone — this layer does not depend on
+   any app version being deployed. **It needs the migration to be applied as
+   `postgres`**; the migration raises a warning instead of failing if it could
+   not create it, so watch for that line.
+3. The owner can rotate at will: delete their `recovery_codes` row and insert a
+   new one (`insert into public.recovery_codes (user_id) values (auth.uid())`).
+   There is no UPDATE path, so a code is always a value the server drew.
+
+## Settings to apply in the Supabase dashboard (not expressible in SQL)
+
+- **Auth → Providers → Anonymous sign-ins**: on (the app depends on it), with
+  **CAPTCHA enabled** — otherwise anonymous sign-up is an open endpoint that
+  anyone can loop.
+- **Auth → Rate limits**: keep the defaults or lower them, especially "anonymous
+  sign-ins per hour" and "OTP/email sent per hour". A free project's email quota
+  is small and shared with the parents who actually need it.
+- **Auth → Email**: OTP only; magic-link redirect URLs are unused by this app.
+- Set `CRON_SECRET` in Vercel, or `/api/ping` is a write anyone can trigger.
 
 Both are plain `.mjs` with no imports, like `api/speech-token.mjs`; Vercel
 functions in this repo carry no dependencies. Their tests live in

@@ -120,7 +120,7 @@ create or replace function public.gen_recovery_code()
 returns text
 language sql
 volatile
-set search_path = public, pg_catalog
+set search_path = pg_catalog, public
 as $$
   select string_agg(
            substr('ABCDEFGHJKLMNPQRSTUVWXYZ23456789', 1 + (get_byte(u.bytes, i) & 31), 1),
@@ -134,6 +134,101 @@ $$;
 alter table public.recovery_codes
   alter column code set default public.gen_recovery_code();
 
+-- A recovery code is a credential for an account that has NO password, so it
+-- must stop working the moment the account gains a real one. When a parent
+-- links an email (or a phone), the code is deleted here rather than in the
+-- client, so no app version — and no half-finished sign-up flow — can leave a
+-- screenshot able to take the family account over.
+create or replace function public.drop_recovery_code_on_link()
+returns trigger
+language plpgsql
+security definer
+set search_path = pg_catalog, public
+as $$
+begin
+  delete from public.recovery_codes where user_id = new.id;
+  return null;
+end;
+$$;
+
+do $$
+begin
+  execute 'drop trigger if exists on_auth_user_email_linked on auth.users';
+  execute $ddl$
+    create trigger on_auth_user_email_linked
+    after update of email, phone on auth.users
+    for each row
+    when ((new.email is not null and new.email is distinct from old.email)
+       or (new.phone is not null and new.phone is distinct from old.phone))
+    execute function public.drop_recovery_code_on_link()
+  $ddl$;
+exception when insufficient_privilege then
+  -- Only the owner of auth.users may put a trigger on it. If this migration
+  -- was applied by a lesser role, say so loudly: without this trigger the
+  -- recovery code outlives the linking and api/recover.mjs is the only guard.
+  raise warning 'could not create on_auth_user_email_linked — re-run this migration as postgres';
+end
+$$;
+
+-- Client clocks are input, not truth. An iPad set to 2030 could otherwise
+-- freeze every LWW key forever (nothing would ever be "newer") and park its
+-- events permanently at the top of the pruning order, evicting real ones.
+-- Values are capped 24h ahead — enough slack for ordinary clock skew and a
+-- timezone mistake, and the damage from a wrong clock is bounded to a day.
+-- The cap is quantised to the hour so that a replayed event still lands on the
+-- same primary key rather than multiplying into duplicates.
+create or replace function public.clamp_client_ts(client_ts bigint)
+returns bigint
+language sql
+stable
+set search_path = pg_catalog, public
+as $$
+  select greatest(
+    least(client_ts, (floor(extract(epoch from now()) / 3600)::bigint * 3600 + 86400) * 1000),
+    0);
+$$;
+
+create or replace function public.clamp_event_ts()
+returns trigger
+language plpgsql
+set search_path = pg_catalog, public
+as $$
+begin
+  new.ts := public.clamp_client_ts(new.ts);
+  return new;
+end;
+$$;
+
+drop trigger if exists events_clamp_ts on public.events;
+create trigger events_clamp_ts
+before insert or update of ts on public.events
+for each row execute function public.clamp_event_ts();
+
+-- One iPad, one family: a handful of children, not a thousand rows created by
+-- a script. The cap is on INSERT only, so re-parenting during a recovery
+-- (a service-role UPDATE) can never be blocked by it.
+create or replace function public.enforce_profile_cap()
+returns trigger
+language plpgsql
+security definer
+set search_path = pg_catalog, public
+as $$
+declare n int;
+begin
+  select count(*) into n from public.profiles where owner_id = new.owner_id;
+  if n >= 10 then
+    raise exception 'profile cap reached: one account may hold at most 10 profiles'
+      using errcode = '23514';
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists profiles_cap on public.profiles;
+create trigger profiles_cap
+before insert on public.profiles
+for each row execute function public.enforce_profile_cap();
+
 -- The strategy for a key: longest matching rule prefix, defaulting to 'lww'.
 -- SECURITY DEFINER so the contract cannot be bent by a future policy change on
 -- kv_merge_rules; it only ever reads that admin-owned table.
@@ -142,7 +237,7 @@ returns text
 language sql
 stable
 security definer
-set search_path = public, pg_catalog
+set search_path = pg_catalog, public
 as $$
   select coalesce((
     select r.strategy
@@ -213,7 +308,7 @@ create or replace function public.merge_kv(profile uuid, entries jsonb)
 returns setof public.kv
 language plpgsql
 security invoker
-set search_path = public, pg_catalog
+set search_path = pg_catalog, public
 as $$
 declare
   entry jsonb;
@@ -240,6 +335,8 @@ begin
       raise exception 'merge_kv: every entry needs key, value and updated_at'
         using errcode = '22023';
     end if;
+    -- A client clock is an input, never a fact (see clamp_client_ts).
+    u := public.clamp_client_ts(u);
 
     insert into public.kv as t (profile_id, key, value, updated_at)
     values (profile, k, v, u)
@@ -268,7 +365,7 @@ create or replace function public.prune_events()
 returns trigger
 language plpgsql
 security definer
-set search_path = public, pg_catalog
+set search_path = pg_catalog, public
 as $$
 begin
   delete from public.events e
@@ -298,6 +395,37 @@ create trigger events_prune
 after insert on public.events
 referencing new table as new_rows
 for each statement execute function public.prune_events();
+
+-- ---------------------------------------------------------------------------
+-- Size and sanity limits
+--
+-- Not validation — the client already validates. These are floors under an
+-- authenticated user with a modified app: without them one account can push
+-- megabytes into a free project's storage and take the whole family's sync
+-- down with it. Postgres has no ADD CONSTRAINT IF NOT EXISTS, hence the block.
+-- ---------------------------------------------------------------------------
+do $$
+declare
+  wanted constant text[][] := array[
+    ['kv',       'kv_key_len',          'length(key) <= 64'],
+    ['kv',       'kv_value_size',       'octet_length(value::text) <= 16384'],
+    ['events',   'events_kind_len',     'length(kind) <= 24'],
+    ['events',   'events_item_len',     'length(item_id) <= 128'],
+    ['events',   'events_score_range',  'score is null or (score >= 0 and score <= 100)'],
+    ['events',   'events_phonemes_size','phonemes is null or octet_length(phonemes::text) <= 8192'],
+    ['profiles', 'profiles_name_len',   'length(name) between 1 and 40'],
+    ['profiles', 'profiles_avatar_len', 'length(avatar) between 1 and 16']
+  ];
+  i int;
+begin
+  for i in 1 .. array_length(wanted, 1) loop
+    if not exists (select 1 from pg_constraint where conname = wanted[i][2]) then
+      execute format('alter table public.%I add constraint %I check (%s)',
+                     wanted[i][1], wanted[i][2], wanted[i][3]);
+    end if;
+  end loop;
+end
+$$;
 
 -- ---------------------------------------------------------------------------
 -- Row Level Security
@@ -350,9 +478,12 @@ create policy kv_own on public.kv
   with check (exists (select 1 from public.profiles p
                       where p.id = kv.profile_id and p.owner_id = (select auth.uid())));
 
--- recovery_codes: read your own (the parent screen shows it) and create your
--- own at sign-up. No UPDATE and no DELETE policy exists: redemption runs
--- server-side with the service role, which bypasses RLS.
+-- recovery_codes: read your own (the parent screen shows it), create your own
+-- at sign-up, and delete your own. There is deliberately no UPDATE policy: a
+-- code is not edited, it is thrown away and a new one is drawn — delete then
+-- insert is the rotate path, and it means the code always comes from
+-- gen_recovery_code() rather than from anything a client chose. Redemption
+-- runs server-side with the service role, which bypasses RLS.
 drop policy if exists recovery_codes_select_own on public.recovery_codes;
 create policy recovery_codes_select_own on public.recovery_codes
   for select to authenticated using (user_id = (select auth.uid()));
@@ -360,6 +491,10 @@ create policy recovery_codes_select_own on public.recovery_codes
 drop policy if exists recovery_codes_insert_own on public.recovery_codes;
 create policy recovery_codes_insert_own on public.recovery_codes
   for insert to authenticated with check (user_id = (select auth.uid()));
+
+drop policy if exists recovery_codes_delete_own on public.recovery_codes;
+create policy recovery_codes_delete_own on public.recovery_codes
+  for delete to authenticated using (user_id = (select auth.uid()));
 
 -- The merge contract is public knowledge, not data: readable, never writable.
 drop policy if exists kv_merge_rules_read on public.kv_merge_rules;
@@ -399,10 +534,19 @@ begin
     -- column default, i.e. gen_recovery_code().
     grant select on public.recovery_codes to authenticated;
     grant insert (user_id) on public.recovery_codes to authenticated;
+    -- rotate = delete your row, insert a fresh one (see the policies above)
+    grant delete on public.recovery_codes to authenticated;
     grant select on public.kv_merge_rules to authenticated;
     revoke all on public.heartbeat from authenticated;
     grant execute on function public.merge_kv(uuid, jsonb) to authenticated;
     grant execute on function public.gen_recovery_code() to authenticated;
+    -- merge_kv runs as the CALLER (that is what makes RLS protect it), so the
+    -- caller also needs the helpers it calls on the way through. They are pure
+    -- and harmless on their own.
+    grant execute on function public.kv_strategy(text) to authenticated;
+    grant execute on function public.clamp_client_ts(bigint) to authenticated;
+    grant execute on function public.kv_merge_value(text, jsonb, bigint, jsonb, bigint)
+      to authenticated;
   end if;
 
   -- The Vercel functions (api/recover.mjs, api/ping.mjs) run as this role and
@@ -414,10 +558,40 @@ begin
       to service_role;
     grant execute on function public.merge_kv(uuid, jsonb) to service_role;
     grant execute on function public.gen_recovery_code() to service_role;
+    grant execute on function public.kv_strategy(text) to service_role;
+    grant execute on function public.clamp_client_ts(bigint) to service_role;
+    grant execute on function public.kv_merge_value(text, jsonb, bigint, jsonb, bigint)
+      to service_role;
   end if;
 end
 $$;
 
--- merge_kv is reachable by PUBLIC by default; make the grant list explicit.
+-- Functions are executable by PUBLIC by default; make every grant list
+-- explicit instead (the grants to authenticated/service_role are above).
 revoke execute on function public.merge_kv(uuid, jsonb) from public;
 revoke execute on function public.prune_events() from public;
+revoke execute on function public.kv_strategy(text) from public;
+revoke execute on function public.gen_recovery_code() from public;
+revoke execute on function public.clamp_client_ts(bigint) from public;
+revoke execute on function public.clamp_event_ts() from public;
+revoke execute on function public.enforce_profile_cap() from public;
+revoke execute on function public.drop_recovery_code_on_link() from public;
+revoke execute on function public.kv_merge_value(text, jsonb, bigint, jsonb, bigint) from public;
+
+-- ---------------------------------------------------------------------------
+-- Resetting a child's progress
+--
+-- There is deliberately NO "clear" verb and no tombstone. Stars merge by max,
+-- so a reset written as an empty value would simply be out-merged by the next
+-- device to sync and the parent would watch the stars come back.
+--
+-- A reset is therefore an explicit DELETE by the owner:
+--
+--   delete from public.kv     where profile_id = '<profile>';
+--   delete from public.events where profile_id = '<profile>';
+--
+-- …which the grants and the `for all` policies above already allow for one's
+-- own profiles, and which Task 3's sync layer calls (together with clearing
+-- localStorage) when a parent resets. Deleting the profile row cascades to
+-- both tables and is the "remove this child" case.
+-- ---------------------------------------------------------------------------

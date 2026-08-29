@@ -4,10 +4,17 @@
 // iPad has already signed in anonymously as a BRAND NEW user; this endpoint
 // moves the OLD user's profiles onto that new user and deletes the old user.
 //
-// Two things make it safe to expose:
+// Three things make it safe to expose:
 //   1. The caller must present their own Supabase JWT. Profiles are moved TO
 //      whoever that token says they are — never to an id in the request body.
 //   2. The code is 2^40 possibilities and every attempt is rate-limited.
+//   3. It redeems ONLY anonymous accounts. Once a parent has linked an email,
+//      the email is the way back in and the code must stop being one: a
+//      screenshot in a class group chat would otherwise be enough to take the
+//      family's account over and delete the parent's login with it. The
+//      database enforces the same rule from the other side (a trigger drops
+//      the code when a user gains an email), so neither layer is load-bearing
+//      alone.
 //
 // It needs the service role because re-parenting is exactly what RLS forbids a
 // user to do. That key lives in server/.env locally and in Vercel env in
@@ -54,6 +61,18 @@ const jsonHeaders = (serviceKey) => ({
   'content-type': 'application/json',
 })
 
+// "Anonymous" means: nothing else can sign this account in. Anything that
+// could — an email, a phone, an OAuth identity — makes the code a second,
+// weaker credential for a real account, which is exactly what we refuse.
+// `is_anonymous` is only trusted when it says false; an older GoTrue that
+// omits it falls back to the absence of every other credential.
+function isAnonymousUser(user) {
+  if (!user || user.is_anonymous === false) return false
+  if (user.email || user.new_email || user.phone) return false
+  const identities = Array.isArray(user.identities) ? user.identities : []
+  return identities.every(i => !i?.provider || i.provider === 'anonymous')
+}
+
 /**
  * @returns {Promise<{ status: number, body: object }>} never throws
  */
@@ -82,20 +101,52 @@ export async function recover({ code, authorization, env = process.env, fetchImp
       return { status: 401, body: { error: 'Invalid session' } }
     }
 
-    // 2. Whose code is it?
-    const codeRes = await fetchImpl(
-      `${url}/rest/v1/recovery_codes?select=user_id&code=eq.${encodeURIComponent(cleaned)}`,
+    // 2. CLAIM the code by deleting it. Reading it first and deleting it later
+    //    would leave a window in which two requests both believe they own it;
+    //    the delete is atomic, so exactly one caller gets the row back. Every
+    //    refusal below therefore has to put the row back — a parent whose
+    //    rescue was refused must not lose their code because of it.
+    const claimRes = await fetchImpl(
+      `${url}/rest/v1/recovery_codes?code=eq.${encodeURIComponent(cleaned)}`,
+      {
+        method: 'DELETE',
+        headers: { ...jsonHeaders(serviceKey), prefer: 'return=representation' },
+      },
+    )
+    if (!claimRes.ok) return { status: 502, body: { error: 'Lookup failed' } }
+    const rows = await claimRes.json()
+    const claimed = Array.isArray(rows) && rows.length === 1 ? rows[0] : null
+    if (!claimed?.user_id) return { status: 404, body: { error: 'Unknown code' } }
+    const oldUserId = claimed.user_id
+
+    const restore = () => fetchImpl(`${url}/rest/v1/recovery_codes`, {
+      method: 'POST',
+      headers: { ...jsonHeaders(serviceKey), prefer: 'resolution=merge-duplicates' },
+      body: JSON.stringify([claimed]),
+    }).catch(() => {})
+
+    // Redeeming your own code would delete the account you are signed into.
+    if (oldUserId === me.id) {
+      await restore()
+      return { status: 409, body: { error: 'Code already yours' } }
+    }
+
+    // 3. Only anonymous accounts may be rescued this way (see the header).
+    const ownerRes = await fetchImpl(
+      `${url}/auth/v1/admin/users/${encodeURIComponent(oldUserId)}`,
       { headers: jsonHeaders(serviceKey) },
     )
-    if (!codeRes.ok) return { status: 502, body: { error: 'Lookup failed' } }
-    const rows = await codeRes.json()
-    const oldUserId = Array.isArray(rows) && rows.length === 1 ? rows[0].user_id : null
-    if (!oldUserId) return { status: 404, body: { error: 'Unknown code' } }
-    // Redeeming your own code would delete the account you are signed into.
-    if (oldUserId === me.id) return { status: 409, body: { error: 'Code already yours' } }
+    if (!ownerRes.ok) {
+      await restore()
+      return { status: 502, body: { error: 'Lookup failed' } }
+    }
+    if (!isAnonymousUser(await ownerRes.json())) {
+      await restore()
+      return { status: 403, body: { error: 'Code belongs to a linked account' } }
+    }
 
-    // 3. Re-parent the children. This is the only step that must not be lost,
-    //    so nothing is deleted until it has succeeded.
+    // 4. Re-parent the children. This is the only step that must not be lost,
+    //    so the old account is not touched until it has succeeded.
     const moveRes = await fetchImpl(
       `${url}/rest/v1/profiles?owner_id=eq.${encodeURIComponent(oldUserId)}`,
       {
@@ -104,14 +155,15 @@ export async function recover({ code, authorization, env = process.env, fetchImp
         body: JSON.stringify({ owner_id: me.id }),
       },
     )
-    if (!moveRes.ok) return { status: 502, body: { error: 'Re-parenting failed' } }
+    if (!moveRes.ok) {
+      await restore()
+      return { status: 502, body: { error: 'Re-parenting failed' } }
+    }
     const moved = await moveRes.json()
     const profiles = Array.isArray(moved) ? moved.length : 0
 
-    // 4. Burn the code, then the empty user. A code is single-use: it is the
-    //    only credential in the whole system that a stranger could type.
-    await fetchImpl(`${url}/rest/v1/recovery_codes?user_id=eq.${encodeURIComponent(oldUserId)}`,
-      { method: 'DELETE', headers: jsonHeaders(serviceKey) })
+    // 5. The old account is now empty AND provably anonymous, so removing it
+    //    takes nobody's way in with it.
     const delRes = await fetchImpl(
       `${url}/auth/v1/admin/users/${encodeURIComponent(oldUserId)}`,
       { method: 'DELETE', headers: jsonHeaders(serviceKey) },

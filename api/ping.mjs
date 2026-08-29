@@ -37,8 +37,9 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' })
   }
   // Vercel signs cron invocations with CRON_SECRET when that env var is set.
-  // When it is not set the endpoint is harmless anyway: it writes one fixed row
-  // and returns nothing about anybody.
+  // Set it (supabase/README.md says so too): without it this is a write anyone
+  // can trigger. The blast radius is one fixed row and no data comes back, but
+  // an open write on a free project is not something to leave lying around.
   const expected = process.env.CRON_SECRET
   if (expected && req.headers?.authorization !== `Bearer ${expected}`) {
     return res.status(401).json({ error: 'Unauthorized' })

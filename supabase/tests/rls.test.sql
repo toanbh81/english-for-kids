@@ -199,8 +199,8 @@ begin
     assert false, 'SECURITY FAIL: a client picked its own recovery code (code oracle)';
   exception when insufficient_privilege then null;
   end;
-  -- …and codes are not editable or deletable by anyone through the API at all:
-  -- the UPDATE/DELETE privileges are not granted, so it fails before RLS.
+  -- …and a code is never EDITED. Rotation is delete-then-insert, which is what
+  -- keeps every code a value gen_recovery_code() drew.
   insert into public.recovery_codes (user_id) values ('22222222-2222-4222-8222-222222222222');
   begin
     update public.recovery_codes set code = 'AAAAAAAA'
@@ -208,11 +208,26 @@ begin
     assert false, 'a recovery code must not be updatable from the client';
   exception when insufficient_privilege then null;
   end;
+
+  -- deleting someone ELSE's code does nothing (the row is invisible)…
+  delete from public.recovery_codes where user_id = '11111111-1111-4111-8111-111111111111';
+  get diagnostics n = row_count;
+  assert n = 0, 'SECURITY FAIL: family two deleted family one''s recovery code';
+
+  -- …while rotating your own works, and draws a different code.
+  declare old_code text; new_code text;
   begin
+    select code into old_code from public.recovery_codes
+    where user_id = '22222222-2222-4222-8222-222222222222';
     delete from public.recovery_codes where user_id = '22222222-2222-4222-8222-222222222222';
-    assert false, 'a recovery code must not be deletable from the client';
-  exception when insufficient_privilege then null;
+    get diagnostics n = row_count;
+    assert n = 1, 'an owner must be able to throw away their own code';
+    insert into public.recovery_codes (user_id) values ('22222222-2222-4222-8222-222222222222');
+    select code into new_code from public.recovery_codes
+    where user_id = '22222222-2222-4222-8222-222222222222';
+    assert new_code is not null and new_code <> old_code, 'rotation drew the same code back';
   end;
+
   assert (select count(*) from public.recovery_codes) = 1,
     'family two should still hold exactly its own code';
 
@@ -381,7 +396,231 @@ begin
     'family two should see exactly its own single event';
 end $$;
 
+-- ---------------------------------------------------------------------------
+-- 6. Client clocks are input, not truth.
+--    An iPad set to 2030 must not be able to freeze a key forever or park its
+--    events decades ahead of every real one.
+-- ---------------------------------------------------------------------------
+select set_config('request.jwt.claims',
+                  '{"sub":"11111111-1111-4111-8111-111111111111","role":"authenticated"}', true);
+
+do $$
+declare
+  p3 constant uuid := 'cccccccc-0000-4000-8000-000000000003';
+  year_2100 constant bigint := 4102444800000;
+  cap bigint;
+  u bigint;
+  stored bigint;
+begin
+  cap := public.clamp_client_ts(year_2100);   -- the ceiling: this hour + 24h
+  assert cap < year_2100, 'clamp_client_ts is not clamping at all';
+
+  insert into public.profiles (id, owner_id, name)
+  values (p3, '11111111-1111-4111-8111-111111111111', 'Bé Ba');
+
+  -- kv: a wild updated_at is capped on the way in…
+  perform public.merge_kv(p3, jsonb_build_array(jsonb_build_object(
+    'key', 'band', 'value', jsonb_build_object('level', 9), 'updated_at', year_2100)));
+  select updated_at into u from public.kv where profile_id = p3 and key = 'band';
+  assert u = cap, 'a far-future client clock was stored as given: ' || u;
+
+  -- …so the key is frozen for at most a day, not for ever: a write dated at
+  -- the ceiling still wins.
+  perform public.merge_kv(p3, jsonb_build_array(jsonb_build_object(
+    'key', 'band', 'value', jsonb_build_object('level', 1), 'updated_at', cap)));
+  assert (select value from public.kv where profile_id = p3 and key = 'band')
+         = '{"level": 1}'::jsonb, 'a far-future write froze an LWW key permanently';
+
+  -- events: the same ceiling, applied by a trigger before the primary key is
+  -- decided, so a replay of the poisoned event still lands on the same row
+  -- instead of multiplying.
+  insert into public.events (profile_id, ts, kind, item_id)
+  values (p3, year_2100, 'word', 'future');
+  select ts into stored from public.events where profile_id = p3 and item_id = 'future';
+  assert stored = cap, 'a far-future event kept its timestamp: ' || stored;
+
+  insert into public.events (profile_id, ts, kind, item_id)
+  values (p3, year_2100, 'word', 'future')
+  on conflict (profile_id, ts, kind, item_id) do nothing;
+  assert (select count(*) from public.events where profile_id = p3 and item_id = 'future') = 1,
+    'a replayed far-future event created a second row instead of deduping';
+
+  -- and genuine events keep their places next to it
+  insert into public.events (profile_id, ts, kind, item_id)
+  select p3, g, 'word', 'real' || g from generate_series(1000, 1002) g;
+  assert (select count(*) from public.events where profile_id = p3) = 4,
+    'a far-future event evicted genuine ones';
+end $$;
+
+-- ---------------------------------------------------------------------------
+-- 7. Resetting a child's progress is a plain DELETE by the owner.
+--    (There is no tombstone verb: stars merge by max, so an "empty" write
+--    would just be out-merged. Task 3 calls exactly these statements.)
+-- ---------------------------------------------------------------------------
+do $$
+declare
+  p3 constant uuid := 'cccccccc-0000-4000-8000-000000000003';
+  n int;
+begin
+  delete from public.kv where profile_id = p3;
+  get diagnostics n = row_count;
+  assert n > 0, 'an owner must be able to delete their own kv rows (progress reset)';
+  delete from public.events where profile_id = p3;
+  get diagnostics n = row_count;
+  assert n = 4, 'an owner must be able to delete their own events (progress reset)';
+  assert (select count(*) from public.profiles where id = p3) = 1,
+    'a reset must not take the profile with it';
+end $$;
+
+-- …and the same DELETE aimed at another family does nothing at all.
+select set_config('request.jwt.claims',
+                  '{"sub":"22222222-2222-4222-8222-222222222222","role":"authenticated"}', true);
+do $$
+declare n int;
+begin
+  delete from public.kv where profile_id = 'aaaaaaaa-0000-4000-8000-000000000001';
+  get diagnostics n = row_count;
+  assert n = 0, 'SECURITY FAIL: family two reset family one''s kv';
+  delete from public.events where profile_id = 'aaaaaaaa-0000-4000-8000-000000000001';
+  get diagnostics n = row_count;
+  assert n = 0, 'SECURITY FAIL: family two reset family one''s events';
+  assert (select count(*) from public.events
+          where profile_id = 'aaaaaaaa-0000-4000-8000-000000000001') = 0,
+    'family two can still not see family one''s events (count is RLS-filtered)';
+end $$;
+
+-- ---------------------------------------------------------------------------
+-- 8. Floors under a modified client: sizes, ranges and a profile cap.
+-- ---------------------------------------------------------------------------
+do $$
+declare i int;
+begin
+  begin
+    insert into public.kv (profile_id, key, value, updated_at)
+    values ('bbbbbbbb-0000-4000-8000-000000000002', repeat('k', 65), '{}', 1);
+    assert false, 'an over-long kv key was accepted';
+  exception when check_violation then null;
+  end;
+
+  begin
+    insert into public.kv (profile_id, key, value, updated_at)
+    values ('bbbbbbbb-0000-4000-8000-000000000002', 'fat',
+            jsonb_build_object('blob', repeat('x', 20000)), 1);
+    assert false, 'a 20KB kv value was accepted';
+  exception when check_violation then null;
+  end;
+
+  begin
+    insert into public.events (profile_id, ts, kind, item_id, score)
+    values ('bbbbbbbb-0000-4000-8000-000000000002', 9, 'word', 'x', 5000);
+    assert false, 'a score outside 0..100 was accepted';
+  exception when check_violation then null;
+  end;
+
+  begin
+    insert into public.events (profile_id, ts, kind, item_id)
+    values ('bbbbbbbb-0000-4000-8000-000000000002', 9, 'word', repeat('i', 129));
+    assert false, 'an over-long item_id was accepted';
+  exception when check_violation then null;
+  end;
+
+  -- family two holds one profile; nine more reach the cap, the eleventh does not
+  for i in 2 .. 10 loop
+    insert into public.profiles (owner_id, name)
+    values ('22222222-2222-4222-8222-222222222222', 'Bé ' || i);
+  end loop;
+  assert (select count(*) from public.profiles) = 10, 'the cap test did not set up 10 profiles';
+  begin
+    insert into public.profiles (owner_id, name)
+    values ('22222222-2222-4222-8222-222222222222', 'Bé 11');
+    assert false, 'a single account created an eleventh profile';
+  exception when check_violation then null;
+  end;
+end $$;
+
+-- ---------------------------------------------------------------------------
+-- 9. The unauthenticated role reaches nothing, and RLS is actually ON.
+-- ---------------------------------------------------------------------------
+set local role anon;
+do $$
+declare t text;
+begin
+  foreach t in array array['profiles', 'events', 'kv', 'recovery_codes', 'heartbeat'] loop
+    begin
+      execute format('select 1 from public.%I limit 1', t);
+      assert false, 'SECURITY FAIL: the anon role can read ' || t;
+    exception when insufficient_privilege then null;
+    end;
+  end loop;
+
+  begin
+    perform public.merge_kv('aaaaaaaa-0000-4000-8000-000000000001', '[]'::jsonb);
+    assert false, 'SECURITY FAIL: the anon role can call merge_kv';
+  exception when insufficient_privilege then null;
+  end;
+end $$;
+
+set local role authenticated;
+do $$
+begin
+  -- the heartbeat is the cron's alone, in both directions
+  begin
+    insert into public.heartbeat (id, at) values (2, now());
+    assert false, 'SECURITY FAIL: an authenticated user can write the heartbeat';
+  exception when insufficient_privilege then null;
+  end;
+
+  -- the merge contract is readable but not editable: a user who could add a
+  -- rule could turn stars into last-write-wins and erase them.
+  assert (select count(*) from public.kv_merge_rules where prefix = 'stars') = 1,
+    'the stars rule should be readable by the client';
+  begin
+    insert into public.kv_merge_rules (prefix, strategy) values ('stars2', 'lww');
+    assert false, 'SECURITY FAIL: a user rewrote the merge contract';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    update public.kv_merge_rules set strategy = 'lww' where prefix = 'stars';
+    assert false, 'SECURITY FAIL: a user turned the star rule into LWW';
+  exception when insufficient_privilege then null;
+  end;
+end $$;
+
+-- ---------------------------------------------------------------------------
+-- 10. The recovery code dies the moment the account gains a real credential.
+--     A screenshot of the code must not be a way into a LINKED family account
+--     (api/recover.mjs refuses too — this is the layer that does not depend on
+--     any app version being deployed).
+-- ---------------------------------------------------------------------------
 reset role;
+do $$
+declare anon_user constant uuid := '33333333-3333-4333-8333-333333333333';
+begin
+  insert into auth.users (id, instance_id, aud, role)
+  values (anon_user, '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated');
+  insert into public.recovery_codes (user_id) values (anon_user);
+  assert (select count(*) from public.recovery_codes where user_id = anon_user) = 1,
+    'the anonymous user should start with a recovery code';
+
+  -- the parent links their email
+  update auth.users set email = 'linked@test.invalid' where id = anon_user;
+  assert (select count(*) from public.recovery_codes where user_id = anon_user) = 0,
+    'SECURITY FAIL: the recovery code outlived the email link — a screenshot '
+    'could still take over the parent''s account';
+end $$;
+
+do $$
+declare unprotected text;
+begin
+  select string_agg(relname, ', ') into unprotected
+  from pg_class
+  where relnamespace = 'public'::regnamespace
+    and relkind = 'r'
+    and relname in ('profiles', 'events', 'kv', 'recovery_codes', 'heartbeat', 'kv_merge_rules')
+    and not relrowsecurity;
+  assert unprotected is null, 'SECURITY FAIL: row level security is off on: ' || unprotected;
+end $$;
+
 select 'ALL RLS + MERGE TESTS PASSED' as result;
 
 rollback;
