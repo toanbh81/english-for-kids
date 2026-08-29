@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { SYNCED_KEYS, isSyncedName, syncedForm } from './synced'
+import { SYNCED_KEYS, isSyncedName, isValidStoredValue, syncedForm } from './synced'
 
 /**
  * This file exists to make the allowlist VISIBLE. Mirroring is now fail-closed — a store whose key
@@ -52,5 +52,35 @@ describe('what is allowed to leave the device', () => {
     for (const name of ['toString', 'constructor', '__proto__', 'hasOwnProperty']) {
       expect(isSyncedName(name)).toBe(false)
     }
+  })
+})
+
+describe('the declared shapes', () => {
+  it('accepts what the stores actually write, and refuses what they cannot read', () => {
+    expect(isValidStoredValue('stars', '{"sword:cat":3}')).toBe(true)
+    expect(isValidStoredValue('stars', '[]')).toBe(false)          // parses; is not a map
+    expect(isValidStoredValue('stars', '{"a":1,')).toBe(false)     // does not parse
+    expect(isValidStoredValue('stars', 'null')).toBe(false)
+    expect(isValidStoredValue('band', '{"value":3,"mode":"auto"}')).toBe(true)
+    expect(isValidStoredValue('band', '5')).toBe(false)
+    expect(isValidStoredValue('leitner', '{}')).toBe(true)
+    expect(isValidStoredValue('lesson.2026-08-29', '{"v":1}')).toBe(true)
+
+    // The two bare scalars, where "not JSON" is the correct state.
+    expect(isValidStoredValue('limit.minutes', '45')).toBe(true)
+    expect(isValidStoredValue('limit.minutes', '{"minutes":15}')).toBe(false)
+    expect(isValidStoredValue('limit.minutes', '0')).toBe(false)
+    expect(isValidStoredValue('limit.minutes', '')).toBe(false)
+    expect(isValidStoredValue('lesson.length', 'short')).toBe(true)
+    expect(isValidStoredValue('lesson.length', '["medium"]')).toBe(false)
+    expect(isValidStoredValue('lesson.length', '"long"')).toBe(false)
+  })
+
+  it('vouches for nothing it does not know', () => {
+    // Callers use this to decide whether bytes may be sent or written, so "no opinion" has to read
+    // as "no", never as "yes".
+    expect(isValidStoredValue('voice.lastTranscript', '{"text":"hi"}')).toBe(false)
+    expect(isValidStoredValue('activity', '[]')).toBe(false)
+    expect(isValidStoredValue('toString', 'anything')).toBe(false)
   })
 })

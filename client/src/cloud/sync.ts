@@ -1,7 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { ActivityEvent } from '../progress/activity'
 import { KEEP_DAYS, lessonDayInName } from '../progress/lessonStore'
-import { isSyncedName, syncedForm } from '../progress/synced'
+import { isSyncedName, isValidStoredValue, syncedShape } from '../progress/synced'
 import {
   ACTIVITY_CAP,
   ROOT,
@@ -647,6 +647,14 @@ async function pushKv(sb: SupabaseClient, profileId: string, ops: KvOp[]): Promi
     // The server's kv_value_size CHECK would refuse the whole call. Skipping one key keeps the rest
     // of the child's progress syncing.
     if (byteLength(raw) > MAX_KV_BYTES) { done.add(op.id); continue }
+    // **A value that fails its own declared shape is never sent.** Belt as well as braces: the merge
+    // already refuses to queue one, but the merge is not the only thing that queues an op — a plain
+    // store write does too, and a local value can be the wrong shape without a pull ever having run
+    // (`setStars` writing onto an array leaves `[]`, which serialises as an array and would reach
+    // `merge_kv` as one, where no per-entry max is possible and the child's whole star map on the
+    // server becomes `[]`). The op is finished rather than retried: it can never succeed, and the
+    // next pull is what heals the local value.
+    if (!isValidStoredValue(op.n, raw)) { done.add(op.id); continue }
     entries.push({ key: op.n, value: encodeValue(raw), updated_at: op.u })
     included.push(op.id)
   }
@@ -918,19 +926,25 @@ function mergeKvRows(profileId: string, rows: KvRow[]): void {
     // still wins — the child has been using it — but the clock is SEEDED from the server's rather
     // than invented, so a genuinely newer write from the other iPad wins next time instead of
     // losing to a timestamp this device made up for itself.
+    const shape = syncedShape(name)
     const preferIncoming = localAt !== undefined && remoteAt >= localAt
-    const { value: merged, source } = mergeStored(name, existing, incoming, preferIncoming, syncedForm(name))
+    const { value: merged, source } = mergeStored(name, existing, incoming, preferIncoming, shape ?? undefined)
 
     if (source === 'stalemate') {
-      // Neither copy can be judged against the other: one of them parses but is not the shape this
-      // key holds, which is version skew, not damage. Nothing is written and nothing is pushed —
-      // overwriting a value we do not understand is how a real `limit.minutes` of "45" becomes an
-      // object `getLimitMinutes()` reads as NaN.
+      // Neither copy passes the key's own shape. Nothing is written and nothing is pushed: there is
+      // nothing to heal from and nothing worth sending.
       continue
     }
     if (merged !== existing && !writeRaw(key, merged)) continue
 
-    if (source === 'existing' && localAt !== undefined) {
+    // The server's row is not the shape this key holds — an older or newer build wrote it. Our copy
+    // is good (or `mergeStored` would have said stalemate), so it goes up regardless of clocks, and
+    // with one that wins: leaving junk up there means every other device heals FROM it.
+    const remoteIsJunk = shape !== null && !shape(incoming)
+
+    if (remoteIsJunk) {
+      ahead.push({ name, at: Math.max(localAt ?? 0, remoteAt) })
+    } else if (source === 'existing' && localAt !== undefined) {
       // A real local value with a real clock, and it is the newer one. Say so, with its own clock:
       // it already beats the remote, so nothing has to be forged for the decision to stick.
       ahead.push({ name, at: localAt })
@@ -941,9 +955,9 @@ function mergeKvRows(profileId: string, rows: KvRow[]): void {
     } else {
       // 'incoming' — the server already holds everything this device does.
       // 'existing' with no clock — kept locally, and the seed here is the whole point of F5.
-      // 'damaged'  — the local bytes could not be read. THEY ARE NOT NEWER TRUTH. The server's copy
-      //              has been adopted and nothing is pushed: half a JSON object written over the
-      //              cloud's good map is the child's stars gone from the last place they existed.
+      // 'damaged'  — the local value failed its own shape and the server's did not. The server's
+      //              copy has been adopted (the device is healed rather than left unreadable) and
+      //              NOTHING is pushed: bytes that fail their shape are not news.
       accepted[name] = remoteAt
     }
   }

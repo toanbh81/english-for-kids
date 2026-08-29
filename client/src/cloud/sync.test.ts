@@ -20,8 +20,8 @@ vi.mock('./supabase', () => ({
 import { logActivity } from '../progress/activity'
 import { getBand, setBandValue } from '../progress/band'
 import { promote } from '../progress/leitner'
-import { KEEP_DAYS, saveLesson, setLessonLength } from '../progress/lessonStore'
-import { setLimitMinutes } from '../progress/limit'
+import { KEEP_DAYS, getLessonLength, saveLesson, setLessonLength } from '../progress/lessonStore'
+import { getLimitMinutes, setLimitMinutes } from '../progress/limit'
 import { getStars, setStars } from '../progress/store'
 import { resetAuthState } from './auth'
 import { resetProfilesForTest } from './profileState'
@@ -936,6 +936,90 @@ describe('pull', () => {
     await flush()
 
     expect(server.kv.get(`${PROFILE}|lesson.length`)?.value).toBe('long')
+  })
+
+  it('heals a wrong-shaped local star map instead of pushing it over the server\'s', async () => {
+    // The M1 end state, end to end. `[]` parses, so it was never "damaged"; it is not a map, so it
+    // could not be merged — and the old stalemate left it in place. The child then reads 0 stars
+    // (`store.ts` casts without checking), `setStars` writes a non-index property onto the array,
+    // `JSON.stringify` still gives `[]`, and `merge_kv` gets an array against an object: no
+    // per-entry max is possible, it falls to last-write-wins, and the server's map becomes `[]`.
+    bootProfile()
+    startSync()
+    setStars('sword:cat', 3) // a real clock for the key, so LWW would call the local value current
+    localStorage.setItem(key('stars'), '[]')
+    server.kv.set(`${PROFILE}|stars`, {
+      profile_id: PROFILE, key: 'stars', value: { 'sword:cat': 3, 'sword:dog': 2 }, updated_at: 1,
+    })
+
+    await pullProfile(PROFILE)
+    await flush()
+
+    // The cloud copy is intact…
+    expect(server.kv.get(`${PROFILE}|stars`)?.value).toEqual({ 'sword:cat': 3, 'sword:dog': 2 })
+    // …and the device is HEALED, not left reading zero. Leaving it broken is not a resting state.
+    expect(localStorage.getItem(key('stars'))).not.toBe('[]')
+    expect(getStars('sword:cat')).toBe(3)
+    expect(getStars('sword:dog')).toBe(2)
+  })
+
+  it('keeps a good local value when the SERVER is the wrong shape, however new its clock', async () => {
+    // The two `text` keys, which the json-only test never covered. A newer server row must not be
+    // able to talk the device into a `limit.minutes` its own screen reads as NaN.
+    bootProfile()
+    startSync()
+    setLimitMinutes(45)
+    setLessonLength('short')
+    const future = Date.now() + 60_000
+    server.kv.set(`${PROFILE}|limit.minutes`, {
+      profile_id: PROFILE, key: 'limit.minutes', value: { minutes: 15 }, updated_at: future,
+    })
+    server.kv.set(`${PROFILE}|lesson.length`, {
+      profile_id: PROFILE, key: 'lesson.length', value: ['medium'], updated_at: future,
+    })
+
+    await pullProfile(PROFILE)
+
+    expect(localStorage.getItem(key('limit.minutes'))).toBe('45')
+    expect(getLimitMinutes()).toBe(45)
+    expect(getLessonLength()).toBe('short')
+
+    // …and the junk up there is replaced, so the other iPad does not heal FROM it.
+    await flush()
+    expect(server.kv.get(`${PROFILE}|limit.minutes`)?.value).toBe(45)
+    expect(server.kv.get(`${PROFILE}|lesson.length`)?.value).toBe('short')
+  })
+
+  it('touches neither side when both copies fail the shape', async () => {
+    bootProfile()
+    startSync()
+    setStars('sword:cat', 3)
+    localStorage.setItem(key('stars'), '[]')
+    server.kv.set(`${PROFILE}|stars`, { profile_id: PROFILE, key: 'stars', value: 'nonsense', updated_at: 1 })
+
+    await pullProfile(PROFILE)
+    await flush()
+
+    expect(localStorage.getItem(key('stars'))).toBe('[]')
+    expect(server.kv.get(`${PROFILE}|stars`)?.value).toBe('nonsense')
+  })
+
+  it('refuses to send a wrong-shaped value with no pull involved at all', async () => {
+    // The push-side guard on its own: the merge is not the only thing that queues an op, and a local
+    // value can be the wrong shape without the server ever having been consulted.
+    bootProfile()
+    startSync()
+    setStars('sword:cat', 3)     // queues a `stars` op the honest way
+    setBandValue(3)              // and one for a key that is fine
+    localStorage.setItem(key('stars'), '[]') // …then the value under it goes wrong
+
+    await flush()
+
+    expect(server.kv.get(`${PROFILE}|stars`)).toBeUndefined()
+    expect(server.kv.get(`${PROFILE}|band`)?.value).toEqual({ value: 3, mode: 'manual' })
+    // The op is finished, not retried for ever: it can never succeed, and the pull is what heals.
+    expect(outbox().ops).toEqual([])
+    expect(syncStatus()).toMatchObject({ state: 'synced', lastError: null })
   })
 
   it('never uploads a key no store registered', async () => {

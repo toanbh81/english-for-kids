@@ -440,8 +440,13 @@ function mergeActivity(existing: string, incoming: string): MergeOutcome {
   return { value: JSON.stringify(merged.slice(-ACTIVITY_CAP)), source: behind ? 'merged' : 'incoming' }
 }
 
-/** How the owning store writes this value; `progress/synced.ts` is where each key declares it. */
-export type ValueForm = 'json' | 'text' | null
+/**
+ * The declared shape of a key's value, supplied by the caller.
+ *
+ * It is a callback rather than a table here because the shapes live with the keys, in
+ * `progress/synced.ts`, and this module is the leaf everything else imports — it cannot reach up.
+ */
+export type ShapeCheck = (raw: string) => boolean
 
 /**
  * What one stored value becomes when a second copy of it turns up.
@@ -471,21 +476,41 @@ export function mergeStored(
   existing: string | null,
   incoming: string,
   preferIncoming = false,
-  form: ValueForm = null,
+  valid?: ShapeCheck,
 ): MergeOutcome {
+  // ---------------------------------------------------------------------------------------------
+  // The declared shape decides first, on BOTH sides, for every key that has one.
+  //
+  // Expressed once here so it cannot be true of some keys and not others — an earlier version tested
+  // only "is the local value parseable JSON", which said nothing at all about the two keys stored as
+  // bare scalars and mistook a value from another build of the app for damage.
+  //
+  // The four cases, and why each is what it is:
+  //
+  //   local ✗, server ✓ — HEAL. The device is holding something its own store cannot read; the
+  //     server's copy is the only usable one, so take it. Nothing is pushed: bytes that fail their
+  //     shape are not news.
+  //   local ✓, server ✗ — keep local AND tell the server. The junk is up there, not down here, and
+  //     it is never written to disk.
+  //   both ✗           — touch neither side. Nothing to heal from, nothing worth sending.
+  //   both ✓           — the ordinary merge below.
+  //
+  // The middle two are what closes the hole `stalemate` opened: refusing to heal is defensible, but
+  // refusing to heal and then letting the un-healed value be pushed is how a wrong-shaped local
+  // `stars` of `[]` became the server's whole star map.
+  // ---------------------------------------------------------------------------------------------
+  if (valid) {
+    const mineOk = existing !== null && valid(existing)
+    const theirsOk = valid(incoming)
+    if (!mineOk && theirsOk) return { value: incoming, source: existing === null ? 'incoming' : 'damaged' }
+    if (mineOk && !theirsOk) return { value: existing, source: 'existing' }
+    // On `stalemate` the caller writes NOTHING; the value is only what would have been kept.
+    if (!mineOk) return { value: existing ?? incoming, source: 'stalemate' }
+  }
+
   if (existing === null) return { value: incoming, source: 'incoming' }
   if (name === 'stars') return mergeStars(existing, incoming)
   if (name === 'activity') return mergeActivity(existing, incoming)
-
-  // Last write wins — but only between two values that can be read, and only a key the owning store
-  // says it writes as JSON can be judged unreadable at all. `limit.minutes` is "45" and
-  // `lesson.length` is "medium": bytes that are not JSON are exactly right for them, and an earlier
-  // version of this check called them damaged and replaced them with whatever the server held.
-  if (form === 'json' && !parseJson(existing).ok) {
-    return parseJson(incoming).ok
-      ? { value: incoming, source: 'damaged' }
-      : { value: existing, source: 'stalemate' }
-  }
   return preferIncoming ? { value: incoming, source: 'incoming' } : { value: existing, source: 'existing' }
 }
 
@@ -495,9 +520,9 @@ export function mergeStoredValue(
   existing: string | null,
   incoming: string,
   preferIncoming = false,
-  form: ValueForm = null,
+  valid?: ShapeCheck,
 ): string {
-  return mergeStored(name, existing, incoming, preferIncoming, form).value
+  return mergeStored(name, existing, incoming, preferIncoming, valid).value
 }
 
 /**

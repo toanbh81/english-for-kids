@@ -426,6 +426,14 @@ describe('the write seam', () => {
 describe('the merge contract', () => {
   const event = (ts: number, id: string) => ({ ts, kind: 'word', id })
 
+  // The shapes `progress/synced.ts` declares for the real keys, inlined here so this file can test
+  // the RULE without importing the registry it is a leaf below.
+  const parse = (raw: string): unknown => { try { return JSON.parse(raw) as unknown } catch { return undefined } }
+  const isObject = (raw: string) => { const v = parse(raw); return !!v && typeof v === 'object' && !Array.isArray(v) }
+  const isArray = (raw: string) => Array.isArray(parse(raw))
+  const isMinutes = (raw: string) => Number.isFinite(Number(raw)) && Number(raw) > 0
+  const isLength = (raw: string) => ['short', 'medium', 'long'].includes(raw)
+
   it('takes the higher star, never the newer one', () => {
     const merged = mergeStoredValue('stars', JSON.stringify({ a: 3, b: 1 }), JSON.stringify({ a: 1, c: 2 }), true)
     expect(JSON.parse(merged)).toEqual({ a: 3, b: 1, c: 2 })
@@ -458,46 +466,63 @@ describe('the merge contract', () => {
     expect(mergeStored('band', null, '{"v":1}').source).toBe('incoming')
   })
 
-  it('calls half-written local bytes damaged, and hands back the copy that can be read', () => {
-    // The shape an iOS tab killed mid-setItem leaves behind. Reported as newer local truth it would
-    // be pushed over the cloud's good copy — the last place the child's stars still existed.
+  it('lets the declared shape decide, on both sides, for every kind of key', () => {
+    // Four cases, one rule, applied identically to a `json` key and a `text` one. The rule used to
+    // be "is the local value parseable JSON", which says nothing at all about a value stored as a
+    // bare scalar and mistakes a build-to-build shape change for damage.
     const half = '{"sword:cat":3,"sword:d'
-    expect(mergeStored('stars', half, '{"sword:cat":3,"sword:dog":2}')).toEqual({
-      value: '{"sword:cat":3,"sword:dog":2}', source: 'damaged',
+    const good = '{"sword:cat":3,"sword:dog":2}'
+
+    // local invalid, server valid -> HEAL. The device is holding something its own store cannot
+    // read; the cloud copy is the only usable one. Nothing is pushed.
+    expect(mergeStored('stars', half, good, false, isObject)).toEqual({ value: good, source: 'damaged' })
+    expect(mergeStored('band', '{"value":4,"mo', '{"value":3}', false, isObject).source).toBe('damaged')
+    expect(mergeStored('limit.minutes', '{"minutes":', '30', false, isMinutes).source).toBe('damaged')
+
+    // local valid, server invalid -> keep local, and SAY SO. The junk is up there, not down here.
+    expect(mergeStored('stars', good, '[]', false, isObject)).toEqual({ value: good, source: 'existing' })
+    expect(mergeStored('limit.minutes', '45', '{"minutes":15}', false, isMinutes).source).toBe('existing')
+
+    // both invalid -> touch neither side. Nothing to heal from, nothing worth sending.
+    expect(mergeStored('stars', half, 'also broken', false, isObject)).toEqual({
+      value: half, source: 'stalemate',
     })
-    expect(mergeStored('activity', '[{"ts":1,', '[{"ts":1,"kind":"word","id":"a"}]').source).toBe('damaged')
-    // Every LWW key too — but only one the owning store says it writes as JSON. That `form` is not
-    // a detail: without it, `lesson.length` ("medium") reads as unparseable on every single pull.
-    expect(mergeStored('band', '{"value":4,"mo', '{"value":3,"mode":"auto"}', false, 'json')).toEqual({
-      value: '{"value":3,"mode":"auto"}', source: 'damaged',
-    })
-    // …and a bare scalar is never damage: `limit.minutes` and `lesson.length` are stored unquoted on
-    // purpose, and a truncated "20" is indistinguishable from a real one.
-    expect(mergeStored('limit.minutes', '20', '30', false, 'text').source).toBe('existing')
-    expect(mergeStored('lesson.length', 'medium', 'long', true, 'text').source).toBe('incoming')
-    expect(mergeStored('lesson.length', 'medium', '"long"', false, 'text').source).toBe('existing')
+    expect(mergeStored('limit.minutes', 'zero', '{}', true, isMinutes).source).toBe('stalemate')
+
+    // both valid -> the ordinary merge, and the clock still decides the last-write-wins keys.
+    expect(mergeStored('limit.minutes', '20', '30', false, isMinutes).source).toBe('existing')
+    expect(mergeStored('lesson.length', 'medium', 'long', true, isLength).source).toBe('incoming')
+    expect(JSON.parse(mergeStored('stars', '{"a":3}', '{"a":1,"b":2}', true, isObject).value))
+      .toEqual({ a: 3, b: 2 })
   })
 
-  it('calls a shape it does not recognise a stalemate, and touches neither side', () => {
-    // Version skew, not corruption: a value some other build of the app wrote. The old shape test
-    // could not tell the two apart and overwrote the local value with bytes the owning store cannot
-    // read — a real `limit.minutes` of "45" replaced by an object `getLimitMinutes()` sees as NaN.
-    // These three are the proven reversals.
-    expect(mergeStored('limit.minutes', '45', '{"minutes":15}', false, 'text')).toEqual({
+  it('never leaves the device holding a value its own store cannot read', () => {
+    // The M1 end state, at the unit level: a wrong-shaped local `stars` used to be a stalemate, so
+    // the child kept reading 0 stars AND the un-healed `[]` was still pushed — which turned the
+    // server's map into `[]` too, because `merge_kv` cannot take a per-entry max against an array.
+    expect(mergeStored('stars', '[]', '{"sword:cat":3}', false, isObject)).toEqual({
+      value: '{"sword:cat":3}', source: 'damaged',
+    })
+    expect(mergeStored('activity', '{}', '[{"ts":1,"kind":"word","id":"a"}]', false, isArray)).toEqual({
+      value: '[{"ts":1,"kind":"word","id":"a"}]', source: 'damaged',
+    })
+    // The two reversals that were never covered, now with a NEWER server row — the clock must not
+    // be able to talk the device into a value its store reads as NaN.
+    expect(mergeStored('limit.minutes', '45', '{"minutes":15}', true, isMinutes)).toEqual({
       value: '45', source: 'existing',
     })
-    expect(mergeStored('lesson.length', 'short', '["medium"]', false, 'text')).toEqual({
+    expect(mergeStored('lesson.length', 'short', '["medium"]', true, isLength)).toEqual({
       value: 'short', source: 'existing',
     })
-    expect(mergeStored('band', '5', '{"value":1,"mode":"auto"}', false, 'json')).toEqual({
-      value: '5', source: 'existing',
-    })
-    // Where a merge is attempted, an unrecognised LOCAL shape is a stalemate: readable, so not
-    // damaged; not a star map, so not mergeable. Keep it, push nothing.
-    expect(mergeStored('stars', '5', '{"a":1}')).toEqual({ value: '5', source: 'stalemate' })
-    expect(mergeStored('activity', '{}', '[]')).toEqual({ value: '{}', source: 'stalemate' })
-    // Neither side readable: nothing is claimed in either direction, and nothing is pushed.
-    expect(mergeStored('stars', '{"a":1,', 'also broken')).toEqual({ value: '{"a":1,', source: 'stalemate' })
+  })
+
+  it('still keeps the active value for a key nobody declared a shape for', () => {
+    // The orphan rescue passes no shape: it sweeps keys this codebase has never heard of, so it
+    // cannot vouch for any of them. `stars` and `activity` keep their own container checks.
+    expect(mergeStored('band', '{"value":4}', '{"value":1}', false).source).toBe('existing')
+    expect(mergeStored('band', '{"value":4}', '{"value":1}', true).source).toBe('incoming')
+    expect(mergeStored('stars', '5', '{"a":1}').source).toBe('stalemate')
+    expect(mergeStored('activity', '{}', '[]').source).toBe('stalemate')
   })
 
   it('is the one place that says what makes two events the same event', () => {
