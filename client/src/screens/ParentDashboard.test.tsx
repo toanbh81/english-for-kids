@@ -45,7 +45,7 @@ const ACTIVE_PROFILE: MockProfile = { id: 'p1', name: 'Bé', avatar: '🦊', cre
 const profileStateMock = vi.hoisted(() => ({
   listProfiles: vi.fn<() => MockProfile[]>(),
   activeProfileId: vi.fn<() => string | null>(),
-  addProfile: vi.fn<(name?: string) => MockProfile>(),
+  addProfile: vi.fn<(name?: string) => MockProfile | null>(),
   renameProfile: vi.fn<(id: string, name: string) => MockProfile[]>(),
   renameRemoteProfile: vi.fn<() => Promise<boolean>>(async () => true),
   switchProfile: vi.fn<(id: string) => boolean>(() => true),
@@ -653,6 +653,67 @@ describe('Phase 11: "Tài khoản"', () => {
     expect(profileStateMock.ensureRemoteProfiles).toHaveBeenCalled()
   })
 
+  /**
+   * `addProfile` answers `null` when the child did not reach disk — an unreadable roster this app
+   * must not write over, or a store that refused. Re-reading the roster alone would simply show
+   * nothing, and a button that appears to do nothing is one a parent taps again.
+   */
+  it('says so when the new child could not be saved', async () => {
+    cloud.configured = true
+    vi.spyOn(window, 'prompt').mockReturnValue('Bé 2')
+    profileStateMock.addProfile.mockReturnValue(null)
+
+    renderWithRouter(<ParentDashboard />)
+    await flush()
+
+    fireEvent.click(screen.getByRole('button', { name: '+ Thêm hồ sơ' }))
+
+    expect(screen.getByTestId('profile-notice')).toHaveTextContent('Chưa lưu được hồ sơ mới')
+    // The child is not announced to the server either — there is no child.
+    expect(profileStateMock.ensureRemoteProfiles).not.toHaveBeenCalled()
+  })
+
+  /**
+   * R2/R1. With an unreadable roster `listProfiles()` is empty, and with no active profile at all
+   * the device is on the legacy namespace. Both rendered as an empty string right beside
+   * "+ Thêm hồ sơ" — the worst possible pairing, because that button is the one that writes the
+   * roster and a parent who sees a blank name is exactly the parent who taps it.
+   */
+  it('never renders a blank profile name beside the add button', async () => {
+    cloud.configured = true
+    profileStateMock.listProfiles.mockReturnValue([])
+    profileStateMock.activeProfileId.mockReturnValue('p1')
+
+    renderWithRouter(<ParentDashboard />)
+    await flush()
+
+    expect(screen.getByTestId('profile-unreadable')).toHaveTextContent('Chưa đọc được danh sách hồ sơ')
+    expect(screen.getByTestId('profile-unreadable')).toHaveTextContent('vẫn đang được lưu bình thường')
+    // Nothing to rename when nothing can be read.
+    expect(screen.queryByRole('button', { name: 'Đổi tên' })).not.toBeInTheDocument()
+  })
+
+  it('says the same thing on a device that has no active profile at all', async () => {
+    cloud.configured = true
+    profileStateMock.listProfiles.mockReturnValue([ACTIVE_PROFILE])
+    profileStateMock.activeProfileId.mockReturnValue(null)
+
+    renderWithRouter(<ParentDashboard />)
+    await flush()
+
+    expect(screen.getByTestId('profile-unreadable')).toBeInTheDocument()
+  })
+
+  it('shows the name normally when the roster reads fine', async () => {
+    cloud.configured = true
+
+    renderWithRouter(<ParentDashboard />)
+    await flush()
+
+    expect(screen.queryByTestId('profile-unreadable')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Đổi tên' })).toBeInTheDocument()
+  })
+
   it('does not add a profile when the prompt is dismissed', async () => {
     cloud.configured = true
     vi.spyOn(window, 'prompt').mockReturnValue(null)
@@ -1047,7 +1108,16 @@ describe('Phase 11 task 5: remote progress view', () => {
     expect(card).not.toHaveTextContent('Chuỗi ngày:')
   })
 
-  it('shows a real zero honestly once the fetch actually succeeds with no events', async () => {
+  /**
+   * A successful fetch that found nothing is still not a measurement of a child.
+   *
+   * "Chuỗi ngày: 0 · Tuần này: 0 phút" reads as a confident statement about a child who has been
+   * idle, and the row that produces it is just as often an empty placeholder profile — a phantom
+   * the parent has no way to interpret. The profile stays on screen either way: hiding a row with
+   * no events would also hide a real child a parent added on another device and is checking
+   * arrived, which is the same error class pointing the other way.
+   */
+  it('says the server holds nothing rather than measuring a child who is not there', async () => {
     cloud.configured = true
     profileStateMock.fetchRemoteProfiles.mockResolvedValue([ACTIVE_PROFILE, SIBLING])
     remoteMock.fetchRemoteStats.mockResolvedValue({
@@ -1058,7 +1128,26 @@ describe('Phase 11 task 5: remote progress view', () => {
     await flush()
 
     const card = (await screen.findAllByTestId('remote-profile'))[0]
-    expect(card).toHaveTextContent('Chuỗi ngày: 0')
-    expect(card).toHaveTextContent('Chưa đủ dữ liệu về âm sai')
+    expect(card).toHaveTextContent('Chưa có dữ liệu nào trên máy chủ')
+    expect(card).not.toHaveTextContent('Chuỗi ngày')
+    expect(card).not.toHaveTextContent('Tuần này')
+    // …and the child is still listed, name and all: a row with nothing on the server may be a
+    // phantom, and may equally be the sibling a parent added elsewhere ten minutes ago.
+    expect(card).toHaveTextContent(SIBLING.name)
+  })
+
+  it('still measures a child the server does have events for', async () => {
+    cloud.configured = true
+    profileStateMock.fetchRemoteProfiles.mockResolvedValue([ACTIVE_PROFILE, SIBLING])
+    remoteMock.fetchRemoteStats.mockResolvedValue({
+      streak: 3, weekMinutes: 21, averages: { story: null, speak: 80, word: null, sentence: null }, weak: [], eventCount: 12,
+    })
+
+    renderWithRouter(<ParentDashboard />)
+    await flush()
+
+    const card = (await screen.findAllByTestId('remote-profile'))[0]
+    expect(card).toHaveTextContent('Chuỗi ngày: 3 · Tuần này: 21 phút')
+    expect(card).not.toHaveTextContent('Chưa có dữ liệu nào trên máy chủ')
   })
 })

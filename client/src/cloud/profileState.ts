@@ -158,8 +158,15 @@ function writeProfiles(profiles: Profile[]): boolean {
  * Existing entries keep their position, so `roster[0]` is stable and every document that adopts
  * "the oldest surviving entry" adopts the same child.
  */
-function mergeIntoRoster(additions: Profile[]): Profile[] {
-  const disk = listProfiles()
+function mergeIntoRoster(additions: Profile[]): Profile[] | null {
+  const { profiles: disk, damaged } = readRoster()
+  // `null`, and nothing written. This is the door the guard first missed: `listProfiles()` throws
+  // the `damaged` flag away, so a union computed from "no children" was written straight over a
+  // half-written roster — and the next launch, finding a roster of one, rescued every other
+  // namespace into it. "+ Thêm hồ sơ" and the restore path both come through here, so the parent
+  // could reach it by tapping a button. The bytes on disk may still be readable by someone, and
+  // they are certainly not ours to overwrite.
+  if (damaged) return null
   const known = new Set(disk.map(p => p.id))
   const merged = [...disk, ...additions.filter(p => isProfileId(p.id) && !known.has(p.id))]
   if (merged.length !== disk.length) writeProfiles(merged)
@@ -190,16 +197,23 @@ export function activeProfile(): Profile | null {
 
 export { activeProfileId }
 
-/** Add a child. Does not switch to them — the parent screen decides when that happens. */
-export function addProfile(name?: string, avatar?: string): Profile {
+/**
+ * Add a child. Does not switch to them — the parent screen decides when that happens.
+ *
+ * **`null` means the child was not saved**, and the caller has to say so: an unreadable roster
+ * (which must not be written over) or a store that refused the write. Returning the profile
+ * regardless would put a child on screen who is not on disk, and the parent would find out when
+ * they next opened the app.
+ */
+export function addProfile(name?: string, avatar?: string): Profile | null {
   const profile: Profile = {
     id: newProfileId(),
     name: name?.trim() || DEFAULT_PROFILE_NAME,
     avatar: avatar || DEFAULT_PROFILE_AVATAR,
     created: Date.now(),
   }
-  mergeIntoRoster([profile])
-  return profile
+  // Confirmed by reading back, not by the absence of a throw: `writeProfiles` swallows a full store.
+  return mergeIntoRoster([profile])?.some(p => p.id === profile.id) ? profile : null
 }
 
 /**
@@ -244,7 +258,7 @@ export function ensureLocalProfile(): Profile | null {
     // Merged into whatever is on disk at this instant, never written over it — the second tab a
     // parent left open on the school run is booting this same update.
     const settled = mergeIntoRoster([minted])
-    if (!settled.length) return minted
+    if (!settled?.length) return minted
 
     // Both documents then adopt the same child: the oldest surviving entry. The loser drops the id
     // it just minted, which has no data under it yet, rather than leaving a phantom second child in
@@ -288,7 +302,9 @@ export function switchProfile(id: string, options: { reload?: boolean } = {}): b
  * Call this BEFORE writing anything into a new profile's namespace: until the roster names an id,
  * `rescueOrphanNamespaces` reads its keys as abandoned and folds them into the active child.
  */
-export function adoptProfiles(remote: Profile[]): Profile[] {
+export function adoptProfiles(remote: Profile[]): Profile[] | null {
+  // `null` when the roster cannot be read: the restore has nowhere safe to put these children, and
+  // the caller must say that rather than report an account with no profiles (see `CloudStart`).
   return mergeIntoRoster(remote)
 }
 
@@ -301,7 +317,11 @@ export function adoptProfiles(remote: Profile[]): Profile[] {
 export function renameProfile(id: string, name: string): Profile[] {
   const trimmed = name.trim()
   if (!trimmed) return listProfiles()
-  const roster = listProfiles()
+  const { profiles: roster, damaged } = readRoster()
+  // Explicit, not incidental. A damaged roster finds no match and would return before writing
+  // anyway — but that is an accident of this function's shape, and the next person to refactor it
+  // would have no way of knowing the safety was load-bearing.
+  if (damaged) return roster
   if (!roster.some(p => p.id === id)) return roster
   writeProfiles(roster.map(p => (p.id === id ? { ...p, name: trimmed } : p)))
   return listProfiles()

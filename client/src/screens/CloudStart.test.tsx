@@ -341,6 +341,31 @@ describe('the email door', () => {
     expect(screen.getByText(/Vẫn tiếp tục với bome@example.com/)).toBeInTheDocument()
   })
 
+  /**
+   * The roster this device would join the restored children onto is unreadable, so `adoptProfiles`
+   * writes nothing and says `null`. Reporting "this account has no profiles" there would be a false
+   * sentence about the family's data — in front of a parent who came to this screen precisely
+   * because something had already gone missing once.
+   */
+  it('says it could not join the children on rather than that there are none', async () => {
+    profileState.fetchRemoteProfiles.mockResolvedValue([profile(SOC, 'Soc')])
+    // The real `adoptProfiles` (this file mocks only the two functions that would hit the network
+    // or reload the document), refusing a roster it cannot read: bytes on disk, none of them a
+    // child. Written after the render so the screen's own mount-time reads are unaffected.
+    localStorage.setItem('speakup.profiles', '[{"id":"11111111-2222-4333-8444-5555')
+
+    await goToEmail()
+    await act(async () => {
+      fireEvent.change(screen.getByLabelText('Mã xác nhận'), { target: { value: '123456' } })
+      fireEvent.submit(screen.getByLabelText('Mã xác nhận').closest('form')!)
+    })
+
+    expect(screen.getByRole('alert')).toHaveTextContent('Chưa đọc được danh sách hồ sơ trên máy này')
+    expect(screen.queryByText(/chưa có hồ sơ nào/)).not.toBeInTheDocument()
+    expect(sync.pullProfile).not.toHaveBeenCalled()
+    expect(profileState.switchProfile).not.toHaveBeenCalled()
+  })
+
   it('never announces an unchecked account as an empty one after signing in', async () => {
     // The same conflation one screen later: this sentence tells a parent their child is gone.
     profileState.fetchRemoteProfiles.mockResolvedValue(null)

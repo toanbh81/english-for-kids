@@ -278,6 +278,15 @@ export function ParentDashboard({ onLock }: Props) {
   }, [remoteShowKey])
 
   /**
+   * `undefined` when the roster is unreadable, and when no profile is active at all (the device is
+   * reading the legacy namespace). Either way there is no name to print — see the "Hồ sơ" block.
+   */
+  const activeProfileEntry = profiles.find(p => p.id === activeId)
+
+  /** Set when a roster write did not happen — see `handleAddProfile`. */
+  const [profileNotice, setProfileNotice] = useState<string | null>(null)
+
+  /**
    * Set when the mirror's half of a reset did not go through — and it survives leaving the screen:
    * a reset the sync engine still owes is still true tomorrow, so a parent coming back to check
    * reads the same sentence rather than a screen that looks as if nothing happened.
@@ -420,7 +429,14 @@ export function ParentDashboard({ onLock }: Props) {
   function handleAddProfile() {
     const name = window.prompt('Tên của bé:')
     if (name === null) return
-    addProfile(name)
+    setProfileNotice(null)
+    // `null` means the child is not on disk — an unreadable roster this must not write over, or a
+    // store that refused the write. Re-reading `listProfiles()` alone would simply show nothing and
+    // leave the parent tapping a button that does nothing, which is how they come to tap it twice.
+    if (!addProfile(name)) {
+      setProfileNotice('Chưa lưu được hồ sơ mới trên máy này. Tiến độ của bé vẫn an toàn — mở lại ứng dụng rồi thử lại nhé.')
+      return
+    }
     setProfiles(listProfiles())
     // Fire-and-forget: the new row reaches the server on the next launch regardless (`connectCloud`
     // calls the same function), this only saves the wait for a child who taps in the next minute.
@@ -587,14 +603,31 @@ export function ParentDashboard({ onLock }: Props) {
                   + Thêm hồ sơ
                 </button>
               </div>
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <p className="text-sm font-semibold text-ink-900">
-                  {profiles.find(p => p.id === activeId)?.avatar} {profiles.find(p => p.id === activeId)?.name}
+              {/* The roster can be unreadable — a half-written value this app now refuses to write
+                * over — and `speakup.profile` can be unset, in which case the device is reading the
+                * legacy namespace. Both used to render as an empty string directly beside
+                * "+ Thêm hồ sơ", which is the worst possible pairing: a parent who sees a blank
+                * name taps the button, and that button is the one that writes the roster. */}
+              {activeProfileEntry ? (
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-sm font-semibold text-ink-900">
+                    {activeProfileEntry.avatar} {activeProfileEntry.name}
+                  </p>
+                  <button type="button" onClick={handleRenameActiveProfile} className="min-h-[36px] text-xs font-bold text-ink-500 underline">
+                    Đổi tên
+                  </button>
+                </div>
+              ) : (
+                <p data-testid="profile-unreadable" className="rounded-xl2 bg-sun-50 p-3 text-xs font-semibold text-sun-700 md:text-sm">
+                  Chưa đọc được danh sách hồ sơ trên máy này. Tiến độ của bé vẫn đang được lưu bình thường —
+                  mở lại ứng dụng để kiểm tra, và tạm thời đừng thêm hồ sơ mới.
                 </p>
-                <button type="button" onClick={handleRenameActiveProfile} className="min-h-[36px] text-xs font-bold text-ink-500 underline">
-                  Đổi tên
-                </button>
-              </div>
+              )}
+              {profileNotice && (
+                <p role="status" data-testid="profile-notice" className="mt-2 rounded-xl2 bg-fix-50 p-3 text-xs font-semibold text-fix-700 md:text-sm">
+                  {profileNotice}
+                </p>
+              )}
               {profiles.length > 1 && (
                 <div className="mt-2">
                   <ProfilePicker profiles={profiles} activeId={activeId} onSelect={handleSwitchProfile} />
@@ -656,14 +689,26 @@ export function ParentDashboard({ onLock }: Props) {
                       <p className="mt-1 text-xs font-semibold text-fix-700">Không tải được tiến độ của bé lúc này.</p>
                     ) : (
                       <div className="mt-1 flex flex-col gap-1 text-xs font-semibold text-ink-500 md:text-sm">
-                        <p>Chuỗi ngày: {entry.streak} · Tuần này: {entry.weekMinutes} phút</p>
-                        <p>
-                          Điểm trung bình — Nói {formatAvg(entry.averages.speak)} · Từ vựng {formatAvg(entry.averages.word)} · Ghép câu {formatAvg(entry.averages.sentence)}
-                        </p>
-                        {entry.weak.length === 0 ? (
-                          <p>Chưa đủ dữ liệu về âm sai</p>
+                        {/* A profile the server holds nothing for gets a sentence, not a
+                          * measurement: "Chuỗi ngày: 0 · Tuần này: 0 phút" reads as a confident
+                          * statement about a child who has been idle, and it is exactly what an
+                          * empty placeholder row produces. Hiding such a profile instead would hide
+                          * a real child a parent added on another device and is checking arrived —
+                          * the same error class, pointing the other way. */}
+                        {entry.eventCount === 0 ? (
+                          <p data-testid="remote-empty">Chưa có dữ liệu nào trên máy chủ</p>
                         ) : (
-                          <p>Âm hay sai: {entry.weak.map(w => `/${w.phoneme}/ (${Math.round(w.avg)})`).join(', ')}</p>
+                          <>
+                            <p>Chuỗi ngày: {entry.streak} · Tuần này: {entry.weekMinutes} phút</p>
+                            <p>
+                              Điểm trung bình — Nói {formatAvg(entry.averages.speak)} · Từ vựng {formatAvg(entry.averages.word)} · Ghép câu {formatAvg(entry.averages.sentence)}
+                            </p>
+                            {entry.weak.length === 0 ? (
+                              <p>Chưa đủ dữ liệu về âm sai</p>
+                            ) : (
+                              <p>Âm hay sai: {entry.weak.map(w => `/${w.phoneme}/ (${Math.round(w.avg)})`).join(', ')}</p>
+                            )}
+                          </>
                         )}
                       </div>
                     )}

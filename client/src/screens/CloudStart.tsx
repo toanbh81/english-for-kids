@@ -207,6 +207,16 @@ export function CloudStart() {
     // roster names an id, `rescueOrphanNamespaces` reads the keys a pull writes as abandoned and
     // folds them into the active child. `pullProfile` refuses an id that is not in the roster.
     const merged = adoptProfiles(remote)
+    // The same conflation as `fetchRemoteProfiles === null`, one module over: the roster on this
+    // device is unreadable, so these children could not be joined onto it. Saying "this account has
+    // no profiles" here would be a false sentence about the family's data, in front of a parent who
+    // came to this screen because something had already gone missing once.
+    if (merged === null) {
+      setError('Chưa đọc được danh sách hồ sơ trên máy này, nên chưa ghép được hồ sơ của bé vào. Chưa có gì mất cả — mở lại ứng dụng rồi thử lại nhé.')
+      setCandidates(null)
+      setStage('menu')
+      return
+    }
     const remoteIds = new Set(remote.map(p => p.id))
     // The account's own profiles, minus the empty one this device minted moments ago: it IS owned
     // by this account (see `mintedId`), so ownership alone cannot tell them apart, and offering it

@@ -231,7 +231,7 @@ describe('two children, one iPad', () => {
     const first = ensureLocalProfile()!
     expect(getStars('sword:cat')).toBe(3)
 
-    const second = addProfile('Bơ', '🐨')
+    const second = addProfile('Bơ', '🐨')!
     expect(listProfiles().map(p => p.name)).toEqual([DEFAULT_PROFILE_NAME, 'Bơ'])
 
     expect(switchProfile(second.id, { reload: false })).toBe(true)
@@ -359,6 +359,50 @@ describe('two children, one iPad', () => {
       const damagedBytes = localStorage.getItem('speakup.profiles')
 
       dropProfile(A)
+
+      expect(localStorage.getItem('speakup.profiles')).toBe(damagedBytes)
+    })
+
+    /**
+     * The guard has to sit at EVERY door onto the roster, not at the two that were noticed first.
+     * `mergeIntoRoster` is the third and fourth: "+ Thêm hồ sơ" and the restore path both write
+     * through it, and it read the roster with `listProfiles()`, which throws the `damaged` flag
+     * away. A union computed from "no children" then went straight over the half-written bytes —
+     * and the next launch, finding a roster of one, folded every other namespace into it.
+     */
+    it('does not save a new child over a roster it cannot read', () => {
+      twoChildrenThenTruncateTheRoster()
+      const damagedBytes = localStorage.getItem('speakup.profiles')
+
+      // The parent taps "+ Thêm hồ sơ" — which is exactly what a blank profile name invites.
+      expect(addProfile('Bo')).toBeNull()
+
+      expect(localStorage.getItem('speakup.profiles')).toBe(damagedBytes)
+      expect(JSON.parse(localStorage.getItem(`speakup.${A}.stars`)!)).toEqual({ 'sword:cat': 3 })
+      expect(JSON.parse(localStorage.getItem(`speakup.${B}.stars`)!)).toEqual({ 'sword:dog': 2 })
+      expect(JSON.parse(localStorage.getItem(`speakup.${A}.leitner`)!)).toEqual({ 'w-a': { box: 3, due: 10 } })
+      expect(JSON.parse(localStorage.getItem(`speakup.${B}.leitner`)!)).toEqual({ 'w-b': { box: 5, due: 20 } })
+    })
+
+    it('does not adopt a restored child over a roster it cannot read', () => {
+      twoChildrenThenTruncateTheRoster()
+      const damagedBytes = localStorage.getItem('speakup.profiles')
+      const remote = [{ id: '33333333-4444-4555-8666-777777777777', name: 'Cun', avatar: 'C', created: 3 }]
+
+      // `null`, not an empty roster: the caller has to say it could not join them rather than
+      // report an account with no children (see CloudStart).
+      expect(adoptProfiles(remote)).toBeNull()
+
+      expect(localStorage.getItem('speakup.profiles')).toBe(damagedBytes)
+      expect(JSON.parse(localStorage.getItem(`speakup.${A}.leitner`)!)).toEqual({ 'w-a': { box: 3, due: 10 } })
+      expect(JSON.parse(localStorage.getItem(`speakup.${B}.leitner`)!)).toEqual({ 'w-b': { box: 5, due: 20 } })
+    })
+
+    it('renames nobody in a roster it cannot read', () => {
+      twoChildrenThenTruncateTheRoster()
+      const damagedBytes = localStorage.getItem('speakup.profiles')
+
+      expect(renameProfile(A, 'Ten moi')).toEqual([])
 
       expect(localStorage.getItem('speakup.profiles')).toBe(damagedBytes)
     })
@@ -496,10 +540,10 @@ describe('the server side', () => {
     const remote = await fetchRemoteProfiles()
     expect(remote).toEqual([{ id: remoteId, name: 'Bơ', avatar: '🐨', created: Date.parse('2026-08-01T00:00:00Z') }])
 
-    const merged = adoptProfiles(remote!)
+    const merged = adoptProfiles(remote!)!
     expect(merged.map(p => p.id)).toEqual([local.id, remoteId])
     // Adopting twice must not clone anybody.
-    expect(adoptProfiles(remote!).map(p => p.id)).toEqual([local.id, remoteId])
+    expect(adoptProfiles(remote!)!.map(p => p.id)).toEqual([local.id, remoteId])
     expect(listProfiles()).toHaveLength(2)
   })
 
@@ -536,8 +580,8 @@ describe('the server side', () => {
 
 describe('renaming a profile locally', () => {
   it('trims the name and leaves every other profile untouched', () => {
-    const first = addProfile('Bé')
-    const second = addProfile('Bơ')
+    const first = addProfile('Bé')!
+    const second = addProfile('Bơ')!
 
     const roster = renameProfile(second.id, ' Sóc con  ')
 
@@ -546,7 +590,7 @@ describe('renaming a profile locally', () => {
   })
 
   it('does nothing for an id this device does not know, or a blank name', () => {
-    const profile = addProfile('Bé')
+    const profile = addProfile('Bé')!
     expect(renameProfile('11111111-2222-4333-8444-555555555555', 'Ai đó')).toEqual(listProfiles())
     expect(renameProfile(profile.id, '   ')).toEqual(listProfiles())
     expect(listProfiles().find(p => p.id === profile.id)?.name).toBe('Bé')
