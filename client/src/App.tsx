@@ -60,8 +60,11 @@ export default function App() {
         <Route path="/sentences" element={<SentenceList />} />
         <Route path="/sentence/:id" element={<SentenceBuilder />} />
         <Route path="/parent" element={<ParentGate />} />
-        {/* No math gate: a wiped device has no progress to protect (spec flows 3, 4) and nothing
-          * here shows a child anything about accounts — only an email/OTP or an 8-char code. */}
+        {/* The route is open; the DOORS behind it are not. `/start` is only ever linked from a
+          * device with no history at all, but a typed URL still lands here, so the math question
+          * sits in front of both actions — the one that can sign this iPad into another account
+          * and the one that re-parents profiles onto it. Reading the two-button menu is harmless
+          * (spec flows 3, 4). */}
         <Route path="/start" element={<CloudStart />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

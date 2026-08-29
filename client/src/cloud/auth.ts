@@ -272,6 +272,20 @@ function looksLikeWrongKind(error: AuthError): boolean {
 }
 
 /**
+ * Is this refusal "that email has no account and you told me not to create one"?
+ *
+ * Supabase answers a `shouldCreateUser: false` OTP for an unknown address with a signups-disabled
+ * error (`otp_disabled`, "Signups not allowed for otp") rather than a 404 — it deliberately does
+ * not confirm or deny an address to an anonymous caller. Matching the code first and the wording
+ * second keeps this from ever being read as a network failure.
+ */
+function looksLikeNoSuchUser(error: AuthError): boolean {
+  const code = (error as AuthError & { code?: string }).code ?? ''
+  if (code === 'otp_disabled' || code === 'user_not_found') return true
+  return /signups?\s+not\s+allowed|otp_disabled|user\s+not\s+found/i.test(error.message ?? '')
+}
+
+/**
  * Upgrade this device's anonymous account to a parent email (flow 2).
  *
  * Supabase sends a 6-digit code to the address; `verifyEmailOtp` finishes it. The user id does not
@@ -297,8 +311,15 @@ export async function linkEmail(email: string): Promise<AuthResult> {
 
 /**
  * Sign a parent in on a device that has no session of its own — a new iPad, or one whose cache was
- * wiped (flow 3). Creates the account if that email has never been used, which is what makes it
- * safe to offer on a fresh device: the parent types their address and gets their family either way.
+ * wiped (flow 3).
+ *
+ * **`shouldCreateUser: false`, always.** This door is offered under "email đã liên kết", and an
+ * address that has never been linked must fail saying so — not mint a brand-new empty account. It
+ * used to create one, and that is how a family lost everything: the new account owns nothing, the
+ * anonymous account holding months of mirrored progress is abandoned in the same breath, its
+ * recovery code is owner-read-only and is now being read as somebody else, and every flush after
+ * that fails RLS under a status line reading "Chưa đồng bộ N mục" for ever. A clean refusal costs
+ * the parent one honest sentence; the other way there is no way back.
  *
  * **It refuses while this device is holding an unlinked anonymous account with a child on it.**
  * Signing in as somebody else would strand that account: its rows would still exist, owned by a
@@ -322,8 +343,16 @@ export async function signInWithEmail(
     return failed('anonymous-session-in-use')
   }
   try {
-    const { error } = await sb.auth.signInWithOtp({ email: address, options: { shouldCreateUser: true } })
-    if (error) { pending = null; return failed(error.message) }
+    const { error } = await sb.auth.signInWithOtp({ email: address, options: { shouldCreateUser: false } })
+    // Supabase's way of saying "no user for that address and I was told not to make one" is a
+    // signup/otp refusal, and it is the ONE answer this screen must not blur into "có lỗi xảy ra":
+    // the parent has to learn that this email was never linked, so they reach for the recovery code
+    // instead of typing the address again. Translated to an app code here so the screen never has
+    // to read Supabase's English.
+    if (error) {
+      pending = null
+      return failed(looksLikeNoSuchUser(error) ? 'email-not-linked' : error.message)
+    }
     pending = { email: address, kind: 'email' }
     return { ok: true, userId: await currentUserId() }
   } catch (e) {

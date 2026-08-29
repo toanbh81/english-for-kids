@@ -31,6 +31,7 @@ type AuthOk = { ok: true; userId: string | null }
 type AuthFail = { ok: false; error: string }
 const authMock = vi.hoisted(() => ({
   currentEmail: vi.fn<() => Promise<string | null>>(async () => null),
+  currentUserId: vi.fn<() => Promise<string | null>>(async () => 'u1'),
   isAnonymous: vi.fn<() => Promise<boolean>>(async () => true),
   ensureRecoveryCode: vi.fn<() => Promise<string | null>>(async () => null),
   linkEmail: vi.fn<(email: string) => Promise<AuthOk | AuthFail>>(async () => ({ ok: true, userId: 'u1' })),
@@ -63,6 +64,7 @@ const syncMock = vi.hoisted(() => ({
   syncStatus: vi.fn<() => MockSyncStatus>(() => ({ state: 'off', pending: 0, lastSyncedAt: null, lastError: null, syncing: false })),
   subscribeSyncStatus: vi.fn<(fn: (s: MockSyncStatus) => void) => () => void>(() => () => undefined),
   resetRemoteProgress: vi.fn<() => Promise<boolean>>(async () => true),
+  hasPendingReset: vi.fn<(id: string) => boolean>(() => false),
 }))
 vi.mock('../cloud/sync', () => syncMock)
 
@@ -92,6 +94,7 @@ beforeEach(() => {
 
   cloud.configured = false
   authMock.currentEmail.mockReset().mockResolvedValue(null)
+  authMock.currentUserId.mockReset().mockResolvedValue('u1')
   authMock.isAnonymous.mockReset().mockResolvedValue(true)
   authMock.ensureRecoveryCode.mockReset().mockResolvedValue(null)
   authMock.linkEmail.mockReset().mockResolvedValue({ ok: true, userId: 'u1' })
@@ -109,6 +112,7 @@ beforeEach(() => {
   syncMock.syncStatus.mockReset().mockReturnValue({ state: 'off', pending: 0, lastSyncedAt: null, lastError: null, syncing: false })
   syncMock.subscribeSyncStatus.mockReset().mockReturnValue(() => undefined)
   syncMock.resetRemoteProgress.mockReset().mockResolvedValue(true)
+  syncMock.hasPendingReset.mockReset().mockReturnValue(false)
 })
 
 afterEach(() => {
@@ -595,7 +599,7 @@ describe('Phase 11: "Tài khoản"', () => {
     expect(authMock.linkEmail).toHaveBeenLastCalledWith('fixed@example.com')
   })
 
-  it('signs out only after the confirm dialog is accepted, and returns to the anonymous state', async () => {
+  it('signs out only after the confirm dialog is accepted, and says the device now has no account', async () => {
     cloud.configured = true
     authMock.isAnonymous.mockResolvedValue(false)
     authMock.currentEmail.mockResolvedValue('bome@example.com')
@@ -608,7 +612,11 @@ describe('Phase 11: "Tài khoản"', () => {
     await flush()
 
     expect(authMock.signOut).toHaveBeenCalled()
-    expect(screen.getByLabelText('Email của bố/mẹ')).toBeInTheDocument()
+    // Signing out leaves NO session, and a link form would call `updateUser` on a user that no
+    // longer exists. The screen says where the device stands instead.
+    expect(screen.queryByRole('button', { name: 'Đăng xuất' })).not.toBeInTheDocument()
+    expect(screen.getByTestId('no-session')).toBeInTheDocument()
+    expect(screen.queryByLabelText('Email của bố/mẹ')).not.toBeInTheDocument()
   })
 
   it('adds a profile and registers it with the server', async () => {
@@ -679,6 +687,157 @@ describe('Phase 11: "Tài khoản"', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Đặt lại tiến trình' }))
     await waitFor(() => expect(syncMock.resetRemoteProgress).toHaveBeenCalledWith('p1'))
+  })
+
+  /**
+   * F2. `isAnonymous()` answers false with no session at all, so the screen used to render the
+   * signed-in branch for an account that does not exist: an empty email line and a "Đăng xuất"
+   * button, with no link form and no recovery code — on a device that has been offline since
+   * install, or has just signed out. That is exactly the window in which nothing is backed up.
+   * The three states are checked separately here because only the third one was ever wrong.
+   */
+  describe('the three account states', () => {
+    it('linked: shows the email and the way out, and no link form', async () => {
+      cloud.configured = true
+      authMock.isAnonymous.mockResolvedValue(false)
+      authMock.currentEmail.mockResolvedValue('bome@example.com')
+      authMock.currentUserId.mockResolvedValue('u1')
+
+      renderWithRouter(<ParentDashboard />)
+      await flush()
+
+      expect(screen.getByText('bome@example.com')).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Đăng xuất' })).toBeInTheDocument()
+      expect(screen.queryByLabelText('Email của bố/mẹ')).not.toBeInTheDocument()
+      expect(screen.queryByTestId('no-session')).not.toBeInTheDocument()
+    })
+
+    it('anonymous: shows the link form and the recovery code', async () => {
+      cloud.configured = true
+      authMock.isAnonymous.mockResolvedValue(true)
+      authMock.currentEmail.mockResolvedValue(null)
+      authMock.currentUserId.mockResolvedValue('u1')
+      authMock.ensureRecoveryCode.mockResolvedValue('ABC23XYZ')
+
+      renderWithRouter(<ParentDashboard />)
+      await flush()
+
+      expect(screen.getByLabelText('Email của bố/mẹ')).toBeInTheDocument()
+      expect(await screen.findByText('ABC23XYZ')).toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: 'Đăng xuất' })).not.toBeInTheDocument()
+      expect(screen.queryByTestId('no-session')).not.toBeInTheDocument()
+    })
+
+    it('no session at all: never the signed-in branch, and says why in Vietnamese', async () => {
+      cloud.configured = true
+      // The exact combination that was never tested: not anonymous, and no email either.
+      authMock.isAnonymous.mockResolvedValue(false)
+      authMock.currentEmail.mockResolvedValue(null)
+      authMock.currentUserId.mockResolvedValue(null)
+
+      renderWithRouter(<ParentDashboard />)
+      await flush()
+
+      expect(screen.queryByRole('button', { name: 'Đăng xuất' })).not.toBeInTheDocument()
+      expect(screen.getByTestId('no-session')).toHaveTextContent('vẫn đang được lưu trên máy này')
+      // No dead form: `linkEmail` would call `updateUser` on a user that does not exist.
+      expect(screen.queryByLabelText('Email của bố/mẹ')).not.toBeInTheDocument()
+    })
+
+    it('blames the network when that is the reason there is no account', async () => {
+      cloud.configured = true
+      authMock.isAnonymous.mockResolvedValue(false)
+      authMock.currentEmail.mockResolvedValue(null)
+      authMock.currentUserId.mockResolvedValue(null)
+      vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false)
+
+      renderWithRouter(<ParentDashboard />)
+      await flush()
+
+      expect(screen.getByTestId('no-session')).toHaveTextContent('Đang ngoại tuyến')
+    })
+  })
+
+  /**
+   * F3. The boolean `resetRemoteProgress` returns was discarded, so a reset that never reached the
+   * server looked exactly like one that did — and the sync engine then put every deleted row back
+   * on the next launch. The engine's half is fixed in cloud/sync.ts; this is the half the parent
+   * can see.
+   */
+  it('says so, in Vietnamese, when the mirror half of a reset did not go through', async () => {
+    cloud.configured = true
+    syncMock.resetRemoteProgress.mockResolvedValue(false)
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+
+    renderWithRouter(<ParentDashboard />)
+    await flush()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Đặt lại tiến trình' }))
+
+    const notice = await screen.findByTestId('reset-notice')
+    expect(notice).toHaveTextContent('Đã xoá xong trên máy này')
+    expect(notice).toHaveTextContent('chưa xoá được')
+  })
+
+  it('still says it on the next visit, while the reset is still owed', async () => {
+    cloud.configured = true
+    syncMock.hasPendingReset.mockReturnValue(true)
+
+    renderWithRouter(<ParentDashboard />)
+    await flush()
+
+    // The parent left the screen and came back: a reset the engine has not carried out yet is
+    // still true, and a screen that looked normal would be the same silence as before.
+    expect(screen.getByTestId('reset-notice')).toHaveTextContent('chưa xoá được')
+    expect(syncMock.hasPendingReset).toHaveBeenCalledWith('p1')
+  })
+
+  it('stays quiet when the mirror half of a reset succeeded', async () => {
+    cloud.configured = true
+    syncMock.resetRemoteProgress.mockResolvedValue(true)
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+
+    renderWithRouter(<ParentDashboard />)
+    await flush()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Đặt lại tiến trình' }))
+    await waitFor(() => expect(syncMock.resetRemoteProgress).toHaveBeenCalled())
+    await flush()
+
+    expect(screen.queryByTestId('reset-notice')).not.toBeInTheDocument()
+  })
+
+  /** F7: the confirm dialog was unchanged from the local-only era, and this button now deletes the
+   * child's cloud copy as well. It has to say so before the parent taps OK. */
+  it('warns that the reset deletes the cloud copy too, and only when there is one', async () => {
+    cloud.configured = true
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false)
+
+    const { unmount } = renderWithRouter(<ParentDashboard />)
+    await flush()
+    fireEvent.click(screen.getByRole('button', { name: 'Đặt lại tiến trình' }))
+    expect(confirm.mock.calls[0][0]).toMatch(/trên tài khoản/)
+    unmount()
+
+    cloud.configured = false
+    confirm.mockClear()
+    renderWithRouter(<ParentDashboard />)
+    await flush()
+    fireEvent.click(screen.getByRole('button', { name: 'Đặt lại tiến trình' }))
+    expect(confirm.mock.calls[0][0]).not.toMatch(/tài khoản/)
+  })
+
+  /** F7: "an toàn trên mọi thiết bị" sat on the same screen as "Bản ghi gần đây", and recordings
+   * never sync. The consent line the spec asks for stays; the promise around it gets honest. */
+  it('promises only what actually travels', async () => {
+    cloud.configured = true
+
+    renderWithRouter(<ParentDashboard />)
+    await flush()
+
+    expect(screen.queryByText(/trên mọi thiết bị/)).not.toBeInTheDocument()
+    expect(screen.getByText(/bản ghi giọng nói chỉ nằm trên máy này/)).toBeInTheDocument()
+    expect(screen.getByText(/Tiến độ học của bé sẽ được lưu trên tài khoản của bạn/)).toBeInTheDocument()
   })
 
   it('does not touch the mirror on reset with no cloud configured', async () => {

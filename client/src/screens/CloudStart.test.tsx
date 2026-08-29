@@ -12,22 +12,52 @@ type AuthOk = { ok: true; userId: string | null }
 type AuthFail = { ok: false; error: string }
 const auth = vi.hoisted(() => ({
   currentAccessToken: vi.fn<() => Promise<string | null>>(async () => 'token-abc'),
-  signInWithEmail: vi.fn<(email: string, options?: unknown) => Promise<AuthOk | AuthFail>>(async () => ({ ok: true, userId: 'u1' })),
+  currentEmail: vi.fn<() => Promise<string | null>>(async () => null),
+  currentUserId: vi.fn<() => Promise<string | null>>(async () => 'u1'),
+  ensureRecoveryCode: vi.fn<() => Promise<string | null>>(async () => null),
+  startAnonymousSession: vi.fn(async () => undefined),
+  signInWithEmail: vi.fn<(email: string, options?: { abandonAnonymous?: boolean }) => Promise<AuthOk | AuthFail>>(async () => ({ ok: true, userId: 'u1' })),
   verifyEmailOtp: vi.fn<(email: string, token: string) => Promise<AuthOk | AuthFail>>(async () => ({ ok: true, userId: 'u1' })),
 }))
 vi.mock('../cloud/auth', () => auth)
 
+/**
+ * **`profileState` is the REAL module here** — only the two functions that would talk to a server
+ * or reload the document are replaced.
+ *
+ * The whole-module mock this file used to carry (`adoptProfiles: remote => remote`) made two of
+ * this screen's rules untestable at once: the ordering constraint (`adoptProfiles` must COMPLETE
+ * before `pullProfile` is called, or `rescueOrphanNamespaces` folds the pulled keys into the wrong
+ * child) passed with the calls inverted, and the "which profiles are restorable" filter was a
+ * no-op because the mock returned whatever it was handed. Both defects were invisible to fifteen
+ * green tests. The real roster — real localStorage, real UUID validation — is what makes them
+ * visible, which is why the ids below are real UUIDs.
+ */
 const profileState = vi.hoisted(() => ({
-  adoptProfiles: vi.fn((remote: Profile[]) => remote),
-  fetchRemoteProfiles: vi.fn(async (): Promise<Profile[]> => []),
+  fetchRemoteProfiles: vi.fn<() => Promise<Profile[]>>(async () => []),
   switchProfile: vi.fn(() => true),
 }))
-vi.mock('../cloud/profileState', () => profileState)
+vi.mock('../cloud/profileState', async importOriginal => ({
+  ...(await importOriginal<typeof import('../cloud/profileState')>()),
+  fetchRemoteProfiles: profileState.fetchRemoteProfiles,
+  switchProfile: profileState.switchProfile,
+}))
 
-const sync = vi.hoisted(() => ({ pullProfile: vi.fn(async () => true) }))
+const sync = vi.hoisted(() => ({
+  pullProfile: vi.fn(async (_id: string) => true),
+  hasMirroredData: vi.fn((_id: string) => false),
+}))
 vi.mock('../cloud/sync', () => sync)
 
+import { listProfiles } from '../cloud/profileState'
+import { logActivity } from '../progress/activity'
+import { setStars } from '../progress/store'
 import { CloudStart } from './CloudStart'
+
+/** Real UUIDs, because the real roster refuses anything else (`isProfileId`). */
+const MINTED = '11111111-2222-4333-8444-555555555555'
+const SOC = '22222222-3333-4444-8555-666666666666'
+const CAO = '33333333-4444-4555-8666-777777777777'
 
 function renderStart() {
   return render(
@@ -35,22 +65,44 @@ function renderStart() {
       <Routes>
         <Route path="/start" element={<CloudStart />} />
         <Route path="/" element={<p>trang chủ</p>} />
+        <Route path="/parent" element={<p>góc phụ huynh</p>} />
       </Routes>
     </MemoryRouter>,
   )
 }
 
-const profile = (id: string, name = 'Bé', avatar = '🦊'): Profile => ({ id, name, avatar, created: 0 })
+const profile = (id: string, name = 'Bé', avatar = '🦊', created = 0): Profile => ({ id, name, avatar, created })
+
+/** A device as `ensureLocalProfile()` would have left it: one profile in the roster, and active. */
+function bootDevice(id = MINTED) {
+  localStorage.setItem('speakup.profiles', JSON.stringify([profile(id)]))
+  localStorage.setItem('speakup.profile', id)
+}
+
+/** The math question is `a × b` with both in 3..9; `Math.random() === 0` makes it 3 × 3. */
+function answerTheQuestion() {
+  fireEvent.change(screen.getByLabelText('Đáp án'), { target: { value: '9' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Vào' }))
+}
+
+function openEmailDoor() {
+  fireEvent.click(screen.getByText('Tôi có email đã liên kết'))
+  answerTheQuestion()
+}
 
 beforeEach(() => {
+  localStorage.clear()
   vi.clearAllMocks()
+  vi.spyOn(Math, 'random').mockReturnValue(0)
   cloud.configured = true
   auth.currentAccessToken.mockResolvedValue('token-abc')
+  auth.currentEmail.mockResolvedValue(null)
   auth.signInWithEmail.mockResolvedValue({ ok: true, userId: 'u1' })
   auth.verifyEmailOtp.mockResolvedValue({ ok: true, userId: 'u1' })
-  profileState.adoptProfiles.mockImplementation((remote: Profile[]) => remote)
   profileState.fetchRemoteProfiles.mockResolvedValue([])
   sync.pullProfile.mockResolvedValue(true)
+  sync.hasMirroredData.mockReturnValue(false)
+  bootDevice()
   vi.stubGlobal('fetch', vi.fn())
 })
 
@@ -71,18 +123,170 @@ describe('the menu', () => {
   })
 })
 
+/**
+ * F1d. This route is typeable, and both doors do something a child must never do by accident: the
+ * email door can hand the iPad to another account, and the recovery code re-parents profiles onto
+ * it. Reading the menu is harmless; the forms are not.
+ */
+describe('the parent question in front of both doors', () => {
+  it('asks before the email form, and only shows it once the answer is right', () => {
+    renderStart()
+
+    fireEvent.click(screen.getByText('Tôi có email đã liên kết'))
+    expect(screen.queryByLabelText('Email của bố/mẹ')).not.toBeInTheDocument()
+    expect(screen.getByText('3 × 3 = ?')).toBeInTheDocument()
+
+    fireEvent.change(screen.getByLabelText('Đáp án'), { target: { value: '5' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Vào' }))
+    expect(screen.getByText('Chưa đúng, thử lại')).toBeInTheDocument()
+    expect(screen.queryByLabelText('Email của bố/mẹ')).not.toBeInTheDocument()
+
+    answerTheQuestion()
+    expect(screen.getByLabelText('Email của bố/mẹ')).toBeInTheDocument()
+  })
+
+  it('asks before the recovery-code form too', () => {
+    renderStart()
+
+    fireEvent.click(screen.getByText('Tôi có mã khôi phục'))
+    expect(screen.queryByLabelText(/Mã khôi phục/)).not.toBeInTheDocument()
+
+    answerTheQuestion()
+    expect(screen.getByLabelText(/Mã khôi phục/)).toBeInTheDocument()
+  })
+
+  it('asks once per visit, not once per door', () => {
+    renderStart()
+    openEmailDoor()
+    fireEvent.click(screen.getByText('← Chọn cách khác'))
+
+    fireEvent.click(screen.getByText('Tôi có mã khôi phục'))
+    expect(screen.getByLabelText(/Mã khôi phục/)).toBeInTheDocument()
+  })
+})
+
 describe('the email door', () => {
   async function goToEmail() {
     renderStart()
-    fireEvent.click(screen.getByText('Tôi có email đã liên kết'))
+    openEmailDoor()
     fireEvent.change(screen.getByLabelText('Email của bố/mẹ'), { target: { value: 'bome@example.com' } })
     await act(async () => { fireEvent.submit(screen.getByLabelText('Email của bố/mẹ').closest('form')!) })
   }
 
-  it('sends the OTP with abandonAnonymous — only this screen is allowed to', async () => {
+  /**
+   * F1b. The flag used to be passed on every send, in violation of the contract quoted in
+   * `cloud/auth.ts` — which made the `anonymous-session-in-use` guard dead code and the Vietnamese
+   * written for it unreachable. It is never on the first attempt now.
+   */
+  it('never asks to abandon the anonymous account on the first attempt', async () => {
     await goToEmail()
-    expect(auth.signInWithEmail).toHaveBeenCalledWith('bome@example.com', { abandonAnonymous: true })
+    expect(auth.signInWithEmail).toHaveBeenCalledWith('bome@example.com', {})
     expect(screen.getByText(/Nhập mã 6 số vừa gửi tới bome@example.com/)).toBeInTheDocument()
+  })
+
+  it('continues by itself on a device with nothing to leave behind', async () => {
+    // The guard fires — this device has a profile and an anonymous session — but the profile is the
+    // empty one the app mints on every launch, so there is provably nothing to strand.
+    auth.signInWithEmail
+      .mockResolvedValueOnce({ ok: false, error: 'anonymous-session-in-use' })
+      .mockResolvedValueOnce({ ok: true, userId: 'u1' })
+
+    await goToEmail()
+
+    expect(auth.signInWithEmail).toHaveBeenNthCalledWith(2, 'bome@example.com', { abandonAnonymous: true })
+    expect(screen.getByText(/Nhập mã 6 số vừa gửi tới bome@example.com/)).toBeInTheDocument()
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  })
+
+  it('stops and names what would be lost when this device is holding real progress', async () => {
+    setStars('sword:cat', 3)
+    logActivity({ ts: 1000, kind: 'word', id: 'sword:cat', score: 90 })
+    logActivity({ ts: 2000, kind: 'speak', id: 'sz-1', score: 80 })
+    auth.signInWithEmail.mockResolvedValue({ ok: false, error: 'anonymous-session-in-use' })
+
+    await goToEmail()
+
+    // One attempt, without the flag, and it stopped there.
+    expect(auth.signInWithEmail).toHaveBeenCalledTimes(1)
+    expect(auth.signInWithEmail).toHaveBeenCalledWith('bome@example.com', {})
+    expect(screen.getByText('Máy này đang có tiến độ của một bé')).toBeInTheDocument()
+    // Named, in numbers read off this device — not a vague warning.
+    expect(screen.getByText(/3 sao và 2 lượt luyện/)).toBeInTheDocument()
+    expect(screen.getByText(/sẽ không mở lại được nữa/)).toBeInTheDocument()
+    // …and the way to keep it.
+    expect(screen.getByRole('link', { name: 'Góc phụ huynh' })).toHaveAttribute('href', '/parent')
+  })
+
+  it('counts rows that only exist on the server as something to lose', async () => {
+    // Nothing on disk (a trimmed cache) but rows mirrored under the anonymous user id: those are
+    // exactly what becomes unreachable, and they used to be nobody's business.
+    sync.hasMirroredData.mockReturnValue(true)
+    auth.signInWithEmail.mockResolvedValue({ ok: false, error: 'anonymous-session-in-use' })
+
+    await goToEmail()
+
+    expect(screen.getByText(/đã được lưu lên máy chủ dưới tài khoản đó/)).toBeInTheDocument()
+  })
+
+  it('passes the flag only after the parent says so in as many words', async () => {
+    setStars('sword:cat', 3)
+    auth.signInWithEmail.mockResolvedValue({ ok: false, error: 'anonymous-session-in-use' })
+    await goToEmail()
+
+    auth.signInWithEmail.mockResolvedValue({ ok: true, userId: 'u2' })
+    await act(async () => { fireEvent.click(screen.getByText(/Vẫn tiếp tục với bome@example.com/)) })
+
+    expect(auth.signInWithEmail).toHaveBeenLastCalledWith('bome@example.com', { abandonAnonymous: true })
+    expect(screen.getByText(/Nhập mã 6 số vừa gửi tới bome@example.com/)).toBeInTheDocument()
+  })
+
+  it('lets the parent back out of abandoning without sending anything', async () => {
+    setStars('sword:cat', 3)
+    auth.signInWithEmail.mockResolvedValue({ ok: false, error: 'anonymous-session-in-use' })
+    await goToEmail()
+
+    fireEvent.click(screen.getByText('← Quay lại'))
+
+    expect(screen.getByLabelText('Email của bố/mẹ')).toBeInTheDocument()
+    expect(auth.signInWithEmail).toHaveBeenCalledTimes(1)
+  })
+
+  /**
+   * F1c. `shouldCreateUser: true` under a button labelled "Tôi có email đã liên kết" is what turned
+   * a mistyped address into a brand-new empty account, with the family's real one abandoned in the
+   * same breath and no way back. `cloud/auth.ts` refuses to create one now; this screen has to say
+   * why, without ever suggesting the same email again.
+   */
+  it('is honest when the email was never linked, and abandons nothing', async () => {
+    auth.signInWithEmail.mockResolvedValue({ ok: false, error: 'email-not-linked' })
+
+    await goToEmail()
+
+    expect(screen.getByRole('alert')).toHaveTextContent('Email này chưa liên kết với hồ sơ nào')
+    expect(screen.getByRole('alert')).toHaveTextContent('mã khôi phục')
+    expect(auth.signInWithEmail).toHaveBeenCalledTimes(1)
+    expect(auth.signInWithEmail).not.toHaveBeenCalledWith('bome@example.com', { abandonAnonymous: true })
+    // Still on the email form, ready for the other address.
+    expect(screen.getByLabelText('Email của bố/mẹ')).toBeInTheDocument()
+  })
+
+  it('says the same thing on the form itself, before the parent types', async () => {
+    renderStart()
+    openEmailDoor()
+    expect(screen.getByText(/Chỉ dùng được email đã liên kết/)).toBeInTheDocument()
+  })
+
+  it('never advises a retry for a guard that a retry reproduces', async () => {
+    // The abandonment path answered "anonymous-session-in-use" a second time: the copy the parent
+    // then reads must point at the parent screen, not at the button that just failed.
+    setStars('sword:cat', 3)
+    auth.signInWithEmail.mockResolvedValue({ ok: false, error: 'anonymous-session-in-use' })
+    await goToEmail()
+    await act(async () => { fireEvent.click(screen.getByText(/Vẫn tiếp tục với bome@example.com/)) })
+
+    const alert = screen.getByRole('alert')
+    expect(alert).toHaveTextContent('Góc phụ huynh')
+    expect(alert.textContent).not.toMatch(/thử lại/)
   })
 
   it('shows a Vietnamese error and lets the parent retry on an offline failure', async () => {
@@ -109,24 +313,81 @@ describe('the email door', () => {
     expect(input.value).toBe('bome@example.com')
     fireEvent.change(input, { target: { value: 'fixed@example.com' } })
     await act(async () => { fireEvent.submit(input.closest('form')!) })
-    expect(auth.signInWithEmail).toHaveBeenLastCalledWith('fixed@example.com', { abandonAnonymous: true })
+    expect(auth.signInWithEmail).toHaveBeenLastCalledWith('fixed@example.com', {})
   })
 
   it('restores straight to the one profile the account owns', async () => {
-    profileState.fetchRemoteProfiles.mockResolvedValue([profile('p1', 'Sóc')])
-    profileState.adoptProfiles.mockImplementation((remote: Profile[]) => remote)
+    profileState.fetchRemoteProfiles.mockResolvedValue([profile(SOC, 'Sóc')])
     await goToEmail()
     await act(async () => {
       fireEvent.change(screen.getByLabelText('Mã xác nhận'), { target: { value: '123456' } })
       fireEvent.submit(screen.getByLabelText('Mã xác nhận').closest('form')!)
     })
-    await waitFor(() => expect(sync.pullProfile).toHaveBeenCalledWith('p1'))
-    expect(profileState.switchProfile).toHaveBeenCalledWith('p1')
+    await waitFor(() => expect(sync.pullProfile).toHaveBeenCalledWith(SOC))
+    expect(profileState.switchProfile).toHaveBeenCalledWith(SOC)
+  })
+
+  /**
+   * F5. The ordering `pullProfile` refuses to work without — and the one the old whole-module mock
+   * could not see. Inverting the two calls in `afterAuthenticated` makes this fail: the roster does
+   * not know the id yet at the moment of the pull, which is precisely the window in which
+   * `rescueOrphanNamespaces` folds the pulled keys into the wrong child.
+   */
+  it('has the profile in the real roster BEFORE it pulls into it', async () => {
+    let rosterAtPull: string[] = []
+    sync.pullProfile.mockImplementation(async () => {
+      rosterAtPull = listProfiles().map(p => p.id)
+      return true
+    })
+    profileState.fetchRemoteProfiles.mockResolvedValue([profile(SOC, 'Sóc')])
+
+    await goToEmail()
+    await act(async () => {
+      fireEvent.change(screen.getByLabelText('Mã xác nhận'), { target: { value: '123456' } })
+      fireEvent.submit(screen.getByLabelText('Mã xác nhận').closest('form')!)
+    })
+
+    await waitFor(() => expect(sync.pullProfile).toHaveBeenCalled())
+    expect(rosterAtPull).toContain(SOC)
+  })
+
+  /**
+   * F4. `connectCloud()` gave the freshly minted local profile a row under this very account, so
+   * "the account owns it" cannot tell the two apart — and both render as the identical "🦊 Bé".
+   * A parent picking the wrong one lands in an empty profile and concludes the restore failed.
+   */
+  it('never offers the empty profile this device just minted as a restore target', async () => {
+    profileState.fetchRemoteProfiles.mockResolvedValue([profile(MINTED), profile(SOC, 'Sóc')])
+
+    await goToEmail()
+    await act(async () => {
+      fireEvent.change(screen.getByLabelText('Mã xác nhận'), { target: { value: '123456' } })
+      fireEvent.submit(screen.getByLabelText('Mã xác nhận').closest('form')!)
+    })
+
+    // One real candidate left, so there is no picker at all — and the pull is the child's.
+    await waitFor(() => expect(sync.pullProfile).toHaveBeenCalledWith(SOC))
+    expect(sync.pullProfile).not.toHaveBeenCalledWith(MINTED)
+  })
+
+  it('keeps offering the local profile when it is not empty', async () => {
+    // Not a decoy: this device's own child, with progress, listed by the account it belongs to.
+    setStars('sword:cat', 3)
+    profileState.fetchRemoteProfiles.mockResolvedValue([profile(MINTED), profile(SOC, 'Sóc')])
+    auth.currentEmail.mockResolvedValue('bome@example.com') // already linked: no abandon prompt
+
+    await goToEmail()
+    await act(async () => {
+      fireEvent.change(screen.getByLabelText('Mã xác nhận'), { target: { value: '123456' } })
+      fireEvent.submit(screen.getByLabelText('Mã xác nhận').closest('form')!)
+    })
+
+    expect(await screen.findByText('Sóc')).toBeInTheDocument()
+    expect(screen.getAllByRole('button').some(b => b.textContent?.includes('Bé'))).toBe(true)
   })
 
   it('shows a picker when the account owns more than one profile', async () => {
-    profileState.fetchRemoteProfiles.mockResolvedValue([profile('p1', 'Sóc'), profile('p2', 'Cáo')])
-    profileState.adoptProfiles.mockImplementation((remote: Profile[]) => remote)
+    profileState.fetchRemoteProfiles.mockResolvedValue([profile(SOC, 'Sóc'), profile(CAO, 'Cáo')])
     await goToEmail()
     await act(async () => {
       fireEvent.change(screen.getByLabelText('Mã xác nhận'), { target: { value: '123456' } })
@@ -137,13 +398,28 @@ describe('the email door', () => {
     expect(sync.pullProfile).not.toHaveBeenCalled()
 
     fireEvent.click(screen.getByText('Cáo'))
-    await waitFor(() => expect(sync.pullProfile).toHaveBeenCalledWith('p2'))
-    expect(profileState.switchProfile).toHaveBeenCalledWith('p2')
+    await waitFor(() => expect(sync.pullProfile).toHaveBeenCalledWith(CAO))
+    expect(profileState.switchProfile).toHaveBeenCalledWith(CAO)
+  })
+
+  /** F4's other half: two rows that would otherwise be identical are told apart by something real. */
+  it('disambiguates two profiles that look exactly alike', async () => {
+    profileState.fetchRemoteProfiles.mockResolvedValue([
+      profile(SOC, 'Bé', '🦊', new Date('2026-03-04T09:00:00').getTime()),
+      profile(CAO, 'Bé', '🦊', new Date('2026-07-19T09:00:00').getTime()),
+    ])
+    await goToEmail()
+    await act(async () => {
+      fireEvent.change(screen.getByLabelText('Mã xác nhận'), { target: { value: '123456' } })
+      fireEvent.submit(screen.getByLabelText('Mã xác nhận').closest('form')!)
+    })
+
+    expect(await screen.findByText('Tạo 04/03/2026')).toBeInTheDocument()
+    expect(screen.getByText('Tạo 19/07/2026')).toBeInTheDocument()
   })
 
   it('is honest when the account has no profiles at all', async () => {
     profileState.fetchRemoteProfiles.mockResolvedValue([])
-    profileState.adoptProfiles.mockImplementation(() => [])
     await goToEmail()
     await act(async () => {
       fireEvent.change(screen.getByLabelText('Mã xác nhận'), { target: { value: '123456' } })
@@ -159,26 +435,27 @@ describe('the recovery-code door', () => {
     return { ok: status >= 200 && status < 300, status, json: async () => body }
   }
 
-  async function goToCode() {
+  function goToCode() {
     renderStart()
     fireEvent.click(screen.getByText('Tôi có mã khôi phục'))
+    answerTheQuestion()
   }
 
   it('sends the current device\'s own bearer token, never a stored email', async () => {
     (fetch as ReturnType<typeof vi.fn>).mockResolvedValue(jsonResponse(200, { profiles: 1 }))
-    profileState.fetchRemoteProfiles.mockResolvedValue([profile('p1')])
-    await goToCode()
+    profileState.fetchRemoteProfiles.mockResolvedValue([profile(SOC, 'Sóc')])
+    goToCode()
     fireEvent.change(screen.getByLabelText(/Mã khôi phục/), { target: { value: 'abc23xyz' } })
     await act(async () => { fireEvent.submit(screen.getByLabelText(/Mã khôi phục/).closest('form')!) })
     const [, init] = (fetch as ReturnType<typeof vi.fn>).mock.calls[0]
     expect(init.headers.authorization).toBe('Bearer token-abc')
     expect(JSON.parse(init.body)).toEqual({ code: 'ABC23XYZ' })
-    await waitFor(() => expect(sync.pullProfile).toHaveBeenCalledWith('p1'))
+    await waitFor(() => expect(sync.pullProfile).toHaveBeenCalledWith(SOC))
   })
 
   it('shows the honest reason an already-linked account\'s code is refused', async () => {
     (fetch as ReturnType<typeof vi.fn>).mockResolvedValue(jsonResponse(403, { error: 'Code belongs to a linked account' }))
-    await goToCode()
+    goToCode()
     fireEvent.change(screen.getByLabelText(/Mã khôi phục/), { target: { value: 'ABC23XYZ' } })
     await act(async () => { fireEvent.submit(screen.getByLabelText(/Mã khôi phục/).closest('form')!) })
     expect(screen.getByRole('alert')).toHaveTextContent('đã liên kết email')
@@ -187,7 +464,7 @@ describe('the recovery-code door', () => {
 
   it('reports an unknown code without pulling anything', async () => {
     (fetch as ReturnType<typeof vi.fn>).mockResolvedValue(jsonResponse(404, { error: 'Unknown code' }))
-    await goToCode()
+    goToCode()
     fireEvent.change(screen.getByLabelText(/Mã khôi phục/), { target: { value: 'ZZZZZZZZ' } })
     await act(async () => { fireEvent.submit(screen.getByLabelText(/Mã khôi phục/).closest('form')!) })
     expect(screen.getByRole('alert')).toHaveTextContent('Không tìm thấy mã này')
@@ -195,7 +472,7 @@ describe('the recovery-code door', () => {
 
   it('is honest about a dropped connection rather than blaming the code', async () => {
     (fetch as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('offline'))
-    await goToCode()
+    goToCode()
     fireEvent.change(screen.getByLabelText(/Mã khôi phục/), { target: { value: 'ABC23XYZ' } })
     await act(async () => { fireEvent.submit(screen.getByLabelText(/Mã khôi phục/).closest('form')!) })
     expect(screen.getByRole('alert')).toHaveTextContent('Không có kết nối mạng')
@@ -203,16 +480,28 @@ describe('the recovery-code door', () => {
 
   it('refuses to call the API at all with no session token to present', async () => {
     auth.currentAccessToken.mockResolvedValue(null)
-    await goToCode()
+    goToCode()
     fireEvent.change(screen.getByLabelText(/Mã khôi phục/), { target: { value: 'ABC23XYZ' } })
     await act(async () => { fireEvent.submit(screen.getByLabelText(/Mã khôi phục/).closest('form')!) })
     expect(fetch).not.toHaveBeenCalled()
     expect(screen.getByRole('alert')).toBeInTheDocument()
   })
 
-  it('goes back to the menu', async () => {
-    await goToCode()
+  it('goes back to the menu', () => {
+    goToCode()
     fireEvent.click(screen.getByText('← Chọn cách khác'))
     expect(screen.getByText('Tôi có email đã liên kết')).toBeInTheDocument()
   })
+})
+
+/** F6: this screen is reachable by a child, so §Rules' 64 px floor applies to every control on it —
+ * including the quiet text buttons, which were 44. */
+it('holds every control to the 64 px tap floor', () => {
+  renderStart()
+  openEmailDoor()
+
+  for (const label of ['← Chọn cách khác']) {
+    expect(screen.getByText(label).className, label).toContain('min-h-[64px]')
+  }
+  expect(screen.getByLabelText('Email của bố/mẹ').className).toContain('min-h-[64px]')
 })

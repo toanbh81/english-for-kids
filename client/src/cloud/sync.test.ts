@@ -1299,6 +1299,93 @@ describe('reset', () => {
     expect(syncStatus()).toMatchObject({ state: 'synced', pending: 0 })
   })
 
+  /**
+   * F3: the reset that undid itself overnight.
+   *
+   * `resetRemoteProgress` drops the queue and the meta in the same turn whether or not the network
+   * answers. Offline, that used to be the whole of it: the server kept every row, nothing on the
+   * device remembered they were meant to be gone, and the next launch pulled them straight back —
+   * stars max-wins against an emptied store, events union — in front of a parent who had watched
+   * the reset happen. The intent has to outlive the attempt.
+   */
+  it('finishes an offline reset at the next launch, before it pulls anything back', async () => {
+    bootProfile()
+    startSync()
+    setStars('sword:cat', 3)
+    logActivity({ ts: 1000, kind: 'word', id: 'sword:cat', score: 90 })
+    await flush()
+    expect(server.kv.size).toBe(1)
+    expect(server.events).toHaveLength(1)
+
+    // The parent taps reset with no network. The local half runs (the screen does it first), the
+    // remote half cannot.
+    const online = vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false)
+    localStorage.removeItem(key('stars'))
+    localStorage.removeItem(key('activity'))
+    expect(await resetRemoteProgress(PROFILE)).toBe(false) // …and it says so, for the screen to show
+    expect(server.kv.size).toBe(1) // the server still holds everything
+
+    // Next launch, network back.
+    online.mockReturnValue(true)
+    resetSyncForTest()
+    startSync()
+    await syncNow()
+    await flush()
+
+    // The rows are gone rather than back, and the child's screen is still empty.
+    expect(server.kv.size).toBe(0)
+    expect(server.events).toEqual([])
+    expect(getStars('sword:cat')).toBe(0)
+    expect(JSON.parse(localStorage.getItem(key('activity')) ?? '[]')).toEqual([])
+    online.mockRestore()
+  })
+
+  it('keeps the reset owed until the DELETE actually succeeds', async () => {
+    bootProfile()
+    startSync()
+    setStars('sword:cat', 3)
+    await flush()
+
+    // Not offline this time — there is simply no usable session when the parent taps.
+    server.state.userId = null
+    localStorage.removeItem(key('stars'))
+    expect(await resetRemoteProgress(PROFILE)).toBe(false)
+    server.state.userId = 'user-1'
+    expect(server.kv.size).toBe(1)
+
+    // A pull is the dangerous moment, and it is the one that settles the debt first.
+    await pullProfile(PROFILE)
+
+    expect(server.kv.size).toBe(0)
+    // …and the pull did not put the deleted stars back on the way past.
+    expect(getStars('sword:cat')).toBe(0)
+  })
+
+  it('lets the child carry on after a reset that has not reached the server yet', async () => {
+    bootProfile()
+    startSync()
+    setStars('sword:cat', 3)
+    await flush()
+
+    const online = vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false)
+    localStorage.removeItem(key('stars'))
+    await resetRemoteProgress(PROFILE)
+    // The child plays again that evening, still offline: this is NEW progress, not the progress the
+    // parent deleted, and it must reach the server once the reset has been carried out.
+    setStars('sword:dog', 2)
+    logActivity({ ts: 5000, kind: 'speak', id: 'sz-1', score: 80 })
+
+    online.mockReturnValue(true)
+    resetSyncForTest()
+    startSync()
+    await syncNow()
+    await flush()
+
+    expect(server.kv.get(`${PROFILE}|stars`)?.value).toEqual({ 'sword:dog': 2 })
+    expect(server.events.map(e => e.item_id)).toEqual(['sz-1'])
+    online.mockRestore()
+  })
+
   it('forgets a profile without touching the others', () => {
     bootProfile()
     startSync()

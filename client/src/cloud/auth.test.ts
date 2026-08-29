@@ -341,9 +341,14 @@ describe('signing in on another device', () => {
     use(client)
 
     expect(await signInWithEmail('bome@example.com')).toEqual({ ok: true, userId: null })
+    // `shouldCreateUser: false`, and it is not a detail. This is the door labelled "Tôi có email
+    // đã liên kết": with `true`, a mistyped or never-linked address silently minted a brand-new
+    // empty account, the anonymous one holding the family's mirrored progress was abandoned in the
+    // same flow, and nothing could reach it again — the recovery code is owner-read-only and was
+    // now being read as the new user.
     expect(client.auth.signInWithOtp).toHaveBeenCalledWith({
       email: 'bome@example.com',
-      options: { shouldCreateUser: true },
+      options: { shouldCreateUser: false },
     })
 
     const verified = await verifyEmailOtp('bome@example.com', '654321')
@@ -394,6 +399,32 @@ describe('signing in on another device', () => {
       error: 'For security purposes, you can only request this after 51 seconds',
     })
     expect(client.auth.verifyOtp).toHaveBeenCalledTimes(1)
+  })
+
+  /**
+   * The other half of `shouldCreateUser: false`: what the parent is told. An address with no
+   * account has to come back as its own answer — not as a raw Supabase string the screen would
+   * translate into "có lỗi xảy ra, thử lại nhé", which is advice that can only fail again.
+   */
+  it('reports a never-linked email as exactly that, whichever way the server words it', async () => {
+    for (const error of [
+      { message: 'Signups not allowed for otp', status: 422 },
+      { message: 'something else entirely', code: 'otp_disabled', status: 422 },
+    ]) {
+      const client = makeClient()
+      client.auth.signInWithOtp.mockResolvedValue({ data: {}, error })
+      use(client)
+
+      expect(await signInWithEmail('never@example.com')).toEqual({ ok: false, error: 'email-not-linked' })
+    }
+  })
+
+  it('does not mistake a real server failure for a never-linked email', async () => {
+    const client = makeClient()
+    client.auth.signInWithOtp.mockResolvedValue({ data: {}, error: { message: 'Failed to fetch' } })
+    use(client)
+
+    expect(await signInWithEmail('bome@example.com')).toEqual({ ok: false, error: 'Failed to fetch' })
   })
 
   it('forgets a flow the server refused to start', async () => {

@@ -60,9 +60,13 @@ function isStandaloneDisplay(): boolean {
   }
 }
 
-/** The ITP-7-day wipe this nudge exists for is a WebKit thing — no point nudging a browser it does
- * not apply to, and the copy names Safari by name, so it has to actually be one. */
-function looksLikeIOSSafari(): boolean {
+/**
+ * The ITP-7-day wipe this nudge exists for is a WebKit thing, and on iOS EVERY browser is WebKit —
+ * Chrome and Firefox there are Safari's engine in a different shell, and they lose the storage the
+ * same way. So the test is the platform, not the browser, which is exactly what this regex asks;
+ * the copy names no browser either, and says "Màn hình chính", which is what all of them call it.
+ */
+function looksLikeIOS(): boolean {
   try { return /iP(hone|od|ad)/.test(window.navigator.userAgent) } catch { return false }
 }
 
@@ -169,14 +173,26 @@ export function Home() {
     return { events, now, lesson: lessonStatus(now, events) }
   })
   const counters = missionStatus(now, events)
-  const hasProgress =
+  // TODAY's work, and only today's: `missionStatus` and `lessonStatus` both filter the log to the
+  // current day. It is the right question for Foxy's mood and greeting ("Giỏi lắm, tiếp tục nhé!"
+  // is about this morning) and the wrong one for anything about the child's history — see
+  // `hasHistory` below.
+  const doneToday =
     lesson.doneCount > 0 || counters.story > 0 || counters.speak > 0 || counters.word > 0
-  const mood: FoxyMood = lesson.done ? 'cheer' : hasProgress ? 'happy' : 'idle'
+  const mood: FoxyMood = lesson.done ? 'cheer' : doneToday ? 'happy' : 'idle'
   const say = lesson.done
     ? 'Hoàn thành nhiệm vụ rồi! 🎉'
-    : hasProgress
+    : doneToday
       ? 'Giỏi lắm, tiếp tục nhé!'
       : 'Hôm nay mình luyện nói nhé!'
+  /**
+   * Has this child EVER done anything on this device — the whole log, not today's slice of it.
+   *
+   * The restore link below hangs off this, and a today-scoped answer made it reappear every
+   * morning before the child's first tap, however many months of history sat underneath. That is
+   * the one thing it must never do: it is the door that abandons an account.
+   */
+  const hasHistory = events.length > 0 || totalStars() > 0
   const overLimit = minutesToday(now, events) >= getLimitMinutes()
 
   // Decided once per mount, then remembered in storage by the effect below, so the trip to the
@@ -211,7 +227,7 @@ export function Home() {
   }
 
   const [a2hsDismissed, setA2hsDismissed] = useState(() => wasDismissed(a2hsDismissedKey()))
-  const showA2hs = !a2hsDismissed && looksLikeIOSSafari() && !isStandaloneDisplay()
+  const showA2hs = !a2hsDismissed && looksLikeIOS() && !isStandaloneDisplay()
   function handleDismissA2hs() {
     dismiss(a2hsDismissedKey())
     setA2hsDismissed(true)
@@ -294,7 +310,12 @@ export function Home() {
               type="button"
               aria-label="Đóng thông báo liên kết email"
               onClick={handleDismissBanner}
-              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-teal-700"
+              // §Rules' 64 px floor: this is the child's Home, not the adult dashboard, and the
+              // exemption the design grants is for that screen alone. The glyph stays small; the
+              // HIT AREA is what has to reach the floor, so the padding does the work. `-my-3`
+              // gives it back the height it borrows from the banner's own padding, so a 64 px
+              // target does not make the banner taller than it was.
+              className="-my-3 flex h-16 w-16 shrink-0 items-center justify-center rounded-full text-teal-700"
             >
               ✕
             </button>
@@ -306,14 +327,18 @@ export function Home() {
           * project exists, because it is about localStorage, not about the mirror. */}
         {showA2hs && (
           <div data-testid="a2hs-banner" className="flex items-center justify-between gap-3 rounded-xl2 bg-sun-50 px-4 py-3 shadow-card-sm">
+            {/* "ít bị xoá hơn", not "không mất": installing lifts the app out of the 7-day sweep,
+              * it does not make storage permanent — a full disk, a manual clear or a reinstall
+              * still take it. The banner may not promise what only a linked email can. */}
             <p className="flex-1 text-sm font-semibold text-sun-700">
-              Thêm Speak Up! vào Màn hình chính để không mất tiến độ nếu lâu ngày không mở.
+              Thêm Speak Up! vào Màn hình chính để tiến độ ít bị xoá hơn khi lâu ngày không mở.
             </p>
             <button
               type="button"
               aria-label="Đóng thông báo cài vào Màn hình chính"
               onClick={handleDismissA2hs}
-              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sun-700"
+              // The 64 px floor again — same reasoning as the banner above.
+              className="-my-3 flex h-16 w-16 shrink-0 items-center justify-center rounded-full text-sun-700"
             >
               ✕
             </button>
@@ -442,10 +467,13 @@ export function Home() {
               </Link>
             </div>
 
-            {/* Spec flows 3/4's other door, on a device that has no progress worth protecting yet
-              * — a fresh install or a wiped cache. Gone the moment the child has done anything
-              * (`hasProgress`), so it never sits next to real progress suggesting it might vanish. */}
-            {cloudAvailable && !hasProgress && (
+            {/* Spec flows 3/4's other door, and it is only ever offered on a device that has
+              * nothing of its own to lose: a fresh install, or a cache the browser wiped. The test
+              * is the child's whole HISTORY (`hasHistory`), never today's activity — a today-scoped
+              * one put this link back on screen every morning before the first tap, on top of
+              * months of progress, in front of a child, one tap from a screen that can hand this
+              * iPad to a different account. */}
+            {cloudAvailable && !hasHistory && (
               <div className="flex items-center justify-center ipad:absolute ipad:bottom-[100px] ipad:left-1/2 ipad:-translate-x-1/2">
                 <Link to="/start" className="text-xs font-bold text-ink-500 underline ipad:text-sm">
                   Đã dùng Speak Up rồi?

@@ -15,6 +15,7 @@ import { PHONEME_TIPS } from '../scoring/feedback'
 import { playBlob } from '../audio/player'
 import {
   currentEmail,
+  currentUserId,
   ensureRecoveryCode,
   isAnonymous,
   linkEmail,
@@ -31,7 +32,7 @@ import {
   renameRemoteProfile,
   switchProfile,
 } from '../cloud/profileState'
-import { resetRemoteProgress, subscribeSyncStatus, syncStatus } from '../cloud/sync'
+import { hasPendingReset, resetRemoteProgress, subscribeSyncStatus, syncStatus } from '../cloud/sync'
 import type { SyncStatus } from '../cloud/sync'
 import { isCloudConfigured } from '../cloud/supabase'
 import { ProfilePicker } from '../components/ProfilePicker'
@@ -54,6 +55,17 @@ const LIMIT_CHIPS = [15, 20, 30] as const
 /** How many of the chart's fourteen days a phone draws (design §12 M8c). */
 const PHONE_DAYS = 7
 const BAND_VALUES = [1, 2, 3, 4, 5] as const satisfies readonly Band[]
+/**
+ * What the parent is told when the mirror's half of a reset has not happened.
+ *
+ * The device is genuinely clear; the server copy is not, and the engine will finish it before it
+ * pulls anything back. Saying nothing was the old behaviour, and it is how a parent came back to a
+ * child whose stars had returned overnight with no explanation available anywhere.
+ */
+const PENDING_RESET_NOTICE =
+  'Đã xoá xong trên máy này. Bản lưu trên tài khoản thì chưa xoá được (có thể do mất mạng) — '
+  + 'máy sẽ tự xoá nốt khi có mạng trở lại, trước khi tải bất cứ thứ gì về.'
+
 const LENGTH_LABEL: Record<LessonLength, string> = {
   short: 'Ngắn ~8 phút',
   medium: 'Vừa ~12 phút',
@@ -80,6 +92,13 @@ function describeAuthError(code: string): string {
   if (/network|fetch/.test(lower)) return 'Không có kết nối mạng, thử lại nhé.'
   return 'Có lỗi xảy ra, thử lại nhé.'
 }
+
+/**
+ * `navigator.onLine === false` is the reliable half of that flag — it really does mean no network,
+ * while true only ever meant an interface is up. Used here to say WHY there is no account yet, so
+ * an offline device gets an explanation instead of a form that cannot work.
+ */
+const online = (): boolean => typeof navigator === 'undefined' || navigator.onLine !== false
 
 function formatDayLabel(day: string): string {
   const [, m, d] = day.split('-')
@@ -137,18 +156,29 @@ export function ParentDashboard({ onLock }: Props) {
     return subscribeSyncStatus(setSync)
   }, [cloudAvailable])
 
+  /**
+   * Three states, not two — and the third one is the dangerous one.
+   *
+   * `isAnonymous()` answers **false** when there is no session at all, so asking it alone put this
+   * screen into the signed-in branch on a device that has never reached the network: an empty email
+   * line and a "Đăng xuất" button for an account that does not exist, with no link form and no
+   * recovery code anywhere. That is precisely the window in which nothing is backed up, on the one
+   * screen that exists to get out of it. So "no session" is treated as "not linked", which is what
+   * it is, and the reason is said out loud rather than left as a dead form.
+   */
   const [authReady, setAuthReady] = useState(false)
   const [email, setEmail] = useState<string | null>(null)
-  const [anonymous, setAnonymous] = useState(true)
+  const [hasSession, setHasSession] = useState(true)
   const [recoveryCode, setRecoveryCode] = useState<string | null>(null)
+  const linked = email !== null
   useEffect(() => {
     if (!cloudAvailable) return undefined
     let cancelled = false
     void (async () => {
-      const [em, anon] = await Promise.all([currentEmail(), isAnonymous()])
+      const [em, anon, userId] = await Promise.all([currentEmail(), isAnonymous(), currentUserId()])
       if (cancelled) return
       setEmail(em)
-      setAnonymous(anon)
+      setHasSession(userId !== null)
       setAuthReady(true)
       // The standing ruling: a LINKED account has no recovery code at all, on purpose (a trigger
       // drops it the moment the account gains an email) — so this is only ever asked while
@@ -169,6 +199,14 @@ export function ParentDashboard({ onLock }: Props) {
 
   const [profiles, setProfiles] = useState<Profile[]>(() => listProfiles())
   const activeId = activeProfileId()
+  /**
+   * Set when the mirror's half of a reset did not go through — and it survives leaving the screen:
+   * a reset the sync engine still owes is still true tomorrow, so a parent coming back to check
+   * reads the same sentence rather than a screen that looks as if nothing happened.
+   */
+  const [resetNotice, setResetNotice] = useState<string | null>(
+    () => (cloudAvailable && activeId && hasPendingReset(activeId) ? PENDING_RESET_NOTICE : null),
+  )
 
   const { events, now } = snapshot
   const days = minutesPerDay(14, now, events)
@@ -223,7 +261,14 @@ export function ParentDashboard({ onLock }: Props) {
   }
 
   async function handleReset() {
-    if (!window.confirm('Xoá toàn bộ sao, lịch sử và bản ghi?')) return
+    // The old wording was from the local-only era and stopped being true the moment this button
+    // also emptied the mirror: the cloud copy of this child goes with it, and no device gets it
+    // back. A parent may not find that out afterwards.
+    const question = cloudAvailable && activeId
+      ? 'Xoá toàn bộ sao, lịch sử và bản ghi của bé trên máy này, và xoá luôn bản đã lưu trên tài khoản? Máy khác sẽ không tải lại được nữa.'
+      : 'Xoá toàn bộ sao, lịch sử và bản ghi?'
+    if (!window.confirm(question)) return
+    setResetNotice(null)
     clearStars()
     clearActivity()
     clearLeitner()
@@ -241,7 +286,12 @@ export function ParentDashboard({ onLock }: Props) {
     setSnapshot({ events: getActivity(), now: Date.now() })
     // Constraint #3: reset is two halves, and this is the mirror's — called from here, the visible
     // foreground screen, so it can never race the hidden-tab flush trigger.
-    if (cloudAvailable && activeId) await resetRemoteProgress(activeId)
+    if (!cloudAvailable || !activeId) return
+    // …and the answer is not thrown away. Offline, or on any DELETE error, the server still holds
+    // every row: the sync engine has written down that the reset is owed and will finish it before
+    // it pulls anything, but the parent is told plainly rather than left to discover it — either
+    // now (nothing looks wrong) or, worse, in a week when it does not.
+    if (!(await resetRemoteProgress(activeId))) setResetNotice(PENDING_RESET_NOTICE)
   }
 
   // ---------------------------------------------------------------------------------------------
@@ -265,7 +315,7 @@ export function ParentDashboard({ onLock }: Props) {
     const result = await verifyEmailOtp(linkEmailValue, linkOtp)
     if (!result.ok) { setLinkBusy(false); setLinkError(describeAuthError(result.error)); return }
     setEmail(linkEmailValue)
-    setAnonymous(false)
+    setHasSession(true)
     // The standing ruling, the other side of it: linking just dropped the recovery code server
     // side, so this screen must stop showing one rather than hold onto a stale value.
     setRecoveryCode(null)
@@ -284,7 +334,9 @@ export function ParentDashboard({ onLock }: Props) {
   async function handleSignOut() {
     if (!window.confirm('Đăng xuất khỏi tài khoản này?')) return
     const result = await signOut()
-    if (result.ok) { setEmail(null); setAnonymous(true) }
+    // Signing out leaves this device with NO session, which is the third state above — not an
+    // anonymous one. Saying otherwise is what drew a link form that could not work.
+    if (result.ok) { setEmail(null); setHasSession(false) }
   }
 
   function handleAddProfile() {
@@ -356,13 +408,30 @@ export function ParentDashboard({ onLock }: Props) {
 
             {!authReady ? (
               <p className="text-sm text-ink-500">Đang tải…</p>
-            ) : anonymous ? (
+            ) : !linked ? (
               <div className="flex flex-col gap-3">
-                {linkStage === 'idle' ? (
+                {/* No session at all — offline since install, or just signed out. The account this
+                  * screen would talk about does not exist yet, so it says so instead of offering a
+                  * form that cannot possibly reach anyone. */}
+                {!hasSession && (
+                  <p data-testid="no-session" className="rounded-xl2 bg-sun-50 p-3 text-xs font-semibold text-sun-700 md:text-sm">
+                    {online()
+                      ? 'Máy này chưa kết nối được với tài khoản nào. Thử mở lại trang này sau một chút nhé.'
+                      : 'Đang ngoại tuyến nên chưa tạo được tài khoản cho máy này. Có mạng trở lại, mở lại trang này để liên kết email nhé.'}
+                    {' '}Tiến độ của bé vẫn đang được lưu trên máy này.
+                  </p>
+                )}
+                {/* With no session there is nothing to link an email TO — `linkEmail` calls
+                  * `updateUser` on a user that does not exist — so neither form is drawn. */}
+                {!hasSession ? null : linkStage === 'idle' ? (
                   <form onSubmit={handleSendOtp} className="flex flex-col gap-2">
+                    {/* What actually travels, and only that: stars, history and lessons. The
+                      * recordings card is on this same screen and its blobs never leave the
+                      * device — "an toàn trên mọi thiết bị" promised the parent otherwise. */}
                     <p className="text-xs font-semibold text-ink-500 md:text-sm">
-                      Liên kết email để giữ tiến độ của bé an toàn trên mọi thiết bị. Tiến độ học của bé
-                      sẽ được lưu trên tài khoản của bạn.
+                      Liên kết email để mở lại sao, lịch sử luyện tập và bài học của bé trên máy khác
+                      (bản ghi giọng nói chỉ nằm trên máy này). Tiến độ học của bé sẽ được lưu trên
+                      tài khoản của bạn.
                     </p>
                     <div className="flex flex-wrap gap-2">
                       <input
@@ -676,10 +745,17 @@ export function ParentDashboard({ onLock }: Props) {
           </div>
         </div>
 
-        {/* `max-md:`, because `min-h-[64px] px-8 text-[22px]` are `Button`'s own classes. */}
-        <Button variant="outline" onClick={handleReset} className="self-start max-md:min-h-[48px] max-md:px-4 max-md:text-base">
-          Đặt lại tiến trình
-        </Button>
+        <div className="flex flex-col items-start gap-2">
+          {/* `max-md:`, because `min-h-[64px] px-8 text-[22px]` are `Button`'s own classes. */}
+          <Button variant="outline" onClick={handleReset} className="self-start max-md:min-h-[48px] max-md:px-4 max-md:text-base">
+            Đặt lại tiến trình
+          </Button>
+          {resetNotice && (
+            <p role="status" data-testid="reset-notice" className="rounded-xl2 bg-sun-50 p-3 text-xs font-semibold text-sun-700 md:text-sm">
+              {resetNotice}
+            </p>
+          )}
+        </div>
       </div>
     </main>
   )

@@ -99,7 +99,19 @@ type Op = KvOp | EventOp
  */
 type Meta = { done: string[]; mirrored: string[]; clock: Record<string, number> }
 
-type Outbox = { v: 1; next: number; ops: Op[]; meta: Record<string, Meta> }
+/**
+ * `resets` — profiles whose cloud copy the parent has asked to delete and whose DELETE has not
+ * happened yet (offline, no session, a server error).
+ *
+ * Without it the reset silently un-does itself: `resetRemoteProgress` drops the queue and the meta
+ * in the same turn whether or not the network answers, so an offline reset leaves every server row
+ * standing with nothing on the device remembering that they are meant to be gone. The next launch
+ * pulls them back — stars max-wins against an empty store, events union — and the child's stars and
+ * streak return overnight, in front of a parent who watched the reset happen.
+ *
+ * So the intent outlives the attempt, and the next launch finishes the job BEFORE it pulls anything.
+ */
+type Outbox = { v: 1; next: number; ops: Op[]; meta: Record<string, Meta>; resets: string[] }
 
 /** One op per key per profile, so a burst of writes cannot grow the queue without bound. */
 const MAX_OPS = 500
@@ -131,7 +143,7 @@ const DEBOUNCE_MS = 30_000
  */
 const MAX_KV_NAME_LEN = 64 // `kv_key_len` in the migration
 
-const emptyOutbox = (): Outbox => ({ v: 1, next: 1, ops: [], meta: {} })
+const emptyOutbox = (): Outbox => ({ v: 1, next: 1, ops: [], meta: {}, resets: [] })
 
 const isRecord = (v: unknown): v is Record<string, unknown> =>
   !!v && typeof v === 'object' && !Array.isArray(v)
@@ -207,7 +219,8 @@ function readOutbox(): Outbox {
       }
     }
     const next = Math.max(finite(parsed.next), ...ops.map(op => op.id + 1), 1)
-    return { v: 1, next, ops: ops.slice(-MAX_OPS), meta }
+    const resets = stringList(parsed.resets).filter(isProfileId)
+    return { v: 1, next, ops: ops.slice(-MAX_OPS), meta, resets }
   } catch {
     return emptyOutbox()
   }
@@ -245,8 +258,10 @@ function writeOutbox(box: Outbox): void {
     { ...box, ops: box.ops.slice(Math.ceil(box.ops.length / 2)) },
     { ...box, ops: [] },
     // `clock` and `done` outlive the ops and are what stop the next pull regressing a value and the
-    // next flush re-sending the log, so they are the last thing dropped, not the first.
-    { v: 1, next: box.next, ops: [], meta: {} },
+    // next flush re-sending the log, so they are the last thing dropped, not the first — and
+    // `resets` is never dropped at all: it is a handful of ids, and losing it is the one failure
+    // that puts deleted progress back on the child's screen.
+    { v: 1, next: box.next, ops: [], meta: {}, resets: box.resets },
   ]
   for (const attempt of attempts) {
     try {
@@ -709,6 +724,9 @@ async function runFlush(): Promise<void> {
   // `navigator.onLine === false` is the reliable half of that flag: it really does mean no network.
   // Anything else is attempted, because "true" only ever meant an interface is up.
   if (!isOnline()) return
+  // Before a single op goes up: a flush into a profile whose pending DELETE has not run yet would
+  // push the child's newer work into rows that are about to be deleted with everything else.
+  await settlePendingResets()
 
   // Re-open a queue for anything the outbox has lost track of but the log still owes — an `ev` op a
   // full store refused, or one consumed by a flush that was running when the event was logged.
@@ -819,6 +837,10 @@ async function runPull(profileId: string): Promise<boolean> {
   if (!sb) return false
   if (!isOnline()) return false
   if (!(await currentUserId())) return false
+  // A reset the parent made offline is finished HERE, before a single row comes down. Pulling first
+  // would merge the rows they deleted back into the store the reset emptied, and the child's stars
+  // and streak would be back on screen by the time anyone noticed.
+  await settlePendingResets()
 
   try {
     const kv = await sb.from('kv').select('key, value, updated_at').eq('profile_id', profileId)
@@ -1035,15 +1057,30 @@ function mergeEventRows(profileId: string, rows: RemoteEventRow[]): void {
 export async function resetRemoteProgress(profileId: string): Promise<boolean> {
   if (!isProfileId(profileId)) return false
   forgetProfile(profileId)
+  // Both of these are written BEFORE the network is touched, and that ordering is the fix for a
+  // reset that used to undo itself: the parent's intent, and what it applies to, are facts as soon
+  // as they tap — the DELETE is only how it gets carried out. Recording them after a round trip
+  // that may never happen is what let an offline reset revert overnight.
+  settleAfterReset(profileId)
+  markPendingReset(profileId)
   const sb = await getSupabase()
   if (!sb) return false
+  // Not attempted at all with the network provably down — the answer would be a timeout, and the
+  // caller needs a truthful "not yet" now rather than in thirty seconds. The record above is what
+  // makes that safe to say.
+  if (!isOnline()) return false
   if (!(await currentUserId())) return false
+  return deleteRemoteProgress(sb, profileId)
+}
+
+/** The DELETE itself, shared by the parent's tap and by the retry the next launch runs. */
+async function deleteRemoteProgress(sb: SupabaseClient, profileId: string): Promise<boolean> {
   try {
     const kv = await sb.from('kv').delete().eq('profile_id', profileId)
     if (kv.error) throw new Error(kv.error.message)
     const events = await sb.from('events').delete().eq('profile_id', profileId)
     if (events.error) throw new Error(events.error.message)
-    settleAfterReset(profileId)
+    clearPendingReset(profileId)
     return true
   } catch (e) {
     lastError = errorMessage(e)
@@ -1052,13 +1089,47 @@ export async function resetRemoteProgress(profileId: string): Promise<boolean> {
   }
 }
 
+function markPendingReset(profileId: string): void {
+  updateOutbox(box => { box.resets = [...new Set([...box.resets, profileId])] })
+}
+
+function clearPendingReset(profileId: string): void {
+  updateOutbox(box => { box.resets = box.resets.filter(id => id !== profileId) })
+}
+
+/** For the parent screen, which has to be able to say "the server copy is not gone yet". */
+export function hasPendingReset(profileId: string): boolean {
+  return readOutbox().resets.includes(profileId)
+}
+
+/**
+ * Finish any reset whose DELETE never landed — **before anything is pulled or pushed**.
+ *
+ * That order is the whole point. A pull would merge the rows the parent deleted straight back into
+ * an emptied store, and a flush would push whatever the child has done since into a profile that is
+ * about to be wiped. Anything written after the reset was recorded is left alone: it got its own
+ * ops like any other write, and this only removes what the parent asked to be removed.
+ */
+async function settlePendingResets(): Promise<void> {
+  const pending = readOutbox().resets
+  if (!pending.length) return
+  const sb = await getSupabase()
+  if (!sb) return
+  if (!isOnline()) return
+  if (!(await currentUserId())) return
+  for (const profileId of pending) await deleteRemoteProgress(sb, profileId)
+}
+
 /**
  * Write down that this device has nothing to send for anything the child currently holds.
  *
- * The reset succeeded; the local half is the caller's and may not have run — a full store, or a
- * parent screen that clears localStorage second. Either way the next launch must not read an empty
- * server as "none of this was ever mirrored" and upload the lot, which is the standing ruling
- * (a reset is a DELETE, not a merge) undone by the back door.
+ * Called the moment the parent asks — not once the server answers. The local half is the caller's
+ * and may not have run (a full store, or a parent screen that clears localStorage second), and
+ * either way the next launch must not read an empty server as "none of this was ever mirrored" and
+ * upload the lot, which is the standing ruling (a reset is a DELETE, not a merge) undone by the
+ * back door. Doing it at the ASK is also what makes the deferred retry safe: what the reset applies
+ * to is whatever was on disk when the parent tapped, and anything the child does afterwards is a
+ * new write with an op of its own, which still syncs normally.
  *
  * So every key and every event that is on disk RIGHT NOW is recorded as accounted for. Anything the
  * child does after this is a new write, gets an op like any other, and syncs normally.
@@ -1071,6 +1142,19 @@ function settleAfterReset(profileId: string): void {
     meta.done = [...new Set([...meta.done, ...identities])]
   })
   notifyStatus()
+}
+
+/**
+ * Has anything of this child's ever REACHED the server under the account this device holds?
+ *
+ * The one question flow 3 has to answer before it abandons an anonymous account: rows exist up
+ * there that only this session's user id can reach, and once the device signs in as somebody else
+ * nothing can ever read them again. Local-only, synchronous, and free — it reads the same
+ * `mirrored`/`done` bookkeeping the pull and the flush already keep.
+ */
+export function hasMirroredData(profileId: string): boolean {
+  const meta = readMeta(profileId)
+  return meta.mirrored.length > 0 || meta.done.length > 0
 }
 
 /** Forget everything queued and remembered for one child (a reset, or a profile being removed). */

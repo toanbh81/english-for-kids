@@ -331,6 +331,68 @@ describe('Phase 11: "Đã dùng Speak Up rồi?"', () => {
 
     expect(screen.queryByRole('link', { name: 'Đã dùng Speak Up rồi?' })).not.toBeInTheDocument()
   })
+
+  /**
+   * The bug this link had: `hasProgress` was built from `missionStatus` and `lessonStatus`, and
+   * BOTH filter the log to today. So the door that can hand this iPad to another account came back
+   * every single morning, in front of the child, on top of however much history existed — and the
+   * comment above it claimed the opposite. The old guard only ever completed a lesson *today*,
+   * which is the one case where the two readings agree.
+   */
+  it('stays away on a device with history but nothing done yet today', () => {
+    cloud.configured = true
+    seedDoneDay(NOW - 2 * DAY_MS)
+    seedDoneDay(NOW - DAY_MS)
+
+    renderHome()
+
+    expect(screen.queryByRole('link', { name: 'Đã dùng Speak Up rồi?' })).not.toBeInTheDocument()
+  })
+
+  it('stays away for a child whose stars are the only thing left on the device', () => {
+    cloud.configured = true
+    // An activity log that has rotated out, or a partial restore: the stars are still progress,
+    // and this device is still not the fresh one this link is for.
+    localStorage.setItem('speakup.stars', JSON.stringify({ 'sword:cat': 3 }))
+
+    renderHome()
+
+    expect(screen.queryByRole('link', { name: 'Đã dùng Speak Up rồi?' })).not.toBeInTheDocument()
+  })
+
+  it('keeps Foxy today-scoped even so', () => {
+    cloud.configured = true
+    seedDoneDay(NOW - DAY_MS)
+
+    renderHome()
+
+    // Yesterday's work is history, not this morning's greeting: the mood question and the
+    // restore-door question are different questions and no longer share an answer.
+    expect(screen.getByTestId('foxy')).toHaveAttribute('data-mood', 'idle')
+    expect(screen.getByText('Hôm nay mình luyện nói nhé!')).toBeInTheDocument()
+  })
+})
+
+/** §Rules puts the tap floor at 64 px on every child-reachable screen; the only exemption the
+ * design grants is the adult dashboard behind the math gate. Both banner close buttons were 32. */
+describe('Phase 11: the banners meet the child tap floor', () => {
+  it('gives both dismiss buttons a 64 px hit area', async () => {
+    cloud.configured = true
+    auth.isAnonymous.mockResolvedValue(true)
+    seedDoneDay(NOW - 2 * DAY_MS)
+    seedDoneDay(NOW - DAY_MS)
+    seedDoneDay(NOW)
+    Object.defineProperty(window.navigator, 'userAgent', {
+      value: 'Mozilla/5.0 (iPad; CPU OS 17_0 like Mac OS X) AppleWebKit/605.1.15 Safari/604.1',
+      configurable: true,
+    })
+
+    renderHome()
+    await act(async () => { await Promise.resolve() })
+
+    expect(screen.getByLabelText('Đóng thông báo liên kết email')).toHaveClass('h-16', 'w-16')
+    expect(screen.getByLabelText('Đóng thông báo cài vào Màn hình chính')).toHaveClass('h-16', 'w-16')
+  })
 })
 
 it('keeps the stacked layout scrollable so the mission CTA is never trapped below the fold', () => {

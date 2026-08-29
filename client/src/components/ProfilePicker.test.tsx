@@ -32,4 +32,59 @@ describe('ProfilePicker', () => {
 
     for (const button of screen.getAllByRole('button')) expect(button).toBeDisabled()
   })
+
+  it('says nothing extra when the names already tell the children apart', () => {
+    render(<ProfilePicker profiles={profiles} onSelect={() => undefined} />)
+
+    expect(screen.queryByText(/^Tạo /)).not.toBeInTheDocument()
+    expect(screen.queryByText(/^Mã /)).not.toBeInTheDocument()
+  })
+
+  /**
+   * Every profile this app mints is "🦊 Bé", so two of them are two identical buttons — and in a
+   * restore picker, tapping the wrong one lands the parent in an empty profile that reads as a
+   * failed restore. Whatever is added has to be a fact about the profile AND has to actually
+   * differ, which a date alone does not for two profiles made the same afternoon.
+   */
+  describe('two children who look exactly alike', () => {
+    const same = (id: string, created: number): Profile => ({ id, name: 'Bé', avatar: '🦊', created })
+
+    it('dates them when the dates differ', () => {
+      render(<ProfilePicker
+        profiles={[same('a', new Date('2026-03-04T09:00:00').getTime()), same('b', new Date('2026-07-19T15:00:00').getTime())]}
+        onSelect={() => undefined}
+      />)
+
+      expect(screen.getByText('Tạo 04/03/2026')).toBeInTheDocument()
+      expect(screen.getByText('Tạo 19/07/2026')).toBeInTheDocument()
+    })
+
+    it('steps up to the time when both were made the same day', () => {
+      render(<ProfilePicker
+        profiles={[same('a', new Date('2026-03-04T09:12:00').getTime()), same('b', new Date('2026-03-04T18:40:00').getTime())]}
+        onSelect={() => undefined}
+      />)
+
+      expect(screen.getByText('Tạo 04/03 09:12')).toBeInTheDocument()
+      expect(screen.getByText('Tạo 04/03 18:40')).toBeInTheDocument()
+    })
+
+    it('falls back to something that cannot collide when there is no usable date', () => {
+      render(<ProfilePicker
+        profiles={[same('abcd-1', 0), same('efgh-2', 0)]}
+        onSelect={() => undefined}
+      />)
+
+      expect(screen.getByText('Mã abcd')).toBeInTheDocument()
+      expect(screen.getByText('Mã efgh')).toBeInTheDocument()
+    })
+
+    it('never leaves two rows reading the same', () => {
+      const stamp = new Date('2026-03-04T09:12:00').getTime()
+      render(<ProfilePicker profiles={[same('abcd-1', stamp), same('efgh-2', stamp)]} onSelect={() => undefined} />)
+
+      const rows = screen.getAllByRole('button').map(b => b.textContent)
+      expect(new Set(rows).size).toBe(rows.length)
+    })
+  })
 })

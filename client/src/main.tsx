@@ -5,6 +5,7 @@ import App from './App'
 import { AppErrorBoundary } from './components/AppErrorBoundary'
 import { bootstrapProfiles } from './cloud/profileState'
 import { startSync } from './cloud/sync'
+import { ProfileGate } from './screens/ProfileGate'
 import './styles.css'
 
 // Before the first render, and synchronously: this settles which child's storage namespace every
@@ -21,9 +22,15 @@ createRoot(document.getElementById('root')!).render(
     {/* Outside the router on purpose: a screen that throws takes the router down with it, so the
       * fallback cannot live inside the tree it is catching. */}
     <AppErrorBoundary>
-      <BrowserRouter>
-        <App />
-      </BrowserRouter>
+      {/* Spec flow 6, and it has to be here rather than on a route: the question "whose iPad is
+        * this right now" is asked before any screen reads a star, and there is no URL a second
+        * child would ever type. On a one-profile device it renders its children and nothing
+        * else — no picker, no flash, no extra tap. */}
+      <ProfileGate>
+        <BrowserRouter>
+          <App />
+        </BrowserRouter>
+      </ProfileGate>
     </AppErrorBoundary>
   </StrictMode>,
 )
