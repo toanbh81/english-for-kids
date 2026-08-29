@@ -41,9 +41,40 @@ patterns=(
   'xox[baprs]-[A-Za-z0-9-]{10,}'              # Slack
   '-----BEGIN (RSA |EC |OPENSSH |DSA )?PRIVATE KEY-----'
   'eyJ[A-Za-z0-9_-]{20,}\.eyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}'  # JWT
+  # --- Supabase (Phase 11) -------------------------------------------------
+  # Only the SERVICE ROLE key is a secret. The project URL and the anon /
+  # publishable key are public by design (they ship inside the browser bundle)
+  # and are exempted below — flagging them would train everyone to ignore this
+  # gate, which is how the real key eventually gets waved through.
+  'SUPABASE_SERVICE_ROLE(_KEY)?[[:space:]]*[=:][[:space:]]*["'"'"']?[A-Za-z0-9._-]{16,}'
+  'service[_-]?role([_-]?(key|secret))?[[:space:]]*[=:][[:space:]]*["'"'"']?[A-Za-z0-9._-]{16,}'
+  'sb_secret_[A-Za-z0-9_-]{8,}'               # current Supabase secret-key format
 )
+
+# Patterns that are matched WITHOUT the placeholder exemptions below, because
+# nothing but a real key produces them.
+# A legacy Supabase service-role key is a JWT whose payload encodes
+# "service_role"; these are its base64 at each of the three byte alignments.
+# The plain JWT rule already catches a bare one — this rule exists for the
+# dangerous mix-up: a SERVICE key pasted into a variable *named* like the anon
+# key, which the anon exemption would otherwise wave through.
+# (The one-character brackets are deliberate: they keep each alternative from
+# matching this very line, so the rule file stays scannable like any other.)
+hard_patterns=(
+  '(Nlcn[Z]pY2Vfcm9sZS|zZXJ2[a]WNlX3JvbGU|c2Vy[d]mljZV9yb2xl)'
+  # A full-length `sb_secret_` key: long enough that no placeholder reaches it,
+  # so not even the word "example" on the same line buys it a pass.
+  'sb_secret_[A-Za-z0-9_-]{20,}'
+)
+
 # Lines that are clearly placeholders/docs are ignored.
+#   …plus one deliberate exemption: an anon/publishable key ASSIGNED to an
+#   anon/publishable-named variable. Those values are public, but the legacy
+#   ones are JWT-shaped and would otherwise trip the JWT rule. The exemption is
+#   the assignment shape, never a bare token, so a real secret cannot hide
+#   behind the word "anon" in a comment.
 ignore='your-key|<key>|<dán|REPLACE|example|placeholder|xxxx|\$\{?[A-Z_]+\}?$|process\.env|import\.meta\.env'
+ignore="$ignore"'|(anon|publishable)_key[[:space:]]*[=:][[:space:]]*["'"'"']?(eyJ|sb_publishable_)'
 
 case "$mode" in
   staged) diff_cmd="git diff --cached -U0 --diff-filter=ACMR" ;;
@@ -65,12 +96,24 @@ if [ -n "$diff_cmd" ]; then
       red "LEAK: possible secret in added lines (pattern: $p)"; echo "$hits" | head -5 | mask; fail=1
     fi
   done
+  for p in "${hard_patterns[@]}"; do
+    hits=$(printf '%s\n' "$added" | grep -Ei -e "$p" || true)
+    if [ -n "$hits" ]; then
+      red "LEAK: service-role key in added lines (pattern: $p)"; echo "$hits" | head -5 | mask; fail=1
+    fi
+  done
 else
   # tree mode: scan file contents.
   for p in "${patterns[@]}"; do
     hits=$(echo "$files" | grep -Ev "$allowed_file" | xargs -r grep -EinH -e "$p" 2>/dev/null | grep -Eiv "$ignore" || true)
     if [ -n "$hits" ]; then
       red "LEAK: possible secret in tracked file (pattern: $p)"; echo "$hits" | head -5 | mask; fail=1
+    fi
+  done
+  for p in "${hard_patterns[@]}"; do
+    hits=$(echo "$files" | grep -Ev "$allowed_file" | xargs -r grep -EinH -e "$p" 2>/dev/null || true)
+    if [ -n "$hits" ]; then
+      red "LEAK: service-role key in tracked file (pattern: $p)"; echo "$hits" | head -5 | mask; fail=1
     fi
   done
 fi
