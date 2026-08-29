@@ -150,8 +150,21 @@ export function ensureLocalProfile(): Profile {
   let profile = (active ? roster.find(p => p.id === active) : undefined) ?? roster[0]
 
   if (!profile) {
-    profile = { id: newProfileId(), name: DEFAULT_PROFILE_NAME, avatar: DEFAULT_PROFILE_AVATAR, created: Date.now() }
-    if (!writeProfiles([profile])) return profile
+    const minted: Profile = {
+      id: newProfileId(), name: DEFAULT_PROFILE_NAME, avatar: DEFAULT_PROFILE_AVATAR, created: Date.now(),
+    }
+    // Appended to whatever is on disk at this instant, not written over it. Reading and writing
+    // inside one synchronous turn is atomic against the other documents of this app — the second
+    // tab a parent left open on the school run, booting the same update at the same moment — so
+    // neither can lose the other's entry.
+    if (!writeProfiles([...listProfiles(), minted])) return minted
+
+    // Both documents then adopt the same child: the oldest surviving entry. The loser drops the id
+    // it just minted, which has no data under it yet, rather than leaving a phantom second child in
+    // the picker and a half-migrated namespace nothing points at.
+    const settled = listProfiles()
+    profile = settled[0] ?? minted
+    if (profile.id !== minted.id) writeProfiles(settled.filter(p => p.id !== minted.id))
   }
 
   if (!setActiveProfileId(profile.id)) return profile
@@ -199,25 +212,43 @@ export function adoptProfiles(remote: Profile[]): Profile[] {
  *
  * `ignoreDuplicates` — an `on conflict do nothing` — because this runs on every launch: a row that
  * exists is right, and re-sending the local name would undo a rename made from another device.
+ *
+ * **Task 4, when it adds renaming: `.update({ name }).eq('id', profileId)`, never an upsert with
+ * `ignoreDuplicates` off.** An upsert that is allowed to conflict reports the conflict, and on a
+ * table keyed by an id the client chose that reply is an existence oracle — it answers "does this
+ * profile id exist?" for ids the caller does not own. An UPDATE that matches no row it owns simply
+ * changes nothing and says nothing, which is the only answer a stranger should get.
+ *
+ * Returns the ids that are ACTUALLY owned by the current user afterwards — see below for why that
+ * is not the same as "no error".
  */
-export async function ensureRemoteProfiles(): Promise<boolean> {
-  const sb = getSupabase()
-  if (!sb) return false
+export async function ensureRemoteProfiles(): Promise<string[]> {
+  const sb = await getSupabase()
+  if (!sb) return []
   const userId = await currentUserId()
-  if (!userId) return false
+  if (!userId) return []
   const rows = listProfiles().map(p => ({ id: p.id, owner_id: userId, name: p.name, avatar: p.avatar }))
-  if (!rows.length) return false
+  if (!rows.length) return []
   try {
     const { error } = await sb.from('profiles').upsert(rows, { onConflict: 'id', ignoreDuplicates: true })
-    return !error
+    if (error) return []
+
+    // "Did nothing" and "wrote the row" come back identically from an `on conflict do nothing`, and
+    // they are not the same news: a row can already exist owned by an ACCOUNT THIS DEVICE HAS LEFT
+    // (the anonymous user it had before a recovery, say), in which case the write was silently
+    // skipped and nothing here belongs to us. So the ids are read back, and RLS — which only ever
+    // returns rows whose owner is the caller — is what turns the question into an answer.
+    const { data, error: readBack } = await sb.from('profiles').select('id').in('id', rows.map(r => r.id))
+    if (readBack || !Array.isArray(data)) return []
+    return data.map(row => String(row.id)).filter(id => rows.some(r => r.id === id))
   } catch {
-    return false
+    return []
   }
 }
 
 /** The children this account owns, as the server sees them. RLS scopes the select to them. */
 export async function fetchRemoteProfiles(): Promise<Profile[]> {
-  const sb = getSupabase()
+  const sb = await getSupabase()
   if (!sb) return []
   const userId = await currentUserId()
   if (!userId) return []
@@ -252,8 +283,11 @@ export async function fetchRemoteProfiles(): Promise<Profile[]> {
  */
 export async function connectCloud(options: BootstrapOptions = {}): Promise<void> {
   try {
-    if (!getSupabase()) return
-    await startAnonymousSession(options)
+    if (!(await getSupabase())) return
+    // The retry handed to the sign-in is this whole function, not the sign-in alone: a device that
+    // booted offline has no profile rows and no recovery code either, and a network that comes back
+    // an hour later has to finish all of it. Every step is idempotent, so re-running costs nothing.
+    await startAnonymousSession({ ...options, retry: () => { void connectCloud(options) } })
     if ((await currentUserId()) === null) return
     await ensureRemoteProfiles()
     await ensureRecoveryCode()

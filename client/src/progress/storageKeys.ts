@@ -44,12 +44,41 @@ export const PROFILES_KEY = `${ROOT}profiles`
  *   `speakup.auth`      the Supabase session — one account per device (cloud/supabase.ts)
  *   `speakup.parent`    the parent gate's "unlocked at" stamp (screens/ParentGate.tsx)
  *   `speakup.outbox`    the sync queue — one per device, it names its own profile per op
+ *   `speakup.migrate.*` the migration's own unfinished business (below)
  *
  * Anything else under `speakup.` is a child's progress and gets migrated, including keys this
  * file has never heard of: a value left behind by an older version of the app is still that
  * child's, and moving it is how a returning child keeps it.
  */
-const DEVICE_SEGMENTS = new Set(['profile', 'profiles', 'auth', 'parent', 'outbox'])
+const DEVICE_SEGMENTS = new Set(['profile', 'profiles', 'auth', 'parent', 'outbox', 'migrate'])
+
+/**
+ * The legacy keys a previous migration run could not move (a full store, a store that threw).
+ *
+ * Without this list the retry is worse than useless. Say the copy of `speakup.stars` fails: the
+ * app carries on, reads the namespaced key, finds nothing, and writes a fresh default over it —
+ * and from then on the namespaced value and the legacy value differ, which is exactly the shape of
+ * "an old bundle wrote a stale key", so the guard below would protect the empty default for ever
+ * and the child's stars would never come home. Being on this list is the difference: it says the
+ * legacy value is unfinished business, not a straggler, and it wins.
+ */
+const PENDING_KEY = `${ROOT}migrate.pending`
+
+function readPending(): Set<string> {
+  try {
+    const parsed: unknown = JSON.parse(localStorage.getItem(PENDING_KEY) ?? '[]')
+    return new Set(Array.isArray(parsed) ? parsed.filter((k): k is string => typeof k === 'string') : [])
+  } catch {
+    return new Set()
+  }
+}
+
+function writePending(keys: Set<string>): void {
+  try {
+    if (keys.size === 0) localStorage.removeItem(PENDING_KEY)
+    else localStorage.setItem(PENDING_KEY, JSON.stringify([...keys]))
+  } catch { /* ignore: the same storage that would not take the value */ }
+}
 
 /**
  * Profile ids are UUIDs, and this is the only shape accepted anywhere. A hand-edited or
@@ -124,49 +153,21 @@ export function storageName(key: string): string | null {
 }
 
 /**
- * Does this store accept writes at all?
+ * Put `value` at `to` and say whether it is there.
  *
- * The question matters because a store that is FULL and a store that is READ-ONLY (Safari private
- * browsing, some kiosk modes) both answer a `setItem` with the same exception, and the two want
- * opposite handling: freeing room and retrying fixes the first and destroys data in the second.
- * A one-byte probe tells them apart. The key deliberately has no dot after `speakup`, so it can
- * never be mistaken for a child's value if the cleanup below fails too.
+ * A copy, and only ever a copy: the original stays put until the copy has been verified. An
+ * earlier version freed room by removing the original first when the store was full, which is a
+ * trade this data cannot make — between that removal and the write, another document of the same
+ * app (a second tab, the one this device's parent left open) can take the space, and the child's
+ * stars are then gone with nothing to restore them from. A full store is simply a migration that
+ * happens on the next launch instead, and the pending list is what makes that retry authoritative.
  */
-function storageAcceptsWrites(): boolean {
-  const probe = 'speakup-migrate-probe'
-  try {
-    localStorage.setItem(probe, '1')
-    localStorage.removeItem(probe)
-    return true
-  } catch {
-    return false
-  }
-}
-
-/**
- * Put `value` at `to` and give the caller back whether it is there.
- *
- * The straight copy is tried first, because a copy leaves the original in place if anything goes
- * wrong. It can fail for exactly one interesting reason — the store is full, and the copy needs
- * room for a second copy of a value that is already in there — and only then, and only once a
- * probe has confirmed the store takes writes at all, is the original moved instead. Even that
- * puts the original back if the write still fails; the removal freed precisely the room the write
- * needs, so it is the one write that cannot fail.
- */
-function copyValue(from: string, to: string, value: string): boolean {
+function copyValue(to: string, value: string): boolean {
   try {
     localStorage.setItem(to, value)
     return true
   } catch {
-    if (!storageAcceptsWrites()) return false
-    try {
-      localStorage.removeItem(from)
-      localStorage.setItem(to, value)
-      return true
-    } catch {
-      try { localStorage.setItem(from, value) } catch { /* ignore: storage unavailable */ }
-      return false
-    }
+    return false
   }
 }
 
@@ -175,13 +176,15 @@ function copyValue(from: string, to: string, value: string): boolean {
  *
  * Guarantees, in the order they matter:
  *
- *  - **Nothing is lost.** A key is only removed after the namespaced copy has been read back and
- *    compared to the original string. A key that cannot be copied (full or unavailable storage)
- *    stays exactly where it is and is retried on the next launch.
- *  - **Nothing is clobbered.** If the namespaced key already holds a *different* value — a
- *    half-finished earlier run, or an old cached bundle that wrote a legacy key after the
- *    migration — the namespaced value is the one the app has been using, so it wins and the
- *    legacy key is left alone rather than overwritten in either direction.
+ *  - **Nothing is lost.** A key is only ever copied, and only removed after the namespaced copy has
+ *    been read back and compared to the original string. A key that cannot be copied (full or
+ *    unavailable storage) stays exactly where it is, is written down as pending, and is retried on
+ *    the next launch.
+ *  - **Nothing is clobbered.** If the namespaced key already holds a *different* value — an old
+ *    cached bundle that wrote a legacy key after the migration — the namespaced value is the one
+ *    the app has been using, so it wins and the legacy key is left alone rather than overwritten in
+ *    either direction. The one exception is a key on the pending list, where the namespaced value
+ *    is a default written over a hole this migration left, and the child's own value wins.
  *  - **Idempotent by shape, not by a flag.** Keys that are already namespaced (their first
  *    segment is a UUID) and device keys are skipped, so a second run has nothing to do. There is
  *    no "migrated" marker to get out of step with reality.
@@ -210,19 +213,34 @@ export function migrateKeysInto(profileId: string): number {
     return 0
   }
 
+  const pending = readPending()
+  const before = pending.size
   let moved = 0
+
   for (const key of legacy) {
     try {
       const value = localStorage.getItem(key)
-      if (value === null) continue
+      if (value === null) { pending.delete(key); continue }
       const target = `${prefix}${key.slice(ROOT.length)}`
       const existing = localStorage.getItem(target)
-      if (existing === null && !copyValue(key, target, value)) continue
-      if (existing !== null && existing !== value) continue
-      if (localStorage.getItem(target) !== value) continue
+
+      // The namespaced value wins over a legacy one that differs — UNLESS this key is unfinished
+      // business from a run that could not move it, in which case what is sitting in the namespace
+      // is a default the app wrote over the hole, and the child's real value is still here.
+      if (existing !== null && existing !== value && !pending.has(key)) continue
+
+      if (existing !== value && !copyValue(target, value)) { pending.add(key); continue }
+      if (localStorage.getItem(target) !== value) { pending.add(key); continue }
+
       localStorage.removeItem(key)
+      pending.delete(key)
       moved++
-    } catch { /* ignore: this key stays legacy and is retried next launch */ }
+    } catch {
+      // This key stays legacy and is retried — with authority — on the next launch.
+      pending.add(key)
+    }
   }
+
+  if (pending.size !== before || pending.size > 0) writePending(pending)
   return moved
 }

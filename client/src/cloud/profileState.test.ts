@@ -13,7 +13,7 @@ const auth = vi.hoisted(() => ({
 }))
 
 vi.mock('./supabase', () => ({
-  getSupabase: () => cloud.client,
+  getSupabase: async () => cloud.client,
   isCloudConfigured: () => cloud.client !== null,
   resetSupabaseClient: () => undefined,
 }))
@@ -37,18 +37,27 @@ import {
 type Reply = { data: unknown; error: { message: string } | null }
 type Query = { table: string; verb: string; payload?: unknown; options?: unknown }
 
-/** Only the two calls profileState makes: a profiles upsert and a profiles select. */
-function makeClient(select: Reply = { data: [], error: null }, upsert: Reply = { data: null, error: null }) {
+/**
+ * Only the calls profileState makes: a profiles upsert, and selects. `select` is a function of the
+ * ids asked for, because the ownership read-back — the one that tells "wrote the row" apart from
+ * "the row belongs to an account this device has left" — is answered by RLS returning fewer rows.
+ */
+function makeClient(
+  select: Reply | ((ids: unknown) => Reply) = { data: [], error: null },
+  upsert: Reply = { data: null, error: null },
+) {
   const queries: Query[] = []
   const from = vi.fn((table: string) => {
     const entry: Query = { table, verb: 'select' }
     const run = async (): Promise<Reply> => {
       queries.push({ ...entry })
-      return entry.verb === 'select' ? select : upsert
+      if (entry.verb !== 'select') return upsert
+      return typeof select === 'function' ? select(entry.payload) : select
     }
     const chain = {
       select: () => chain,
       eq: () => chain,
+      in: (_column: string, ids: unknown) => { entry.payload = ids; return chain },
       upsert: (payload: unknown, options?: unknown) => { entry.verb = 'upsert'; entry.payload = payload; entry.options = options; return chain },
       then: (onOk: (r: Reply) => unknown, onErr?: (e: unknown) => unknown) => run().then(onOk, onErr),
     }
@@ -56,6 +65,12 @@ function makeClient(select: Reply = { data: [], error: null }, upsert: Reply = {
   })
   return { from, queries }
 }
+
+/** RLS, as far as these tests care: you get back exactly the rows you own. */
+const ownedRows = (owned: string[]) => (ids: unknown): Reply => ({
+  data: (Array.isArray(ids) ? ids : []).filter(id => owned.includes(String(id))).map(id => ({ id })),
+  error: null,
+})
 
 /** A device that has been in use since before Phase 11: real progress, on the legacy keys. */
 const seedLegacyProgress = () => {
@@ -116,6 +131,36 @@ describe('the first launch after the update', () => {
     expect(getActivity()).toHaveLength(2)
     expect(getLimitMinutes()).toBe(45)
     expect(localStorage.getItem(`speakup.${first.id}.limit.minutes`)).toBe('45')
+  })
+
+  it('mints ONE child when two documents boot the update at the same moment', () => {
+    seedLegacyProgress()
+
+    // The second tab a parent left open, booting the same update. Its roster write is simulated by
+    // interleaving one at the instant this document reads the roster back after its own write —
+    // which is the only window there is, localStorage being synchronous within a document.
+    const other = { id: '11111111-2222-4333-8444-555555555555', name: 'Bơ', avatar: '🐨', created: 1 }
+    const realGet = Storage.prototype.getItem
+    let interleaved = false
+    const getItem = vi.spyOn(Storage.prototype, 'getItem').mockImplementation(function (this: Storage, key: string) {
+      const value = realGet.call(this, key)
+      if (key === 'speakup.profiles' && !interleaved && value !== null) {
+        interleaved = true
+        localStorage.setItem('speakup.profiles', JSON.stringify([other]))
+        return JSON.stringify([other])
+      }
+      return value
+    })
+
+    const profile = ensureLocalProfile()
+    getItem.mockRestore()
+
+    // Both documents settle on the same child, so the progress is migrated once, into a namespace
+    // the roster actually points at — instead of one namespace per tab and a half-migrated orphan.
+    expect(profile.id).toBe(other.id)
+    expect(listProfiles()).toEqual([other])
+    expect(activeProfileId()).toBe(other.id)
+    expect(getStars('sword:cat')).toBe(3)
   })
 
   it('leaves the app on the legacy keys when storage refuses to remember the profile', () => {
@@ -208,7 +253,7 @@ describe('the server side', () => {
 
     expect(auth.startAnonymousSession).not.toHaveBeenCalled()
     expect(auth.ensureRecoveryCode).not.toHaveBeenCalled()
-    expect(await ensureRemoteProfiles()).toBe(false)
+    expect(await ensureRemoteProfiles()).toEqual([])
     expect(await fetchRemoteProfiles()).toEqual([])
     // …and the local half happened anyway, which is the whole local-first promise.
     expect(activeProfileId()).toBe(profile.id)
@@ -216,10 +261,10 @@ describe('the server side', () => {
   })
 
   it('signs in silently, then makes sure the children and the recovery code exist', async () => {
-    const client = makeClient()
+    const profile = ensureLocalProfile()
+    const client = makeClient(ownedRows([profile.id]))
     cloud.client = client
     auth.currentUserId.mockResolvedValue('anon-1')
-    const profile = ensureLocalProfile()
 
     await connectCloud()
 
@@ -236,6 +281,45 @@ describe('the server side', () => {
     expect(upsert?.options).toEqual({ onConflict: 'id', ignoreDuplicates: true })
   })
 
+  it('finishes the whole connection when the network comes back, not just the sign-in', async () => {
+    // The device booted offline: signed in nowhere, so no profile row and no recovery code either.
+    const profile = ensureLocalProfile()
+    const client = makeClient(ownedRows([profile.id]))
+    cloud.client = client
+    let onlineAgain: (() => void) | undefined
+    auth.startAnonymousSession.mockImplementation(async (options: { retry?: () => void } = {}) => {
+      onlineAgain = options.retry
+    })
+
+    await connectCloud()
+    expect(client.queries).toHaveLength(0)
+    expect(auth.ensureRecoveryCode).not.toHaveBeenCalled()
+
+    // An hour later, on the school Wi-Fi.
+    auth.startAnonymousSession.mockImplementation(async () => undefined)
+    auth.currentUserId.mockResolvedValue('anon-1')
+    expect(onlineAgain).toBeTypeOf('function')
+    onlineAgain?.()
+
+    await vi.waitFor(() => {
+      expect(client.queries.some(q => q.verb === 'upsert')).toBe(true)
+      expect(auth.ensureRecoveryCode).toHaveBeenCalledTimes(1)
+    })
+  })
+
+  it('does not report success for rows that belong to an account this device has left', async () => {
+    // A recovery re-parented this device onto a new user: the profile row still exists, so an
+    // `on conflict do nothing` writes nothing and errors not at all — and the row is not ours.
+    const profile = ensureLocalProfile()
+    cloud.client = makeClient(ownedRows([]))
+    auth.currentUserId.mockResolvedValue('anon-2')
+
+    expect(await ensureRemoteProfiles()).toEqual([])
+
+    cloud.client = makeClient(ownedRows([profile.id]))
+    expect(await ensureRemoteProfiles()).toEqual([profile.id])
+  })
+
   it('does not touch the server while nobody is signed in', async () => {
     cloud.client = makeClient()
     auth.currentUserId.mockResolvedValue(null)
@@ -245,7 +329,7 @@ describe('the server side', () => {
 
     expect(auth.startAnonymousSession).toHaveBeenCalledTimes(1)
     expect(auth.ensureRecoveryCode).not.toHaveBeenCalled()
-    expect(await ensureRemoteProfiles()).toBe(false)
+    expect(await ensureRemoteProfiles()).toEqual([])
   })
 
   it('swallows a refusal from the server rather than surfacing it', async () => {
@@ -253,7 +337,7 @@ describe('the server side', () => {
     auth.currentUserId.mockResolvedValue('anon-1')
     ensureLocalProfile()
 
-    expect(await ensureRemoteProfiles()).toBe(false)
+    expect(await ensureRemoteProfiles()).toEqual([])
     expect(await fetchRemoteProfiles()).toEqual([])
     await expect(connectCloud()).resolves.toBeUndefined()
   })

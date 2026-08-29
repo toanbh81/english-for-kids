@@ -5,8 +5,10 @@ import { describe, it, expect, beforeEach, vi } from 'vitest'
  * with it — including the case that matters most, which is having no client at all.
  */
 const cloud = vi.hoisted(() => ({ client: null as unknown }))
+// Resolved, not returned: the real one loads supabase-js on demand, so every caller in auth.ts
+// awaits it and a mock that answered synchronously would be testing an easier module.
 vi.mock('./supabase', () => ({
-  getSupabase: () => cloud.client,
+  getSupabase: async () => cloud.client,
   isCloudConfigured: () => cloud.client !== null,
   resetSupabaseClient: () => undefined,
 }))
@@ -27,7 +29,9 @@ import {
 } from './auth'
 
 type User = { id: string; is_anonymous?: boolean; email?: string }
-type Reply = { data: unknown; error: { message: string } | null }
+/** `status` is what tells a wrong-kind refusal from a rate limit; the real AuthError carries it. */
+type Fail = { message: string; status?: number }
+type Reply = { data: unknown; error: Fail | null }
 type Query = { table: string; verb: string; payload?: unknown; options?: unknown }
 type TableScript = Record<string, (payload?: unknown, options?: unknown) => Reply>
 
@@ -47,19 +51,19 @@ function makeClient(tables: Record<string, TableScript> = {}) {
     getSession: vi.fn(async () => ({ data: { session: state.session }, error: null })),
     signInAnonymously: vi.fn(async () => {
       state.session = { user: { id: 'anon-1', is_anonymous: true } }
-      return { data: { user: state.session.user }, error: null as { message: string } | null }
+      return { data: { user: state.session.user }, error: null as Fail | null }
     }),
-    updateUser: vi.fn(async (_attrs: { email?: string }) => ({ data: {}, error: null as { message: string } | null })),
-    signInWithOtp: vi.fn(async (_args: unknown) => ({ data: {}, error: null as { message: string } | null })),
+    updateUser: vi.fn(async (_attrs: { email?: string }) => ({ data: {}, error: null as Fail | null })),
+    signInWithOtp: vi.fn(async (_args: unknown) => ({ data: {}, error: null as Fail | null })),
     verifyOtp: vi.fn(async ({ email, type }: { email: string; token: string; type: string }) => {
-      if (type === 'email_change' && !state.session) return { data: null, error: { message: 'no session' } }
+      if (type === 'email_change' && !state.session) return { data: null, error: { message: 'no session' } as Fail }
       const user: User = { id: state.session?.user.id ?? 'user-new', is_anonymous: false, email }
       state.session = { user }
-      return { data: { user }, error: null as { message: string } | null }
+      return { data: { user }, error: null as Fail | null }
     }),
     signOut: vi.fn(async () => {
       state.session = null
-      return { error: null as { message: string } | null }
+      return { error: null as Fail | null }
     }),
     onAuthStateChange: vi.fn(() => ({ data: { subscription: { unsubscribe: vi.fn() } } })),
   }
@@ -91,6 +95,7 @@ const use = (client: ReturnType<typeof makeClient> | null) => { cloud.client = c
 beforeEach(() => {
   resetAuthState()
   cloud.client = null
+  localStorage.clear()
   vi.clearAllMocks()
 })
 
@@ -180,6 +185,23 @@ describe('the silent anonymous bootstrap', () => {
 
     await vi.waitFor(() => expect(client.auth.signInAnonymously).toHaveBeenCalledTimes(1))
   })
+
+  it('hands the returning network back to the caller\'s whole sequence, not just the sign-in', async () => {
+    // Signing in is a third of connecting: the profile rows and the recovery code have to follow,
+    // and a device that booted offline has had none of it done. So the retry runs what the launch
+    // would have run — `connectCloud`, from profileState — rather than a sign-in on its own.
+    const client = makeClient()
+    use(client)
+    const retry = vi.fn()
+
+    await startAnonymousSession({ online: () => false, retry, sleep: async () => undefined })
+    expect(retry).not.toHaveBeenCalled()
+
+    window.dispatchEvent(new Event('online'))
+
+    await vi.waitFor(() => expect(retry).toHaveBeenCalledTimes(1))
+    expect(client.auth.signInAnonymously).not.toHaveBeenCalled()
+  })
 })
 
 describe('the recovery code', () => {
@@ -230,10 +252,22 @@ describe('the recovery code', () => {
         insert: () => { stored = { code: 'RACE9WIN' }; return bad('duplicate key value violates unique constraint') },
       },
     })
-    client.state.session = { user: { id: 'anon-1' } }
+    client.state.session = { user: { id: 'anon-1', is_anonymous: true } }
     use(client)
 
     expect(await ensureRecoveryCode()).toBe('RACE9WIN')
+  })
+
+  it('mints nothing once the parent has linked an email', async () => {
+    // The database drops the code when the account gains an email, and /api/recover refuses to
+    // redeem for anything but an anonymous user. A code minted here would be dead on arrival, and
+    // the parent screen would present it as a way home.
+    const client = makeClient(codeTable(null))
+    client.state.session = { user: { id: 'user-1', is_anonymous: false, email: 'bome@example.com' } }
+    use(client)
+
+    expect(await ensureRecoveryCode()).toBeNull()
+    expect(client.queries.some(q => q.verb === 'insert')).toBe(false)
   })
 
   it('is null rather than an error when there is no session or the table says no', async () => {
@@ -316,13 +350,76 @@ describe('signing in on another device', () => {
     expect(client.auth.verifyOtp.mock.calls.map(c => c[0].type)).toEqual(['email_change'])
   })
 
-  it('gives up with the last message when neither kind is accepted', async () => {
+  it('gives up with the FIRST message when neither kind is accepted', async () => {
+    // The first message is the answer for the flow the parent was actually in; the second is what
+    // a flow they were never in thinks of their code, and telling them that would be nonsense.
     const client = makeClient()
-    client.auth.verifyOtp.mockResolvedValue({ data: null, error: { message: 'Token has expired' } })
+    client.auth.verifyOtp
+      .mockResolvedValueOnce({ data: null, error: { message: 'Token has expired or is invalid' } })
+      .mockResolvedValueOnce({ data: null, error: { message: 'Email link is invalid' } })
     use(client)
 
-    expect(await verifyEmailOtp('bome@example.com', '000000')).toEqual({ ok: false, error: 'Token has expired' })
+    expect(await verifyEmailOtp('bome@example.com', '000000'))
+      .toEqual({ ok: false, error: 'Token has expired or is invalid' })
     expect(client.auth.verifyOtp).toHaveBeenCalledTimes(2)
+  })
+
+  it('does not spend a second attempt on a refusal that is not about the kind', async () => {
+    // A rate limit says nothing about which flow the code belongs to, and asking again would burn
+    // one more of the few attempts the parent has left.
+    const client = makeClient()
+    client.auth.verifyOtp.mockResolvedValue({
+      data: null,
+      error: { message: 'For security purposes, you can only request this after 51 seconds', status: 429 },
+    })
+    use(client)
+
+    expect(await verifyEmailOtp('bome@example.com', '000000')).toEqual({
+      ok: false,
+      error: 'For security purposes, you can only request this after 51 seconds',
+    })
+    expect(client.auth.verifyOtp).toHaveBeenCalledTimes(1)
+  })
+
+  it('forgets a flow the server refused to start', async () => {
+    const client = makeClient()
+    use(client)
+
+    expect(await signInWithEmail('bome@example.com')).toEqual({ ok: true, userId: null })
+    client.auth.updateUser.mockResolvedValue({ data: {}, error: { message: 'rate limited' } })
+    client.state.session = { user: { id: 'anon-1', is_anonymous: true } }
+    expect((await linkEmail('bome@example.com')).ok).toBe(false)
+
+    // No code was sent for the link, so the sign-in flow recorded earlier must not be what the
+    // next code the parent types is checked against: with nothing pending it is inferred fresh.
+    await verifyEmailOtp('bome@example.com', '123456')
+    expect(client.auth.verifyOtp.mock.calls[0][0].type).toBe('email_change')
+  })
+
+  it('refuses to sign in over a child who is already on this iPad', async () => {
+    // The anonymous account holding that child would be stranded: its rows owned by a user id
+    // nothing can reach, its recovery code the only way back, and the child's local namespace
+    // invisible to whoever signs in. Task 4 offers linking instead — and only passes the flag
+    // below once the parent has said this iPad's progress is not what they are after.
+    const client = makeClient()
+    client.state.session = { user: { id: 'anon-1', is_anonymous: true } }
+    use(client)
+    localStorage.setItem('speakup.profile', '11111111-2222-4333-8444-555555555555')
+
+    expect(await signInWithEmail('bome@example.com')).toEqual({ ok: false, error: 'anonymous-session-in-use' })
+    expect(client.auth.signInWithOtp).not.toHaveBeenCalled()
+
+    expect(await signInWithEmail('bome@example.com', { abandonAnonymous: true })).toEqual({ ok: true, userId: 'anon-1' })
+    expect(client.auth.signInWithOtp).toHaveBeenCalledTimes(1)
+  })
+
+  it('lets a device with nothing on it sign in freely', async () => {
+    const client = makeClient()
+    use(client)
+    // A wiped cache: a profile exists locally but the session is not anonymous-with-history — and
+    // a fresh device with no session at all is the returning-parent case flow 3 is named after.
+    expect(await signInWithEmail('bome@example.com')).toEqual({ ok: true, userId: null })
+    expect(client.auth.signInWithOtp).toHaveBeenCalledTimes(1)
   })
 })
 

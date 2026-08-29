@@ -1,4 +1,7 @@
-import type { AuthChangeEvent, Session, User } from '@supabase/supabase-js'
+import type { AuthChangeEvent, AuthError, Session, User } from '@supabase/supabase-js'
+// The leaf of the storage layer, not the profile module: importing `profileState` here would close
+// a cycle (it imports this file), and all this needs to know is whether a child lives here.
+import { activeProfileId } from '../progress/storageKeys'
 import { getSupabase } from './supabase'
 
 /**
@@ -39,7 +42,7 @@ const message = (e: unknown): string =>
 
 /** The signed-in user, or null when there is no cloud, no session, or storage said no. */
 export async function currentUser(): Promise<User | null> {
-  const sb = getSupabase()
+  const sb = await getSupabase()
   if (!sb) return null
   try {
     // getSession() reads the persisted session locally; getUser() would be a network round trip
@@ -79,6 +82,15 @@ export type BootstrapOptions = {
   sleep?: (ms: number) => Promise<void>
   /** Test seam. */
   online?: () => boolean
+  /**
+   * What to run when the network comes back after a launch that could not sign in.
+   *
+   * It exists because signing in is only the first third of connecting: the profile rows and the
+   * recovery code have to follow, and a device that booted offline had none of that done. The
+   * caller passes the whole sequence (`connectCloud`), so the retry is the same work the launch
+   * would have done, rather than a sign-in that leaves a session with nothing under it.
+   */
+  retry?: () => void
 }
 
 const DEFAULT_ATTEMPTS = 5
@@ -115,7 +127,7 @@ export function startAnonymousSession(options: BootstrapOptions = {}): Promise<v
 }
 
 async function runAnonymousBootstrap(options: BootstrapOptions): Promise<void> {
-  const sb = getSupabase()
+  const sb = await getSupabase()
   if (!sb) return
   if ((await currentUserId()) !== null) return
 
@@ -140,7 +152,8 @@ function retryWhenOnline(options: BootstrapOptions): void {
   armedForOnline = true
   window.addEventListener('online', () => {
     armedForOnline = false
-    void startAnonymousSession(options)
+    if (options.retry) options.retry()
+    else void startAnonymousSession(options)
   }, { once: true })
 }
 
@@ -161,13 +174,22 @@ function retryWhenOnline(options: BootstrapOptions): void {
  * quiet about, not an error the child's app should ever notice.
  */
 export async function ensureRecoveryCode(): Promise<string | null> {
-  const sb = getSupabase()
+  const sb = await getSupabase()
   if (!sb) return null
-  const userId = await currentUserId()
+  const user = await currentUser()
+  const userId = user?.id
   if (!userId) return null
 
   const existing = await getRecoveryCode()
   if (existing) return existing
+
+  // Nothing found — and for a LINKED account that is the right answer, not a gap to fill. A trigger
+  // on auth.users drops the code the moment the account gains an email or a phone, because
+  // /api/recover refuses to redeem for anything but an anonymous user (the code outliving the
+  // upgrade was a way to take over the family account). Minting another here would produce a code
+  // that can never be redeemed, and the parent screen would show it under "chụp màn hình lại nhé"
+  // as if it were a way home. After linking, the way home is the email.
+  if (user.is_anonymous !== true || user.email) return null
 
   try {
     const { data, error } = await sb
@@ -185,7 +207,7 @@ export async function ensureRecoveryCode(): Promise<string | null> {
 
 /** This account's recovery code if it has one, without creating one. */
 export async function getRecoveryCode(): Promise<string | null> {
-  const sb = getSupabase()
+  const sb = await getSupabase()
   if (!sb) return null
   const userId = await currentUserId()
   if (!userId) return null
@@ -219,43 +241,76 @@ type OtpKind = 'email_change' | 'email'
 let pending: { email: string; kind: OtpKind } | null = null
 
 /**
+ * Is this refusal one that trying the other kind of code could get past?
+ *
+ * A token that belongs to the other flow simply is not found for this one, and Supabase says so
+ * with a 4xx about an invalid or expired token. A 429 (the parent has asked too often) and a 5xx
+ * say nothing about the kind at all, and a second call would only burn one more of the attempts
+ * they have left.
+ */
+function looksLikeWrongKind(error: AuthError): boolean {
+  const status = typeof error.status === 'number' ? error.status : 0
+  if (status === 429 || status >= 500) return false
+  return /invalid|expired|not\s*found/i.test(error.message ?? '')
+}
+
+/**
  * Upgrade this device's anonymous account to a parent email (flow 2).
  *
  * Supabase sends a 6-digit code to the address; `verifyEmailOtp` finishes it. The user id does not
  * change, which is the whole promise: the child's synced rows already belong to this account.
  */
 export async function linkEmail(email: string): Promise<AuthResult> {
-  const sb = getSupabase()
+  const sb = await getSupabase()
   if (!sb) return failed(UNCONFIGURED)
   const address = email.trim().toLowerCase()
   if (!EMAIL_RE.test(address)) return failed('invalid-email')
   try {
     const { error } = await sb.auth.updateUser({ email: address })
-    if (error) return failed(error.message)
+    // Nothing was sent, so nothing is pending: leaving an earlier flow recorded here would send
+    // the NEXT code the parent types to the wrong verification.
+    if (error) { pending = null; return failed(error.message) }
     pending = { email: address, kind: 'email_change' }
     return { ok: true, userId: await currentUserId() }
   } catch (e) {
+    pending = null
     return failed(message(e))
   }
 }
 
 /**
- * Sign a parent in on a device that has no session — a new iPad, or one whose cache was wiped
- * (flow 3). Creates the account if that email has never been used, which is also what makes this
- * safe to offer on a fresh device: the parent types their address and gets their family either
- * way.
+ * Sign a parent in on a device that has no session of its own — a new iPad, or one whose cache was
+ * wiped (flow 3). Creates the account if that email has never been used, which is what makes it
+ * safe to offer on a fresh device: the parent types their address and gets their family either way.
+ *
+ * **It refuses while this device is holding an unlinked anonymous account with a child on it.**
+ * Signing in as somebody else would strand that account: its rows would still exist, owned by a
+ * user id nothing can reach again, with the recovery code as the only way back — and the child's
+ * local progress would sit in a namespace the new account has never heard of. The right move there
+ * is `linkEmail`, which upgrades in place and keeps everything.
+ *
+ * Task 4 owns that choice: it shows the parent which situation they are in and only passes
+ * `{ abandonAnonymous: true }` once they have said, in Vietnamese and in as many words, that this
+ * iPad's local progress is not the progress they are after.
  */
-export async function signInWithEmail(email: string): Promise<AuthResult> {
-  const sb = getSupabase()
+export async function signInWithEmail(
+  email: string,
+  options: { abandonAnonymous?: boolean } = {},
+): Promise<AuthResult> {
+  const sb = await getSupabase()
   if (!sb) return failed(UNCONFIGURED)
   const address = email.trim().toLowerCase()
   if (!EMAIL_RE.test(address)) return failed('invalid-email')
+  if (!options.abandonAnonymous && activeProfileId() !== null && (await isAnonymous())) {
+    return failed('anonymous-session-in-use')
+  }
   try {
     const { error } = await sb.auth.signInWithOtp({ email: address, options: { shouldCreateUser: true } })
-    if (error) return failed(error.message)
+    if (error) { pending = null; return failed(error.message) }
     pending = { email: address, kind: 'email' }
     return { ok: true, userId: await currentUserId() }
   } catch (e) {
+    pending = null
     return failed(message(e))
   }
 }
@@ -268,9 +323,14 @@ export async function signInWithEmail(email: string): Promise<AuthResult> {
  * anonymous session is assumed to be mid-upgrade and anything else mid-sign-in. Either way the
  * other kind is tried once before giving up: a rejected token is not consumed, and getting this
  * wrong would mean telling a parent their correct code is wrong.
+ *
+ * That second attempt is only made when the refusal is the kind a wrong TYPE produces — a token
+ * that cannot be found for this flow. A rate limit or a 500 says nothing about the kind, and
+ * asking again would spend the parent's remaining attempts on the same wall. The message reported
+ * is always the FIRST one, because that is the answer for the flow the parent was actually in.
  */
 export async function verifyEmailOtp(email: string, token: string): Promise<AuthResult> {
-  const sb = getSupabase()
+  const sb = await getSupabase()
   if (!sb) return failed(UNCONFIGURED)
   const address = email.trim().toLowerCase()
   const code = token.trim()
@@ -282,7 +342,7 @@ export async function verifyEmailOtp(email: string, token: string): Promise<Auth
     : (await isAnonymous()) ? 'email_change' : 'email'
   const kinds: OtpKind[] = first === 'email_change' ? ['email_change', 'email'] : ['email', 'email_change']
 
-  let lastError = 'invalid-token'
+  let firstError: string | null = null
   for (const kind of kinds) {
     try {
       const { data, error } = await sb.auth.verifyOtp({ email: address, token: code, type: kind })
@@ -290,12 +350,14 @@ export async function verifyEmailOtp(email: string, token: string): Promise<Auth
         pending = null
         return { ok: true, userId: data?.user?.id ?? (await currentUserId()) }
       }
-      lastError = error.message
+      firstError ??= error.message
+      if (!looksLikeWrongKind(error)) break
     } catch (e) {
-      lastError = message(e)
+      firstError ??= message(e)
+      break
     }
   }
-  return failed(lastError)
+  return failed(firstError ?? 'invalid-token')
 }
 
 /**
@@ -306,7 +368,7 @@ export async function verifyEmailOtp(email: string, token: string): Promise<Auth
  * this until an email exists (flow 2 before flow 3).
  */
 export async function signOut(): Promise<AuthResult> {
-  const sb = getSupabase()
+  const sb = await getSupabase()
   if (!sb) return failed(UNCONFIGURED)
   try {
     const { error } = await sb.auth.signOut()
@@ -318,17 +380,33 @@ export async function signOut(): Promise<AuthResult> {
   }
 }
 
-/** Session changes, for the parent screen. Returns an unsubscribe that is safe to call always. */
+/**
+ * Session changes, for the parent screen.
+ *
+ * The one caller here that cannot be async: React effects must hand back their cleanup
+ * synchronously. So the subscription is attached once the client chunk has loaded, and the
+ * unsubscribe returned right now closes over whatever has happened by the time it is called — a
+ * component that mounts and unmounts before the chunk arrives cancels the attachment instead of
+ * leaking a listener into a screen that is gone.
+ */
 export function subscribeAuth(listener: (event: AuthChangeEvent, session: Session | null) => void): () => void {
-  const sb = getSupabase()
-  if (!sb) return () => undefined
-  try {
-    const { data } = sb.auth.onAuthStateChange(listener)
-    return () => {
-      try { data?.subscription?.unsubscribe() } catch { /* already gone */ }
-    }
-  } catch {
-    return () => undefined
+  let cancelled = false
+  let detach: (() => void) | null = null
+
+  void getSupabase().then(sb => {
+    if (!sb || cancelled) return
+    try {
+      const { data } = sb.auth.onAuthStateChange(listener)
+      detach = () => {
+        try { data?.subscription?.unsubscribe() } catch { /* already gone */ }
+      }
+    } catch { /* no subscription is better than a broken screen */ }
+  }).catch(() => undefined)
+
+  return () => {
+    cancelled = true
+    detach?.()
+    detach = null
   }
 }
 

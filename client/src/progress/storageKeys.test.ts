@@ -184,30 +184,49 @@ describe('the one-time migration', () => {
     expect(migrateKeysInto(ID)).toBe(0)
     setItem.mockRestore()
 
-    // Read-only storage must never be a reason to delete a child's progress: every value is
-    // exactly where it was, and the next launch tries again.
+    // A store that will not take the copy — full, or read-only in private browsing — must never be
+    // a reason to delete a child's progress: nothing is ever removed before its copy has been read
+    // back, so every value is exactly where it was and the next launch tries again.
     for (const [key, value] of Object.entries(legacy)) expect(localStorage.getItem(key)).toBe(value)
   })
 
-  it('moves the value when the store is merely full', () => {
-    const value = JSON.stringify({ 'sword:cat': 3 })
-    localStorage.setItem('speakup.stars', value)
+  it('brings a key home on the retry even after the app wrote a fresh default over the hole', () => {
+    // The exact sequence that used to strand a child's stars for good:
+    //   1. the store is full for one key, so the copy fails and the legacy value stays behind;
+    //   2. the app runs the session anyway, reads an empty namespace and writes a default into it;
+    //   3. the next launch sees a namespaced value that DIFFERS from the legacy one — which is
+    //      also what a stale old bundle looks like — and would protect the default for ever.
+    const earned = JSON.stringify({ 'sword:cat': 3, 'pair:pair-ship-sheep': 2 })
+    localStorage.setItem('speakup.stars', earned)
+    localStorage.setItem('speakup.band', JSON.stringify({ value: 4, mode: 'manual' }))
 
-    // Full, not read-only: a write only succeeds once something is removed. This is the case the
-    // probe distinguishes, and the only one allowed to remove the original first.
-    let full = true
     const real = Storage.prototype.setItem
     const setItem = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(function (this: Storage, k: string, v: string) {
-      if (full && k.startsWith(`speakup.${ID}.`)) throw new DOMException('quota', 'QuotaExceededError')
-      if (k === 'speakup-migrate-probe') full = false
+      if (k === `speakup.${ID}.stars`) throw new DOMException('quota', 'QuotaExceededError')
       real.call(this, k, v)
     })
+    expect(migrateKeysInto(ID)).toBe(1) // the band made it; the stars did not
+    setItem.mockRestore()
+
+    expect(localStorage.getItem('speakup.stars')).toBe(earned)
+    expect(JSON.parse(localStorage.getItem('speakup.migrate.pending') ?? '[]')).toEqual(['speakup.stars'])
+
+    // The session carries on and the app writes its default over the empty namespace.
+    localStorage.setItem(`speakup.${ID}.stars`, '{}')
 
     expect(migrateKeysInto(ID)).toBe(1)
-    setItem.mockRestore()
-    expect(localStorage.getItem(`speakup.${ID}.stars`)).toBe(value)
+    expect(localStorage.getItem(`speakup.${ID}.stars`)).toBe(earned)
     expect(localStorage.getItem('speakup.stars')).toBeNull()
-    expect(localStorage.getItem('speakup-migrate-probe')).toBeNull()
+    // And the note is torn up, so the key is an ordinary one again.
+    expect(localStorage.getItem('speakup.migrate.pending')).toBeNull()
+  })
+
+  it('keeps its own bookkeeping out of the children\'s namespaces', () => {
+    localStorage.setItem('speakup.migrate.pending', JSON.stringify(['speakup.stars']))
+    localStorage.setItem('speakup.stars', 'x')
+
+    migrateKeysInto(ID)
+    expect(localStorage.getItem(`speakup.${ID}.migrate.pending`)).toBeNull()
   })
 
   it('does nothing for an id that is not a profile id', () => {
