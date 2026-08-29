@@ -466,16 +466,38 @@ describe('the merge contract', () => {
       value: '{"sword:cat":3,"sword:dog":2}', source: 'damaged',
     })
     expect(mergeStored('activity', '[{"ts":1,', '[{"ts":1,"kind":"word","id":"a"}]').source).toBe('damaged')
-    // Every LWW key too, not just the two that compute a merge.
-    expect(mergeStored('band', '{"value":4,"mo', '{"value":3,"mode":"auto"}', false)).toEqual({
+    // Every LWW key too — but only one the owning store says it writes as JSON. That `form` is not
+    // a detail: without it, `lesson.length` ("medium") reads as unparseable on every single pull.
+    expect(mergeStored('band', '{"value":4,"mo', '{"value":3,"mode":"auto"}', false, 'json')).toEqual({
       value: '{"value":3,"mode":"auto"}', source: 'damaged',
     })
-    // …but a bare scalar is not damage: `limit.minutes` and `lesson.length` are stored unquoted on
+    // …and a bare scalar is never damage: `limit.minutes` and `lesson.length` are stored unquoted on
     // purpose, and a truncated "20" is indistinguishable from a real one.
-    expect(mergeStored('limit.minutes', '20', '30', false).source).toBe('existing')
-    expect(mergeStored('lesson.length', 'medium', 'long', true).source).toBe('incoming')
-    // Neither side readable: nothing is claimed in either direction.
-    expect(mergeStored('stars', half, 'also broken')).toEqual({ value: half, source: 'existing' })
+    expect(mergeStored('limit.minutes', '20', '30', false, 'text').source).toBe('existing')
+    expect(mergeStored('lesson.length', 'medium', 'long', true, 'text').source).toBe('incoming')
+    expect(mergeStored('lesson.length', 'medium', '"long"', false, 'text').source).toBe('existing')
+  })
+
+  it('calls a shape it does not recognise a stalemate, and touches neither side', () => {
+    // Version skew, not corruption: a value some other build of the app wrote. The old shape test
+    // could not tell the two apart and overwrote the local value with bytes the owning store cannot
+    // read — a real `limit.minutes` of "45" replaced by an object `getLimitMinutes()` sees as NaN.
+    // These three are the proven reversals.
+    expect(mergeStored('limit.minutes', '45', '{"minutes":15}', false, 'text')).toEqual({
+      value: '45', source: 'existing',
+    })
+    expect(mergeStored('lesson.length', 'short', '["medium"]', false, 'text')).toEqual({
+      value: 'short', source: 'existing',
+    })
+    expect(mergeStored('band', '5', '{"value":1,"mode":"auto"}', false, 'json')).toEqual({
+      value: '5', source: 'existing',
+    })
+    // Where a merge is attempted, an unrecognised LOCAL shape is a stalemate: readable, so not
+    // damaged; not a star map, so not mergeable. Keep it, push nothing.
+    expect(mergeStored('stars', '5', '{"a":1}')).toEqual({ value: '5', source: 'stalemate' })
+    expect(mergeStored('activity', '{}', '[]')).toEqual({ value: '{}', source: 'stalemate' })
+    // Neither side readable: nothing is claimed in either direction, and nothing is pushed.
+    expect(mergeStored('stars', '{"a":1,', 'also broken')).toEqual({ value: '{"a":1,', source: 'stalemate' })
   })
 
   it('is the one place that says what makes two events the same event', () => {

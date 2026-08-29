@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { ActivityEvent } from '../progress/activity'
 import { KEEP_DAYS, lessonDayInName } from '../progress/lessonStore'
+import { isSyncedName, syncedForm } from '../progress/synced'
 import {
   ACTIVITY_CAP,
   ROOT,
@@ -83,8 +84,20 @@ type Op = KvOp | EventOp
  *    on pull. A key with no entry is one this device has never written since sync existed; the pull
  *    keeps the local value and SEEDS the clock from the server's, so the next genuinely newer
  *    remote write wins instead of losing to a timestamp this device invented for itself.
+ *
+ *  - `mirrored` — the kv names this device knows have REACHED the server (pushed, or seen coming
+ *    back from it). Distinct from `clock`, and the distinction is the whole of N3.
+ *
+ *    "There is no row for this key" and "this key has never been mirrored" are different facts, and
+ *    reading the first as the second is what let a completed reset undo itself: the parent resets,
+ *    both tables are emptied, the local half fails (a full store, or the halves ordered the other
+ *    way), and the next launch finds a server with no rows and re-uploads everything the reset had
+ *    just deleted. `clock` cannot stand in for this — it is stamped when the child WRITES a key,
+ *    which is before anything has been sent, and the op carrying it can still be dropped by a full
+ *    store. Only a fact recorded when the server actually answered can tell a reset apart from a
+ *    key that never made it.
  */
-type Meta = { done: string[]; clock: Record<string, number> }
+type Meta = { done: string[]; mirrored: string[]; clock: Record<string, number> }
 
 type Outbox = { v: 1; next: number; ops: Op[]; meta: Record<string, Meta> }
 
@@ -104,19 +117,19 @@ const EVENT_BATCH = 500
 const DEBOUNCE_MS = 30_000
 
 /**
- * The activity log is NOT a kv value. It is the `events` table — one row per attempt, deduped by
- * the primary key — and it routinely outgrows kv's 16 KB ceiling. Anything else the stores write
- * goes up as kv.
+ * What may be mirrored is an ALLOWLIST, and it does not live here — `progress/synced.ts` holds it,
+ * next to the stores that own the keys, so a store author meets it while writing the store.
+ *
+ * This module used to decide by exclusion: everything under the child's namespace minus a two-name
+ * denylist. `migrateKeysInto` deliberately sweeps keys this codebase has never heard of into that
+ * namespace, so exclusion meant uploading whatever any past or future version had left behind, with
+ * no module owning it — and the spec's promise is that a child's voice never leaves the device. A
+ * key nobody registered now simply does not sync, which is the direction this is allowed to fail in.
+ *
+ * The activity log is the one value that is mirrored but is NOT a kv key: it goes to the `events`
+ * table, one row per attempt, because it outgrows kv's 16 KB ceiling.
  */
-const NEVER_KV = new Set([
-  'activity',
-  // A once-a-day confetti stamp, not progress. Mirroring it would let one device suppress the
-  // celebration on another, and it is the child's, not the parent dashboard's.
-  'celebrated',
-])
-
-/** `kv_key_len` in the migration. */
-const MAX_KV_NAME_LEN = 64
+const MAX_KV_NAME_LEN = 64 // `kv_key_len` in the migration
 
 const emptyOutbox = (): Outbox => ({ v: 1, next: 1, ops: [], meta: {} })
 
@@ -153,7 +166,10 @@ function toOp(value: unknown): Op | null {
   return null
 }
 
-const emptyMeta = (): Meta => ({ done: [], clock: {} })
+const emptyMeta = (): Meta => ({ done: [], mirrored: [], clock: {} })
+
+const stringList = (value: unknown): string[] =>
+  Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : []
 
 function toMeta(value: unknown): Meta {
   if (!isRecord(value)) return emptyMeta()
@@ -163,10 +179,7 @@ function toMeta(value: unknown): Meta {
       if (typeof at === 'number' && Number.isFinite(at)) clock[name] = at
     }
   }
-  const done = Array.isArray(value.done)
-    ? value.done.filter((id): id is string => typeof id === 'string')
-    : []
-  return { done, clock }
+  return { done: stringList(value.done), mirrored: stringList(value.mirrored), clock }
 }
 
 /**
@@ -211,11 +224,15 @@ function writeOutbox(box: Outbox): void {
   if (box.ops.length > MAX_OPS) box.ops = box.ops.slice(-MAX_OPS)
   for (const meta of Object.values(box.meta)) {
     const names = Object.keys(meta.clock)
-    if (names.length <= MAX_CLOCK_ENTRIES) continue
-    // Oldest clocks first: a stale entry only costs a "prefer the local value" that would have been
-    // the answer anyway, since a missing clock reads the same way.
-    const doomed = names.sort((a, b) => meta.clock[a] - meta.clock[b]).slice(0, names.length - MAX_CLOCK_ENTRIES)
-    for (const name of doomed) delete meta.clock[name]
+    if (names.length > MAX_CLOCK_ENTRIES) {
+      // Oldest clocks first: a stale entry only costs a "prefer the local value" that would have
+      // been the answer anyway, since a missing clock reads the same way.
+      const doomed = names.sort((a, b) => meta.clock[a] - meta.clock[b]).slice(0, names.length - MAX_CLOCK_ENTRIES)
+      for (const name of doomed) delete meta.clock[name]
+    }
+    // `mirrored` tracks the same key space, so the same ceiling holds it. Dropping the front costs
+    // one redundant re-push of a key the server already has, which the merge rules make harmless.
+    if (meta.mirrored.length > MAX_CLOCK_ENTRIES) meta.mirrored = meta.mirrored.slice(-MAX_CLOCK_ENTRIES)
   }
   // A full store must not lose the child's progress to the queue that mirrors it, so the queue is
   // the thing that gives way: the newest half of the ops, then none of them, then the meta alone.
@@ -254,7 +271,8 @@ function updateOutbox(change: (box: Outbox) => void): Outbox {
 // ---------------------------------------------------------------------------
 
 function enqueueKv(profileId: string, name: string, at: number): void {
-  if (NEVER_KV.has(name) || name.length > MAX_KV_NAME_LEN) return
+  // The allowlist, at the one door every kv op comes through.
+  if (!isSyncedName(name) || name.length > MAX_KV_NAME_LEN) return
   updateOutbox(box => {
     // One op per (profile, key). The value is read at flush time, so a second op for the same key
     // would only push the same bytes twice.
@@ -403,9 +421,36 @@ const statusListeners = new Set<(status: SyncStatus) => void>()
 
 const isOnline = (): boolean => typeof navigator === 'undefined' || navigator.onLine !== false
 
+/**
+ * Every child this device might be holding data for: the ones the outbox remembers, plus whoever is
+ * using the iPad now (whose meta may not exist yet on a first launch).
+ */
+function trackedProfiles(box: Outbox): string[] {
+  const ids = new Set(Object.keys(box.meta))
+  const active = activeProfileId()
+  if (active) ids.add(active)
+  return [...ids]
+}
+
+/**
+ * Children with events the server does not hold and **no queued op saying so**.
+ *
+ * This is the last place the status line could lie. The queue is not the only measure of what is
+ * waiting: a full store can refuse the `ev` op (`writeOutbox` drops ops precisely when there is no
+ * room), and the flush would then find an empty queue, call it a day, and report "Đã đồng bộ ✓" over
+ * a log the server has never seen — the exact failure F3 was raised about, one layer down.
+ */
+function unrepresented(box: Outbox): string[] {
+  return trackedProfiles(box).filter(profileId =>
+    undelivered(profileId) > 0 && !box.ops.some(op => op.t === 'ev' && op.p === profileId))
+}
+
 export function syncStatus(): SyncStatus {
   if (!isCloudConfigured()) return { state: 'off', pending: 0, lastSyncedAt: null, lastError: null, syncing: false }
-  const pending = readOutbox().ops.length
+  const box = readOutbox()
+  // `synced` has to mean nothing is waiting by EVERY measure this module has, not just by the one
+  // that happens to be cheapest to read.
+  const pending = box.ops.length + unrepresented(box).length
   const state: SyncState = !isOnline() ? 'offline' : pending > 0 ? 'pending' : 'synced'
   return { state, pending, lastSyncedAt, lastError, syncing }
 }
@@ -609,6 +654,10 @@ async function pushKv(sb: SupabaseClient, profileId: string, ops: KvOp[]): Promi
   if (entries.length) {
     const { error } = await sb.rpc('merge_kv', { profile: profileId, entries })
     if (error) throw new Error(error.message)
+    // The server answered, so these names have REACHED it — the fact `mirrored` records, and the
+    // one that lets a later pull tell "deleted by a reset" from "never sent".
+    const names = entries.map(entry => entry.key)
+    updateMeta(profileId, meta => { meta.mirrored = [...new Set([...meta.mirrored, ...names])] })
   }
   for (const id of included) done.add(id)
   return done
@@ -652,6 +701,12 @@ async function runFlush(): Promise<void> {
   // `navigator.onLine === false` is the reliable half of that flag: it really does mean no network.
   // Anything else is attempted, because "true" only ever meant an interface is up.
   if (!isOnline()) return
+
+  // Re-open a queue for anything the outbox has lost track of but the log still owes — an `ev` op a
+  // full store refused, or one consumed by a flush that was running when the event was logged.
+  // Doing it here, before the queue is read, is what stops an empty outbox being mistaken for an
+  // empty mailbox.
+  for (const profileId of unrepresented(readOutbox())) enqueueEvents(profileId)
 
   const ops = readOutbox().ops
   if (!ops.length) { lastSyncedAt = Date.now(); notifyStatus(); return }
@@ -782,12 +837,15 @@ async function runPull(profileId: string): Promise<boolean> {
 }
 
 /**
- * Every kv name this child has on disk — including ones the server has never heard of.
+ * The child's mirrorable values that are on disk — **allowlisted names only**.
  *
- * That last part is why it exists. A key whose op was dropped by a full store (see `writeOutbox`)
- * would otherwise never be mirrored at all if it is one the app writes ONCE — `lesson.length`,
- * `limit.minutes` — because the only other thing that queues a key is the pull, and the pull could
- * only ever queue keys the server already had.
+ * It exists for the keys the server has never heard of. A key whose op was dropped by a full store
+ * (see `writeOutbox`) would otherwise never be mirrored at all if it is one the app writes ONCE —
+ * `lesson.length`, `limit.minutes` — because the only other thing that queues a key is the pull, and
+ * the pull could only ever queue keys the server already had.
+ *
+ * `isSyncedName` is what stops that reach turning into "upload everything under the namespace":
+ * `migrateKeysInto` puts keys from versions this code has never seen in there too.
  */
 function localKvNames(profileId: string): string[] {
   const prefix = profilePrefix(profileId)
@@ -797,7 +855,7 @@ function localKvNames(profileId: string): string[] {
       const key = localStorage.key(i)
       if (!key?.startsWith(prefix)) continue
       const name = key.slice(prefix.length)
-      if (!name || NEVER_KV.has(name) || name.length > MAX_KV_NAME_LEN) continue
+      if (!name || !isSyncedName(name) || name.length > MAX_KV_NAME_LEN) continue
       names.push(name)
     }
   } catch { /* storage unavailable: nothing to mirror */ }
@@ -828,7 +886,8 @@ function retainedLessonDays(remoteNames: string[], profileId: string): Set<strin
 }
 
 function mergeKvRows(profileId: string, rows: KvRow[]): void {
-  const clock = readMeta(profileId).clock
+  const meta = readMeta(profileId)
+  const clock = meta.clock
   const accepted: Record<string, number> = {}
   const ahead: { name: string; at: number }[] = []
   const seenRemotely = new Set<string>()
@@ -839,7 +898,9 @@ function mergeKvRows(profileId: string, rows: KvRow[]): void {
 
   for (const row of rows) {
     const name = typeof row.key === 'string' ? row.key : ''
-    if (!name || NEVER_KV.has(name)) continue
+    // A row for a key this app does not own — an older version's, or a newer one's. It is not
+    // written to disk and it is not counted as anything.
+    if (!name || !isSyncedName(name)) continue
     seenRemotely.add(name)
     if (row.value === undefined || row.value === null) continue
     // Outside the local retention window: writing it would only give `saveLesson` something to
@@ -858,8 +919,15 @@ function mergeKvRows(profileId: string, rows: KvRow[]): void {
     // than invented, so a genuinely newer write from the other iPad wins next time instead of
     // losing to a timestamp this device made up for itself.
     const preferIncoming = localAt !== undefined && remoteAt >= localAt
-    const { value: merged, source } = mergeStored(name, existing, incoming, preferIncoming)
+    const { value: merged, source } = mergeStored(name, existing, incoming, preferIncoming, syncedForm(name))
 
+    if (source === 'stalemate') {
+      // Neither copy can be judged against the other: one of them parses but is not the shape this
+      // key holds, which is version skew, not damage. Nothing is written and nothing is pushed —
+      // overwriting a value we do not understand is how a real `limit.minutes` of "45" becomes an
+      // object `getLimitMinutes()` reads as NaN.
+      continue
+    }
     if (merged !== existing && !writeRaw(key, merged)) continue
 
     if (source === 'existing' && localAt !== undefined) {
@@ -872,7 +940,7 @@ function mergeKvRows(profileId: string, rows: KvRow[]): void {
       ahead.push({ name, at: Math.max(localAt ?? 0, remoteAt) })
     } else {
       // 'incoming' — the server already holds everything this device does.
-      // 'existing' with no clock — kept locally, and the seed below is the whole point of F5.
+      // 'existing' with no clock — kept locally, and the seed here is the whole point of F5.
       // 'damaged'  — the local bytes could not be read. THEY ARE NOT NEWER TRUTH. The server's copy
       //              has been adopted and nothing is pushed: half a JSON object written over the
       //              cloud's good map is the child's stars gone from the last place they existed.
@@ -880,15 +948,25 @@ function mergeKvRows(profileId: string, rows: KvRow[]): void {
     }
   }
 
-  if (Object.keys(accepted).length) {
-    updateMeta(profileId, meta => { Object.assign(meta.clock, accepted) })
-  }
+  // A row that came back is a row the server holds — the second of the two facts `mirrored` keeps
+  // apart from `clock`.
+  updateMeta(profileId, m => {
+    Object.assign(m.clock, accepted)
+    m.mirrored = [...new Set([...m.mirrored, ...seenRemotely])]
+  })
   for (const { name, at } of ahead) enqueueKv(profileId, name, at)
 
-  // Anything on disk the server has never seen. Queued last, so a key that is both unknown remotely
-  // and outside the lesson window is not queued twice.
+  // Anything on disk the server has never seen AND this device has never sent. Queued last, so a
+  // key that is both unknown remotely and outside the lesson window is not queued twice.
+  //
+  // The second half of that condition is what stops a completed reset undoing itself. After
+  // `resetRemoteProgress` the server legitimately has no rows, and the local half may not have run
+  // — but every one of those keys is on `mirrored`, so "there is no row" reads as "it was deleted",
+  // not as "it was never mirrored". A key whose op a full store dropped was never on `mirrored` in
+  // the first place, so it still goes up. Two different facts, told apart.
+  const known = new Set(readMeta(profileId).mirrored)
   for (const name of localKvNames(profileId)) {
-    if (seenRemotely.has(name)) continue
+    if (seenRemotely.has(name) || known.has(name)) continue
     const day = lessonDayInName(name)
     if (day && !keepDays.has(day)) continue
     // There is no remote value here to regress, so `Date.now()` cannot lose the child anything —
@@ -951,12 +1029,34 @@ export async function resetRemoteProgress(profileId: string): Promise<boolean> {
     if (kv.error) throw new Error(kv.error.message)
     const events = await sb.from('events').delete().eq('profile_id', profileId)
     if (events.error) throw new Error(events.error.message)
+    settleAfterReset(profileId)
     return true
   } catch (e) {
     lastError = errorMessage(e)
     notifyStatus()
     return false
   }
+}
+
+/**
+ * Write down that this device has nothing to send for anything the child currently holds.
+ *
+ * The reset succeeded; the local half is the caller's and may not have run — a full store, or a
+ * parent screen that clears localStorage second. Either way the next launch must not read an empty
+ * server as "none of this was ever mirrored" and upload the lot, which is the standing ruling
+ * (a reset is a DELETE, not a merge) undone by the back door.
+ *
+ * So every key and every event that is on disk RIGHT NOW is recorded as accounted for. Anything the
+ * child does after this is a new write, gets an op like any other, and syncs normally.
+ */
+function settleAfterReset(profileId: string): void {
+  const names = localKvNames(profileId)
+  const identities = readLocalEvents(profileId).map(e => eventIdentity(e.ts, e.kind, e.id))
+  updateMeta(profileId, meta => {
+    meta.mirrored = [...new Set([...meta.mirrored, ...names])]
+    meta.done = [...new Set([...meta.done, ...identities])]
+  })
+  notifyStatus()
 }
 
 /** Forget everything queued and remembered for one child (a reset, or a profile being removed). */

@@ -638,6 +638,24 @@ describe('what counts as sent', () => {
     expect(syncStatus().state).toBe('pending')
     expect(syncStatus().lastSyncedAt).toBeNull()
   })
+
+  it('does not call an empty outbox an empty mailbox when the store refused the op', async () => {
+    // The last version of the lie F3 was raised about: a full store drops the `ev` op, the flush
+    // finds nothing queued and calls it a day, and the parent reads "Đã đồng bộ ✓" over a session
+    // the server has never seen — then wipes the device.
+    bootProfile()
+    startSync()
+    localStorage.setItem('speakup.outbox', JSON.stringify({ v: 1, next: 1, ops: [], meta: {} }))
+    // The event is on disk; the queue that should have named it is not.
+    localStorage.setItem(key('activity'), JSON.stringify([{ ts: 1000, kind: 'word', id: 'a', score: 90 }]))
+
+    expect(syncStatus()).toMatchObject({ state: 'pending', pending: 1 })
+
+    await flush()
+
+    expect(server.events).toHaveLength(1)
+    expect(syncStatus()).toMatchObject({ state: 'synced', pending: 0 })
+  })
 })
 
 describe('a store with no room left', () => {
@@ -920,6 +938,58 @@ describe('pull', () => {
     expect(server.kv.get(`${PROFILE}|lesson.length`)?.value).toBe('long')
   })
 
+  it('never uploads a key no store registered', async () => {
+    // `migrateKeysInto` deliberately sweeps keys this codebase has never heard of into the child's
+    // namespace — a value an older build wrote is still that child's. Under a denylist every one of
+    // them was uploaded, with no module owning it, against a spec that says a child's voice never
+    // leaves the device.
+    bootProfile()
+    startSync()
+    localStorage.setItem(key('voice.lastTranscript'), JSON.stringify({ text: 'my name is Bo' }))
+    localStorage.setItem(key('some.future.key'), 'anything')
+    setStars('sword:cat', 3) // one key that IS registered, so the flush really runs
+
+    await pullProfile(PROFILE)
+    await flush()
+
+    expect([...server.kv.values()].map(r => r.key)).toEqual(['stars'])
+    expect(outbox().ops).toEqual([])
+    // …and the unregistered keys are untouched on disk. Not synced is not the same as not kept.
+    expect(localStorage.getItem(key('voice.lastTranscript'))).toBe('{"text":"my name is Bo"}')
+  })
+
+  it('does not write a server row for a key no store registered either', async () => {
+    bootProfile()
+    startSync()
+    server.kv.set(`${PROFILE}|voice.lastTranscript`, {
+      profile_id: PROFILE, key: 'voice.lastTranscript', value: { text: 'from somewhere' }, updated_at: 1,
+    })
+
+    await pullProfile(PROFILE)
+
+    expect(localStorage.getItem(key('voice.lastTranscript'))).toBeNull()
+  })
+
+  it('mirrors exactly the keys the stores registered', async () => {
+    bootProfile()
+    startSync()
+    setStars('sword:cat', 3)
+    promote('w-1')
+    setBandValue(3)
+    setLimitMinutes(45)
+    setLessonLength('long')
+    saveLesson({ day: '2026-08-29', created: 1, band: 1, items: [] })
+    logActivity({ ts: 1000, kind: 'word', id: 'sword:cat', score: 90 })
+
+    await flush()
+
+    expect([...server.kv.values()].map(r => r.key).sort()).toEqual([
+      'band', 'leitner', 'lesson.2026-08-29', 'lesson.length', 'limit.minutes', 'stars',
+    ])
+    // The event log is rows, not a kv value.
+    expect(server.events).toHaveLength(1)
+  })
+
   it('refuses a profile the roster has not adopted yet', async () => {
     // Writing into a namespace the roster does not name would have `rescueOrphanNamespaces` fold it
     // into the active child at the next launch. adoptProfiles first, then pull — always.
@@ -1100,11 +1170,49 @@ describe('reset', () => {
     expect(server.kv.size).toBe(0)
     expect(server.events).toEqual([])
     expect(outbox().ops).toEqual([])
-    expect(outbox().meta[PROFILE]).toBeUndefined()
 
     await flush()
     expect(server.kv.size).toBe(0)
     expect(server.events).toEqual([])
+  })
+
+  it('stays reset even when the local half never ran', async () => {
+    // The parent screen clears localStorage and the cloud; the local half can fail (a full store) or
+    // simply run second. The reset is still a reset — and the next launch must not read an empty
+    // server as "none of this was ever mirrored" and upload it all again, which is the standing
+    // ruling (a reset is a DELETE, never a merge) undone through the back door.
+    bootProfile()
+    startSync()
+    setStars('sword:cat', 3)
+    logActivity({ ts: 1000, kind: 'word', id: 'sword:cat', score: 90 })
+    await flush()
+    expect(server.kv.size).toBe(1)
+
+    expect(await resetRemoteProgress(PROFILE)).toBe(true)
+    expect(server.kv.size).toBe(0)
+    expect(server.events).toEqual([])
+    // The local half did NOT run: the child's stars and log are still on disk.
+    expect(getStars('sword:cat')).toBe(3)
+
+    // …and a key that was never mirrored at all — its op dropped by a full store — is a DIFFERENT
+    // fact from a key the reset deleted, even though the server has no row for either. Both are on
+    // disk, both are absent server-side, and only one of them may go up.
+    setLessonLength('long')
+    localStorage.setItem('speakup.outbox', JSON.stringify({
+      ...outbox(),
+      ops: [], // the queue the full store could not hold
+    }))
+
+    // Relaunch.
+    resetSyncForTest()
+    startSync()
+    await syncNow()
+    await flush()
+
+    expect([...server.kv.values()].map(r => r.key)).toEqual(['lesson.length'])
+    expect(server.kv.get(`${PROFILE}|stars`)).toBeUndefined() // the reset stands
+    expect(server.events).toEqual([]) // and so does it for the event log
+    expect(syncStatus()).toMatchObject({ state: 'synced', pending: 0 })
   })
 
   it('forgets a profile without touching the others', () => {

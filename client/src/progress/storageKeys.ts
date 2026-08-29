@@ -329,19 +329,24 @@ export function eventIdentity(ts: unknown, kind: unknown, id: unknown): string {
   return `${String(ts)}|${String(kind)}|${String(id)}`
 }
 
-const parseMap = (raw: string): Record<string, unknown> | null => {
-  try {
-    const parsed: unknown = JSON.parse(raw)
-    return isMap(parsed) ? parsed : null
-  } catch { return null }
+/**
+ * Two facts about a stored value, kept apart because conflating them has now caused two findings:
+ * whether the BYTES can be read at all, and whether what they say is the SHAPE this key holds.
+ *
+ * Unreadable bytes are damage — a `setItem` that did not finish. An unexpected shape is a value
+ * some other version of this app wrote on purpose, and it is not ours to overwrite.
+ */
+type Parsed = { ok: true; value: unknown } | { ok: false }
+
+const parseJson = (raw: string): Parsed => {
+  try { return { ok: true, value: JSON.parse(raw) } } catch { return { ok: false } }
 }
 
-const parseList = (raw: string): unknown[] | null => {
-  try {
-    const parsed: unknown = JSON.parse(raw)
-    return Array.isArray(parsed) ? parsed : null
-  } catch { return null }
-}
+const asMap = (parsed: Parsed): Record<string, unknown> | null =>
+  parsed.ok && isMap(parsed.value) ? parsed.value : null
+
+const asList = (parsed: Parsed): unknown[] | null =>
+  parsed.ok && Array.isArray(parsed.value) ? parsed.value : null
 
 /**
  * Where the value that came out of a merge came FROM, which is a different question from what it
@@ -350,14 +355,20 @@ const parseList = (raw: string): unknown[] | null => {
  *  - `incoming` — the other copy already contains everything this one does. Adopt it; say nothing.
  *  - `existing` — this copy wins outright. The other side is behind.
  *  - `merged`   — genuinely combined: neither side had the result. The other side is behind.
- *  - `damaged`  — **the local bytes could not be read.** Not "ahead", not "behind": unreadable. The
- *    incoming copy is adopted because it is the only copy there is, and the caller must never
- *    report damaged bytes upward as newer truth. Half a JSON object is what an iOS tab killed
- *    mid-`setItem` leaves behind (see `copyValue` above), and the cloud copy is then the only thing
- *    that can give the child their stars back — so pushing the damage over it destroys the one
+ *  - `damaged`  — **the local BYTES could not be read at all.** Not "ahead", not "behind":
+ *    unreadable. The incoming copy is adopted because it is the only copy there is, and the caller
+ *    must never report damaged bytes upward as newer truth. Half a JSON object is what an iOS tab
+ *    killed mid-`setItem` leaves behind (see `copyValue` above), and the cloud copy is then the only
+ *    thing that can give the child their stars back — so pushing the damage over it destroys the one
  *    remaining good copy.
+ *  - `stalemate` — the two copies cannot be compared: one of them parses cleanly but is not the
+ *    shape this key holds. That is what **version skew** looks like — a value written by an older or
+ *    newer build of the app — and it is emphatically not damage. Neither side is touched: the local
+ *    value stays (local-first) and nothing is pushed, because overwriting a value we do not
+ *    understand is how a real `limit.minutes` of "45" becomes an object the parent's own screen
+ *    cannot read.
  */
-export type MergeSource = 'incoming' | 'existing' | 'merged' | 'damaged'
+export type MergeSource = 'incoming' | 'existing' | 'merged' | 'damaged' | 'stalemate'
 export type MergeOutcome = { value: string; source: MergeSource }
 
 /**
@@ -366,11 +377,19 @@ export type MergeOutcome = { value: string; source: MergeSource }
  * the same reason.
  */
 function mergeStars(existing: string, incoming: string): MergeOutcome {
-  const mine = parseMap(existing)
-  const theirs = parseMap(incoming)
-  // Both unreadable: there is nothing to choose between, so nothing changes and nothing is claimed.
-  if (!mine && !theirs) return { value: existing, source: 'existing' }
-  if (!mine) return { value: incoming, source: 'damaged' }
+  const mineBytes = parseJson(existing)
+  const mine = asMap(mineBytes)
+  const theirs = asMap(parseJson(incoming))
+
+  if (!mine) {
+    // Nothing usable on the other side either: touch neither.
+    if (!theirs) return { value: existing, source: 'stalemate' }
+    // Readable bytes that are simply not a star map — a shape from another version of the app. Not
+    // damage, and not ours to replace.
+    if (mineBytes.ok) return { value: existing, source: 'stalemate' }
+    return { value: incoming, source: 'damaged' }
+  }
+  // Ours is a good map and theirs is not: pushing ours up is a repair, not a regression.
   if (!theirs) return { value: existing, source: 'existing' }
 
   const out: Record<string, unknown> = { ...mine }
@@ -396,10 +415,15 @@ const eventKey = (event: unknown): string =>
   isMap(event) ? eventIdentity(event.ts, event.kind, event.id) : JSON.stringify(event)
 
 function mergeActivity(existing: string, incoming: string): MergeOutcome {
-  const mine = parseList(existing)
-  const theirs = parseList(incoming)
-  if (!mine && !theirs) return { value: existing, source: 'existing' }
-  if (!mine) return { value: incoming, source: 'damaged' }
+  const mineBytes = parseJson(existing)
+  const mine = asList(mineBytes)
+  const theirs = asList(parseJson(incoming))
+
+  if (!mine) {
+    if (!theirs) return { value: existing, source: 'stalemate' }
+    if (mineBytes.ok) return { value: existing, source: 'stalemate' }
+    return { value: incoming, source: 'damaged' }
+  }
   if (!theirs) return { value: existing, source: 'existing' }
 
   const seen = new Set<string>()
@@ -416,11 +440,8 @@ function mergeActivity(existing: string, incoming: string): MergeOutcome {
   return { value: JSON.stringify(merged.slice(-ACTIVITY_CAP)), source: behind ? 'merged' : 'incoming' }
 }
 
-/**
- * Are these bytes a JSON object or array — the shape every stored value has except the two bare
- * scalars the app writes on purpose (`limit.minutes` = "20", `lesson.length` = "medium")?
- */
-const isStructured = (raw: string): boolean => parseMap(raw) !== null || parseList(raw) !== null
+/** How the owning store writes this value; `progress/synced.ts` is where each key declares it. */
+export type ValueForm = 'json' | 'text' | null
 
 /**
  * What one stored value becomes when a second copy of it turns up.
@@ -450,14 +471,21 @@ export function mergeStored(
   existing: string | null,
   incoming: string,
   preferIncoming = false,
+  form: ValueForm = null,
 ): MergeOutcome {
   if (existing === null) return { value: incoming, source: 'incoming' }
   if (name === 'stars') return mergeStars(existing, incoming)
   if (name === 'activity') return mergeActivity(existing, incoming)
-  // Last write wins — but only between two values that can be read. A key whose server copy is an
-  // object or an array while the local bytes are not JSON at all is a local value that was cut in
-  // half, not one that is newer, and last-write-wins has no opinion worth having about it.
-  if (isStructured(incoming) && !isStructured(existing)) return { value: incoming, source: 'damaged' }
+
+  // Last write wins — but only between two values that can be read, and only a key the owning store
+  // says it writes as JSON can be judged unreadable at all. `limit.minutes` is "45" and
+  // `lesson.length` is "medium": bytes that are not JSON are exactly right for them, and an earlier
+  // version of this check called them damaged and replaced them with whatever the server held.
+  if (form === 'json' && !parseJson(existing).ok) {
+    return parseJson(incoming).ok
+      ? { value: incoming, source: 'damaged' }
+      : { value: existing, source: 'stalemate' }
+  }
   return preferIncoming ? { value: incoming, source: 'incoming' } : { value: existing, source: 'existing' }
 }
 
@@ -467,8 +495,9 @@ export function mergeStoredValue(
   existing: string | null,
   incoming: string,
   preferIncoming = false,
+  form: ValueForm = null,
 ): string {
-  return mergeStored(name, existing, incoming, preferIncoming).value
+  return mergeStored(name, existing, incoming, preferIncoming, form).value
 }
 
 /**
@@ -522,6 +551,10 @@ export function rescueOrphanNamespaces(activeId: string, knownIds: string[]): nu
       if (incoming === null) continue
       const target = `${prefix}${name}`
       const existing = localStorage.getItem(target)
+      // No `form`: the rescue sweeps keys this codebase has never heard of (that is the point of
+      // it), so it cannot say how any of them is written. `stars` and `activity` still get their
+      // damaged handling, which is where a half-written value actually costs the child something;
+      // every other key falls back to keeping the active value, exactly as it did before.
       const merged = mergeStoredValue(name, existing, incoming)
       if (merged !== existing && !copyValue(target, merged)) continue
       if (localStorage.getItem(target) !== merged) continue
