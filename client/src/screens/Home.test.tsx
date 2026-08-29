@@ -1,9 +1,22 @@
-import { render, screen, within } from '@testing-library/react'
+import { act, render, screen, within } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import type { TopicId } from '../content/topics'
 import { findTopic } from '../content/words'
 import { dayKey, logActivity } from '../progress/activity'
 import { getLesson } from '../progress/lesson'
+
+// Every existing test in this file predates Phase 11 and expects the byte-identical, no-cloud
+// app — so the default here is "unconfigured", exactly like a contributor's clone with no
+// Supabase env vars. `client/.env` in THIS sandbox carries real project keys (they are
+// public-by-design, safe to commit to a working copy, but not to lean on in a unit test), so the
+// mock is what keeps these tests hermetic regardless of what is on disk. Only the describe blocks
+// below that are actually about the cloud UI flip `cloud.configured`.
+const cloud = vi.hoisted(() => ({ configured: false }))
+vi.mock('../cloud/supabase', () => ({ isCloudConfigured: () => cloud.configured }))
+
+const auth = vi.hoisted(() => ({ isAnonymous: vi.fn(async () => true) }))
+vi.mock('../cloud/auth', () => auth)
+
 import { Home } from './Home'
 
 const NOW = new Date('2026-08-23T10:00:00').getTime()
@@ -59,6 +72,8 @@ function unlockAllTopics() {
 
 beforeEach(() => {
   localStorage.clear()
+  cloud.configured = false
+  auth.isAnonymous.mockResolvedValue(true)
   vi.useFakeTimers({ now: new Date(NOW) })
 })
 
@@ -184,6 +199,138 @@ it('does not show the time-limit banner under the limit', () => {
   renderHome()
 
   expect(screen.queryByTestId('limit-banner')).not.toBeInTheDocument()
+})
+
+describe('Phase 11: the milestone banner', () => {
+  function seedThreeDayStreak() {
+    seedDoneDay(NOW - 2 * DAY_MS)
+    seedDoneDay(NOW - DAY_MS)
+    seedDoneDay(NOW)
+  }
+
+  it('stays hidden with no cloud configured, however long the streak', async () => {
+    cloud.configured = false
+    seedThreeDayStreak()
+
+    renderHome()
+    await act(async () => { await Promise.resolve() })
+
+    expect(screen.queryByTestId('milestone-banner')).not.toBeInTheDocument()
+  })
+
+  it('appears after a 3-day streak on a device nobody has linked yet, and can be dismissed', async () => {
+    cloud.configured = true
+    auth.isAnonymous.mockResolvedValue(true)
+    seedThreeDayStreak()
+
+    renderHome()
+    await act(async () => { await Promise.resolve() })
+    expect(screen.getByTestId('milestone-banner')).toHaveTextContent('Tiến độ mới lưu trên máy này')
+    expect(screen.getByRole('link', { name: 'liên kết email' })).toHaveAttribute('href', '/parent')
+
+    act(() => { screen.getByLabelText('Đóng thông báo liên kết email').click() })
+    expect(screen.queryByTestId('milestone-banner')).not.toBeInTheDocument()
+  })
+
+  it('does not claim more safety than exists once the parent has already linked', async () => {
+    cloud.configured = true
+    auth.isAnonymous.mockResolvedValue(false)
+    seedThreeDayStreak()
+
+    renderHome()
+    await act(async () => { await Promise.resolve() })
+
+    expect(screen.queryByTestId('milestone-banner')).not.toBeInTheDocument()
+  })
+
+  it('stays dismissed across a remount', async () => {
+    cloud.configured = true
+    auth.isAnonymous.mockResolvedValue(true)
+    seedThreeDayStreak()
+    localStorage.setItem('speakup.cloud.bannerDismissed', '1')
+
+    renderHome()
+    await act(async () => { await Promise.resolve() })
+
+    expect(screen.queryByTestId('milestone-banner')).not.toBeInTheDocument()
+  })
+})
+
+describe('Phase 11: the Add-to-Home-Screen nudge', () => {
+  const originalUA = window.navigator.userAgent
+
+  function setUserAgent(ua: string) {
+    Object.defineProperty(window.navigator, 'userAgent', { value: ua, configurable: true })
+  }
+
+  afterEach(() => {
+    setUserAgent(originalUA)
+    delete (window.navigator as Navigator & { standalone?: boolean }).standalone
+  })
+
+  it('nudges an un-installed iPad Safari, independent of the cloud', () => {
+    cloud.configured = false
+    setUserAgent('Mozilla/5.0 (iPad; CPU OS 17_0 like Mac OS X) AppleWebKit/605.1.15 Safari/604.1')
+
+    renderHome()
+
+    expect(screen.getByTestId('a2hs-banner')).toHaveTextContent('Thêm Speak Up! vào Màn hình chính')
+  })
+
+  it('stays quiet once the app is already installed', () => {
+    setUserAgent('Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 Safari/604.1')
+    ;(window.navigator as Navigator & { standalone?: boolean }).standalone = true
+
+    renderHome()
+
+    expect(screen.queryByTestId('a2hs-banner')).not.toBeInTheDocument()
+  })
+
+  it('says nothing on a platform the WebKit 7-day wipe does not apply to', () => {
+    setUserAgent('Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 Chrome/120.0')
+
+    renderHome()
+
+    expect(screen.queryByTestId('a2hs-banner')).not.toBeInTheDocument()
+  })
+
+  it('is dismissible, once, for good', () => {
+    setUserAgent('Mozilla/5.0 (iPad; CPU OS 17_0 like Mac OS X) AppleWebKit/605.1.15 Safari/604.1')
+
+    renderHome()
+    act(() => { screen.getByTestId('a2hs-banner').querySelector('button')!.click() })
+    expect(screen.queryByTestId('a2hs-banner')).not.toBeInTheDocument()
+
+    renderHome()
+    expect(screen.queryByTestId('a2hs-banner')).not.toBeInTheDocument()
+  })
+})
+
+describe('Phase 11: "Đã dùng Speak Up rồi?"', () => {
+  it('offers the restore door on a fresh device with cloud configured', () => {
+    cloud.configured = true
+
+    renderHome()
+
+    expect(screen.getByRole('link', { name: 'Đã dùng Speak Up rồi?' })).toHaveAttribute('href', '/start')
+  })
+
+  it('stays hidden with no cloud configured', () => {
+    cloud.configured = false
+
+    renderHome()
+
+    expect(screen.queryByRole('link', { name: 'Đã dùng Speak Up rồi?' })).not.toBeInTheDocument()
+  })
+
+  it('disappears once the child has made any progress', () => {
+    cloud.configured = true
+    completeLesson(NOW, 1)
+
+    renderHome()
+
+    expect(screen.queryByRole('link', { name: 'Đã dùng Speak Up rồi?' })).not.toBeInTheDocument()
+  })
 })
 
 it('keeps the stacked layout scrollable so the mission CTA is never trapped below the fold', () => {

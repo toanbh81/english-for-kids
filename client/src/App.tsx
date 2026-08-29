@@ -24,6 +24,7 @@ import { SentenceList } from './screens/SentenceList'
 import { SentenceBuilder } from './screens/SentenceBuilder'
 import { TopicHub } from './screens/TopicHub'
 import { ParentGate } from './screens/ParentGate'
+import { CloudStart } from './screens/CloudStart'
 import { LessonChip } from './components/LessonChip'
 
 export default function App() {
@@ -59,6 +60,9 @@ export default function App() {
         <Route path="/sentences" element={<SentenceList />} />
         <Route path="/sentence/:id" element={<SentenceBuilder />} />
         <Route path="/parent" element={<ParentGate />} />
+        {/* No math gate: a wiped device has no progress to protect (spec flows 3, 4) and nothing
+          * here shows a child anything about accounts — only an email/OTP or an 8-char code. */}
+        <Route path="/start" element={<CloudStart />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
 

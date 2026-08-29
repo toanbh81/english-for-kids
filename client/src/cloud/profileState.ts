@@ -231,6 +231,21 @@ export function adoptProfiles(remote: Profile[]): Profile[] {
   return mergeIntoRoster(remote)
 }
 
+/**
+ * Rename a child on THIS device's roster — the parent screen's "Đổi tên hồ sơ".
+ *
+ * Local only: it does not touch the server, and does not touch which namespace the child's data
+ * lives under (the id never changes). See `renameRemoteProfile` for the other half.
+ */
+export function renameProfile(id: string, name: string): Profile[] {
+  const trimmed = name.trim()
+  if (!trimmed) return listProfiles()
+  const roster = listProfiles()
+  if (!roster.some(p => p.id === id)) return roster
+  writeProfiles(roster.map(p => (p.id === id ? { ...p, name: trimmed } : p)))
+  return listProfiles()
+}
+
 // ---------------------------------------------------------------------------
 // The server side
 // ---------------------------------------------------------------------------
@@ -271,6 +286,31 @@ export async function ensureRemoteProfiles(): Promise<string[]> {
     return data.map(row => String(row.id)).filter(id => rows.some(r => r.id === id))
   } catch {
     return []
+  }
+}
+
+/**
+ * Rename a child on the server — the other half of `renameProfile`.
+ *
+ * **`.update({ name }).eq('id', profileId)`, never an upsert with `ignoreDuplicates` off.** An
+ * upsert that is allowed to conflict reports the conflict, and on a table keyed by an id the
+ * client chose that reply is an existence oracle for ids the caller does not own (see
+ * `ensureRemoteProfiles` above, which is why this rule lives right next to it). An UPDATE that
+ * matches no row this account owns — RLS's `profiles_update_own` — simply changes nothing and
+ * says nothing, which is the only answer a stranger's id should get.
+ */
+export async function renameRemoteProfile(id: string, name: string): Promise<boolean> {
+  const sb = await getSupabase()
+  if (!sb) return false
+  const userId = await currentUserId()
+  if (!userId) return false
+  const trimmed = name.trim()
+  if (!trimmed) return false
+  try {
+    const { error } = await sb.from('profiles').update({ name: trimmed }).eq('id', id)
+    return !error
+  } catch {
+    return false
   }
 }
 

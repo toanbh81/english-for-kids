@@ -20,6 +20,52 @@ const recordingsMock = vi.hoisted(() => ({
 }))
 vi.mock('../progress/recordings', () => recordingsMock)
 
+// Every test in this file predates Phase 11 and expects the byte-identical, no-cloud dashboard —
+// `client/.env` in this sandbox carries real (public-by-design) project keys, so mocking the whole
+// module family, defaulted to "unconfigured", is what keeps these tests hermetic regardless of
+// what is on disk. Only the "Tài khoản" describe block below flips `cloud.configured` on.
+const cloud = vi.hoisted(() => ({ configured: false }))
+vi.mock('../cloud/supabase', () => ({ isCloudConfigured: () => cloud.configured }))
+
+type AuthOk = { ok: true; userId: string | null }
+type AuthFail = { ok: false; error: string }
+const authMock = vi.hoisted(() => ({
+  currentEmail: vi.fn<() => Promise<string | null>>(async () => null),
+  isAnonymous: vi.fn<() => Promise<boolean>>(async () => true),
+  ensureRecoveryCode: vi.fn<() => Promise<string | null>>(async () => null),
+  linkEmail: vi.fn<(email: string) => Promise<AuthOk | AuthFail>>(async () => ({ ok: true, userId: 'u1' })),
+  verifyEmailOtp: vi.fn<(email: string, token: string) => Promise<AuthOk | AuthFail>>(async () => ({ ok: true, userId: 'u1' })),
+  signOut: vi.fn<() => Promise<AuthOk | AuthFail>>(async () => ({ ok: true, userId: null })),
+}))
+vi.mock('../cloud/auth', () => authMock)
+
+type MockProfile = { id: string; name: string; avatar: string; created: number }
+const ACTIVE_PROFILE: MockProfile = { id: 'p1', name: 'Bé', avatar: '🦊', created: 0 }
+const profileStateMock = vi.hoisted(() => ({
+  listProfiles: vi.fn<() => MockProfile[]>(),
+  activeProfileId: vi.fn<() => string | null>(),
+  addProfile: vi.fn<(name?: string) => MockProfile>(),
+  renameProfile: vi.fn<(id: string, name: string) => MockProfile[]>(),
+  renameRemoteProfile: vi.fn<() => Promise<boolean>>(async () => true),
+  switchProfile: vi.fn<(id: string) => boolean>(() => true),
+  ensureRemoteProfiles: vi.fn<() => Promise<string[]>>(async () => []),
+}))
+vi.mock('../cloud/profileState', () => profileStateMock)
+
+type MockSyncStatus = {
+  state: 'off' | 'offline' | 'pending' | 'synced'
+  pending: number
+  lastSyncedAt: number | null
+  lastError: string | null
+  syncing: boolean
+}
+const syncMock = vi.hoisted(() => ({
+  syncStatus: vi.fn<() => MockSyncStatus>(() => ({ state: 'off', pending: 0, lastSyncedAt: null, lastError: null, syncing: false })),
+  subscribeSyncStatus: vi.fn<(fn: (s: MockSyncStatus) => void) => () => void>(() => () => undefined),
+  resetRemoteProgress: vi.fn<() => Promise<boolean>>(async () => true),
+}))
+vi.mock('../cloud/sync', () => syncMock)
+
 import { ParentGate } from './ParentGate'
 import { ParentDashboard } from './ParentDashboard'
 
@@ -43,6 +89,26 @@ beforeEach(() => {
   recordingsMock.listRecordings.mockResolvedValue([])
   recordingsMock.clearRecordings.mockReset()
   recordingsMock.clearRecordings.mockResolvedValue(undefined)
+
+  cloud.configured = false
+  authMock.currentEmail.mockReset().mockResolvedValue(null)
+  authMock.isAnonymous.mockReset().mockResolvedValue(true)
+  authMock.ensureRecoveryCode.mockReset().mockResolvedValue(null)
+  authMock.linkEmail.mockReset().mockResolvedValue({ ok: true, userId: 'u1' })
+  authMock.verifyEmailOtp.mockReset().mockResolvedValue({ ok: true, userId: 'u1' })
+  authMock.signOut.mockReset().mockResolvedValue({ ok: true, userId: null })
+
+  profileStateMock.listProfiles.mockReset().mockReturnValue([ACTIVE_PROFILE])
+  profileStateMock.activeProfileId.mockReset().mockReturnValue(ACTIVE_PROFILE.id)
+  profileStateMock.addProfile.mockReset().mockReturnValue({ id: 'p2', name: 'Bé 2', avatar: '🦊', created: 0 })
+  profileStateMock.renameProfile.mockReset().mockImplementation((id, name) => [{ ...ACTIVE_PROFILE, id, name }])
+  profileStateMock.renameRemoteProfile.mockReset().mockResolvedValue(true)
+  profileStateMock.switchProfile.mockReset().mockReturnValue(true)
+  profileStateMock.ensureRemoteProfiles.mockReset().mockResolvedValue([])
+
+  syncMock.syncStatus.mockReset().mockReturnValue({ state: 'off', pending: 0, lastSyncedAt: null, lastError: null, syncing: false })
+  syncMock.subscribeSyncStatus.mockReset().mockReturnValue(() => undefined)
+  syncMock.resetRemoteProgress.mockReset().mockResolvedValue(true)
 })
 
 afterEach(() => {
@@ -400,5 +466,230 @@ describe('ParentDashboard', () => {
 
     expect(getLessonLength()).toBe('short')
     expect(screen.getByRole('button', { name: 'Ngắn ~8 phút' })).toHaveAttribute('aria-pressed', 'true')
+  })
+})
+
+describe('Phase 11: "Tài khoản"', () => {
+  it('is entirely absent with no cloud configured', async () => {
+    cloud.configured = false
+    renderWithRouter(<ParentDashboard />)
+    await flush()
+
+    expect(screen.queryByTestId('account-card')).not.toBeInTheDocument()
+  })
+
+  it('shows the consent line, the link form and the recovery code while still anonymous', async () => {
+    cloud.configured = true
+    authMock.ensureRecoveryCode.mockResolvedValue('ABC23XYZ')
+
+    renderWithRouter(<ParentDashboard />)
+    await flush()
+
+    expect(screen.getByText(/Tiến độ học của bé sẽ được lưu trên tài khoản của bạn/)).toBeInTheDocument()
+    expect(screen.getByLabelText('Email của bố/mẹ')).toBeInTheDocument()
+    expect(await screen.findByText('ABC23XYZ')).toBeInTheDocument()
+    expect(screen.getByText(/chụp màn hình lại nhé/)).toBeInTheDocument()
+  })
+
+  it('never shows a recovery code once the account is linked — that is correct, not a bug', async () => {
+    cloud.configured = true
+    authMock.isAnonymous.mockResolvedValue(false)
+    authMock.currentEmail.mockResolvedValue('bome@example.com')
+
+    renderWithRouter(<ParentDashboard />)
+    await flush()
+
+    expect(authMock.ensureRecoveryCode).not.toHaveBeenCalled()
+    expect(screen.queryByText(/chụp màn hình lại nhé/)).not.toBeInTheDocument()
+    expect(screen.getByText('bome@example.com')).toBeInTheDocument()
+  })
+
+  it('shows the honest one-line sync status and nothing more', async () => {
+    cloud.configured = true
+    syncMock.syncStatus.mockReturnValue({ state: 'pending', pending: 3, lastSyncedAt: null, lastError: null, syncing: false })
+
+    renderWithRouter(<ParentDashboard />)
+    await flush()
+
+    expect(screen.getByTestId('sync-status')).toHaveTextContent('Chưa đồng bộ 3 mục')
+  })
+
+  it('subscribes to sync status only on this screen, and unsubscribes on unmount', async () => {
+    cloud.configured = true
+    const unsubscribe = vi.fn()
+    syncMock.subscribeSyncStatus.mockReturnValue(unsubscribe)
+
+    const { unmount } = renderWithRouter(<ParentDashboard />)
+    await flush()
+    expect(syncMock.subscribeSyncStatus).toHaveBeenCalledTimes(1)
+
+    unmount()
+    expect(unsubscribe).toHaveBeenCalledTimes(1)
+  })
+
+  it('links an email end to end: OTP sent, verified, then shows the signed-in state', async () => {
+    cloud.configured = true
+    renderWithRouter(<ParentDashboard />)
+    await flush()
+
+    fireEvent.change(screen.getByLabelText('Email của bố/mẹ'), { target: { value: 'bome@example.com' } })
+    await act(async () => {
+      fireEvent.submit(screen.getByLabelText('Email của bố/mẹ').closest('form')!)
+    })
+    expect(authMock.linkEmail).toHaveBeenCalledWith('bome@example.com')
+    expect(screen.getByText(/Nhập mã 6 số vừa gửi tới bome@example.com/)).toBeInTheDocument()
+
+    fireEvent.change(screen.getByLabelText('Mã xác nhận'), { target: { value: '123456' } })
+    await act(async () => {
+      fireEvent.submit(screen.getByLabelText('Mã xác nhận').closest('form')!)
+    })
+    expect(authMock.verifyEmailOtp).toHaveBeenCalledWith('bome@example.com', '123456')
+    expect(screen.getByText('bome@example.com')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Đăng xuất' })).toBeInTheDocument()
+    // The standing ruling: linking just dropped the code server-side, so it must vanish here too.
+    expect(screen.queryByText(/chụp màn hình lại nhé/)).not.toBeInTheDocument()
+  })
+
+  it('reports a wrong or expired OTP without losing the typed email', async () => {
+    cloud.configured = true
+    authMock.verifyEmailOtp.mockResolvedValue({ ok: false, error: 'Token has expired or is invalid' })
+
+    renderWithRouter(<ParentDashboard />)
+    await flush()
+    fireEvent.change(screen.getByLabelText('Email của bố/mẹ'), { target: { value: 'bome@example.com' } })
+    await act(async () => { fireEvent.submit(screen.getByLabelText('Email của bố/mẹ').closest('form')!) })
+
+    fireEvent.change(screen.getByLabelText('Mã xác nhận'), { target: { value: '000000' } })
+    await act(async () => { fireEvent.submit(screen.getByLabelText('Mã xác nhận').closest('form')!) })
+
+    expect(screen.getByRole('alert')).toHaveTextContent('hết hạn')
+    expect(screen.getByText(/vừa gửi tới bome@example.com/)).toBeInTheDocument()
+  })
+
+  it('is honest about a dropped connection while linking', async () => {
+    cloud.configured = true
+    authMock.linkEmail.mockResolvedValue({ ok: false, error: 'Failed to fetch' })
+
+    renderWithRouter(<ParentDashboard />)
+    await flush()
+    fireEvent.change(screen.getByLabelText('Email của bố/mẹ'), { target: { value: 'bome@example.com' } })
+    await act(async () => { fireEvent.submit(screen.getByLabelText('Email của bố/mẹ').closest('form')!) })
+
+    expect(screen.getByRole('alert')).toHaveTextContent('Không có kết nối mạng')
+    expect(screen.getByLabelText('Email của bố/mẹ')).toBeInTheDocument()
+  })
+
+  it('lets the parent correct a typo\'d email before it is verified', async () => {
+    cloud.configured = true
+    renderWithRouter(<ParentDashboard />)
+    await flush()
+    fireEvent.change(screen.getByLabelText('Email của bố/mẹ'), { target: { value: 'typo@example.com' } })
+    await act(async () => { fireEvent.submit(screen.getByLabelText('Email của bố/mẹ').closest('form')!) })
+
+    fireEvent.click(screen.getByText('Sửa lại email'))
+    const input = screen.getByLabelText('Email của bố/mẹ') as HTMLInputElement
+    expect(input.value).toBe('typo@example.com')
+    fireEvent.change(input, { target: { value: 'fixed@example.com' } })
+    await act(async () => { fireEvent.submit(input.closest('form')!) })
+
+    expect(authMock.linkEmail).toHaveBeenLastCalledWith('fixed@example.com')
+  })
+
+  it('signs out only after the confirm dialog is accepted, and returns to the anonymous state', async () => {
+    cloud.configured = true
+    authMock.isAnonymous.mockResolvedValue(false)
+    authMock.currentEmail.mockResolvedValue('bome@example.com')
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+
+    renderWithRouter(<ParentDashboard />)
+    await flush()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Đăng xuất' }))
+    await flush()
+
+    expect(authMock.signOut).toHaveBeenCalled()
+    expect(screen.getByLabelText('Email của bố/mẹ')).toBeInTheDocument()
+  })
+
+  it('adds a profile and registers it with the server', async () => {
+    cloud.configured = true
+    vi.spyOn(window, 'prompt').mockReturnValue('Bé 2')
+    profileStateMock.listProfiles.mockReturnValueOnce([ACTIVE_PROFILE]).mockReturnValue([ACTIVE_PROFILE, { id: 'p2', name: 'Bé 2', avatar: '🦊', created: 1 }])
+
+    renderWithRouter(<ParentDashboard />)
+    await flush()
+
+    fireEvent.click(screen.getByRole('button', { name: '+ Thêm hồ sơ' }))
+
+    expect(profileStateMock.addProfile).toHaveBeenCalledWith('Bé 2')
+    expect(profileStateMock.ensureRemoteProfiles).toHaveBeenCalled()
+  })
+
+  it('does not add a profile when the prompt is dismissed', async () => {
+    cloud.configured = true
+    vi.spyOn(window, 'prompt').mockReturnValue(null)
+
+    renderWithRouter(<ParentDashboard />)
+    await flush()
+
+    fireEvent.click(screen.getByRole('button', { name: '+ Thêm hồ sơ' }))
+
+    expect(profileStateMock.addProfile).not.toHaveBeenCalled()
+  })
+
+  it('renames the active profile locally and on the server with .update, never an upsert', async () => {
+    cloud.configured = true
+    vi.spyOn(window, 'prompt').mockReturnValue('Sóc con')
+
+    renderWithRouter(<ParentDashboard />)
+    await flush()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Đổi tên' }))
+
+    expect(profileStateMock.renameProfile).toHaveBeenCalledWith('p1', 'Sóc con')
+    expect(profileStateMock.renameRemoteProfile).toHaveBeenCalledWith('p1', 'Sóc con')
+  })
+
+  it('shows the profile picker only when there is more than one child on this device', async () => {
+    cloud.configured = true
+    profileStateMock.listProfiles.mockReturnValue([ACTIVE_PROFILE])
+
+    renderWithRouter(<ParentDashboard />)
+    await flush()
+    expect(screen.queryByRole('button', { name: 'Sóc' })).not.toBeInTheDocument()
+  })
+
+  it('switches the active profile from the picker when more than one exists', async () => {
+    cloud.configured = true
+    profileStateMock.listProfiles.mockReturnValue([ACTIVE_PROFILE, { id: 'p2', name: 'Sóc', avatar: '🐿️', created: 1 }])
+
+    renderWithRouter(<ParentDashboard />)
+    await flush()
+
+    fireEvent.click(screen.getByRole('button', { name: /Sóc/ }))
+    expect(profileStateMock.switchProfile).toHaveBeenCalledWith('p2')
+  })
+
+  it('resets the mirror from this screen when resetting progress, never a hidden-tab flush', async () => {
+    cloud.configured = true
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+
+    renderWithRouter(<ParentDashboard />)
+    await flush()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Đặt lại tiến trình' }))
+    await waitFor(() => expect(syncMock.resetRemoteProgress).toHaveBeenCalledWith('p1'))
+  })
+
+  it('does not touch the mirror on reset with no cloud configured', async () => {
+    cloud.configured = false
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+
+    renderWithRouter(<ParentDashboard />)
+    await flush()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Đặt lại tiến trình' }))
+    await flush()
+    expect(syncMock.resetRemoteProgress).not.toHaveBeenCalled()
   })
 })

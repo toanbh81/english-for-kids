@@ -7,6 +7,8 @@ import { lessonStatus } from '../progress/lesson'
 import { getLimitMinutes } from '../progress/limit'
 import { storageKey } from '../progress/storageKeys'
 import { topicStars, topicUnlocked } from '../progress/topicProgress'
+import { isAnonymous } from '../cloud/auth'
+import { isCloudConfigured } from '../cloud/supabase'
 import { Foxy } from '../components/Foxy'
 import type { FoxyMood } from '../components/Foxy'
 import { MissionCard } from '../components/MissionCard'
@@ -26,6 +28,42 @@ function alreadyCelebrated(day: string): boolean {
 function markCelebrated(day: string): void {
   try { localStorage.setItem(celebratedKey(), day) }
   catch { /* ignore: storage unavailable */ }
+}
+
+// ---------------------------------------------------------------------------
+// Phase 11: the milestone banner and the Add-to-Home-Screen nudge.
+//
+// Both are dismiss-once flags, profile-scoped like `celebrated` above, and neither is a synced
+// key — `progress/synced.ts`'s allowlist has never heard of either name, so `isSyncedName` says no
+// and the outbox never queues them. That is what makes them safe to write with a bare
+// `localStorage.setItem`, exactly like the celebration stamp.
+// ---------------------------------------------------------------------------
+
+const bannerDismissedKey = () => storageKey('cloud.bannerDismissed')
+const a2hsDismissedKey = () => storageKey('a2hs.dismissed')
+
+function wasDismissed(key: string): boolean {
+  try { return localStorage.getItem(key) === '1' } catch { return false }
+}
+
+function dismiss(key: string): void {
+  try { localStorage.setItem(key, '1') } catch { /* ignore: storage unavailable */ }
+}
+
+/** Already installed, on whatever platform bothers to say so. */
+function isStandaloneDisplay(): boolean {
+  try {
+    if ((window.navigator as Navigator & { standalone?: boolean }).standalone) return true
+    return window.matchMedia?.('(display-mode: standalone)').matches ?? false
+  } catch {
+    return false
+  }
+}
+
+/** The ITP-7-day wipe this nudge exists for is a WebKit thing — no point nudging a browser it does
+ * not apply to, and the copy names Safari by name, so it has to actually be one. */
+function looksLikeIOSSafari(): boolean {
+  try { return /iP(hone|od|ad)/.test(window.navigator.userAgent) } catch { return false }
 }
 
 /**
@@ -150,6 +188,35 @@ export function Home() {
     navigate('/mission/done')
   }, [celebrating, now, navigate])
 
+  // A build with no cloud env vars has nothing below to show: no banner, no "already used
+  // this?" link. `cloudAvailable` is read once, synchronously, so a device without the env
+  // vars never even asks whether it is signed in — no chunk load, no effect, byte for byte the
+  // app before Phase 11.
+  const [cloudAvailable] = useState(isCloudConfigured)
+  // null = not answered yet (or no cloud at all) — the banner needs a definite "still anonymous"
+  // before it may claim the parent has not linked, so it stays hidden rather than guessing.
+  const [linked, setLinked] = useState<boolean | null>(null)
+  useEffect(() => {
+    if (!cloudAvailable) return
+    let cancelled = false
+    isAnonymous().then(anon => { if (!cancelled) setLinked(!anon) }).catch(() => undefined)
+    return () => { cancelled = true }
+  }, [cloudAvailable])
+
+  const [bannerDismissed, setBannerDismissed] = useState(() => cloudAvailable && wasDismissed(bannerDismissedKey()))
+  const showMilestoneBanner = cloudAvailable && linked === false && streak(now, events) >= 3 && !bannerDismissed
+  function handleDismissBanner() {
+    dismiss(bannerDismissedKey())
+    setBannerDismissed(true)
+  }
+
+  const [a2hsDismissed, setA2hsDismissed] = useState(() => wasDismissed(a2hsDismissedKey()))
+  const showA2hs = !a2hsDismissed && looksLikeIOSSafari() && !isStandaloneDisplay()
+  function handleDismissA2hs() {
+    dismiss(a2hsDismissedKey())
+    setA2hsDismissed(true)
+  }
+
   return (
     // `min-h-full`, never `h-full`: the stacked portrait layout is taller than the viewport, and a
     // fixed-height root would leave the mission CTA and the parent link below an unscrollable fold.
@@ -211,6 +278,45 @@ export function Home() {
             className="rounded-xl2 bg-sun-50 px-5 py-4 text-center font-display text-xl font-extrabold text-sun-700 shadow-card-sm"
           >
             Hôm nay bé học đủ rồi 🦊 Mai gặp lại nhé!
+          </div>
+        )}
+
+        {/* Spec flow 1's milestone banner: three days in, on a device nobody has linked yet, this
+          * is the one place the app admits the safety net is thinner than it looks. Honest, not
+          * alarming — "mới lưu trên máy này", never "đã mất" or "sắp mất". */}
+        {showMilestoneBanner && (
+          <div data-testid="milestone-banner" className="flex items-center justify-between gap-3 rounded-xl2 bg-teal-50 px-4 py-3 shadow-card-sm">
+            <p className="flex-1 text-sm font-semibold text-teal-700">
+              Tiến độ mới lưu trên máy này — nhờ bố mẹ{' '}
+              <Link to="/parent" className="underline">liên kết email</Link> để giữ an toàn.
+            </p>
+            <button
+              type="button"
+              aria-label="Đóng thông báo liên kết email"
+              onClick={handleDismissBanner}
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-teal-700"
+            >
+              ✕
+            </button>
+          </div>
+        )}
+
+        {/* Non-negotiable principles §5: a non-installed Safari PWA loses all storage after seven
+          * idle days (WebKit ITP). Independent of the cloud — it fires whether or not a Supabase
+          * project exists, because it is about localStorage, not about the mirror. */}
+        {showA2hs && (
+          <div data-testid="a2hs-banner" className="flex items-center justify-between gap-3 rounded-xl2 bg-sun-50 px-4 py-3 shadow-card-sm">
+            <p className="flex-1 text-sm font-semibold text-sun-700">
+              Thêm Speak Up! vào Màn hình chính để không mất tiến độ nếu lâu ngày không mở.
+            </p>
+            <button
+              type="button"
+              aria-label="Đóng thông báo cài vào Màn hình chính"
+              onClick={handleDismissA2hs}
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sun-700"
+            >
+              ✕
+            </button>
           </div>
         )}
 
@@ -335,6 +441,17 @@ export function Home() {
                 🗣️ Các bậc luyện nói
               </Link>
             </div>
+
+            {/* Spec flows 3/4's other door, on a device that has no progress worth protecting yet
+              * — a fresh install or a wiped cache. Gone the moment the child has done anything
+              * (`hasProgress`), so it never sits next to real progress suggesting it might vanish. */}
+            {cloudAvailable && !hasProgress && (
+              <div className="flex items-center justify-center ipad:absolute ipad:bottom-[100px] ipad:left-1/2 ipad:-translate-x-1/2">
+                <Link to="/start" className="text-xs font-bold text-ink-500 underline ipad:text-sm">
+                  Đã dùng Speak Up rồi?
+                </Link>
+              </div>
+            )}
 
             <div className="flex justify-end ipad:absolute ipad:bottom-2 ipad:right-2">
               <Link

@@ -58,6 +58,23 @@ export async function currentUserId(): Promise<string | null> {
   return (await currentUser())?.id ?? null
 }
 
+/**
+ * This device's own access token, for the one caller outside this module that has to present it
+ * itself: Task 4's `/api/recover` call (flow 4) authenticates as "whoever this JWT says", and the
+ * server never accepts an id out of the request body. Null under every failure mode `currentUser`
+ * already handles — no cloud, no session, storage unavailable.
+ */
+export async function currentAccessToken(): Promise<string | null> {
+  const sb = await getSupabase()
+  if (!sb) return null
+  try {
+    const { data } = await sb.auth.getSession()
+    return data?.session?.access_token ?? null
+  } catch {
+    return null
+  }
+}
+
 /** True while the account is still the silent one — i.e. no parent has linked an email yet. */
 export async function isAnonymous(): Promise<boolean> {
   const user = await currentUser()

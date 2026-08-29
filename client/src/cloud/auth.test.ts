@@ -14,6 +14,7 @@ vi.mock('./supabase', () => ({
 }))
 
 import {
+  currentAccessToken,
   currentEmail,
   currentUserId,
   ensureRecoveryCode,
@@ -44,7 +45,7 @@ const bad = (message: string): Reply => ({ data: null, error: { message } })
  * exactly as PostgREST's builder is.
  */
 function makeClient(tables: Record<string, TableScript> = {}) {
-  const state = { session: null as { user: User } | null }
+  const state = { session: null as { user: User; access_token?: string } | null }
   const queries: Query[] = []
 
   const auth = {
@@ -105,6 +106,7 @@ describe('with no cloud configured', () => {
   it('does nothing, quietly, in every direction', async () => {
     await expect(startAnonymousSession()).resolves.toBeUndefined()
     expect(await currentUserId()).toBeNull()
+    expect(await currentAccessToken()).toBeNull()
     expect(await currentEmail()).toBeNull()
     expect(await isAnonymous()).toBe(false)
     expect(await ensureRecoveryCode()).toBeNull()
@@ -114,6 +116,19 @@ describe('with no cloud configured', () => {
     expect(await verifyEmailOtp('bome@example.com', '123456')).toEqual({ ok: false, error: 'cloud-unconfigured' })
     expect(await signOut()).toEqual({ ok: false, error: 'cloud-unconfigured' })
     expect(() => subscribeAuth(() => undefined)()).not.toThrow()
+  })
+})
+
+describe('the current device\'s own access token', () => {
+  // Task 4's /api/recover call authenticates as "whoever this JWT says" — never a stored email —
+  // so this is the one thing that has to come off the CURRENT session, not out of a form field.
+  it('is null with no session, and the session\'s own token once signed in', async () => {
+    const client = makeClient()
+    use(client)
+    expect(await currentAccessToken()).toBeNull()
+
+    client.state.session = { user: { id: 'anon-1', is_anonymous: true }, access_token: 'jwt-abc' }
+    expect(await currentAccessToken()).toBe('jwt-abc')
   })
 })
 

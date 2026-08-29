@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import type { ChangeEvent } from 'react'
+import type { ChangeEvent, FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { getActivity, minutesPerDay, averageScoreByKind, weakPhonemes, clearActivity } from '../progress/activity'
 import { clearBand, getBand, setBandAuto, setBandValue } from '../progress/band'
@@ -13,6 +13,28 @@ import { clearStars } from '../progress/store'
 import { getLimitMinutes, setLimitMinutes } from '../progress/limit'
 import { PHONEME_TIPS } from '../scoring/feedback'
 import { playBlob } from '../audio/player'
+import {
+  currentEmail,
+  ensureRecoveryCode,
+  isAnonymous,
+  linkEmail,
+  signOut,
+  verifyEmailOtp,
+} from '../cloud/auth'
+import type { Profile } from '../cloud/profileState'
+import {
+  activeProfileId,
+  addProfile,
+  ensureRemoteProfiles,
+  listProfiles,
+  renameProfile,
+  renameRemoteProfile,
+  switchProfile,
+} from '../cloud/profileState'
+import { resetRemoteProgress, subscribeSyncStatus, syncStatus } from '../cloud/sync'
+import type { SyncStatus } from '../cloud/sync'
+import { isCloudConfigured } from '../cloud/supabase'
+import { ProfilePicker } from '../components/ProfilePicker'
 import { Button, Card, PAGE_SHELL } from '../components/ui'
 
 /**
@@ -36,6 +58,27 @@ const LENGTH_LABEL: Record<LessonLength, string> = {
   short: 'Ngắn ~8 phút',
   medium: 'Vừa ~12 phút',
   long: 'Dài ~18 phút',
+}
+
+/**
+ * Vietnamese copy for an `AuthResult`'s error code.
+ *
+ * `invalid-email`, `invalid-token`, `cloud-unconfigured` and `anonymous-session-in-use` are this
+ * app's own codes (`cloud/auth.ts` never guesses at Supabase's wording for those). Everything else
+ * is a raw Supabase message — never shown verbatim to a Vietnamese parent, and a wrong or expired
+ * OTP is exactly the shape that lands here (Supabase's own wording for both is some variant of
+ * "invalid/expired token").
+ */
+function describeAuthError(code: string): string {
+  const lower = code.toLowerCase()
+  if (code === 'invalid-email') return 'Email chưa đúng định dạng.'
+  if (code === 'cloud-unconfigured') return 'Chưa thể kết nối lúc này, thử lại sau nhé.'
+  if (code === 'anonymous-session-in-use') return 'Máy này đang có hồ sơ khác, thử lại nhé.'
+  if (code === 'invalid-token' || /invalid|expired|not\s*found/.test(lower)) {
+    return 'Mã chưa đúng hoặc đã hết hạn, thử lại nhé.'
+  }
+  if (/network|fetch/.test(lower)) return 'Không có kết nối mạng, thử lại nhé.'
+  return 'Có lỗi xảy ra, thử lại nhé.'
 }
 
 function formatDayLabel(day: string): string {
@@ -78,6 +121,54 @@ export function ParentDashboard({ onLock }: Props) {
    * re-reads it, and the phone the design is aimed at has nothing to rotate into.)
    */
   const [recordingsOpen] = useState(() => window.matchMedia?.('(min-width: 768px)').matches ?? false)
+
+  // A build with no cloud env vars renders none of what follows — read once, synchronously, so
+  // this screen never even asks whether it is signed in (constraint: byte-identical without them).
+  const [cloudAvailable] = useState(isCloudConfigured)
+
+  // Constraint #1: `syncStatus()` parses the activity log on every store write once a subscriber
+  // exists. This is the ONE screen allowed to subscribe, and there is no timer here — only the
+  // write-driven notifications the sync engine already fires.
+  const [sync, setSync] = useState<SyncStatus>(() => (cloudAvailable ? syncStatus() : {
+    state: 'off', pending: 0, lastSyncedAt: null, lastError: null, syncing: false,
+  }))
+  useEffect(() => {
+    if (!cloudAvailable) return undefined
+    return subscribeSyncStatus(setSync)
+  }, [cloudAvailable])
+
+  const [authReady, setAuthReady] = useState(false)
+  const [email, setEmail] = useState<string | null>(null)
+  const [anonymous, setAnonymous] = useState(true)
+  const [recoveryCode, setRecoveryCode] = useState<string | null>(null)
+  useEffect(() => {
+    if (!cloudAvailable) return undefined
+    let cancelled = false
+    void (async () => {
+      const [em, anon] = await Promise.all([currentEmail(), isAnonymous()])
+      if (cancelled) return
+      setEmail(em)
+      setAnonymous(anon)
+      setAuthReady(true)
+      // The standing ruling: a LINKED account has no recovery code at all, on purpose (a trigger
+      // drops it the moment the account gains an email) — so this is only ever asked while
+      // anonymous, and `ensureRecoveryCode` is itself a no-op for a linked one regardless.
+      if (anon) {
+        const code = await ensureRecoveryCode()
+        if (!cancelled) setRecoveryCode(code)
+      }
+    })()
+    return () => { cancelled = true }
+  }, [cloudAvailable])
+
+  const [linkStage, setLinkStage] = useState<'idle' | 'otp'>('idle')
+  const [linkEmailValue, setLinkEmailValue] = useState('')
+  const [linkOtp, setLinkOtp] = useState('')
+  const [linkBusy, setLinkBusy] = useState(false)
+  const [linkError, setLinkError] = useState<string | null>(null)
+
+  const [profiles, setProfiles] = useState<Profile[]>(() => listProfiles())
+  const activeId = activeProfileId()
 
   const { events, now } = snapshot
   const days = minutesPerDay(14, now, events)
@@ -148,6 +239,76 @@ export function ParentDashboard({ onLock }: Props) {
     setBand({ value: 1, mode: 'auto' })
     setLength(getLessonLength())
     setSnapshot({ events: getActivity(), now: Date.now() })
+    // Constraint #3: reset is two halves, and this is the mirror's — called from here, the visible
+    // foreground screen, so it can never race the hidden-tab flush trigger.
+    if (cloudAvailable && activeId) await resetRemoteProgress(activeId)
+  }
+
+  // ---------------------------------------------------------------------------------------------
+  // Tài khoản: link email, sign out, recovery code, add/rename/switch profiles.
+  // ---------------------------------------------------------------------------------------------
+
+  async function handleSendOtp(e: FormEvent) {
+    e.preventDefault()
+    setLinkBusy(true)
+    setLinkError(null)
+    const result = await linkEmail(linkEmailValue)
+    setLinkBusy(false)
+    if (!result.ok) { setLinkError(describeAuthError(result.error)); return }
+    setLinkStage('otp')
+  }
+
+  async function handleVerifyOtp(e: FormEvent) {
+    e.preventDefault()
+    setLinkBusy(true)
+    setLinkError(null)
+    const result = await verifyEmailOtp(linkEmailValue, linkOtp)
+    if (!result.ok) { setLinkBusy(false); setLinkError(describeAuthError(result.error)); return }
+    setEmail(linkEmailValue)
+    setAnonymous(false)
+    // The standing ruling, the other side of it: linking just dropped the recovery code server
+    // side, so this screen must stop showing one rather than hold onto a stale value.
+    setRecoveryCode(null)
+    setLinkStage('idle')
+    setLinkOtp('')
+    setLinkEmailValue('')
+    setLinkBusy(false)
+  }
+
+  function handleEditLinkEmail() {
+    setLinkStage('idle')
+    setLinkOtp('')
+    setLinkError(null)
+  }
+
+  async function handleSignOut() {
+    if (!window.confirm('Đăng xuất khỏi tài khoản này?')) return
+    const result = await signOut()
+    if (result.ok) { setEmail(null); setAnonymous(true) }
+  }
+
+  function handleAddProfile() {
+    const name = window.prompt('Tên của bé:')
+    if (name === null) return
+    addProfile(name)
+    setProfiles(listProfiles())
+    // Fire-and-forget: the new row reaches the server on the next launch regardless (`connectCloud`
+    // calls the same function), this only saves the wait for a child who taps in the next minute.
+    if (cloudAvailable) void ensureRemoteProfiles()
+  }
+
+  function handleRenameActiveProfile() {
+    const current = profiles.find(p => p.id === activeId)
+    if (!current) return
+    const name = window.prompt('Đổi tên hồ sơ:', current.name)
+    if (name === null || !name.trim()) return
+    setProfiles(renameProfile(current.id, name))
+    if (cloudAvailable) void renameRemoteProfile(current.id, name)
+  }
+
+  function handleSwitchProfile(id: string) {
+    if (id === activeId) return
+    switchProfile(id)
   }
 
   return (
@@ -179,6 +340,122 @@ export function ParentDashboard({ onLock }: Props) {
             <span className="font-display font-extrabold text-ink-900">Khoá lại</span>
           </button>
         </header>
+
+        {cloudAvailable && (
+          <Card data-testid="account-card" className="px-4 py-3.5 md:p-6">
+            <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+              <h2 className="font-display text-base font-extrabold text-ink-900 md:text-xl">Tài khoản</h2>
+              {sync.state !== 'off' && (
+                <span data-testid="sync-status" className="text-xs font-semibold text-ink-500 md:text-sm">
+                  {sync.state === 'offline' && 'Ngoại tuyến'}
+                  {sync.state === 'pending' && `Chưa đồng bộ ${sync.pending} mục`}
+                  {sync.state === 'synced' && 'Đã đồng bộ ✓'}
+                </span>
+              )}
+            </div>
+
+            {!authReady ? (
+              <p className="text-sm text-ink-500">Đang tải…</p>
+            ) : anonymous ? (
+              <div className="flex flex-col gap-3">
+                {linkStage === 'idle' ? (
+                  <form onSubmit={handleSendOtp} className="flex flex-col gap-2">
+                    <p className="text-xs font-semibold text-ink-500 md:text-sm">
+                      Liên kết email để giữ tiến độ của bé an toàn trên mọi thiết bị. Tiến độ học của bé
+                      sẽ được lưu trên tài khoản của bạn.
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      <input
+                        type="email"
+                        required
+                        aria-label="Email của bố/mẹ"
+                        placeholder="email@vidu.com"
+                        value={linkEmailValue}
+                        onChange={e => setLinkEmailValue(e.target.value)}
+                        className="h-11 min-w-0 flex-1 rounded-xl2 border-2 border-line-200 px-3 text-sm font-semibold text-ink-900"
+                      />
+                      <Button type="submit" disabled={linkBusy} className="max-md:min-h-[44px] max-md:px-4 max-md:text-sm">
+                        Liên kết
+                      </Button>
+                    </div>
+                  </form>
+                ) : (
+                  <form onSubmit={handleVerifyOtp} className="flex flex-col gap-2">
+                    <p className="text-xs font-semibold text-ink-500 md:text-sm">
+                      Nhập mã 6 số vừa gửi tới {linkEmailValue}
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      <input
+                        inputMode="numeric"
+                        required
+                        aria-label="Mã xác nhận"
+                        value={linkOtp}
+                        onChange={e => setLinkOtp(e.target.value)}
+                        className="h-11 w-32 rounded-xl2 border-2 border-line-200 px-3 text-center text-sm font-semibold text-ink-900"
+                      />
+                      <Button type="submit" disabled={linkBusy} className="max-md:min-h-[44px] max-md:px-4 max-md:text-sm">
+                        Xác nhận
+                      </Button>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleEditLinkEmail}
+                      className="min-h-[36px] self-start text-xs font-bold text-ink-500 underline"
+                    >
+                      Sửa lại email
+                    </button>
+                  </form>
+                )}
+
+                {linkError && <p role="alert" className="text-xs font-semibold text-fix-700">{linkError}</p>}
+
+                {recoveryCode && (
+                  <div className="rounded-xl2 bg-sun-50 p-3">
+                    <p className="text-xs font-bold text-sun-700">Mã khôi phục — chụp màn hình lại nhé</p>
+                    <p className="mt-1 font-display text-lg font-extrabold tracking-widest text-sun-700">{recoveryCode}</p>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-sm font-semibold text-ink-900">{email}</p>
+                <button
+                  type="button"
+                  onClick={handleSignOut}
+                  className="min-h-[44px] rounded-xl2 border border-line-200 px-3 text-xs font-semibold text-ink-500"
+                >
+                  Đăng xuất
+                </button>
+              </div>
+            )}
+
+            <div className="mt-4 border-t border-line-200 pt-3">
+              <div className="mb-2 flex items-center justify-between">
+                <h3 className="text-xs font-bold text-ink-500 md:text-sm">Hồ sơ</h3>
+                <button
+                  type="button"
+                  onClick={handleAddProfile}
+                  className="min-h-[36px] rounded-xl2 bg-teal-50 px-3 text-xs font-bold text-teal-700"
+                >
+                  + Thêm hồ sơ
+                </button>
+              </div>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-sm font-semibold text-ink-900">
+                  {profiles.find(p => p.id === activeId)?.avatar} {profiles.find(p => p.id === activeId)?.name}
+                </p>
+                <button type="button" onClick={handleRenameActiveProfile} className="min-h-[36px] text-xs font-bold text-ink-500 underline">
+                  Đổi tên
+                </button>
+              </div>
+              {profiles.length > 1 && (
+                <div className="mt-2">
+                  <ProfilePicker profiles={profiles} activeId={activeId} onSelect={handleSwitchProfile} />
+                </div>
+              )}
+            </div>
+          </Card>
+        )}
 
         <div className="grid grid-cols-1 gap-3 md:gap-6 ipad:grid-cols-[1.4fr_1fr]">
           <div className="flex flex-col gap-3 md:gap-6">

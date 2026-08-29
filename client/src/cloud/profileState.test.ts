@@ -31,6 +31,8 @@ import {
   fetchRemoteProfiles,
   listProfiles,
   activeProfile,
+  renameProfile,
+  renameRemoteProfile,
   switchProfile,
 } from './profileState'
 
@@ -56,9 +58,10 @@ function makeClient(
     }
     const chain = {
       select: () => chain,
-      eq: () => chain,
+      eq: (_column: string, value: unknown) => { entry.options = value; return chain },
       in: (_column: string, ids: unknown) => { entry.payload = ids; return chain },
       upsert: (payload: unknown, options?: unknown) => { entry.verb = 'upsert'; entry.payload = payload; entry.options = options; return chain },
+      update: (payload: unknown) => { entry.verb = 'update'; entry.payload = payload; return chain },
       then: (onOk: (r: Reply) => unknown, onErr?: (e: unknown) => unknown) => run().then(onOk, onErr),
     }
     return chain
@@ -399,5 +402,54 @@ describe('the server side', () => {
     // Adopting twice must not clone anybody.
     expect(adoptProfiles(remote).map(p => p.id)).toEqual([local.id, remoteId])
     expect(listProfiles()).toHaveLength(2)
+  })
+
+  it('renames on the server with UPDATE, never an upsert that could conflict', async () => {
+    const profile = ensureLocalProfile()
+    const client = makeClient({ data: [], error: null }, { data: null, error: null })
+    cloud.client = client
+    auth.currentUserId.mockResolvedValue('anon-1')
+
+    expect(await renameRemoteProfile(profile.id, ' Sóc con ')).toBe(true)
+
+    const update = client.queries.find(q => q.verb === 'update')
+    expect(update?.table).toBe('profiles')
+    expect(update?.payload).toEqual({ name: 'Sóc con' })
+    // The id is carried by `.eq`, never by the update body — an UPDATE that matches nothing this
+    // account owns (RLS) simply changes nothing and reports nothing, which is the only answer a
+    // stranger's id should get.
+    expect(update?.options).toBe(profile.id)
+    expect(client.queries.some(q => q.verb === 'upsert')).toBe(false)
+  })
+
+  it('does not rename on the server with no cloud, no session, or a blank name', async () => {
+    const profile = ensureLocalProfile()
+    expect(await renameRemoteProfile(profile.id, 'Sóc')).toBe(false)
+
+    cloud.client = makeClient()
+    auth.currentUserId.mockResolvedValue(null)
+    expect(await renameRemoteProfile(profile.id, 'Sóc')).toBe(false)
+
+    auth.currentUserId.mockResolvedValue('anon-1')
+    expect(await renameRemoteProfile(profile.id, '   ')).toBe(false)
+  })
+})
+
+describe('renaming a profile locally', () => {
+  it('trims the name and leaves every other profile untouched', () => {
+    const first = addProfile('Bé')
+    const second = addProfile('Bơ')
+
+    const roster = renameProfile(second.id, ' Sóc con  ')
+
+    expect(roster.find(p => p.id === second.id)?.name).toBe('Sóc con')
+    expect(roster.find(p => p.id === first.id)?.name).toBe('Bé')
+  })
+
+  it('does nothing for an id this device does not know, or a blank name', () => {
+    const profile = addProfile('Bé')
+    expect(renameProfile('11111111-2222-4333-8444-555555555555', 'Ai đó')).toEqual(listProfiles())
+    expect(renameProfile(profile.id, '   ')).toEqual(listProfiles())
+    expect(listProfiles().find(p => p.id === profile.id)?.name).toBe('Bé')
   })
 })
