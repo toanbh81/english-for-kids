@@ -1,9 +1,8 @@
 import { lessonDone, lessonForDay } from './lessonStore'
-import { onStoreWrite, storageKey } from './storageKeys'
+import { ACTIVITY_CAP, onStoreWrite, storageKey } from './storageKeys'
 
 // Resolved per call, never captured: the active child is only known once the app has booted.
 const activityKey = () => storageKey('activity')
-const CAP = 2000
 const MISSION_TARGET = { story: 1, speak: 5, word: 3 } as const
 const WORD_MISSION_SCORE = 60 // same bar as the Leitner unlock in WordCard
 const WEAK_PHONEME_SCORE = 80 // phonemes at or above this are never reported, so never stored
@@ -50,7 +49,7 @@ function trimPhonemes(e: ActivityEvent): ActivityEvent {
 export function logActivity(e: ActivityEvent): void {
   const events = read()
   events.push(trimPhonemes(e))
-  if (events.length > CAP) events.splice(0, events.length - CAP)
+  if (events.length > ACTIVITY_CAP) events.splice(0, events.length - ACTIVITY_CAP)
   write(events)
 }
 

@@ -3,7 +3,9 @@ import {
   ACTIVE_PROFILE_KEY,
   PROFILES_KEY,
   activeProfileId,
+  eventIdentity,
   isProfileId,
+  mergeStored,
   mergeStoredValue,
   migrateKeysInto,
   namespacePrefix,
@@ -339,7 +341,12 @@ describe('the orphan rescue', () => {
     expect(localStorage.getItem(`speakup.${ORPHAN}.stars`)).toBe(JSON.stringify({ 'sword:fox': 1 }))
   })
 
-  it('falls back to keeping the active value when either side is corrupt', () => {
+  it('keeps the readable copy — whichever side that is', () => {
+    // Damaged bytes are not a value that wins, they are a value that cannot be read. Where the
+    // ACTIVE namespace is the damaged one, the orphan is the only readable copy of the child's
+    // stars and taking it is a recovery, not a regression. Where the ORPHAN is the damaged one, the
+    // active value stands, exactly as before. (The pull applies the same rule for the same reason —
+    // see `MergeSource.damaged` and cloud/sync.ts's F1 tests.)
     localStorage.setItem(`speakup.${ID}.stars`, '{not json')
     localStorage.setItem(`speakup.${ORPHAN}.stars`, JSON.stringify({ 'sword:fox': 1 }))
     localStorage.setItem(`speakup.${ID}.activity`, JSON.stringify([event(1, 'cat')]))
@@ -347,8 +354,17 @@ describe('the orphan rescue', () => {
 
     expect(rescueOrphanNamespaces(ID, [ID])).toBe(2)
 
-    expect(localStorage.getItem(`speakup.${ID}.stars`)).toBe('{not json')
+    expect(JSON.parse(localStorage.getItem(`speakup.${ID}.stars`) ?? '{}')).toEqual({ 'sword:fox': 1 })
     expect(JSON.parse(localStorage.getItem(`speakup.${ID}.activity`) ?? '[]')).toEqual([event(1, 'cat')])
+  })
+
+  it('changes nothing when neither copy can be read', () => {
+    localStorage.setItem(`speakup.${ID}.stars`, '{not json')
+    localStorage.setItem(`speakup.${ORPHAN}.stars`, 'also not json')
+
+    expect(rescueOrphanNamespaces(ID, [ID])).toBe(1)
+
+    expect(localStorage.getItem(`speakup.${ID}.stars`)).toBe('{not json')
   })
 
   it('does nothing for an active id that is not a profile id', () => {
@@ -428,6 +444,46 @@ describe('the merge contract', () => {
     expect(mergeStoredValue('band', '{"value":4}', '{"value":1}', true)).toBe('{"value":1}')
     // Nothing local: there is nothing to weigh, and this is the restore after a wiped cache.
     expect(mergeStoredValue('band', null, '{"value":1}', false)).toBe('{"value":1}')
+  })
+
+  it('says where the value came from, which is not the same as whether it changed', () => {
+    // The distinction the pull turns into "should I push this back?". `merged` and `existing` mean
+    // the other side is behind; `incoming` means it is not; `damaged` means the question does not
+    // apply, because the local bytes could not be read at all.
+    expect(mergeStored('stars', '{"a":1}', '{"a":1}').source).toBe('incoming')
+    expect(mergeStored('stars', '{"a":3}', '{"a":1}').source).toBe('merged')
+    expect(mergeStored('stars', '{"a":1}', '{"a":1,"b":2}').source).toBe('incoming')
+    expect(mergeStored('band', '{"v":4}', '{"v":1}', false).source).toBe('existing')
+    expect(mergeStored('band', '{"v":4}', '{"v":1}', true).source).toBe('incoming')
+    expect(mergeStored('band', null, '{"v":1}').source).toBe('incoming')
+  })
+
+  it('calls half-written local bytes damaged, and hands back the copy that can be read', () => {
+    // The shape an iOS tab killed mid-setItem leaves behind. Reported as newer local truth it would
+    // be pushed over the cloud's good copy — the last place the child's stars still existed.
+    const half = '{"sword:cat":3,"sword:d'
+    expect(mergeStored('stars', half, '{"sword:cat":3,"sword:dog":2}')).toEqual({
+      value: '{"sword:cat":3,"sword:dog":2}', source: 'damaged',
+    })
+    expect(mergeStored('activity', '[{"ts":1,', '[{"ts":1,"kind":"word","id":"a"}]').source).toBe('damaged')
+    // Every LWW key too, not just the two that compute a merge.
+    expect(mergeStored('band', '{"value":4,"mo', '{"value":3,"mode":"auto"}', false)).toEqual({
+      value: '{"value":3,"mode":"auto"}', source: 'damaged',
+    })
+    // …but a bare scalar is not damage: `limit.minutes` and `lesson.length` are stored unquoted on
+    // purpose, and a truncated "20" is indistinguishable from a real one.
+    expect(mergeStored('limit.minutes', '20', '30', false).source).toBe('existing')
+    expect(mergeStored('lesson.length', 'medium', 'long', true).source).toBe('incoming')
+    // Neither side readable: nothing is claimed in either direction.
+    expect(mergeStored('stars', half, 'also broken')).toEqual({ value: half, source: 'existing' })
+  })
+
+  it('is the one place that says what makes two events the same event', () => {
+    expect(eventIdentity(1, 'word', 'a')).toBe('1|word|a')
+    // The rule the union dedupes on and the rule the sync engine asks "have I sent this?" with must
+    // be the same string, or an event is new to one of them and old to the other.
+    const one = JSON.stringify([event(1, 'a')])
+    expect(JSON.parse(mergeStoredValue('activity', one, one))).toHaveLength(1)
   })
 })
 

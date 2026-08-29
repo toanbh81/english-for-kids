@@ -1,9 +1,14 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { ActivityEvent } from '../progress/activity'
+import { KEEP_DAYS, lessonDayInName } from '../progress/lessonStore'
 import {
+  ACTIVITY_CAP,
   ROOT,
+  eventIdentity,
   isProfileId,
+  mergeStored,
   mergeStoredValue,
+  profilePrefix,
   profileStorageKey,
   storageName,
   subscribeStoreWrites,
@@ -54,7 +59,7 @@ const OUTBOX_KEY = `${ROOT}outbox`
  * replay after a partial failure re-read rather than re-send something the child has since improved.
  *
  * An event op is the same idea for the activity log: it says "this child has new events", and the
- * flush works out which ones from the log and the watermark below.
+ * flush works out which ones by comparing the log against the delivered identities below.
  */
 type KvOp = { id: number; t: 'kv'; p: string; n: string; u: number }
 type EventOp = { id: number; t: 'ev'; p: string }
@@ -63,13 +68,23 @@ type Op = KvOp | EventOp
 /**
  * Per-profile bookkeeping that must OUTLIVE the ops (a flush empties `ops`, never this).
  *
- *  - `sent` — the highest event `ts` this device has pushed. Events at or below it are on the
- *    server, so a flush only ever carries the tail.
+ *  - `done` — the IDENTITIES `(ts, kind, id)` of the events the server is known to hold, pruned on
+ *    every write to the ones still in the local log, so it can never outgrow the log.
+ *
+ *    It used to be a high-water mark on `ts`, which is smaller and wrong. Two events logged in the
+ *    same millisecond share a ts, so the second one falls below the mark the first one set and is
+ *    never sent; and a mark seeded from a server row written by a device with a fast clock sits in
+ *    the future and hides every event after it. Both end with `syncStatus()` reporting "Đã đồng bộ
+ *    ✓" over events that are provably not on the server — and that line is the one thing the spec
+ *    puts in front of a parent before they wipe a device. Identity is the only thing that cannot
+ *    lie about it.
+ *
  *  - `clock` — when this device last wrote each kv key, which is the local half of last-write-wins
- *    on pull. A key with no entry reads as "written at an unknown time", and the pull then keeps
- *    the local value: the child has been using it, and guessing is how progress goes backwards.
+ *    on pull. A key with no entry is one this device has never written since sync existed; the pull
+ *    keeps the local value and SEEDS the clock from the server's, so the next genuinely newer
+ *    remote write wins instead of losing to a timestamp this device invented for itself.
  */
-type Meta = { sent: number; clock: Record<string, number> }
+type Meta = { done: string[]; clock: Record<string, number> }
 
 type Outbox = { v: 1; next: number; ops: Op[]; meta: Record<string, Meta> }
 
@@ -85,8 +100,6 @@ const MAX_ITEM_LEN = 128
 const MAX_PHONEMES_BYTES = 8192
 /** One upsert per this many events: 2000 rows in a single request is a payload, not a batch. */
 const EVENT_BATCH = 500
-/** Mirrors `activity.ts` and the server's prune trigger. */
-const ACTIVITY_CAP = 2000
 /** Spec: at most one flush every 30 s off the back of writes. */
 const DEBOUNCE_MS = 30_000
 
@@ -95,7 +108,15 @@ const DEBOUNCE_MS = 30_000
  * the primary key — and it routinely outgrows kv's 16 KB ceiling. Anything else the stores write
  * goes up as kv.
  */
-const NEVER_KV = new Set(['activity'])
+const NEVER_KV = new Set([
+  'activity',
+  // A once-a-day confetti stamp, not progress. Mirroring it would let one device suppress the
+  // celebration on another, and it is the child's, not the parent dashboard's.
+  'celebrated',
+])
+
+/** `kv_key_len` in the migration. */
+const MAX_KV_NAME_LEN = 64
 
 const emptyOutbox = (): Outbox => ({ v: 1, next: 1, ops: [], meta: {} })
 
@@ -132,15 +153,20 @@ function toOp(value: unknown): Op | null {
   return null
 }
 
+const emptyMeta = (): Meta => ({ done: [], clock: {} })
+
 function toMeta(value: unknown): Meta {
-  if (!isRecord(value)) return { sent: 0, clock: {} }
+  if (!isRecord(value)) return emptyMeta()
   const clock: Record<string, number> = {}
   if (isRecord(value.clock)) {
     for (const [name, at] of Object.entries(value.clock)) {
       if (typeof at === 'number' && Number.isFinite(at)) clock[name] = at
     }
   }
-  return { sent: finite(value.sent), clock }
+  const done = Array.isArray(value.done)
+    ? value.done.filter((id): id is string => typeof id === 'string')
+    : []
+  return { done, clock }
 }
 
 /**
@@ -191,16 +217,28 @@ function writeOutbox(box: Outbox): void {
     const doomed = names.sort((a, b) => meta.clock[a] - meta.clock[b]).slice(0, names.length - MAX_CLOCK_ENTRIES)
     for (const name of doomed) delete meta.clock[name]
   }
-  try {
-    localStorage.setItem(OUTBOX_KEY, JSON.stringify(box))
-  } catch {
-    // A full store must not lose the child's progress to the queue that mirrors it. Half the ops go
-    // — replays are idempotent and the local data is untouched either way — and if even that will
-    // not fit, the queue is abandoned in silence.
+  // A full store must not lose the child's progress to the queue that mirrors it, so the queue is
+  // the thing that gives way: the newest half of the ops, then none of them, then the meta alone.
+  //
+  // Each step has to be strictly smaller than the one before or the retry is the write that just
+  // failed. `slice(-Math.floor(n / 2))` was not: at n = 1 that is `slice(-0)`, which is `slice(0)`,
+  // which is the whole array — the one case where the fallback mattered most.
+  const attempts: Outbox[] = [
+    box,
+    { ...box, ops: box.ops.slice(Math.ceil(box.ops.length / 2)) },
+    { ...box, ops: [] },
+    // `clock` and `done` outlive the ops and are what stop the next pull regressing a value and the
+    // next flush re-sending the log, so they are the last thing dropped, not the first.
+    { v: 1, next: box.next, ops: [], meta: {} },
+  ]
+  for (const attempt of attempts) {
     try {
-      localStorage.setItem(OUTBOX_KEY, JSON.stringify({ ...box, ops: box.ops.slice(-Math.floor(box.ops.length / 2)) }))
-    } catch { /* the mirror is the first thing to go, and the last thing that matters */ }
+      localStorage.setItem(OUTBOX_KEY, JSON.stringify(attempt))
+      return
+    } catch { /* try a smaller one */ }
   }
+  // The mirror is the first thing to go, and the last thing that matters. What was dropped here is
+  // picked up again by the pull, which queues every local key the server has never seen.
 }
 
 /** Read-modify-write in one synchronous turn — as close to atomic as localStorage offers. */
@@ -216,13 +254,13 @@ function updateOutbox(change: (box: Outbox) => void): Outbox {
 // ---------------------------------------------------------------------------
 
 function enqueueKv(profileId: string, name: string, at: number): void {
-  if (NEVER_KV.has(name) || name.length > 64) return
+  if (NEVER_KV.has(name) || name.length > MAX_KV_NAME_LEN) return
   updateOutbox(box => {
     // One op per (profile, key). The value is read at flush time, so a second op for the same key
     // would only push the same bytes twice.
     box.ops = box.ops.filter(op => !(op.t === 'kv' && op.p === profileId && op.n === name))
     box.ops.push({ id: box.next++, t: 'kv', p: profileId, n: name, u: at })
-    const meta = (box.meta[profileId] ??= { sent: 0, clock: {} })
+    const meta = (box.meta[profileId] ??= emptyMeta())
     meta.clock[name] = at
   })
   notifyStatus()
@@ -232,7 +270,7 @@ function enqueueEvents(profileId: string): void {
   updateOutbox(box => {
     if (box.ops.some(op => op.t === 'ev' && op.p === profileId)) return
     box.ops.push({ id: box.next++, t: 'ev', p: profileId })
-    box.meta[profileId] ??= { sent: 0, clock: {} }
+    box.meta[profileId] ??= emptyMeta()
   })
   notifyStatus()
 }
@@ -244,11 +282,11 @@ function removeOps(delivered: Set<number>): void {
 }
 
 function updateMeta(profileId: string, change: (meta: Meta) => void): void {
-  updateOutbox(box => { change(box.meta[profileId] ??= { sent: 0, clock: {} }) })
+  updateOutbox(box => { change(box.meta[profileId] ??= emptyMeta()) })
 }
 
 function readMeta(profileId: string): Meta {
-  return readOutbox().meta[profileId] ?? { sent: 0, clock: {} }
+  return readOutbox().meta[profileId] ?? emptyMeta()
 }
 
 /** The write seam's listener. One subscription for the whole app — see progress/storageKeys.ts. */
@@ -336,8 +374,6 @@ function toEventRow(profileId: string, e: ActivityEvent): EventRow | null {
   return { profile_id: profileId, ts: Math.floor(e.ts), kind, item_id: itemId, score, phonemes }
 }
 
-const eventIdentity = (ts: number, kind: string, itemId: string): string => `${ts}|${kind}|${itemId}`
-
 // ---------------------------------------------------------------------------
 // Status (the parent dashboard's one line)
 // ---------------------------------------------------------------------------
@@ -407,50 +443,149 @@ function ensureProfilesOnce(): Promise<string[]> {
 const errorMessage = (e: unknown): string =>
   e instanceof Error ? e.message : typeof e === 'string' ? e : 'sync-failed'
 
+/** The `ts` the server actually stored, for rows it did not store under the ts we sent. */
+type Rewrite = { identity: string; to: number }
+
+/**
+ * What the server stored, against what we sent — the whole of "the clamp converges".
+ *
+ * `clamp_client_ts` caps a ts more than a day past the SERVER's clock, and a device whose own clock
+ * is wrong cannot compute that ceiling: its `now` is the wrong clock. So the ceiling is not guessed,
+ * it is READ — `Prefer: return=representation` on the upsert hands back the rows as stored — and the
+ * local log adopts the server's ts as canonical for those events.
+ *
+ * Without this the two copies never meet and the damage compounds once per launch: the clamped row
+ * never matches the local identity, so the pull sees it as a new event and the flush sees the local
+ * one as still unsent, re-sending it into a server whose clock has moved on, which clamps it to a
+ * NEW ts and inserts a second row. Three cycles, four rows, one real attempt — inflating the streak
+ * and the minutes the parent reads, and eventually evicting real history through the 2000-row cap at
+ * both ends. A child moving the iPad's date forward to get past `limit.minutes` is all it takes.
+ *
+ * A returned row that matches something we sent is unremarkable. One that does not is the server's
+ * version of the rows we sent for that same `(kind, item_id)` whose ts came back nowhere — and only
+ * those ABOVE it, because a clamp lowers a ts (or raises a negative one to zero). Without that guard
+ * an ordinary row that merely conflicted — `on conflict do nothing` returns nothing for it — would
+ * be mistaken for a clamped one and a real event would be rewritten to the wrong day.
+ */
+function reconcileStored(sent: EventRow[], stored: EventRow[]): Rewrite[] {
+  const sentIdentities = new Set(sent.map(r => eventIdentity(r.ts, r.kind, r.item_id)))
+  const storedIdentities = new Set(stored.map(r => eventIdentity(r.ts, r.kind, r.item_id)))
+  const rewrites = new Map<string, number>()
+
+  for (const row of stored) {
+    if (sentIdentities.has(eventIdentity(row.ts, row.kind, row.item_id))) continue
+    for (const mine of sent) {
+      if (mine.kind !== row.kind || mine.item_id !== row.item_id) continue
+      const identity = eventIdentity(mine.ts, mine.kind, mine.item_id)
+      if (storedIdentities.has(identity)) continue
+      // Only in the direction a clamp moves. Two future events for one item collapse onto the same
+      // stored ts, and rewriting both is exactly right: they were one row on the server all along.
+      if (mine.ts > row.ts || mine.ts < 0) rewrites.set(identity, row.ts)
+    }
+  }
+  return [...rewrites].map(([identity, to]) => ({ identity, to }))
+}
+
+/**
+ * Move the local log onto the timestamps the server actually stored.
+ *
+ * Rewriting the child's own log is not a step taken lightly — but the ts being replaced is one the
+ * server refused, so keeping it means keeping two copies of one attempt for ever. The clamped value
+ * is also the more honest of the two: it came from a clock that is right.
+ */
+function adoptStoredTimestamps(profileId: string, rewrites: Rewrite[]): void {
+  if (!rewrites.length) return
+  const key = profileStorageKey(profileId, 'activity')
+  const log = readLocalEvents(profileId)
+  const to = new Map(rewrites.map(r => [r.identity, r.to]))
+
+  const seen = new Set<string>()
+  const next: ActivityEvent[] = []
+  for (const event of log) {
+    const moved = to.get(eventIdentity(event.ts, event.kind, event.id))
+    const settled = moved === undefined ? event : { ...event, ts: moved }
+    const identity = eventIdentity(settled.ts, settled.kind, settled.id)
+    if (seen.has(identity)) continue // two clamped copies of one attempt are one attempt
+    seen.add(identity)
+    next.push(settled)
+  }
+  next.sort((a, b) => a.ts - b.ts)
+  writeRaw(key, JSON.stringify(next.slice(-ACTIVITY_CAP)))
+}
+
 /**
  * Push one child's events. Throws if anything was refused, so the caller keeps the op.
  *
- * The watermark moves only on success, and only to the highest ts we CONSIDERED — including rows
- * the constraints made us skip, which will never become sendable and must not pin the tail open.
- * Moving it any earlier is how an event gets lost: the next flush would see nothing above the
- * watermark, decide there is nothing to send, and drop the op that was still carrying it.
+ * Candidates are chosen by IDENTITY, never by a timestamp watermark — see `Meta.done`. An event the
+ * constraints refuse is recorded as done too: it will never become sendable, and leaving it a
+ * candidate would mean `syncStatus()` never reaching "synced" again.
  */
 async function pushEvents(sb: SupabaseClient, profileId: string): Promise<void> {
-  const sent = readMeta(profileId).sent
-  const candidates = readLocalEvents(profileId).filter(e => e.ts > sent)
+  const done = new Set(readMeta(profileId).done)
+  const candidates = readLocalEvents(profileId).filter(e => !done.has(eventIdentity(e.ts, e.kind, e.id)))
   if (!candidates.length) return
 
   const seen = new Set<string>()
   const rows: EventRow[] = []
   for (const e of candidates) {
-    const row = toEventRow(profileId, e)
-    if (!row) continue
+    const identity = eventIdentity(e.ts, e.kind, e.id)
     // The local log can hold the same (ts, kind, id) twice — `logActivity` appends without looking.
     // Sending both would be a batch that conflicts with itself.
-    const identity = eventIdentity(row.ts, row.kind, row.item_id)
     if (seen.has(identity)) continue
     seen.add(identity)
+    const row = toEventRow(profileId, e)
+    if (!row) { done.add(identity); continue }
     rows.push(row)
   }
 
+  const rewrites: Rewrite[] = []
   for (let i = 0; i < rows.length; i += EVENT_BATCH) {
-    const { error } = await sb
+    const batch = rows.slice(i, i + EVENT_BATCH)
+    const { data, error } = await sb
       .from('events')
       // `ignoreDuplicates` — an `on conflict do nothing`. An event is immutable, so a replay is
       // meant to be a no-op rather than a rewrite, and DO NOTHING is the version of that which
-      // cannot fail on a batch that repeats a key.
-      .upsert(rows.slice(i, i + EVENT_BATCH), {
-        onConflict: 'profile_id,ts,kind,item_id',
-        ignoreDuplicates: true,
-      })
+      // cannot fail on a batch that repeats a key — including a batch whose keys only collide
+      // AFTER the server's clamp has run over them.
+      .upsert(batch, { onConflict: 'profile_id,ts,kind,item_id', ignoreDuplicates: true })
+      // …and the representation is what makes the clamp converge rather than compound.
+      .select('ts, kind, item_id')
     if (error) throw new Error(error.message)
+    const stored = (Array.isArray(data) ? data : []).map(row => ({
+      ...(row as RemoteEventRow),
+      ts: toEpoch((row as RemoteEventRow).ts) ?? Number.NaN,
+      kind: String((row as RemoteEventRow).kind),
+      item_id: String((row as RemoteEventRow).item_id),
+    })).filter(row => Number.isFinite(row.ts)) as EventRow[]
+    rewrites.push(...reconcileStored(batch, stored))
   }
 
-  // The server CLAMPS a ts more than a day ahead of its own clock (clamp_client_ts), so the row it
-  // stored may not carry the ts we sent. That is not an error and must not be treated as one: the
-  // watermark is OUR clock, so nothing here re-sends, retries or loops over the difference.
-  const high = candidates.reduce((max, e) => (e.ts > max ? e.ts : max), sent)
-  updateMeta(profileId, meta => { meta.sent = high })
+  for (const row of rows) {
+    const identity = eventIdentity(row.ts, row.kind, row.item_id)
+    const moved = rewrites.find(r => r.identity === identity)
+    done.add(moved ? eventIdentity(moved.to, row.kind, row.item_id) : identity)
+  }
+  adoptStoredTimestamps(profileId, rewrites)
+  rememberDelivered(profileId, done)
+}
+
+/**
+ * Record what the server holds, pruned to what the local log still contains.
+ *
+ * The prune is what bounds it: `done` can never be longer than the log, which is itself capped, and
+ * an event that has rotated out of the log can never be a candidate again anyway.
+ */
+function rememberDelivered(profileId: string, delivered: Set<string>): void {
+  const present = new Set(readLocalEvents(profileId).map(e => eventIdentity(e.ts, e.kind, e.id)))
+  updateMeta(profileId, meta => {
+    meta.done = [...delivered].filter(identity => present.has(identity))
+  })
+}
+
+/** The events in the local log the server is not known to hold. Drives the honest status line. */
+function undelivered(profileId: string): number {
+  const done = new Set(readMeta(profileId).done)
+  return readLocalEvents(profileId).filter(e => !done.has(eventIdentity(e.ts, e.kind, e.id))).length
 }
 
 /** Push one child's dirty kv keys. Returns the op ids that are now safely mirrored. */
@@ -559,6 +694,18 @@ async function runFlush(): Promise<void> {
     }
 
     removeOps(delivered)
+
+    // An event logged WHILE this flush was pushing found an `ev` op already queued and added
+    // nothing — and that op has just been removed as delivered, which would leave the event unsent
+    // with the status line reading "Đã đồng bộ ✓" over the top of it. The queue is re-opened here
+    // instead, and the loop in `flush()` sends it before this call returns.
+    for (const profileId of byProfile.keys()) {
+      if (!undelivered(profileId)) continue
+      if (readOutbox().ops.some(op => op.t === 'ev' && op.p === profileId)) continue
+      enqueueEvents(profileId)
+      if (!failure) rerun = true
+    }
+
     lastError = failure
     if (!failure && !readOutbox().ops.length) lastSyncedAt = Date.now()
   } catch (e) {
@@ -634,38 +781,102 @@ async function runPull(profileId: string): Promise<boolean> {
   }
 }
 
+/**
+ * Every kv name this child has on disk — including ones the server has never heard of.
+ *
+ * That last part is why it exists. A key whose op was dropped by a full store (see `writeOutbox`)
+ * would otherwise never be mirrored at all if it is one the app writes ONCE — `lesson.length`,
+ * `limit.minutes` — because the only other thing that queues a key is the pull, and the pull could
+ * only ever queue keys the server already had.
+ */
+function localKvNames(profileId: string): string[] {
+  const prefix = profilePrefix(profileId)
+  const names: string[] = []
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i)
+      if (!key?.startsWith(prefix)) continue
+      const name = key.slice(prefix.length)
+      if (!name || NEVER_KV.has(name) || name.length > MAX_KV_NAME_LEN) continue
+      names.push(name)
+    }
+  } catch { /* storage unavailable: nothing to mirror */ }
+  return names
+}
+
+/**
+ * Which `lesson.<day>` names may be written to disk, given everything both sides know about.
+ *
+ * `saveLesson` keeps the newest `KEEP_DAYS` records and deletes the rest. The server has no such
+ * prune — deliberately, so the parent dashboard keeps its history — so a year-old account hands
+ * back a year of lesson records on every launch, `saveLesson` deletes all but thirty on the next
+ * write, and the two ping-pong for ever. On an iPad near its quota that churn is what makes the
+ * swallowed `setItem` in `store.ts` drop a star.
+ *
+ * **A deletion the client made on purpose is not the same as a value it has never seen.** The
+ * retention policy is the client's, so it applies to what comes down too.
+ */
+function retainedLessonDays(remoteNames: string[], profileId: string): Set<string> {
+  const days = new Set<string>()
+  for (const name of [...remoteNames, ...localKvNames(profileId)]) {
+    const day = lessonDayInName(name)
+    if (day) days.add(day)
+  }
+  // Day keys sort lexicographically the same way they sort chronologically — the assumption
+  // `saveLesson` already prunes by.
+  return new Set([...days].sort().slice(-KEEP_DAYS))
+}
+
 function mergeKvRows(profileId: string, rows: KvRow[]): void {
   const clock = readMeta(profileId).clock
   const accepted: Record<string, number> = {}
   const ahead: { name: string; at: number }[] = []
+  const seenRemotely = new Set<string>()
+  const keepDays = retainedLessonDays(
+    rows.map(row => (typeof row.key === 'string' ? row.key : '')),
+    profileId,
+  )
 
   for (const row of rows) {
     const name = typeof row.key === 'string' ? row.key : ''
     if (!name || NEVER_KV.has(name)) continue
+    seenRemotely.add(name)
     if (row.value === undefined || row.value === null) continue
+    // Outside the local retention window: writing it would only give `saveLesson` something to
+    // delete. It stays on the server, where the dashboard can still read it.
+    const day = lessonDayInName(name)
+    if (day && !keepDays.has(day)) continue
+
     const incoming = decodeValue(row.value)
     const remoteAt = toEpoch(row.updated_at) ?? 0
     const localAt = clock[name]
     const key = profileStorageKey(profileId, name)
     const existing = readRaw(key)
 
-    // A key this device has never written carries no clock, so the local value wins by default —
-    // the conservative half of last-write-wins, and the same choice the orphan rescue makes.
+    // A key this device has never written since sync existed carries no clock. The local value
+    // still wins — the child has been using it — but the clock is SEEDED from the server's rather
+    // than invented, so a genuinely newer write from the other iPad wins next time instead of
+    // losing to a timestamp this device made up for itself.
     const preferIncoming = localAt !== undefined && remoteAt >= localAt
-    const merged = mergeStoredValue(name, existing, incoming, preferIncoming)
+    const { value: merged, source } = mergeStored(name, existing, incoming, preferIncoming)
 
     if (merged !== existing && !writeRaw(key, merged)) continue
-    if (merged === incoming) {
-      // What is on disk is now exactly what the server holds; its clock is the honest one.
-      accepted[name] = remoteAt
+
+    if (source === 'existing' && localAt !== undefined) {
+      // A real local value with a real clock, and it is the newer one. Say so, with its own clock:
+      // it already beats the remote, so nothing has to be forged for the decision to stick.
+      ahead.push({ name, at: localAt })
+    } else if (source === 'merged') {
+      // Neither side had the result (a higher star, a longer log). `stars` merges by MAX server-side
+      // and ignores the clock entirely, so this only has to be a sane timestamp, not a winning one.
+      ahead.push({ name, at: Math.max(localAt ?? 0, remoteAt) })
     } else {
-      // Either the local value won outright or the merge produced something neither side had (a
-      // higher star, a longer log). Either way the server is behind and the next flush says so —
-      // and it has to say so with a clock that WINS, or the decision made here would be quietly
-      // reversed by the server's own last-write-wins and the two ends would never converge. Ties go
-      // to the incoming write in `merge_kv`, so matching the remote clock is enough; no forging a
-      // timestamp past it.
-      ahead.push({ name, at: Math.max(localAt ?? 0, remoteAt, Date.now()) })
+      // 'incoming' — the server already holds everything this device does.
+      // 'existing' with no clock — kept locally, and the seed below is the whole point of F5.
+      // 'damaged'  — the local bytes could not be read. THEY ARE NOT NEWER TRUTH. The server's copy
+      //              has been adopted and nothing is pushed: half a JSON object written over the
+      //              cloud's good map is the child's stars gone from the last place they existed.
+      accepted[name] = remoteAt
     }
   }
 
@@ -673,6 +884,17 @@ function mergeKvRows(profileId: string, rows: KvRow[]): void {
     updateMeta(profileId, meta => { Object.assign(meta.clock, accepted) })
   }
   for (const { name, at } of ahead) enqueueKv(profileId, name, at)
+
+  // Anything on disk the server has never seen. Queued last, so a key that is both unknown remotely
+  // and outside the lesson window is not queued twice.
+  for (const name of localKvNames(profileId)) {
+    if (seenRemotely.has(name)) continue
+    const day = lessonDayInName(name)
+    if (day && !keepDays.has(day)) continue
+    // There is no remote value here to regress, so `Date.now()` cannot lose the child anything —
+    // it is this device asserting a key the server does not have at all.
+    enqueueKv(profileId, name, clock[name] ?? Date.now())
+  }
 }
 
 function mergeEventRows(profileId: string, rows: RemoteEventRow[]): void {
@@ -689,25 +911,19 @@ function mergeEventRows(profileId: string, rows: RemoteEventRow[]): void {
 
   const key = profileStorageKey(profileId, 'activity')
   const existing = readRaw(key)
-  const local = readLocalEvents(profileId)
   const merged = mergeStoredValue('activity', existing, JSON.stringify(remote))
   if (merged !== existing) writeRaw(key, merged)
 
-  // What the server is missing, exactly: the events it did not send back. Moving the watermark to
-  // just below the oldest of them is what puts them in the next flush without replaying the whole
-  // restored log; with nothing missing the watermark jumps to the newest row the server holds, so a
-  // device that has just restored from a wiped cache pushes nothing at all.
-  const known = new Set(remote.map(e => eventIdentity(e.ts, e.kind, e.id)))
-  const missing = local.filter(e => !known.has(eventIdentity(e.ts, e.kind, e.id)))
-  const newestRemote = remote.reduce((max, e) => (e.ts > max ? e.ts : max), 0)
+  // Every row the server just sent is, by definition, a row the server holds. Recording them is
+  // what stops a device that has restored from a wiped cache pushing the entire log straight back —
+  // and it is exact, where the old "watermark at the newest row" was merely usually right.
+  const delivered = new Set(readMeta(profileId).done)
+  for (const event of remote) delivered.add(eventIdentity(event.ts, event.kind, event.id))
+  rememberDelivered(profileId, delivered)
 
-  if (!missing.length) {
-    updateMeta(profileId, meta => { if (newestRemote > meta.sent) meta.sent = newestRemote })
-    return
-  }
-  const oldestMissing = missing.reduce((min, e) => (e.ts < min ? e.ts : min), missing[0].ts)
-  updateMeta(profileId, meta => { meta.sent = Math.max(0, Math.min(meta.sent, oldestMissing - 1)) })
-  enqueueEvents(profileId)
+  // Whatever is left is local-only and has to go up. `pushEvents` works out which, from the same
+  // set; this only has to open a queue for it.
+  if (undelivered(profileId)) enqueueEvents(profileId)
 }
 
 // ---------------------------------------------------------------------------

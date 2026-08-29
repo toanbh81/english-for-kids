@@ -307,62 +307,120 @@ export function migrateKeysInto(profileId: string): number {
 // ---------------------------------------------------------------------------
 
 /**
- * Mirrors the cap in `activity.ts`: the event log never grows past this, and a merge is a write
- * like any other.
+ * The event log never grows past this — **and this is the only copy of the number**.
+ *
+ * It lives here, at the bottom of the layering, rather than in `activity.ts`, because the merge
+ * below has to enforce it and this module may not import upwards. `activity.ts` and `cloud/sync.ts`
+ * both take it from here.
  */
-const ACTIVITY_CAP = 2000
+export const ACTIVITY_CAP = 2000
 
 const isMap = (value: unknown): value is Record<string, unknown> =>
   !!value && typeof value === 'object' && !Array.isArray(value)
+
+/**
+ * What makes two events the same event: `(ts, kind, id)` — the server's primary key.
+ *
+ * **The only copy of that rule.** The rescue, the pull's union and the sync engine's "have I sent
+ * this one?" all have to agree about what a duplicate is, and an event counted as new by one of
+ * them and old by another is a duplicate in the child's log or an event that never syncs.
+ */
+export function eventIdentity(ts: unknown, kind: unknown, id: unknown): string {
+  return `${String(ts)}|${String(kind)}|${String(id)}`
+}
+
+const parseMap = (raw: string): Record<string, unknown> | null => {
+  try {
+    const parsed: unknown = JSON.parse(raw)
+    return isMap(parsed) ? parsed : null
+  } catch { return null }
+}
+
+const parseList = (raw: string): unknown[] | null => {
+  try {
+    const parsed: unknown = JSON.parse(raw)
+    return Array.isArray(parsed) ? parsed : null
+  } catch { return null }
+}
+
+/**
+ * Where the value that came out of a merge came FROM, which is a different question from what it
+ * is — and the one the caller needs in order to decide whether the other side is now behind.
+ *
+ *  - `incoming` — the other copy already contains everything this one does. Adopt it; say nothing.
+ *  - `existing` — this copy wins outright. The other side is behind.
+ *  - `merged`   — genuinely combined: neither side had the result. The other side is behind.
+ *  - `damaged`  — **the local bytes could not be read.** Not "ahead", not "behind": unreadable. The
+ *    incoming copy is adopted because it is the only copy there is, and the caller must never
+ *    report damaged bytes upward as newer truth. Half a JSON object is what an iOS tab killed
+ *    mid-`setItem` leaves behind (see `copyValue` above), and the cloud copy is then the only thing
+ *    that can give the child their stars back — so pushing the damage over it destroys the one
+ *    remaining good copy.
+ */
+export type MergeSource = 'incoming' | 'existing' | 'merged' | 'damaged'
+export type MergeOutcome = { value: string; source: MergeSource }
 
 /**
  * Stars only ever go up. A star the child earned in one namespace cannot be lowered by an older
  * value from another, whatever the clocks say — the same rule the server's `merge_kv` applies, for
  * the same reason.
  */
-function mergeStars(existing: string, incoming: string): string {
-  try {
-    const mine: unknown = JSON.parse(existing)
-    const theirs: unknown = JSON.parse(incoming)
-    if (!isMap(mine) || !isMap(theirs)) return existing
-    const out: Record<string, unknown> = { ...mine }
-    for (const [id, value] of Object.entries(theirs)) {
-      const current = out[id]
-      if (current === undefined) { out[id] = value; continue }
-      if (typeof value === 'number' && typeof current === 'number' && value > current) out[id] = value
+function mergeStars(existing: string, incoming: string): MergeOutcome {
+  const mine = parseMap(existing)
+  const theirs = parseMap(incoming)
+  // Both unreadable: there is nothing to choose between, so nothing changes and nothing is claimed.
+  if (!mine && !theirs) return { value: existing, source: 'existing' }
+  if (!mine) return { value: incoming, source: 'damaged' }
+  if (!theirs) return { value: existing, source: 'existing' }
+
+  const out: Record<string, unknown> = { ...mine }
+  let behind = false // does the other copy lack something this one has?
+  for (const [id, value] of Object.entries(theirs)) {
+    const current = out[id]
+    if (current === undefined) { out[id] = value; continue }
+    if (typeof value === 'number' && typeof current === 'number') {
+      if (value > current) out[id] = value
+      else if (current > value) behind = true
+      continue
     }
-    return JSON.stringify(out)
-  } catch {
-    return existing
+    // One side is not a number at all — a hand-edited or half-migrated entry. A real star beats a
+    // non-star in whichever direction it points.
+    if (typeof value === 'number') out[id] = value
+    else if (typeof current === 'number') behind = true
   }
+  for (const id of Object.keys(mine)) if (!(id in theirs)) behind = true
+  return { value: JSON.stringify(out), source: behind ? 'merged' : 'incoming' }
 }
 
-/** One event is the same event in both namespaces when its (ts, kind, id) match — the server's
- * primary key, so a rescue and a sync agree about what a duplicate is. */
-const eventKey = (event: unknown): string => {
-  if (!isMap(event)) return JSON.stringify(event)
-  return `${String(event.ts)}|${String(event.kind)}|${String(event.id)}`
+const eventKey = (event: unknown): string =>
+  isMap(event) ? eventIdentity(event.ts, event.kind, event.id) : JSON.stringify(event)
+
+function mergeActivity(existing: string, incoming: string): MergeOutcome {
+  const mine = parseList(existing)
+  const theirs = parseList(incoming)
+  if (!mine && !theirs) return { value: existing, source: 'existing' }
+  if (!mine) return { value: incoming, source: 'damaged' }
+  if (!theirs) return { value: existing, source: 'existing' }
+
+  const seen = new Set<string>()
+  const merged: unknown[] = []
+  for (const event of [...mine, ...theirs]) {
+    const key = eventKey(event)
+    if (seen.has(key)) continue
+    seen.add(key)
+    merged.push(event)
+  }
+  merged.sort((a, b) => (isMap(a) && typeof a.ts === 'number' ? a.ts : 0) - (isMap(b) && typeof b.ts === 'number' ? b.ts : 0))
+  const theirIdentities = new Set(theirs.map(eventKey))
+  const behind = mine.some(event => !theirIdentities.has(eventKey(event)))
+  return { value: JSON.stringify(merged.slice(-ACTIVITY_CAP)), source: behind ? 'merged' : 'incoming' }
 }
 
-function mergeActivity(existing: string, incoming: string): string {
-  try {
-    const mine: unknown = JSON.parse(existing)
-    const theirs: unknown = JSON.parse(incoming)
-    if (!Array.isArray(mine) || !Array.isArray(theirs)) return existing
-    const seen = new Set<string>()
-    const merged: unknown[] = []
-    for (const event of [...mine, ...theirs]) {
-      const key = eventKey(event)
-      if (seen.has(key)) continue
-      seen.add(key)
-      merged.push(event)
-    }
-    merged.sort((a, b) => (isMap(a) && typeof a.ts === 'number' ? a.ts : 0) - (isMap(b) && typeof b.ts === 'number' ? b.ts : 0))
-    return JSON.stringify(merged.slice(-ACTIVITY_CAP))
-  } catch {
-    return existing
-  }
-}
+/**
+ * Are these bytes a JSON object or array — the shape every stored value has except the two bare
+ * scalars the app writes on purpose (`limit.minutes` = "20", `lesson.length` = "medium")?
+ */
+const isStructured = (raw: string): boolean => parseMap(raw) !== null || parseList(raw) !== null
 
 /**
  * What one stored value becomes when a second copy of it turns up.
@@ -375,24 +433,42 @@ function mergeActivity(existing: string, incoming: string): string {
  *  - `stars` — per-entry **maximum**. A star the child earned is never lowered, whatever the clocks
  *    say. Stars only ever go up, which makes max both correct and replay-proof.
  *  - `activity` — **union**, deduped on `(ts, kind, id)` (the server's primary key), sorted, capped
- *    at the 2000 `activity.ts` already enforces.
+ *    at `ACTIVITY_CAP`.
  *  - everything else — **last write wins**, and `preferIncoming` is that decision. The rescue leaves
  *    it false: an orphaned namespace carries no clock, and the value the child has been using is the
  *    better guess. The pull passes the comparison of the two `updated_at`s.
  *
  * Where there is no existing value at all the incoming one is taken outright — that is the restore
  * after a wiped cache, and it is the one case that has nothing to weigh.
+ *
+ * The `source` on the way out is the half callers get wrong when it is missing: "the value changed"
+ * and "the other side is behind" are not the same statement, and `damaged` is neither. See
+ * `MergeSource`.
  */
+export function mergeStored(
+  name: string,
+  existing: string | null,
+  incoming: string,
+  preferIncoming = false,
+): MergeOutcome {
+  if (existing === null) return { value: incoming, source: 'incoming' }
+  if (name === 'stars') return mergeStars(existing, incoming)
+  if (name === 'activity') return mergeActivity(existing, incoming)
+  // Last write wins — but only between two values that can be read. A key whose server copy is an
+  // object or an array while the local bytes are not JSON at all is a local value that was cut in
+  // half, not one that is newer, and last-write-wins has no opinion worth having about it.
+  if (isStructured(incoming) && !isStructured(existing)) return { value: incoming, source: 'damaged' }
+  return preferIncoming ? { value: incoming, source: 'incoming' } : { value: existing, source: 'existing' }
+}
+
+/** The merged value on its own, for callers with no decision to make from where it came. */
 export function mergeStoredValue(
   name: string,
   existing: string | null,
   incoming: string,
   preferIncoming = false,
 ): string {
-  if (existing === null) return incoming
-  if (name === 'stars') return mergeStars(existing, incoming)
-  if (name === 'activity') return mergeActivity(existing, incoming)
-  return preferIncoming ? incoming : existing
+  return mergeStored(name, existing, incoming, preferIncoming).value
 }
 
 /**

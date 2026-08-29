@@ -20,7 +20,7 @@ vi.mock('./supabase', () => ({
 import { logActivity } from '../progress/activity'
 import { getBand, setBandValue } from '../progress/band'
 import { promote } from '../progress/leitner'
-import { saveLesson } from '../progress/lessonStore'
+import { KEEP_DAYS, saveLesson, setLessonLength } from '../progress/lessonStore'
 import { setLimitMinutes } from '../progress/limit'
 import { getStars, setStars } from '../progress/store'
 import { resetAuthState } from './auth'
@@ -84,6 +84,11 @@ function makeServer() {
   function upsertEvents(rows: EventRow[]): Reply {
     record('events.upsert')
     if (state.failEvents) return fail(state.failEvents)
+    // `Prefer: return=representation` with `resolution=ignore-duplicates`: only the rows actually
+    // INSERTED come back, and they come back as the database stored them — clamp and all. A row
+    // that merely conflicted returns nothing at all, which is the case the reconciliation has to
+    // not mistake for a clamp.
+    const inserted: EventRow[] = []
     for (const row of rows) {
       // The foreign key, and RLS on top of it: a profile this user does not own is not reachable.
       if (!owns(row.profile_id)) return fail('insert or update on table "events" violates foreign key constraint', '23503')
@@ -95,11 +100,12 @@ function makeServer() {
       // `on conflict do nothing` — the primary key IS the dedupe rule.
       if (events.some(e => eventKey(e) === eventKey(stored))) continue
       events.push(stored)
+      inserted.push(stored)
     }
     // The prune trigger, mirrored.
     events.sort((a, b) => a.ts - b.ts)
     if (events.length > 2000) events.splice(0, events.length - 2000)
-    return ok(null)
+    return ok(inserted.map(({ ts, kind, item_id }) => ({ ts, kind, item_id })))
   }
 
   function mergeKv(profile: string, entries: { key: string; value: Json; updated_at: number }[]): Reply {
@@ -504,7 +510,7 @@ describe('at-least-once delivery', () => {
 })
 
 describe('a clock the server does not believe', () => {
-  it('accepts that the row it stored carries a different ts, without erroring or looping', async () => {
+  it('adopts the ts the server actually stored, so one attempt stays one row', async () => {
     bootProfile()
     startSync()
     // The device's whole clock is 400 days fast, so the server caps everything it sends — the
@@ -520,16 +526,32 @@ describe('a clock the server does not believe', () => {
     expect(server.events).toHaveLength(1)
     expect(server.events[0].ts).toBe(ceiling)
     expect(server.kv.get(`${PROFILE}|stars`)?.updated_at).toBe(ceiling)
-    // Not an error, and the op is done: the watermark is our own clock, not the server's reply.
     expect(syncStatus()).toMatchObject({ state: 'synced', lastError: null })
-    expect(outbox().meta[PROFILE].sent).toBe(future)
+    // The local log now carries the server's ts. The two copies are one event, not two.
+    expect(JSON.parse(localStorage.getItem(key('activity'))!)).toEqual([
+      { ts: ceiling, kind: 'word', id: 'sword:cat', score: 90 },
+    ])
+  })
 
-    // …and no loop: a second flush with nothing new sends nothing at all.
-    const before = server.countOf('events.upsert')
-    await flush()
-    await flush()
-    expect(server.countOf('events.upsert')).toBe(before)
+  it('converges: five cycles against a moving ceiling leave one row on each side', async () => {
+    // The compounding failure, run to ground. Before the reconciliation, each cycle produced a NEW
+    // clamped row — the local copy never matched, so the pull read it as a new event and the flush
+    // read the local one as still unsent — inflating the child's streak and minutes and eventually
+    // evicting real history through the 2000-row cap at both ends.
+    bootProfile()
+    startSync()
+    server.state.ceiling = Date.now() - 1000
+    logActivity({ ts: Date.now() + 400 * 24 * 60 * 60 * 1000, kind: 'word', id: 'sword:cat', score: 90 })
+
+    for (let cycle = 0; cycle < 5; cycle++) {
+      server.state.ceiling += 3_600_000 // the server's clock moves on between launches
+      await pullProfile(PROFILE) // a fresh launch: pull, then flush
+      await flush()
+    }
+
     expect(server.events).toHaveLength(1)
+    expect(JSON.parse(localStorage.getItem(key('activity'))!)).toHaveLength(1)
+    expect(syncStatus()).toMatchObject({ state: 'synced', pending: 0, lastError: null })
   })
 
   it('drops a single event the constraints refuse instead of jamming every flush behind it', async () => {
@@ -555,6 +577,91 @@ describe('a clock the server does not believe', () => {
     expect(server.events).toHaveLength(1)
     expect(server.events[0].score).toBe(88)
     expect(syncStatus().lastError).toBeNull()
+  })
+})
+
+describe('what counts as sent', () => {
+  it('sees an event logged in the same millisecond as one already pushed', async () => {
+    // A timestamp high-water mark cannot: the second event is not ABOVE the mark the first one set,
+    // so it is invisible for the rest of the session while the status line reads "Đã đồng bộ ✓".
+    bootProfile()
+    startSync()
+    const ts = 1_700_000_000_000
+    logActivity({ ts, kind: 'word', id: 'a', score: 90 })
+    setStars('sword:cat', 3)
+
+    let release: (() => void) | undefined
+    const gate = new Promise<void>(resolve => { release = resolve })
+    const realRpc = server.rpc.getMockImplementation()!
+    server.rpc.mockImplementationOnce(async (name, args) => {
+      // Logged WHILE the flush is running: it finds an `ev` op already queued and adds nothing, and
+      // that op is about to be removed as delivered.
+      logActivity({ ts, kind: 'word', id: 'b', score: 70 })
+      await gate
+      return realRpc(name, args)
+    })
+
+    const running = flush()
+    release!()
+    await running
+
+    expect(server.events.map(e => e.item_id).sort()).toEqual(['a', 'b'])
+    expect(syncStatus()).toMatchObject({ state: 'synced', pending: 0 })
+  })
+
+  it('is not blinded by a server row dated in this device\'s future', async () => {
+    // Another iPad with a fast clock wrote an event dated next week. A watermark seeded from the
+    // pull would sit in the future and hide every event this device logged afterwards.
+    server.events.push({
+      profile_id: PROFILE, ts: Date.now() + 7 * 86_400_000,
+      kind: 'word', item_id: 'next-week', score: 90, phonemes: null,
+    })
+    bootProfile()
+    startSync()
+
+    await pullProfile(PROFILE)
+    logActivity({ ts: Date.now(), kind: 'word', id: 'today', score: 80 })
+    await flush()
+
+    expect(server.events.map(e => e.item_id).sort()).toEqual(['next-week', 'today'])
+    expect(syncStatus()).toMatchObject({ state: 'synced', pending: 0 })
+  })
+
+  it('never reports synced while the log holds something the server does not', async () => {
+    bootProfile()
+    startSync()
+    logActivity({ ts: 1000, kind: 'word', id: 'a', score: 90 })
+    server.state.failEvents = 'timeout'
+
+    await flush()
+
+    expect(syncStatus().state).toBe('pending')
+    expect(syncStatus().lastSyncedAt).toBeNull()
+  })
+})
+
+describe('a store with no room left', () => {
+  it('retries with something strictly smaller, at every size including one', () => {
+    bootProfile()
+    startSync()
+
+    const attempts: number[] = []
+    const real = Storage.prototype.setItem
+    const spy = vi.spyOn(Storage.prototype, 'setItem')
+      .mockImplementation(function (this: Storage, name: string, value: string) {
+        if (name !== 'speakup.outbox') { real.call(this, name, value); return }
+        attempts.push((JSON.parse(value) as { ops: unknown[] }).ops.length)
+        throw new DOMException('exceeded the quota', 'QuotaExceededError')
+      })
+
+    setBandValue(3) // the queue would hold exactly one op
+    spy.mockRestore()
+
+    // `slice(-Math.floor(n / 2))` at n = 1 is `slice(-0)`, which is `slice(0)`, which is the whole
+    // array: the retry was byte-identical to the write that had just failed, in the one case where
+    // the fallback was the only thing left.
+    expect(attempts.length).toBeGreaterThan(1)
+    expect(attempts[1]).toBeLessThan(attempts[0])
   })
 })
 
@@ -651,24 +758,35 @@ describe('pull', () => {
     expect(JSON.parse(localStorage.getItem(key('leitner'))!)).toEqual({ 'w-1': { box: 2, due: 1 } }) // we had none
   })
 
-  it('keeps the local value when this device has no clock for the key', async () => {
+  it('keeps a clockless local value, and SEEDS its clock rather than inventing one', async () => {
     // An upgrading device: the value was written by a version that had no outbox, so there is no
     // local timestamp to weigh. Preferring the value the child has been using is the conservative
-    // half of last-write-wins, and the same choice the orphan rescue makes.
+    // half of last-write-wins — but claiming it is NEWER, with a timestamp this device made up, is
+    // how the other iPad's real change gets overwritten. The clock is seeded from the server's
+    // instead, and nothing is pushed.
     bootProfile()
     localStorage.setItem(key('band'), JSON.stringify({ value: 4, mode: 'manual' }))
     startSync()
+    const remoteAt = Date.now() - 60_000
     server.kv.set(`${PROFILE}|band`, {
-      profile_id: PROFILE, key: 'band', value: { value: 1, mode: 'auto' }, updated_at: Date.now() + 60_000,
+      profile_id: PROFILE, key: 'band', value: { value: 1, mode: 'auto' }, updated_at: remoteAt,
     })
 
     await pullProfile(PROFILE)
 
-    expect(getBand()).toEqual({ value: 4, mode: 'manual' })
-    // …and the server is told, so the two ends converge instead of disagreeing for ever.
-    expect(outbox().ops.some(o => o.n === 'band')).toBe(true)
+    expect(getBand()).toEqual({ value: 4, mode: 'manual' }) // local-first held
+    expect(outbox().ops.some(o => o.n === 'band')).toBe(false) // nothing claimed upward
+    expect(outbox().meta[PROFILE].clock.band).toBe(remoteAt) // seeded, not forged
     await flush()
-    expect(server.kv.get(`${PROFILE}|band`)?.value).toEqual({ value: 4, mode: 'manual' })
+    expect(server.kv.get(`${PROFILE}|band`)?.value).toEqual({ value: 1, mode: 'auto' })
+
+    // …and the seed is what makes the OTHER device's next change land, instead of losing for ever
+    // to a `Date.now()` this one wrote into its own clock.
+    server.kv.set(`${PROFILE}|band`, {
+      profile_id: PROFILE, key: 'band', value: { value: 5, mode: 'auto' }, updated_at: remoteAt + 1000,
+    })
+    await pullProfile(PROFILE)
+    expect(getBand()).toEqual({ value: 5, mode: 'auto' })
   })
 
   it('unions the event log and pushes only what the server was missing', async () => {
@@ -710,6 +828,96 @@ describe('pull', () => {
     expect(JSON.parse(localStorage.getItem(key('activity'))!)).toEqual([
       { ts: 1700000000000, kind: 'word', id: 'sword:cat', score: 90 },
     ])
+  })
+
+  it('never pushes local bytes that could not be read over the server\'s good copy', async () => {
+    // The exact shape `storageKeys.ts` cites for `copyValue`: an iOS tab killed mid-`setItem`. The
+    // merge cannot be computed, and "could not be computed" is NOT "the local side is newer" — the
+    // cloud copy is the only thing left that can give the child their stars back.
+    bootProfile()
+    startSync()
+    setStars('sword:cat', 3) // gives the key a local clock, so LWW would say local is current
+    localStorage.setItem(key('stars'), '{"sword:cat":3,"sword:d')
+    server.kv.set(`${PROFILE}|stars`, {
+      profile_id: PROFILE, key: 'stars', value: { 'sword:cat': 3, 'sword:dog': 2 }, updated_at: 1,
+    })
+
+    await pullProfile(PROFILE)
+    await flush()
+
+    // The cloud copy is intact. This is the assertion that matters: it was the only thing left
+    // that could give the child their stars back.
+    expect(server.kv.get(`${PROFILE}|stars`)?.value).toEqual({ 'sword:cat': 3, 'sword:dog': 2 })
+    expect(getStars('sword:cat')).toBe(3)
+    expect(getStars('sword:dog')).toBe(2) // recovered from the cloud, which is the point
+  })
+
+  it('does the same for a damaged LWW value, not just for stars', async () => {
+    bootProfile()
+    startSync()
+    setBandValue(4)
+    localStorage.setItem(key('band'), '{"value":4,"mo')
+    server.kv.set(`${PROFILE}|band`, {
+      profile_id: PROFILE, key: 'band', value: { value: 3, mode: 'auto' }, updated_at: 1,
+    })
+
+    await pullProfile(PROFILE)
+    await flush()
+
+    expect(server.kv.get(`${PROFILE}|band`)?.value).toEqual({ value: 3, mode: 'auto' })
+    expect(getBand()).toEqual({ value: 3, mode: 'auto' })
+  })
+
+  it('leaves both sides alone when neither copy can be read', async () => {
+    bootProfile()
+    startSync()
+    setStars('sword:cat', 3)
+    localStorage.setItem(key('stars'), '{"sword:cat":3,"sword:d')
+    server.kv.set(`${PROFILE}|stars`, { profile_id: PROFILE, key: 'stars', value: 'also broken', updated_at: 1 })
+
+    await pullProfile(PROFILE)
+
+    expect(localStorage.getItem(key('stars'))).toBe('{"sword:cat":3,"sword:d')
+    expect(server.kv.get(`${PROFILE}|stars`)?.value).toBe('also broken')
+  })
+
+  it('does not write back lesson records the local prune would delete on sight', async () => {
+    // A year-old account: the server keeps every lesson record (the dashboard wants the history),
+    // the client keeps thirty. Writing all of them back is churn the child pays for in quota — and
+    // a full store is where `store.ts`'s swallowed setItem silently drops a star.
+    bootProfile()
+    startSync()
+    for (let i = 1; i <= 40; i++) {
+      const day = `2026-03-${String(i).padStart(2, '0')}`
+      server.kv.set(`${PROFILE}|lesson.${day}`, {
+        profile_id: PROFILE, key: `lesson.${day}`, value: { v: 1, day, created: i, band: 1, items: [] }, updated_at: i,
+      })
+    }
+
+    await pullProfile(PROFILE)
+
+    const written = Object.keys(localStorage).filter(k => k.startsWith(key('lesson.2026-')))
+    expect(written).toHaveLength(KEEP_DAYS)
+    // The newest thirty, which is the set `saveLesson` would have kept.
+    expect(written.some(k => k.endsWith('2026-03-10'))).toBe(false)
+    expect(written.some(k => k.endsWith('2026-03-11'))).toBe(true)
+    // …and nothing outside the window is queued for a pointless round trip either.
+    expect(outbox().ops.some(o => o.n?.startsWith('lesson.2026-03-0'))).toBe(false)
+  })
+
+  it('mirrors a write-once key the server has never seen', async () => {
+    // The recovery path for F6: an op dropped by a full store. `lesson.length` is written once and
+    // never again, so if the pull only ever re-queued keys the SERVER already had, this key would
+    // never be mirrored in the child's lifetime.
+    bootProfile()
+    startSync()
+    setLessonLength('long')
+    localStorage.removeItem('speakup.outbox') // the queue the full store could not hold
+
+    await pullProfile(PROFILE)
+    await flush()
+
+    expect(server.kv.get(`${PROFILE}|lesson.length`)?.value).toBe('long')
   })
 
   it('refuses a profile the roster has not adopted yet', async () => {

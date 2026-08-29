@@ -36,12 +36,32 @@ const DAY_RE = /^\d{4}-\d{2}-\d{2}$/
  * take the whole app down with it).
  */
 const VERSION = 1
-/** Lesson records kept in storage; older days are pruned so the child's quota never fills up. */
-const KEEP_DAYS = 30
+/**
+ * Lesson records kept in storage; older days are pruned so the child's quota never fills up.
+ *
+ * Exported because the sync pull has to obey the same policy: a server that still holds a year of
+ * lesson records must not write them all back for `saveLesson` to delete again on the next launch —
+ * a ping-pong that costs the child's storage quota, and on a full store costs them a star (the
+ * `setItem` in `store.ts` is a swallowed failure, not a visible one).
+ */
+export const KEEP_DAYS = 30
 /** Same bar as the Leitner unlock and the legacy word mission. */
 const PASS_SCORE = 60
 
 const lessonKey = (day: string) => `${prefix()}${day}`
+
+/**
+ * The day inside a stored name (`lesson.2026-08-29` → `2026-08-29`), or null for anything else —
+ * `lesson.length`, or a key this module does not own.
+ *
+ * The naming rule stays in here, with the code that writes it, so the sync engine can ask which of
+ * the server's kv keys are lesson records without restating the shape.
+ */
+export function lessonDayInName(name: string): string | null {
+  if (!name.startsWith('lesson.')) return null
+  const day = name.slice('lesson.'.length)
+  return DAY_RE.test(day) ? day : null
+}
 
 /** Every field a screen reads off an item must be a string, or the row renders `undefined` — and
  * `route.startsWith(...)` in `matchIds` throws, which is what bricked the app. */
