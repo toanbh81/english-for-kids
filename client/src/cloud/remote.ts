@@ -1,5 +1,8 @@
-import type { ActivityEvent, ActivityKind } from '../progress/activity'
+import type { SupabaseClient } from '@supabase/supabase-js'
+import type { ActivityEvent, ActivityKind, LessonLookup } from '../progress/activity'
 import { averageScoreByKind, minutesPerDay, streak, weakPhonemes } from '../progress/activity'
+import type { Lesson } from '../progress/lessonStore'
+import { lessonDayInName, parseLesson } from '../progress/lessonStore'
 import { ACTIVITY_CAP } from '../progress/storageKeys'
 import { currentUserId } from './auth'
 import { getSupabase } from './supabase'
@@ -24,7 +27,8 @@ import { getSupabase } from './supabase'
  * queries the local parent dashboard already runs — fed a plain in-memory event array instead of
  * `getActivity()`'s localStorage read. `activity.ts`'s functions were already built to take an
  * events array as an optional argument for precisely this reason (see its own "every query reads a
- * passed events array" test). The one exception, `streak`, needed a small extension first — see the
+ * passed events array" test). `streak` needed one small extension first — an injectable lesson
+ * lookup — which this module supplies from the SAME profile's server-side lesson records; see the
  * long comment on `fetchRemoteStats` below.
  */
 
@@ -33,7 +37,7 @@ const WEEK_DAYS = 7
 const WEAK_PHONEME_COUNT = 5
 
 export type RemoteStats = {
-  /** From `activity.ts`'s `streak`, with the lesson-completion rule turned off — see below. */
+  /** From `activity.ts`'s `streak`, fed this same profile's own remote lesson records — see below. */
   streak: number
   /** Minutes practised in the last 7 days, from `minutesPerDay(7, …)` summed the same way the
    * local dashboard sums its own "Tuần này" line. */
@@ -50,6 +54,7 @@ export type RemoteStats = {
 }
 
 type RemoteEventRow = { ts?: unknown; kind?: unknown; item_id?: unknown; score?: unknown; phonemes?: unknown }
+type RemoteKvRow = { key?: unknown; value?: unknown }
 
 /**
  * An epoch-ms column read back off the wire, or null. `events.ts` is a Postgres `bigint`, which
@@ -92,6 +97,49 @@ export function toActivityEvents(rows: readonly RemoteEventRow[]): ActivityEvent
 }
 
 /**
+ * Build a `LessonLookup` from THIS PROFILE's own server-side `kv` rows — never from `lessonForDay`,
+ * which is local storage under whichever profile is active ON THIS DEVICE.
+ *
+ * This is the fix for the direction the first version of this module only disclosed rather than
+ * corrected: `() => null` (the safe fallback against contaminating a remote streak with a stranger's
+ * local lesson history) also meant a real, finished day could show `Chuỗi ngày: 0` whenever the
+ * legacy per-day counters alone did not reach 1 story / 5 speak / 3 word — which a short generated
+ * lesson is explicitly allowed not to. That is the worst direction to be wrong in under this phase's
+ * honesty rule: a confident number making a child look like they skipped practice when they did not.
+ *
+ * The fetched `kv` rows ARE this profile's own record, from the same server the events came from —
+ * so building the lookup from them, and refusing to fall back to anything else, closes the gap
+ * without reopening the contamination this module exists to avoid. A row that fails
+ * `parseLesson`'s validation (a hand-edited value, an older/newer shape) is skipped exactly as
+ * `lessonForDay` would skip it locally — that day is simply absent from the map, which
+ * `dayIsDone`'s legacy counters still cover.
+ *
+ * A failure fetching `kv` itself (network, RLS, a malformed reply) does not fail the whole stats
+ * read: it returns a lookup that finds nothing, which is the ORIGINAL conservative behaviour and a
+ * safe place to land — a possibly-undercounted streak, never a fabricated one.
+ */
+async function fetchRemoteLessonLookup(sb: SupabaseClient, profileId: string): Promise<LessonLookup> {
+  const byDay = new Map<string, Lesson>()
+  try {
+    const { data, error } = await sb
+      .from('kv')
+      .select('key, value')
+      .eq('profile_id', profileId)
+      .like('key', 'lesson.%')
+    if (!error && Array.isArray(data)) {
+      for (const row of data as RemoteKvRow[]) {
+        const name = typeof row.key === 'string' ? row.key : ''
+        const day = lessonDayInName(name) // null for `lesson.length`, which this filter also matches
+        if (!day) continue
+        const lesson = parseLesson(row.value)
+        if (lesson) byDay.set(day, lesson)
+      }
+    }
+  } catch { /* degrade to the legacy counters alone — see the doc comment above */ }
+  return (day: string) => byDay.get(day) ?? null
+}
+
+/**
  * One profile's read-only stats, straight from the server.
  *
  * **`null` means "could not find out" and must never be read as "this child has done nothing".**
@@ -102,26 +150,21 @@ export function toActivityEvents(rows: readonly RemoteEventRow[]): ActivityEvent
  * profile with no events yet looks exactly like `{ streak: 0, weekMinutes: 0, ... }`, and that is
  * the honest answer for it. The two cases are distinguishable in the type (`null` vs. an object)
  * specifically so a caller cannot collapse them by accident the way an empty array would invite.
+ * (Only the EVENTS read gates this — a failed lesson-lookup fetch degrades quietly, per
+ * `fetchRemoteLessonLookup`'s own doc comment, rather than turning the whole read into "unknown".)
  *
  * **Call this only with an id that already came back from `fetchRemoteProfiles()`.** That function
  * scopes its own read to `owner_id = <this session's user>`, so every id it returns has already
  * cleared the one check that matters; this function trusts that and does not repeat it. Handing it
- * an arbitrary id is not a data leak — the `events` table's RLS is scoped through `profiles` the
- * same way — but a profile nobody here can reach would come back as an empty, successful fetch,
+ * an arbitrary id is not a data leak — both `events` and `kv`'s RLS are scoped through `profiles`
+ * the same way — but a profile nobody here can reach would come back as an empty, successful fetch,
  * which is indistinguishable from a real zero. `fetchRemoteProfiles()`'s own contract is what keeps
  * that case from ever reaching here in practice.
  *
- * **Day-completion uses the legacy per-day counters ONLY — never the "finished today's generated
- * lesson" rule `streak` also knows about.** That second rule needs a lesson record, and lesson
- * records live in `kv`, which this function does not fetch (the brief is explicit: reuse the
- * activity queries against a fetched EVENT array, not new analytics over more tables). `streak`'s
- * default lesson lookup reads `lessonForDay`, which is `localStorage` under whichever profile is
- * ACTIVE ON THIS DEVICE — almost never the remote profile being looked at, and sometimes a
- * different child entirely (two profiles, one iPad, one of them open while the parent checks the
- * other's remote numbers). Passing that default through unexamined would silently blend a
- * stranger's lesson history into this child's streak. Passing `() => null` instead makes the
- * fallback explicit and honest: the streak may undercount a day the child finished via a short
- * lesson, but it can never count a day some OTHER profile's lesson happened to complete.
+ * **Day-completion is real, not approximated: the legacy per-day counters, OR this same profile's
+ * own server-side lesson record for that day** — exactly the two-way rule `activity.ts`'s
+ * `dayIsDone` already applies locally, just fed a lookup built from `kv` instead of `localStorage`.
+ * See `fetchRemoteLessonLookup` for why that lookup may never fall back to `lessonForDay`.
  */
 export async function fetchRemoteStats(profileId: string): Promise<RemoteStats | null> {
   const sb = await getSupabase()
@@ -140,9 +183,10 @@ export async function fetchRemoteStats(profileId: string): Promise<RemoteStats |
     if (error || !Array.isArray(data)) return null
 
     const events = toActivityEvents(data as RemoteEventRow[])
+    const lessonLookup = await fetchRemoteLessonLookup(sb, profileId)
     const now = Date.now()
     return {
-      streak: streak(now, events, () => null),
+      streak: streak(now, events, lessonLookup),
       weekMinutes: minutesPerDay(WEEK_DAYS, now, events).reduce((sum, d) => sum + d.minutes, 0),
       averages: averageScoreByKind(events),
       weak: weakPhonemes(WEAK_PHONEME_COUNT, events),

@@ -216,6 +216,21 @@ export function ParentDashboard({ onLock }: Props) {
   // Ids already asked for, so a re-render (the sync status line updates often) does not re-fetch a
   // profile whose stats already came back — success OR failure both count as "asked".
   const fetchedRemoteIds = useRef(new Set<string>())
+  /**
+   * Whether THIS COMPONENT INSTANCE is still mounted — set once, for the component's whole
+   * lifetime, never per effect run. The stats-fetch effect below used to guard its `setRemoteStats`
+   * call with a `cancelled` flag scoped to a single effect run instead, and that was a real,
+   * deterministic bug: two profiles shown, a sibling's fetch still in flight, the parent presses
+   * "Xem từ xa" — `remoteShowKey` changes, the OLD effect's cleanup sets ITS `cancelled` to true, the
+   * NEW effect run sees the sibling's id already in `fetchedRemoteIds` and does not re-fetch it, and
+   * the original promise then resolves against the stale `cancelled` and drops its own update. The
+   * id stays marked "asked" forever with no answer ever recorded for it — a card stuck on
+   * "Đang tải…" with no retry short of a reload. A fetch is requested once per id (still true here)
+   * and its result is applied whenever it lands, regardless of how many times this effect has
+   * re-run since — the only thing that should ever suppress an update is the component being gone.
+   */
+  const remoteStatsMounted = useRef(true)
+  useEffect(() => () => { remoteStatsMounted.current = false }, [])
 
   useEffect(() => {
     if (!cloudAvailable || !authReady || !hasSession) return undefined
@@ -246,21 +261,20 @@ export function ParentDashboard({ onLock }: Props) {
     ? remoteProfiles.profiles.filter(p => remoteViewOn || p.id !== activeId)
     : []
   // A stable string, not the array itself: the array is a fresh reference every render (it is
-  // rebuilt above), and keying the effect on it would cancel each fetch's `cancelled` flag before
-  // the promise it belongs to ever resolves, silently dropping every result.
+  // rebuilt above), and an effect keyed on a fresh reference every time would re-run — and tear
+  // down — on every render, which is exactly the shape of the race described above.
   const remoteShowKey = remoteProfilesToShow.map(p => p.id).join(',')
 
   useEffect(() => {
-    if (!remoteShowKey) return undefined
-    let cancelled = false
+    if (!remoteShowKey) return
     for (const id of remoteShowKey.split(',')) {
       if (fetchedRemoteIds.current.has(id)) continue
       fetchedRemoteIds.current.add(id)
       void fetchRemoteStats(id).then(stats => {
-        if (!cancelled) setRemoteStats(prev => ({ ...prev, [id]: stats }))
+        // Gated on the component's whole lifetime, not on this effect run — see `remoteStatsMounted`.
+        if (remoteStatsMounted.current) setRemoteStats(prev => ({ ...prev, [id]: stats }))
       })
     }
-    return () => { cancelled = true }
   }, [remoteShowKey])
 
   /**

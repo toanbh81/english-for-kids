@@ -9,19 +9,28 @@ vi.mock('./supabase', () => ({
 }))
 vi.mock('./auth', () => auth)
 
+import { dayKey } from '../progress/activity'
 import { fetchRemoteStats, toActivityEvents } from './remote'
 
 type Reply = { data: unknown; error: { message: string } | null }
 
+const DEFAULT_REPLY: Reply = { data: [], error: null }
+
 /**
- * Only the shape `fetchRemoteStats` actually calls: `.from('events').select(...).eq(...).order(...)
- * .limit(...)`, resolving to `{ data, error }`. Mirrors the light client in `profileState.test.ts`.
+ * The two tables `fetchRemoteStats` actually calls: `events` (`.select().eq().order().limit()`) and
+ * `kv` (`.select().eq().like()`), each resolving independently to `{ data, error }`. Mirrors the
+ * light client in `profileState.test.ts`, extended to route by table name since this module now
+ * talks to two of them.
  */
-function makeClient(reply: Reply = { data: [], error: null }) {
-  const from = vi.fn(() => {
+function makeClient(replies: { events?: Reply; kv?: Reply } = {}) {
+  const events = replies.events ?? DEFAULT_REPLY
+  const kv = replies.kv ?? DEFAULT_REPLY
+  const from = vi.fn((table: string) => {
+    const reply = table === 'kv' ? kv : events
     const chain = {
       select: () => chain,
       eq: () => chain,
+      like: () => chain,
       order: () => chain,
       limit: () => chain,
       then: (onOk: (r: Reply) => unknown, onErr?: (e: unknown) => unknown) => Promise.resolve(reply).then(onOk, onErr),
@@ -38,6 +47,31 @@ beforeEach(() => {
 
 const BASE = new Date('2026-08-23T10:00:00').getTime() // Sunday
 const DAY = 24 * 60 * 60 * 1000
+const BASE_DAY = dayKey(BASE)
+
+/** A stored lesson value exactly as `saveLesson` writes it — the shape `parseLesson` validates. */
+function lessonRow(day: string, overrides: Record<string, unknown> = {}) {
+  return {
+    key: `lesson.${day}`,
+    value: {
+      v: 1,
+      day,
+      created: BASE,
+      band: 1,
+      items: [
+        { kind: 'listen', activity: 'story', id: 'story1', route: '/story/1', label: 'Story', emoji: '📖' },
+        { kind: 'speak', activity: 'speak', id: 'speak1', route: '/speak/1', label: 'Speak', emoji: '🗣️' },
+      ],
+      ...overrides,
+    },
+  }
+}
+
+/** The events that complete `lessonRow`'s two items — well under the legacy 5-speak/3-word bar. */
+const LESSON_COMPLETING_EVENTS = [
+  { ts: BASE, kind: 'story', item_id: 'story1' },
+  { ts: BASE + 1, kind: 'speak', item_id: 'speak1', score: 85 },
+]
 
 describe('toActivityEvents — mapping server rows to activity.ts\'s shape', () => {
   it('maps a full row, including phonemes, into an ActivityEvent', () => {
@@ -92,8 +126,16 @@ describe('fetchRemoteStats', () => {
     expect(client.from).not.toHaveBeenCalled()
   })
 
-  it('returns null — not a zero-stats object — when the server refuses the read', async () => {
-    cloud.client = makeClient({ data: null, error: { message: 'permission denied' } })
+  // F3 (review): the two halves of `if (error || !Array.isArray(data)) return null` need
+  // independent coverage — a single case with BOTH `data: null` and an `error` set is caught by
+  // either half alone, so it does not actually prove the `error` half does anything.
+  it('returns null when the server reports an error, even alongside a well-formed (empty) rows array', async () => {
+    cloud.client = makeClient({ events: { data: [], error: { message: 'permission denied' } } })
+    expect(await fetchRemoteStats('p1')).toBeNull()
+  })
+
+  it('returns null when the response is not an array, even with no error reported', async () => {
+    cloud.client = makeClient({ events: { data: null, error: null } })
     expect(await fetchRemoteStats('p1')).toBeNull()
   })
 
@@ -103,7 +145,7 @@ describe('fetchRemoteStats', () => {
   })
 
   it('returns a real, honest zero for a profile that has genuinely never practised', async () => {
-    cloud.client = makeClient({ data: [], error: null })
+    cloud.client = makeClient({ events: { data: [], error: null } })
     const stats = await fetchRemoteStats('p1')
     expect(stats).toEqual({
       streak: 0,
@@ -117,12 +159,14 @@ describe('fetchRemoteStats', () => {
   it('computes streak, minutes and averages via activity.ts, from the fetched rows alone', async () => {
     vi.useFakeTimers({ now: BASE })
     cloud.client = makeClient({
-      data: [
-        { ts: BASE, kind: 'speak', item_id: 's1', score: 80 },
-        { ts: BASE, kind: 'speak', item_id: 's2', score: 60 },
-        { ts: BASE - DAY, kind: 'speak', item_id: 's3', score: 90 },
-      ],
-      error: null,
+      events: {
+        data: [
+          { ts: BASE, kind: 'speak', item_id: 's1', score: 80 },
+          { ts: BASE, kind: 'speak', item_id: 's2', score: 60 },
+          { ts: BASE - DAY, kind: 'speak', item_id: 's3', score: 90 },
+        ],
+        error: null,
+      },
     })
     const stats = await fetchRemoteStats('p1')
     expect(stats?.eventCount).toBe(3)
@@ -134,13 +178,11 @@ describe('fetchRemoteStats', () => {
     vi.useRealTimers()
   })
 
-  it('never counts a day done via a lesson record — the legacy counters only', async () => {
-    // Five speaks in one day is enough to satisfy the legacy per-day counters (1 story, 5 speak,
-    // 3 word) ONLY when every threshold is met; a lone speak, with no story and no word, must not
-    // count as a completed day by either rule available to a remote fetch (it has no lesson kv
-    // row to consult at all, by design — see the long comment on `fetchRemoteStats`).
+  it('does not count a day done when neither the legacy counters nor any remote lesson record say so', async () => {
+    // A lone speak, with no story and no word, meets neither rule available to a remote fetch when
+    // there is genuinely no lesson kv row for that day (the default empty `kv` reply below).
     vi.useFakeTimers({ now: BASE })
-    cloud.client = makeClient({ data: [{ ts: BASE, kind: 'speak', item_id: 's1', score: 80 }], error: null })
+    cloud.client = makeClient({ events: { data: [{ ts: BASE, kind: 'speak', item_id: 's1', score: 80 }], error: null } })
     const stats = await fetchRemoteStats('p1')
     expect(stats?.streak).toBe(0)
     vi.useRealTimers()
@@ -153,7 +195,7 @@ describe('fetchRemoteStats', () => {
       ...Array.from({ length: 5 }, (_, i) => ({ ts: BASE + i, kind: 'speak', item_id: `sp${i}` })),
       ...Array.from({ length: 3 }, (_, i) => ({ ts: BASE + i, kind: 'word', item_id: `w${i}` })),
     ]
-    cloud.client = makeClient({ data: rows, error: null })
+    cloud.client = makeClient({ events: { data: rows, error: null } })
     const stats = await fetchRemoteStats('p1')
     expect(stats?.streak).toBe(1)
     vi.useRealTimers()
@@ -161,13 +203,83 @@ describe('fetchRemoteStats', () => {
 
   it('surfaces weak phonemes from the fetched rows, via weakPhonemes unmodified', async () => {
     cloud.client = makeClient({
-      data: [
-        { ts: BASE, kind: 'word', item_id: 'w1', phonemes: [{ phoneme: 'th', score: 30 }] },
-        { ts: BASE + 1, kind: 'word', item_id: 'w2', phonemes: [{ phoneme: 'th', score: 50 }] },
-      ],
-      error: null,
+      events: {
+        data: [
+          { ts: BASE, kind: 'word', item_id: 'w1', phonemes: [{ phoneme: 'th', score: 30 }] },
+          { ts: BASE + 1, kind: 'word', item_id: 'w2', phonemes: [{ phoneme: 'th', score: 50 }] },
+        ],
+        error: null,
+      },
     })
     const stats = await fetchRemoteStats('p1')
     expect(stats?.weak).toEqual([{ phoneme: 'th', avg: 40, count: 2 }])
+  })
+
+  // --- Review round 2, finding 2: the streak-honesty fix -----------------------------------------
+
+  describe('day-completion via this profile\'s own remote lesson record', () => {
+    it('counts a day done via a remote lesson record, even when the legacy counters alone are not met', async () => {
+      vi.useFakeTimers({ now: BASE })
+      cloud.client = makeClient({
+        events: { data: LESSON_COMPLETING_EVENTS, error: null },
+        kv: { data: [lessonRow(BASE_DAY)], error: null },
+      })
+      const stats = await fetchRemoteStats('p1')
+      expect(stats?.streak).toBe(1)
+      vi.useRealTimers()
+    })
+
+    it('ignores a lesson kv row that fails its own shape, rather than trusting it', async () => {
+      vi.useFakeTimers({ now: BASE })
+      cloud.client = makeClient({
+        events: { data: LESSON_COMPLETING_EVENTS, error: null },
+        // Wrong version stamp — `parseLesson` refuses it, exactly as `lessonForDay` would locally.
+        kv: { data: [lessonRow(BASE_DAY, { v: 2 })], error: null },
+      })
+      const stats = await fetchRemoteStats('p1')
+      expect(stats?.streak).toBe(0)
+      vi.useRealTimers()
+    })
+
+    it('ignores a kv row whose key is not a lesson day (e.g. lesson.length)', async () => {
+      vi.useFakeTimers({ now: BASE })
+      cloud.client = makeClient({
+        events: { data: LESSON_COMPLETING_EVENTS, error: null },
+        kv: { data: [{ key: 'lesson.length', value: 'medium' }], error: null },
+      })
+      const stats = await fetchRemoteStats('p1')
+      expect(stats?.streak).toBe(0)
+      vi.useRealTimers()
+    })
+
+    it('falls back to the legacy counters alone when the lesson kv fetch itself fails — the read still succeeds', async () => {
+      vi.useFakeTimers({ now: BASE })
+      cloud.client = makeClient({
+        events: { data: LESSON_COMPLETING_EVENTS, error: null },
+        kv: { data: null, error: { message: 'timeout' } },
+      })
+      const stats = await fetchRemoteStats('p1')
+      // Not null: a failed SECOND query degrades the streak, it does not turn the whole answer
+      // into "unknown" — only the `events` read gates that.
+      expect(stats).not.toBeNull()
+      expect(stats?.streak).toBe(0)
+      vi.useRealTimers()
+    })
+
+    it('never reads this device\'s localStorage while building the remote lesson lookup', async () => {
+      vi.useFakeTimers({ now: BASE })
+      cloud.client = makeClient({
+        events: { data: LESSON_COMPLETING_EVENTS, error: null },
+        kv: { data: [lessonRow(BASE_DAY)], error: null },
+      })
+      const getItem = vi.spyOn(Storage.prototype, 'getItem')
+      const stats = await fetchRemoteStats('p1')
+      // The positive half: the remote lesson record really was used (this is not a vacuous "nothing
+      // happened" negative assertion below).
+      expect(stats?.streak).toBe(1)
+      expect(getItem).not.toHaveBeenCalled()
+      getItem.mockRestore()
+      vi.useRealTimers()
+    })
   })
 })

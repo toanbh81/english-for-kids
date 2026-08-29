@@ -946,6 +946,54 @@ describe('Phase 11 task 5: remote progress view', () => {
     expect(remoteMock.fetchRemoteStats).not.toHaveBeenCalledWith('p1')
   })
 
+  /**
+   * Review round 2, finding 1 — proved deterministically with a promise this test controls by
+   * hand. Reproduces the exact sequence: a sibling's fetch is still in flight when the parent
+   * presses "Xem từ xa", which changes which profiles are shown and re-runs the stats effect BEFORE
+   * the original promise ever settles. The old code gated its `setRemoteStats` call on a `cancelled`
+   * flag scoped to that one effect run; the re-run marked the sibling's id as already "asked" (via
+   * `fetchedRemoteIds`) without re-fetching it, so when the original promise finally resolved it
+   * updated nothing — the card was stuck on "Đang tải…" forever, with no reload-free way out.
+   */
+  it('does not get stuck on "Đang tải…" when a sibling\'s fetch resolves only after the toggle changes which profiles are shown', async () => {
+    cloud.configured = true
+    profileStateMock.fetchRemoteProfiles.mockResolvedValue([ACTIVE_PROFILE, SIBLING])
+    let resolveSibling!: (stats: MockRemoteStats | null) => void
+    const siblingPromise = new Promise<MockRemoteStats | null>(resolve => { resolveSibling = resolve })
+    remoteMock.fetchRemoteStats.mockImplementation(async (id: string) => (id === 'p2' ? siblingPromise : REMOTE_STATS))
+
+    renderWithRouter(<ParentDashboard />)
+    await flush()
+
+    // The sibling's card is up and its fetch is in flight (the toggle is off, so only the sibling —
+    // the one profile differing from the active device profile — is shown at all).
+    let cards = await screen.findAllByTestId('remote-profile')
+    expect(cards).toHaveLength(1)
+    expect(cards[0]).toHaveTextContent('Đang tải…')
+
+    // The parent presses "Xem từ xa" WHILE the sibling's fetch is still unresolved. This changes
+    // `remoteShowKey` (now includes the active device profile too) and re-runs the stats effect —
+    // the exact moment the old `cancelled`-per-run guard misfired.
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('remote-view-toggle'))
+      await Promise.resolve()
+    })
+
+    // Now the ORIGINAL sibling fetch finally settles.
+    await act(async () => {
+      resolveSibling(REMOTE_STATS)
+      await Promise.resolve()
+    })
+
+    cards = screen.getAllByTestId('remote-profile')
+    const siblingCard = cards.find(c => c.textContent?.includes('Sóc'))
+    expect(siblingCard).toBeDefined()
+    // The positive assertion this bug made impossible: the card resolves out of "Đang tải…" on its
+    // own, with no remount and no page reload.
+    expect(siblingCard).not.toHaveTextContent('Đang tải…')
+    expect(siblingCard).toHaveTextContent('Chuỗi ngày: 3')
+  })
+
   it('stays quiet when the account holds only the profile already active here, until "Xem từ xa" is pressed', async () => {
     cloud.configured = true
     profileStateMock.fetchRemoteProfiles.mockResolvedValue([ACTIVE_PROFILE])

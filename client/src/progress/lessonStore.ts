@@ -74,6 +74,28 @@ function isLessonItem(value: unknown): value is LessonItem {
 }
 
 /**
+ * A stored lesson value, already `JSON.parse`'d, validated against the exact shape `saveLesson`
+ * writes — split out of `lessonForDay` so the SAME validation covers a value that never went
+ * through `localStorage` at all.
+ *
+ * That second caller is `cloud/remote.ts`'s remote dashboard: a `kv` row's `value` column is jsonb,
+ * so PostgREST hands it back already parsed, never as a JSON string to `JSON.parse` again. Without
+ * this split, giving the remote view its own lesson-completion rule (Phase 11 task 5) would have
+ * meant a second copy of these five checks drifting from this one the moment either changed.
+ */
+export function parseLesson(parsed: unknown): Lesson | null {
+  if (!parsed || typeof parsed !== 'object') return null
+  const { v, day: storedDay, created, band, items } = parsed as Partial<Lesson> & { v?: unknown }
+  if (v !== VERSION) return null
+  // `created` gates every done-match, so a record without it would mark the whole day complete.
+  if (typeof storedDay !== 'string' || typeof created !== 'number' || typeof band !== 'number') return null
+  if (!Array.isArray(items) || !items.every(isLessonItem)) return null
+  // Rebuilt rather than passed through, so the version stamp stays a storage detail and two
+  // lessons of the same day still compare equal whether they were just generated or read back.
+  return { day: storedDay, created, band, items }
+}
+
+/**
  * Corrupt or unavailable storage (private mode, hand-edited value) must not crash the app: a record
  * that fails any check reads as "no lesson yet", so the caller generates a fresh one over the top.
  */
@@ -81,16 +103,7 @@ export function lessonForDay(day: string): Lesson | null {
   try {
     const raw = localStorage.getItem(lessonKey(day))
     if (!raw) return null
-    const parsed: unknown = JSON.parse(raw)
-    if (!parsed || typeof parsed !== 'object') return null
-    const { v, day: storedDay, created, band, items } = parsed as Partial<Lesson> & { v?: unknown }
-    if (v !== VERSION) return null
-    // `created` gates every done-match, so a record without it would mark the whole day complete.
-    if (typeof storedDay !== 'string' || typeof created !== 'number' || typeof band !== 'number') return null
-    if (!Array.isArray(items) || !items.every(isLessonItem)) return null
-    // Rebuilt rather than passed through, so the version stamp stays a storage detail and two
-    // lessons of the same day still compare equal whether they were just generated or read back.
-    return { day: storedDay, created, band, items }
+    return parseLesson(JSON.parse(raw))
   } catch { return null }
 }
 
