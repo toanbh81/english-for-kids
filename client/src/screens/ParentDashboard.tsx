@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { ChangeEvent, FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { getActivity, minutesPerDay, averageScoreByKind, weakPhonemes, clearActivity } from '../progress/activity'
@@ -27,6 +27,7 @@ import {
   activeProfileId,
   addProfile,
   ensureRemoteProfiles,
+  fetchRemoteProfiles,
   listProfiles,
   renameProfile,
   renameRemoteProfile,
@@ -34,6 +35,8 @@ import {
 } from '../cloud/profileState'
 import { hasPendingReset, resetRemoteProgress, subscribeSyncStatus, syncStatus } from '../cloud/sync'
 import type { SyncStatus } from '../cloud/sync'
+import { fetchRemoteStats } from '../cloud/remote'
+import type { RemoteStats } from '../cloud/remote'
 import { isCloudConfigured } from '../cloud/supabase'
 import { ProfilePicker } from '../components/ProfilePicker'
 import { Button, Card, PAGE_SHELL } from '../components/ui'
@@ -104,6 +107,8 @@ function formatDayLabel(day: string): string {
   const [, m, d] = day.split('-')
   return `${d}/${m}`
 }
+
+const formatAvg = (n: number | null): string => (n == null ? '—' : String(Math.round(n)))
 
 function formatTs(ts: number): string {
   const d = new Date(ts)
@@ -191,6 +196,43 @@ export function ParentDashboard({ onLock }: Props) {
     return () => { cancelled = true }
   }, [cloudAvailable])
 
+  // ---------------------------------------------------------------------------------------------
+  // Flow 5: read-only progress from another device.
+  //
+  // `fetchRemoteProfiles()` needs a live session to mean anything (constraint: it answers `[]` for
+  // "no session" too, which is NOT "this account owns nothing" — see the trap called out in its own
+  // doc comment). So this is gated on `hasSession`, not merely `cloudAvailable`, and it is not even
+  // attempted until `authReady` says which is true. `'unknown'` is a first-class state precisely so
+  // a failed fetch can say so instead of silently rendering as "no remote profiles".
+  // ---------------------------------------------------------------------------------------------
+  type RemoteProfilesState = { status: 'idle' } | { status: 'unknown' } | { status: 'ready'; profiles: Profile[] }
+  const [remoteProfilesState, setRemoteProfilesState] = useState<RemoteProfilesState>({ status: 'idle' })
+  // The manual "Xem từ xa" toggle — off by default, the section still appears on its own the moment
+  // the account holds a profile this device's active one is not (a sibling, or simply a different
+  // device's child), which is the "differs" half of the brief's condition; the toggle is the other
+  // half, for comparing THIS device's own child against what the server holds for them.
+  const [remoteViewOn, setRemoteViewOn] = useState(false)
+  const [remoteStats, setRemoteStats] = useState<Record<string, RemoteStats | null>>({})
+  // Ids already asked for, so a re-render (the sync status line updates often) does not re-fetch a
+  // profile whose stats already came back — success OR failure both count as "asked".
+  const fetchedRemoteIds = useRef(new Set<string>())
+
+  useEffect(() => {
+    if (!cloudAvailable || !authReady || !hasSession) return undefined
+    let cancelled = false
+    void (async () => {
+      const remote = await fetchRemoteProfiles()
+      if (cancelled) return
+      setRemoteProfilesState(remote === null ? { status: 'unknown' } : { status: 'ready', profiles: remote })
+    })()
+    return () => { cancelled = true }
+  }, [cloudAvailable, authReady, hasSession])
+  // `hasSession` going false (a sign-out) must hide whatever the state above still remembers from
+  // before — but resetting it with another `setState` inside the effect above only chases that
+  // render with a second one. Deriving it here instead is the fix the lint rule itself names:
+  // "derive the value during render" rather than synchronizing it via an extra effect-driven write.
+  const remoteProfiles: RemoteProfilesState = hasSession ? remoteProfilesState : { status: 'idle' }
+
   const [linkStage, setLinkStage] = useState<'idle' | 'otp'>('idle')
   const [linkEmailValue, setLinkEmailValue] = useState('')
   const [linkOtp, setLinkOtp] = useState('')
@@ -199,6 +241,28 @@ export function ParentDashboard({ onLock }: Props) {
 
   const [profiles, setProfiles] = useState<Profile[]>(() => listProfiles())
   const activeId = activeProfileId()
+
+  const remoteProfilesToShow = remoteProfiles.status === 'ready'
+    ? remoteProfiles.profiles.filter(p => remoteViewOn || p.id !== activeId)
+    : []
+  // A stable string, not the array itself: the array is a fresh reference every render (it is
+  // rebuilt above), and keying the effect on it would cancel each fetch's `cancelled` flag before
+  // the promise it belongs to ever resolves, silently dropping every result.
+  const remoteShowKey = remoteProfilesToShow.map(p => p.id).join(',')
+
+  useEffect(() => {
+    if (!remoteShowKey) return undefined
+    let cancelled = false
+    for (const id of remoteShowKey.split(',')) {
+      if (fetchedRemoteIds.current.has(id)) continue
+      fetchedRemoteIds.current.add(id)
+      void fetchRemoteStats(id).then(stats => {
+        if (!cancelled) setRemoteStats(prev => ({ ...prev, [id]: stats }))
+      })
+    }
+    return () => { cancelled = true }
+  }, [remoteShowKey])
+
   /**
    * Set when the mirror's half of a reset did not go through — and it survives leaving the screen:
    * a reset the sync engine still owes is still true tomorrow, so a parent coming back to check
@@ -522,7 +586,80 @@ export function ParentDashboard({ onLock }: Props) {
                   <ProfilePicker profiles={profiles} activeId={activeId} onSelect={handleSwitchProfile} />
                 </div>
               )}
+              {/* Flow 5's manual door. Shown whenever the account is known to hold at least one
+                * profile — even when it is only the one already active here — so the affordance is
+                * discoverable regardless of whether the section below is currently visible on its
+                * own (it appears without this being pressed once a DIFFERENT profile is on the
+                * account; pressing it adds this device's own child, for comparing the two). */}
+              {remoteProfiles.status === 'ready' && remoteProfiles.profiles.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setRemoteViewOn(v => !v)}
+                  aria-pressed={remoteViewOn}
+                  data-testid="remote-view-toggle"
+                  className="mt-2 min-h-[36px] rounded-xl2 border border-line-200 px-3 text-xs font-bold text-ink-500"
+                >
+                  Xem từ xa
+                </button>
+              )}
             </div>
+          </Card>
+        )}
+
+        {/* A read that failed must never render as "no remote profiles" — the whole reason this is
+          * its own branch rather than folded into an empty list below. */}
+        {cloudAvailable && remoteProfiles.status === 'unknown' && (
+          <Card data-testid="remote-progress-unknown" className="px-4 py-3.5 md:p-6">
+            <p className="text-xs font-semibold text-ink-500 md:text-sm">
+              Chưa xem được tiến độ từ xa lúc này (máy chủ chưa trả lời). Thử tải lại trang sau nhé.
+            </p>
+          </Card>
+        )}
+
+        {/* Flow 5: per-profile read-only stats pulled straight from the server, computed with the
+          * same queries (`progress/activity.ts`) the numbers above use on local data. Shown once
+          * there is at least one profile to show — either a sibling this device is not currently
+          * showing, or this device's own child with "Xem từ xa" pressed. */}
+        {cloudAvailable && remoteProfilesToShow.length > 0 && (
+          <Card data-testid="remote-progress-card" className="px-4 py-3.5 md:p-6">
+            <h2 className="font-display text-base font-extrabold text-ink-900 md:text-xl">Tiến độ từ xa</h2>
+            <p className="mb-2 mt-1 text-xs font-semibold text-ink-500 md:text-sm">
+              Lấy từ máy chủ — có thể khác số trên chính máy này (máy có thể đã tự xoá bớt lịch sử cũ).
+            </p>
+            <ul className="flex flex-col gap-3">
+              {remoteProfilesToShow.map(p => {
+                const loaded = p.id in remoteStats
+                const entry = remoteStats[p.id]
+                return (
+                  <li key={p.id} data-testid="remote-profile" className="rounded-xl2 border border-line-200 p-3">
+                    <p className="font-semibold text-ink-900">
+                      {p.avatar} {p.name}
+                      {p.id === activeId && <span className="font-normal text-ink-500"> · đang dùng trên máy này</span>}
+                    </p>
+                    {!loaded ? (
+                      <p className="mt-1 text-xs font-semibold text-ink-500">Đang tải…</p>
+                    ) : entry === null ? (
+                      <p className="mt-1 text-xs font-semibold text-fix-700">Không tải được tiến độ của bé lúc này.</p>
+                    ) : (
+                      <div className="mt-1 flex flex-col gap-1 text-xs font-semibold text-ink-500 md:text-sm">
+                        <p>Chuỗi ngày: {entry.streak} · Tuần này: {entry.weekMinutes} phút</p>
+                        <p>
+                          Điểm trung bình — Nói {formatAvg(entry.averages.speak)} · Từ vựng {formatAvg(entry.averages.word)} · Ghép câu {formatAvg(entry.averages.sentence)}
+                        </p>
+                        {entry.weak.length === 0 ? (
+                          <p>Chưa đủ dữ liệu về âm sai</p>
+                        ) : (
+                          <p>Âm hay sai: {entry.weak.map(w => `/${w.phoneme}/ (${Math.round(w.avg)})`).join(', ')}</p>
+                        )}
+                      </div>
+                    )}
+                    <p className="mt-1 text-xs font-semibold text-ink-300">
+                      Bản ghi giọng nói của bé không đồng bộ — chỉ nghe được trên máy đã ghi.
+                    </p>
+                  </li>
+                )
+              })}
+            </ul>
           </Card>
         )}
 

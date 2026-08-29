@@ -1,3 +1,4 @@
+import type { Lesson } from './lessonStore'
 import { lessonDone, lessonForDay } from './lessonStore'
 import { ACTIVITY_CAP, onStoreWrite, storageKey } from './storageKeys'
 
@@ -88,14 +89,32 @@ function isDone(counts: { story: number; speak: number; word: number }): boolean
 }
 
 /**
+ * Where a day's lesson record comes from, when one is needed at all.
+ *
+ * The default, `lessonForDay`, reads THIS DEVICE's localStorage under whichever profile is
+ * currently active — which is exactly right for every local query below, and exactly wrong for
+ * Phase 11's remote dashboard (`cloud/remote.ts`). A remote view computes another profile's stats
+ * from events fetched off the server; if `dayIsDone` fell through to the default lookup regardless,
+ * it would silently score that profile's "day done" against whichever lesson record happens to sit
+ * under the ACTIVE LOCAL profile's namespace — a different child, or no lesson at all, depending on
+ * what this device happens to be doing. That is not a slightly-off answer, it is a fabricated one,
+ * and the caller has no way to tell it apart from the truth. So a caller with no access to the
+ * remote profile's lesson kv rows passes `() => null` explicitly, which is a real, honest fallback:
+ * `dayIsDone` still has the legacy per-day counters (1 story, 5 speak, 3 word) to fall back on —
+ * they are computed from the SAME events array — it only loses the newer "finished today's
+ * generated lesson" rule for days a shorter lesson would otherwise have covered.
+ */
+export type LessonLookup = (day: string) => Lesson | null
+
+/**
  * A day is done when the legacy counters hold **or** that day's generated lesson is finished
  * (spec §4, mission compatibility). Both directions matter: streaks earned before Phase 7 keep
  * counting, and a short lesson the child actually completed counts even though it asks for fewer
  * than 5 speaks. `dayEvents` must already be filtered to `day`.
  */
-function dayIsDone(day: string, dayEvents: ActivityEvent[]): boolean {
+function dayIsDone(day: string, dayEvents: ActivityEvent[], lessonLookup: LessonLookup = lessonForDay): boolean {
   if (isDone(countsForDay(dayEvents))) return true
-  const lesson = lessonForDay(day)
+  const lesson = lessonLookup(day)
   return lesson !== null && lessonDone(lesson, dayEvents)
 }
 
@@ -107,7 +126,7 @@ export function missionStatus(now = Date.now(), events = getActivity()): { story
   return { ...countsForDay(today), done: dayIsDone(key, today) }
 }
 
-export function completedDays(events = getActivity()): Set<string> {
+export function completedDays(events = getActivity(), lessonLookup: LessonLookup = lessonForDay): Set<string> {
   const byDay = new Map<string, ActivityEvent[]>()
   for (const e of events) {
     const key = dayKey(e.ts)
@@ -117,13 +136,13 @@ export function completedDays(events = getActivity()): Set<string> {
   }
   const done = new Set<string>()
   for (const [key, events] of byDay) {
-    if (dayIsDone(key, events)) done.add(key)
+    if (dayIsDone(key, events, lessonLookup)) done.add(key)
   }
   return done
 }
 
-export function streak(now = Date.now(), events = getActivity()): number {
-  const done = completedDays(events)
+export function streak(now = Date.now(), events = getActivity(), lessonLookup: LessonLookup = lessonForDay): number {
+  const done = completedDays(events, lessonLookup)
   let cursor = now
   if (!done.has(dayKey(cursor))) {
     cursor -= DAY_MS
@@ -137,11 +156,15 @@ export function streak(now = Date.now(), events = getActivity()): number {
   return count
 }
 
-export function weekDots(now = Date.now(), events = getActivity()): { day: string; done: boolean; isToday: boolean }[] {
+export function weekDots(
+  now = Date.now(),
+  events = getActivity(),
+  lessonLookup: LessonLookup = lessonForDay,
+): { day: string; done: boolean; isToday: boolean }[] {
   const d = new Date(now)
   const mondayOffset = (d.getDay() + 6) % 7 // 0=Mon ... 6=Sun
   const monday = new Date(d.getFullYear(), d.getMonth(), d.getDate() - mondayOffset)
-  const done = completedDays(events)
+  const done = completedDays(events, lessonLookup)
   const todayKey = dayKey(now)
   const dots: { day: string; done: boolean; isToday: boolean }[] = []
   for (let i = 0; i < 7; i++) {

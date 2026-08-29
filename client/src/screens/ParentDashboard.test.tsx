@@ -50,8 +50,21 @@ const profileStateMock = vi.hoisted(() => ({
   renameRemoteProfile: vi.fn<() => Promise<boolean>>(async () => true),
   switchProfile: vi.fn<(id: string) => boolean>(() => true),
   ensureRemoteProfiles: vi.fn<() => Promise<string[]>>(async () => []),
+  fetchRemoteProfiles: vi.fn<() => Promise<MockProfile[] | null>>(async () => []),
 }))
 vi.mock('../cloud/profileState', () => profileStateMock)
+
+type MockRemoteStats = {
+  streak: number
+  weekMinutes: number
+  averages: { story: number | null; speak: number | null; word: number | null; sentence: number | null }
+  weak: { phoneme: string; avg: number; count: number }[]
+  eventCount: number
+}
+const remoteMock = vi.hoisted(() => ({
+  fetchRemoteStats: vi.fn<(id: string) => Promise<MockRemoteStats | null>>(async () => null),
+}))
+vi.mock('../cloud/remote', () => remoteMock)
 
 type MockSyncStatus = {
   state: 'off' | 'offline' | 'pending' | 'synced'
@@ -108,6 +121,9 @@ beforeEach(() => {
   profileStateMock.renameRemoteProfile.mockReset().mockResolvedValue(true)
   profileStateMock.switchProfile.mockReset().mockReturnValue(true)
   profileStateMock.ensureRemoteProfiles.mockReset().mockResolvedValue([])
+  profileStateMock.fetchRemoteProfiles.mockReset().mockResolvedValue([])
+
+  remoteMock.fetchRemoteStats.mockReset().mockResolvedValue(null)
 
   syncMock.syncStatus.mockReset().mockReturnValue({ state: 'off', pending: 0, lastSyncedAt: null, lastError: null, syncing: false })
   syncMock.subscribeSyncStatus.mockReset().mockReturnValue(() => undefined)
@@ -489,6 +505,10 @@ describe('Phase 11: "Tài khoản"', () => {
     renderWithRouter(<ParentDashboard />)
     await flush()
 
+    // The positive twin of the "is entirely absent with no cloud configured" test below, which only
+    // ever checks that this id is ABSENT — a `queryByTestId` that never fires is not a passing test,
+    // it is an untested assertion, so this confirms the same id actually renders when it should.
+    expect(screen.getByTestId('account-card')).toBeInTheDocument()
     expect(screen.getByText(/Tiến độ học của bé sẽ được lưu trên tài khoản của bạn/)).toBeInTheDocument()
     expect(screen.getByLabelText('Email của bố/mẹ')).toBeInTheDocument()
     expect(await screen.findByText('ABC23XYZ')).toBeInTheDocument()
@@ -850,5 +870,147 @@ describe('Phase 11: "Tài khoản"', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Đặt lại tiến trình' }))
     await flush()
     expect(syncMock.resetRemoteProgress).not.toHaveBeenCalled()
+  })
+})
+
+/**
+ * Task 5, flow 5: a parent on another device reads a child's progress straight from the server.
+ *
+ * The reviewer's standing rule for this task: "I could not fetch it" must never render as "the
+ * child did nothing" — so every negative assertion below ("no remote card") is paired, in this same
+ * describe block, with a positive one proving the exact same selector renders when the data says it
+ * should (F5's own guidance against a `queryBy*` that can never fail).
+ */
+describe('Phase 11 task 5: remote progress view', () => {
+  const SIBLING: MockProfile = { id: 'p2', name: 'Sóc', avatar: '🐿️', created: 1 }
+
+  const REMOTE_STATS: MockRemoteStats = {
+    streak: 3,
+    weekMinutes: 42,
+    averages: { story: null, speak: 80, word: 70, sentence: null },
+    weak: [{ phoneme: 'th', avg: 35, count: 4 }],
+    eventCount: 10,
+  }
+
+  it('is entirely absent with no cloud configured, even when the account genuinely holds another profile', async () => {
+    cloud.configured = false
+    profileStateMock.fetchRemoteProfiles.mockResolvedValue([ACTIVE_PROFILE, SIBLING])
+
+    renderWithRouter(<ParentDashboard />)
+    await flush()
+
+    expect(profileStateMock.fetchRemoteProfiles).not.toHaveBeenCalled()
+    expect(screen.queryByTestId('remote-progress-card')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('remote-view-toggle')).not.toBeInTheDocument()
+  })
+
+  it('never calls fetchRemoteProfiles with no live session — [] would read as "owns nothing", which is not true of "no session"', async () => {
+    cloud.configured = true
+    authMock.currentUserId.mockResolvedValue(null)
+    authMock.isAnonymous.mockResolvedValue(false)
+    authMock.currentEmail.mockResolvedValue(null)
+
+    renderWithRouter(<ParentDashboard />)
+    await flush()
+
+    expect(profileStateMock.fetchRemoteProfiles).not.toHaveBeenCalled()
+    expect(screen.queryByTestId('remote-progress-card')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('remote-progress-unknown')).not.toBeInTheDocument()
+  })
+
+  it('says a remote read failed rather than showing nothing or claiming zero profiles', async () => {
+    cloud.configured = true
+    profileStateMock.fetchRemoteProfiles.mockResolvedValue(null)
+
+    renderWithRouter(<ParentDashboard />)
+    await flush()
+
+    expect(await screen.findByTestId('remote-progress-unknown')).toHaveTextContent('máy chủ chưa trả lời')
+    // Never rendered together: an unknown answer is not "zero remote profiles".
+    expect(screen.queryByTestId('remote-progress-card')).not.toBeInTheDocument()
+  })
+
+  it('shows a sibling profile\'s remote card automatically — the account differs from the active device profile', async () => {
+    cloud.configured = true
+    profileStateMock.fetchRemoteProfiles.mockResolvedValue([ACTIVE_PROFILE, SIBLING])
+    remoteMock.fetchRemoteStats.mockResolvedValue(REMOTE_STATS)
+
+    renderWithRouter(<ParentDashboard />)
+    await flush()
+
+    const cards = await screen.findAllByTestId('remote-profile')
+    expect(cards).toHaveLength(1)
+    expect(cards[0]).toHaveTextContent('Sóc')
+    expect(remoteMock.fetchRemoteStats).toHaveBeenCalledWith('p2')
+    // The active device's own profile is not duplicated here without being asked for.
+    expect(remoteMock.fetchRemoteStats).not.toHaveBeenCalledWith('p1')
+  })
+
+  it('stays quiet when the account holds only the profile already active here, until "Xem từ xa" is pressed', async () => {
+    cloud.configured = true
+    profileStateMock.fetchRemoteProfiles.mockResolvedValue([ACTIVE_PROFILE])
+
+    renderWithRouter(<ParentDashboard />)
+    await flush()
+
+    // Negative, anchored by the positive assertion right after it: the toggle IS there to be pressed.
+    expect(screen.queryByTestId('remote-progress-card')).not.toBeInTheDocument()
+    const toggle = screen.getByTestId('remote-view-toggle')
+    expect(toggle).toHaveAttribute('aria-pressed', 'false')
+
+    remoteMock.fetchRemoteStats.mockResolvedValue(REMOTE_STATS)
+    fireEvent.click(toggle)
+
+    expect(toggle).toHaveAttribute('aria-pressed', 'true')
+    const cards = await screen.findAllByTestId('remote-profile')
+    expect(cards).toHaveLength(1)
+    expect(cards[0]).toHaveTextContent('đang dùng trên máy này')
+    expect(remoteMock.fetchRemoteStats).toHaveBeenCalledWith('p1')
+  })
+
+  it('renders streak, weekly minutes, averages and weak phonemes computed from the fetched events, plus the recordings caveat', async () => {
+    cloud.configured = true
+    profileStateMock.fetchRemoteProfiles.mockResolvedValue([ACTIVE_PROFILE, SIBLING])
+    remoteMock.fetchRemoteStats.mockResolvedValue(REMOTE_STATS)
+
+    renderWithRouter(<ParentDashboard />)
+    await flush()
+
+    const card = (await screen.findAllByTestId('remote-profile'))[0]
+    expect(card).toHaveTextContent('Chuỗi ngày: 3')
+    expect(card).toHaveTextContent('42 phút')
+    expect(card).toHaveTextContent('Nói 80')
+    expect(card).toHaveTextContent('Từ vựng 70')
+    expect(card).toHaveTextContent('/th/ (35)')
+    expect(card).toHaveTextContent('không đồng bộ')
+  })
+
+  it('reports a per-profile fetch failure honestly, never as zero progress', async () => {
+    cloud.configured = true
+    profileStateMock.fetchRemoteProfiles.mockResolvedValue([ACTIVE_PROFILE, SIBLING])
+    remoteMock.fetchRemoteStats.mockResolvedValue(null)
+
+    renderWithRouter(<ParentDashboard />)
+    await flush()
+
+    const card = (await screen.findAllByTestId('remote-profile'))[0]
+    expect(card).toHaveTextContent('Không tải được tiến độ của bé lúc này.')
+    // The failure message and a real (possibly zero) streak line must never coexist.
+    expect(card).not.toHaveTextContent('Chuỗi ngày:')
+  })
+
+  it('shows a real zero honestly once the fetch actually succeeds with no events', async () => {
+    cloud.configured = true
+    profileStateMock.fetchRemoteProfiles.mockResolvedValue([ACTIVE_PROFILE, SIBLING])
+    remoteMock.fetchRemoteStats.mockResolvedValue({
+      streak: 0, weekMinutes: 0, averages: { story: null, speak: null, word: null, sentence: null }, weak: [], eventCount: 0,
+    })
+
+    renderWithRouter(<ParentDashboard />)
+    await flush()
+
+    const card = (await screen.findAllByTestId('remote-profile'))[0]
+    expect(card).toHaveTextContent('Chuỗi ngày: 0')
+    expect(card).toHaveTextContent('Chưa đủ dữ liệu về âm sai')
   })
 })
