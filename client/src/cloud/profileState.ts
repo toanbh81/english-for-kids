@@ -137,6 +137,18 @@ export function listProfiles(): Profile[] {
   return readRoster().profiles
 }
 
+/**
+ * False when the roster is on disk but unreadable — the state in which no writer may touch it.
+ *
+ * Ask this BEFORE spending something that cannot be spent twice. `/api/recover` re-parents the old
+ * profiles and burns the recovery code in one server-side step; if the roster then refuses the
+ * result, the code is gone, the door answers 404 on a retry, and nothing on the device repairs a
+ * damaged roster. Refusing before the call leaves the family exactly one working key.
+ */
+export function rosterIsReadable(): boolean {
+  return !readRoster().damaged
+}
+
 function writeProfiles(profiles: Profile[]): boolean {
   try {
     localStorage.setItem(PROFILES_KEY, JSON.stringify(profiles))

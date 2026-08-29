@@ -3,7 +3,7 @@ import type { FormEvent } from 'react'
 import { Link, Navigate } from 'react-router-dom'
 import { currentAccessToken, currentEmail, signInWithEmail, verifyEmailOtp } from '../cloud/auth'
 import type { Profile } from '../cloud/profileState'
-import { activeProfileId, adoptProfiles, dropProfile, fetchRemoteProfiles, listProfiles, switchProfile } from '../cloud/profileState'
+import { activeProfileId, adoptProfiles, dropProfile, fetchRemoteProfiles, listProfiles, rosterIsReadable, switchProfile } from '../cloud/profileState'
 import { hasMirroredData, pullProfile } from '../cloud/sync'
 import { isCloudConfigured } from '../cloud/supabase'
 import { hasAnyHistory, profileHistory, sumHistory } from '../progress/history'
@@ -331,6 +331,14 @@ export function CloudStart() {
     setBusy(true)
     const token = await currentAccessToken()
     if (!token) { setBusy(false); setError('Chưa có kết nối, thử lại khi có mạng nhé.'); return }
+    // Ask before spending: /api/recover burns the code and re-parents the profiles in one
+    // server-side step, so a roster that cannot receive the result would cost the family their
+    // only key — the retry answers 404, and nothing here repairs a damaged roster.
+    if (!rosterIsReadable()) {
+      setBusy(false)
+      setError('Chưa đọc được danh sách hồ sơ trên máy này, nên chưa dùng mã được. Mã của bạn vẫn còn nguyên — đừng dùng nó ở đâu khác cho tới khi máy này đọc lại được.')
+      return
+    }
     let status: number
     try {
       const res = await fetch('/api/recover', {

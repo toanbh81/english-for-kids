@@ -746,6 +746,22 @@ describe('the recovery-code door', () => {
     await waitFor(() => expect(sync.pullProfile).toHaveBeenCalledWith(SOC))
   })
 
+  it('will not spend the code into a roster that cannot receive it', async () => {
+    // The recovery code is a one-shot key: /api/recover burns it and re-parents the profiles in
+    // one server-side step. If the roster is unreadable the result has nowhere to land, the retry
+    // answers 404, and nothing on the device repairs a damaged roster — so the door must refuse
+    // BEFORE the call, and say plainly that the code is still good.
+    localStorage.setItem('speakup.profiles', '[{"id":"11111111-2222-4333-8444-5555')
+    goToCode()
+    fireEvent.change(screen.getByLabelText(/Mã khôi phục/), { target: { value: 'ABC23XYZ' } })
+    await act(async () => { fireEvent.submit(screen.getByLabelText(/Mã khôi phục/).closest('form')!) })
+    expect(fetch).not.toHaveBeenCalled()
+    expect(screen.getByRole('alert')).toHaveTextContent('Mã của bạn vẫn còn nguyên')
+    expect(sync.pullProfile).not.toHaveBeenCalled()
+    // and the damaged bytes are still on disk for whoever can read them
+    expect(localStorage.getItem('speakup.profiles')).toBe('[{"id":"11111111-2222-4333-8444-5555')
+  })
+
   it('shows the honest reason an already-linked account\'s code is refused', async () => {
     (fetch as ReturnType<typeof vi.fn>).mockResolvedValue(jsonResponse(403, { error: 'Code belongs to a linked account' }))
     goToCode()

@@ -440,7 +440,9 @@ describe('ParentDashboard', () => {
     // Closed below 768…
     expect(summary.closest('details')).not.toHaveAttribute('open')
     // …but never gone: the recording and its play button are still there to be disclosed.
-    expect(screen.getByRole('button', { name: 'Phát' })).toBeInTheDocument()
+    // findBy*, not getBy*: the heading renders synchronously while the row waits on
+    // listRecordings, so a bare get here races the promise and fails under a loaded suite.
+    expect(await screen.findByRole('button', { name: 'Phát' })).toBeInTheDocument()
     expect(screen.getByText('apple')).toBeInTheDocument()
   })
 
