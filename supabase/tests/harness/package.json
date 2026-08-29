@@ -1,0 +1,13 @@
+{
+  "name": "speakup-supabase-harness",
+  "private": true,
+  "type": "module",
+  "description": "Runs supabase/migrations + supabase/tests/rls.test.sql on a throwaway Postgres. Deliberately outside the pnpm workspace so PGlite never reaches the client bundle.",
+  "scripts": {
+    "test": "node run.mjs",
+    "audit": "node run.mjs --audit"
+  },
+  "dependencies": {
+    "@electric-sql/pglite": "^0.5.8"
+  }
+}

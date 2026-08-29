@@ -529,37 +529,115 @@ create policy kv_merge_rules_read on public.kv_merge_rules
 -- Grants — belt as well as braces. RLS already restricts rows; these restrict
 -- the tables themselves, so an unauthenticated `anon` request is refused
 -- before any policy is even consulted.
+--
+-- Read this section as SUBTRACT, then ADD — never as ADD alone. A real
+-- Supabase project ships with
+--
+--     alter default privileges in schema public
+--       grant all on tables, functions, sequences
+--       to postgres, anon, authenticated, service_role;
+--
+-- so every object created above was BORN table-wide-ALL for `anon` and
+-- `authenticated`, and a migration that only grants is a migration that
+-- changes nothing. Two ways that bites, both of which this file used to claim
+-- it had closed:
+--
+--   * TRUNCATE is not a DELETE. No policy is consulted for it, so an inherited
+--     TRUNCATE lets any signed-in device — including a silent anonymous one —
+--     empty every family's table in one statement. RLS cannot help.
+--   * A column grant cannot narrow a table-level one. `grant insert (user_id)`
+--     is decoration while table-level INSERT stands, and with it the client
+--     picks its own recovery code — the oracle the grant was written to
+--     prevent.
+--
+-- Hence: revoke everything from both client roles first, then hand back
+-- exactly what each one needs. Anything not named in the ADD half is denied,
+-- which is what makes the deny cases below true statements rather than hopes.
 -- ---------------------------------------------------------------------------
 
 revoke all on public.profiles, public.events, public.kv,
               public.recovery_codes, public.heartbeat, public.kv_merge_rules
   from public;
 
-do $$
-begin
-  if exists (select 1 from pg_roles where rolname = 'anon') then
-    revoke all on public.profiles, public.events, public.kv,
-                  public.recovery_codes, public.heartbeat, public.kv_merge_rules
-      from anon;
-    revoke execute on function public.merge_kv(uuid, jsonb) from anon;
-  end if;
+-- Functions are executable by PUBLIC by default; make every grant list
+-- explicit instead (the grants to authenticated/service_role are below).
+revoke execute on function public.merge_kv(uuid, jsonb) from public;
+revoke execute on function public.prune_events() from public;
+revoke execute on function public.kv_strategy(text) from public;
+revoke execute on function public.gen_recovery_code() from public;
+revoke execute on function public.clamp_client_ts(bigint) from public;
+revoke execute on function public.clamp_event_ts() from public;
+revoke execute on function public.clamp_kv_updated_at() from public;
+revoke execute on function public.enforce_profile_cap() from public;
+revoke execute on function public.drop_recovery_code_on_link() from public;
+revoke execute on function public.kv_merge_value(text, jsonb, bigint, jsonb, bigint) from public;
 
+do $$
+declare
+  -- Every function this file creates. The client roles lose EXECUTE on all of
+  -- them here and get it back below on the five they actually call; the rest
+  -- are trigger bodies and internals (`prune_events`, `enforce_profile_cap`,
+  -- `drop_recovery_code_on_link`, the two clamps) that a client has no
+  -- business invoking directly.
+  every_function constant text[] := array[
+    'public.merge_kv(uuid, jsonb)',
+    'public.gen_recovery_code()',
+    'public.kv_strategy(text)',
+    'public.clamp_client_ts(bigint)',
+    'public.kv_merge_value(text, jsonb, bigint, jsonb, bigint)',
+    'public.clamp_event_ts()',
+    'public.clamp_kv_updated_at()',
+    'public.enforce_profile_cap()',
+    'public.prune_events()',
+    'public.drop_recovery_code_on_link()'
+  ];
+  client_role text;
+  f text;
+begin
+  -- --- subtract -------------------------------------------------------------
+  -- `revoke all` and not a list of verbs, so this stays right on a Postgres
+  -- that grows another one (MAINTAIN arrived in 17). It also clears column
+  -- grants, which is why the column grant below has to come after it.
+  foreach client_role in array array['anon', 'authenticated'] loop
+    if exists (select 1 from pg_roles where rolname = client_role) then
+      execute format(
+        'revoke all on public.profiles, public.events, public.kv,
+                       public.recovery_codes, public.heartbeat,
+                       public.kv_merge_rules from %I', client_role);
+      foreach f in array every_function loop
+        execute format('revoke all on function %s from %I', f, client_role);
+      end loop;
+    end if;
+  end loop;
+
+  -- --- add back -------------------------------------------------------------
+  -- `anon` is deliberately absent: a device with no session has no reason to
+  -- reach anything here, and the app's "anonymous" users are real GoTrue users
+  -- carrying the `authenticated` role.
   if exists (select 1 from pg_roles where rolname = 'authenticated') then
     grant select, insert, update, delete
       on public.profiles, public.events, public.kv to authenticated;
-    -- Recovery codes are read-only to their owner, and — note the column list —
-    -- a client may insert ONLY the user_id, never the code itself. Letting a
-    -- client choose the code would turn the UNIQUE constraint into an oracle:
-    -- a unique violation would confirm somebody else's code, and that guessing
-    -- game would run entirely inside the database, out of reach of the rate
-    -- limit on /api/recover. With this grant the code can only come from the
-    -- column default, i.e. gen_recovery_code().
+    -- Recovery codes are read-only to their owner, and — note the column list,
+    -- and note that table-level INSERT was revoked a few lines up so this list
+    -- is the whole story — a client may insert ONLY the user_id, never the
+    -- code itself. Letting a client choose the code would turn the UNIQUE
+    -- constraint into an oracle: a unique violation would confirm somebody
+    -- else's code, and that guessing game would run entirely inside the
+    -- database, out of reach of the rate limit on /api/recover. With this
+    -- grant the code can only come from the column default, i.e.
+    -- gen_recovery_code(). There is no UPDATE either: rotation is
+    -- delete-then-insert, so every code is a value the server drew.
     grant select on public.recovery_codes to authenticated;
     grant insert (user_id) on public.recovery_codes to authenticated;
     -- rotate = delete your row, insert a fresh one (see the policies above)
     grant delete on public.recovery_codes to authenticated;
+    -- The merge contract is public knowledge, so it is readable — but only
+    -- readable. A client that could flip 'stars' from 'max' to 'lww' could
+    -- erase a child's earned stars with one stale write, for every family at
+    -- once. (merge_kv itself does not need this grant: kv_strategy is
+    -- SECURITY DEFINER precisely so the rules can be read without one.)
     grant select on public.kv_merge_rules to authenticated;
-    revoke all on public.heartbeat from authenticated;
+    -- heartbeat is granted back to nobody: it is the cron's alone.
     grant execute on function public.merge_kv(uuid, jsonb) to authenticated;
     grant execute on function public.gen_recovery_code() to authenticated;
     -- merge_kv runs as the CALLER (that is what makes RLS protect it), so the
@@ -588,18 +666,14 @@ begin
 end
 $$;
 
--- Functions are executable by PUBLIC by default; make every grant list
--- explicit instead (the grants to authenticated/service_role are above).
-revoke execute on function public.merge_kv(uuid, jsonb) from public;
-revoke execute on function public.prune_events() from public;
-revoke execute on function public.kv_strategy(text) from public;
-revoke execute on function public.gen_recovery_code() from public;
-revoke execute on function public.clamp_client_ts(bigint) from public;
-revoke execute on function public.clamp_event_ts() from public;
-revoke execute on function public.clamp_kv_updated_at() from public;
-revoke execute on function public.enforce_profile_cap() from public;
-revoke execute on function public.drop_recovery_code_on_link() from public;
-revoke execute on function public.kv_merge_value(text, jsonb, bigint, jsonb, bigint) from public;
+-- This migration creates no sequences (every key is a uuid, a client
+-- timestamp or a text id), so the project's default privileges on sequences
+-- have nothing to hand out here. If a later migration adds one — a bigserial,
+-- an identity column — it will be born ALL-to-anon-and-authenticated like the
+-- tables above, and it will need the same subtract-then-add treatment.
+-- supabase/tests/rls.test.sql asserts that the set of client privileges in
+-- this schema is exactly the set above, so a new object cannot slip in
+-- unnoticed.
 
 -- ---------------------------------------------------------------------------
 -- Resetting a child's progress

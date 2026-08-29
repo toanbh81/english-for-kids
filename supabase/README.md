@@ -13,6 +13,7 @@ Spec: `docs/superpowers/specs/2026-08-29-phase11-cloud-profiles-design.md`.
 | --- | --- |
 | `migrations/0001_profiles_sync.sql` | Schema, RLS policies, the `merge_kv` RPC, the 2000-event prune trigger. Idempotent — safe to re-run. |
 | `tests/rls.test.sql` | The policy and merge tests. One transaction, ends in `ROLLBACK`, leaves no rows. |
+| `tests/harness/` | Runs both of the above on a throwaway Postgres (PGlite). No Docker, no project, no keys. |
 
 ## Applying it
 
@@ -29,6 +30,13 @@ create two throwaway users inside a transaction and roll back, so running them
 against the real project is safe. (If `auth.users` rejects the fixture insert on
 a future Supabase version, add whatever column it names — the fixture already
 spells out `instance_id`, `aud` and `role`.)
+
+Re-pasting the whole file is also how you *repair* a project that was set up
+from an older copy of it: every privilege statement in it revokes before it
+grants, so a re-run converges on the intended set rather than adding to
+whatever is already there. Apply it as `postgres` — the SQL editor does — or
+the `auth.users` trigger cannot be created and the migration says so with a
+warning rather than an error.
 
 ## Environment variables
 
@@ -60,6 +68,13 @@ off a profile. So a single rule, *"the profile's owner is `auth.uid()`"*,
 protects every row, and it is enforced by RLS in the database rather than by
 any check in the client. `heartbeat` has RLS on and no policy at all: only the
 service role can touch it. There are no public reads anywhere in this phase.
+
+RLS is the rule about *rows*; the grants underneath it are the rule about
+*verbs*, and they are not redundant. RLS is never consulted for a `TRUNCATE`,
+and a column grant is inert while the table-level grant it was meant to narrow
+still stands — so the migration revokes everything from `anon` and
+`authenticated` before granting anything back, and `tests/rls.test.sql` ends by
+asserting that the two roles hold exactly that set and nothing more.
 
 ## The kv merge contract
 
@@ -181,23 +196,31 @@ injected.
 
 ## Running the SQL tests locally without a project
 
-`tests/rls.test.sql` needs Supabase's `auth` schema and the `anon` /
-`authenticated` roles. Against a bare Postgres, create a stand-in first:
-
-```sql
-create role anon nologin;
-create role authenticated nologin;
-create role service_role nologin bypassrls;
-create schema if not exists auth;
-create table auth.users (id uuid primary key, instance_id uuid, aud varchar(255),
-                         role varchar(255), email text unique,
-                         is_anonymous boolean not null default false,
-                         created_at timestamptz not null default now());
-create or replace function auth.uid() returns uuid language sql stable as $$
-  select nullif(current_setting('request.jwt.claims', true)::jsonb ->> 'sub', '')::uuid;
-$$;
-grant usage on schema auth to anon, authenticated, service_role;
+```sh
+cd supabase/tests/harness
+pnpm install --ignore-workspace
+node run.mjs
 ```
 
-…then run the migration and the test file. (`supabase start` gives you the real
-thing instead, if Docker is available.)
+That applies the migration, applies it twice more (re-runnability is the repair
+path for a live project, so it is tested rather than assumed) and runs
+`tests/rls.test.sql`, ending in one `PASS`/`FAIL` line. `node run.mjs --audit`
+also prints everything `anon` and `authenticated` hold in `public`.
+(`supabase start` gives you the real thing instead, if Docker is available.)
+
+`tests/harness/shim.sql` is the stand-in for the project: the three roles, the
+`auth` schema, `auth.uid()` — **and the default privileges a real project
+already has**. That last part is not decoration. Supabase ships with
+
+```sql
+alter default privileges in schema public
+  grant all on tables to postgres, anon, authenticated, service_role;
+```
+
+(and the same for functions and sequences), so every object a migration creates
+here is *born* with `ALL` for the client roles. A migration that only grants
+therefore changes nothing; `0001` revokes from `anon` and `authenticated`
+first and then hands back exactly what each needs. A shim without those lines
+made three real holes invisible — `TRUNCATE` on every family's rows (RLS never
+sees a `TRUNCATE`), a writable `kv_merge_rules`, and a client free to choose
+its own recovery code. See `tests/harness/README.md`.

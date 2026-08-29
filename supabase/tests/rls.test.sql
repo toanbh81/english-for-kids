@@ -563,9 +563,10 @@ end $$;
 -- ---------------------------------------------------------------------------
 set local role anon;
 do $$
-declare t text;
+declare t text; f text;
 begin
-  foreach t in array array['profiles', 'events', 'kv', 'recovery_codes', 'heartbeat'] loop
+  foreach t in array array['profiles', 'events', 'kv', 'recovery_codes',
+                           'heartbeat', 'kv_merge_rules'] loop
     begin
       execute format('select 1 from public.%I limit 1', t);
       assert false, 'SECURITY FAIL: the anon role can read ' || t;
@@ -573,11 +574,22 @@ begin
     end;
   end loop;
 
-  begin
-    perform public.merge_kv('aaaaaaaa-0000-4000-8000-000000000001', '[]'::jsonb);
-    assert false, 'SECURITY FAIL: the anon role can call merge_kv';
-  exception when insufficient_privilege then null;
-  end;
+  -- Not one function in this schema, not just merge_kv. A session-less request
+  -- has no business anywhere here, and gen_recovery_code() in particular would
+  -- otherwise be a free code generator for anyone at all.
+  foreach f in array array[
+    'public.merge_kv(''aaaaaaaa-0000-4000-8000-000000000001''::uuid, ''[]''::jsonb)',
+    'public.gen_recovery_code()',
+    'public.kv_strategy(''stars'')',
+    'public.clamp_client_ts(1::bigint)',
+    'public.kv_merge_value(''max'', ''{}''::jsonb, 1::bigint, ''{}''::jsonb, 2::bigint)'
+  ] loop
+    begin
+      execute format('select %s', f);
+      assert false, 'SECURITY FAIL: the anon role can call ' || f;
+    exception when insufficient_privilege then null;
+    end;
+  end loop;
 end $$;
 
 set local role authenticated;
@@ -604,6 +616,70 @@ begin
     assert false, 'SECURITY FAIL: a user turned the star rule into LWW';
   exception when insufficient_privilege then null;
   end;
+  begin
+    delete from public.kv_merge_rules where prefix = 'stars';
+    assert false, 'SECURITY FAIL: a user deleted the star rule '
+                  '(the default is LWW, so deleting it IS turning stars off)';
+  exception when insufficient_privilege then null;
+  end;
+end $$;
+
+-- ---------------------------------------------------------------------------
+-- 9b. TRUNCATE is not a DELETE.
+--     No policy is consulted for it, so RLS says nothing here and the table
+--     grant is the only thing in the way. A project's default privileges hand
+--     `authenticated` TRUNCATE on every new table unless the migration revokes
+--     it, and one statement from any signed-in device — including a silent
+--     anonymous one — would then empty every family's rows at once. This is
+--     the single most destructive thing a client could do to this database,
+--     so it gets its own section.
+-- ---------------------------------------------------------------------------
+do $$
+declare t text;
+begin
+  foreach t in array array['profiles', 'events', 'kv', 'recovery_codes',
+                           'heartbeat', 'kv_merge_rules'] loop
+    begin
+      -- CASCADE, so that a refusal is the grant talking and not the foreign
+      -- keys hanging off profiles.
+      execute format('truncate table public.%I cascade', t);
+      assert false, 'SECURITY FAIL: an authenticated user truncated ' || t
+                    || ' — every family''s rows, in one statement, past RLS';
+    exception when insufficient_privilege then null;
+    end;
+  end loop;
+end $$;
+
+-- ---------------------------------------------------------------------------
+-- 9c. The plumbing is not an API.
+--     Trigger bodies and the internal maintenance functions are executable by
+--     PUBLIC the moment they are created, and by anon/authenticated on top of
+--     that on a real project. `insufficient_privilege` and nothing else is the
+--     pass here: a trigger function that a client MAY execute refuses with
+--     `feature_not_supported` instead, which looks like a denial and is not
+--     one — it is the function declining the calling convention, not the
+--     database declining the caller.
+-- ---------------------------------------------------------------------------
+do $$
+declare f text;
+begin
+  foreach f in array array[
+    'public.prune_events()',
+    'public.enforce_profile_cap()',
+    'public.drop_recovery_code_on_link()',
+    'public.clamp_event_ts()',
+    'public.clamp_kv_updated_at()'
+  ] loop
+    begin
+      execute format('select %s', f);
+      assert false, 'SECURITY FAIL: a client called ' || f || ' directly';
+    exception
+      when insufficient_privilege then null;
+      when feature_not_supported then
+        assert false, 'SECURITY FAIL: a client holds EXECUTE on ' || f
+                      || ' (it refused as a trigger, not as a privilege)';
+    end;
+  end loop;
 end $$;
 
 -- ---------------------------------------------------------------------------
@@ -639,6 +715,86 @@ begin
     and relname in ('profiles', 'events', 'kv', 'recovery_codes', 'heartbeat', 'kv_merge_rules')
     and not relrowsecurity;
   assert unprotected is null, 'SECURITY FAIL: row level security is off on: ' || unprotected;
+end $$;
+
+-- ---------------------------------------------------------------------------
+-- 11. The inventory: what the two client roles hold in `public`, all of it.
+--
+-- The sections above probe the holes we know about. This one exists because of
+-- the ones we did not: a real project's default privileges hand every NEW
+-- object in this schema to `anon` and `authenticated` with ALL, so the next
+-- table, sequence or function added here arrives wide open and every targeted
+-- test above keeps passing. So instead of listing what must be denied, list
+-- what may be allowed and fail on anything else — including on an object this
+-- migration never created, because such an object is wide open too and that is
+-- itself the finding.
+-- ---------------------------------------------------------------------------
+do $$
+declare
+  -- role | object | privilege. Nothing for `anon`: a request with no session
+  -- reaches nothing here at all.
+  allowed constant text[] := array[
+    'authenticated|table profiles|SELECT',
+    'authenticated|table profiles|INSERT',
+    'authenticated|table profiles|UPDATE',
+    'authenticated|table profiles|DELETE',
+    'authenticated|table events|SELECT',
+    'authenticated|table events|INSERT',
+    'authenticated|table events|UPDATE',
+    'authenticated|table events|DELETE',
+    'authenticated|table kv|SELECT',
+    'authenticated|table kv|INSERT',
+    'authenticated|table kv|UPDATE',
+    'authenticated|table kv|DELETE',
+    -- read your own code, throw it away; the code column is not insertable and
+    -- there is no UPDATE, so a code is always one gen_recovery_code() drew
+    'authenticated|table recovery_codes|SELECT',
+    'authenticated|table recovery_codes|DELETE',
+    'authenticated|column recovery_codes.user_id|INSERT',
+    -- the merge contract is public knowledge; writing it is erasing stars
+    'authenticated|table kv_merge_rules|SELECT',
+    -- merge_kv is SECURITY INVOKER so RLS protects it, which is why its pure
+    -- helpers have to be callable too
+    'authenticated|function merge_kv|EXECUTE',
+    'authenticated|function gen_recovery_code|EXECUTE',
+    'authenticated|function kv_strategy|EXECUTE',
+    'authenticated|function clamp_client_ts|EXECUTE',
+    'authenticated|function kv_merge_value|EXECUTE'
+  ];
+  extra text;
+begin
+  select string_agg(h.role || ' holds ' || h.priv || ' on ' || h.obj, '; ' order by h.obj, h.priv)
+    into extra
+  from (
+    select pg_get_userbyid(a.grantee) as role,
+           'table ' || c.relname as obj,
+           a.privilege_type as priv
+    from pg_class c
+    cross join lateral aclexplode(coalesce(c.relacl, acldefault('r', c.relowner))) a
+    where c.relnamespace = 'public'::regnamespace
+      and c.relkind in ('r', 'p', 'v', 'm', 'f', 'S')
+    union all
+    select pg_get_userbyid(a.grantee),
+           'column ' || c.relname || '.' || at.attname,
+           a.privilege_type
+    from pg_attribute at
+    join pg_class c on c.oid = at.attrelid
+    cross join lateral aclexplode(at.attacl) a
+    where c.relnamespace = 'public'::regnamespace
+    union all
+    select pg_get_userbyid(a.grantee),
+           'function ' || p.proname,
+           a.privilege_type
+    from pg_proc p
+    cross join lateral aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) a
+    where p.pronamespace = 'public'::regnamespace
+  ) h
+  where h.role in ('anon', 'authenticated')
+    and (h.role || '|' || h.obj || '|' || h.priv) <> all (allowed);
+
+  assert extra is null,
+    'SECURITY FAIL: privileges nobody asked for (a default-privilege inheritance '
+    'that the migration did not revoke, or a new object born wide open): ' || extra;
 end $$;
 
 select 'ALL RLS + MERGE TESTS PASSED' as result;
