@@ -988,21 +988,41 @@ variables, commented, so a fresh clone shows what exists without turning any of 
 
 ### Applying the migration and running the RLS tests
 
-```bash
-supabase db push          # from the repo root, once `supabase link` has been run
+**The verified path is the SQL editor.** Open the project's SQL editor and paste the whole of
+`supabase/migrations/0001_profiles_sync.sql` (run it as `postgres` — a lesser role cannot create the
+trigger that drops a recovery code the moment its account gets an email, and the migration says so
+with a warning rather than failing silently), then paste and run `supabase/tests/rls.test.sql`.
+
+**On a stock project, that first run of `rls.test.sql` FAILS — expect that, it is not broken.** It
+names one of Supabase's own platform objects: `PUBLIC holds EXECUTE on function rls_auto_enable;
+anon holds EXECUTE on function rls_auto_enable; authenticated holds EXECUTE on function
+rls_auto_enable`. This finding is untidy, not exploitable (Postgres refuses to call an event-trigger
+function directly, no matter who holds `EXECUTE` on it — `supabase/README.md` has the full two-sided
+proof), and the fix is one statement, run once as `postgres`:
+
+```sql
+revoke all on function public.rls_auto_enable() from public, anon, authenticated;
 ```
 
-Without the CLI: paste the whole of `supabase/migrations/0001_profiles_sync.sql` into the project's
-SQL editor and run it (as `postgres` — a lesser role cannot create the trigger that drops a recovery
-code the moment its account gets an email, and the migration says so with a warning rather than
-failing silently), then paste and run `supabase/tests/rls.test.sql`, which ends in
-`ALL RLS + MERGE TESTS PASSED`. Re-pasting the migration file is also how you *repair* a project set
-up from an older copy of it — every grant in it revokes before it grants, so a re-run converges on
-the intended privilege set instead of adding to whatever is already there. **Expect two named,
-harmless findings the first time you run the RLS tests against a real project** (Supabase's own
-`rls_auto_enable()` platform function, and possibly `authenticated` holding `CREATE` on schema
-`public` on an older project template) — both are explained, with their one-line fixes, in
-`supabase/README.md`.
+Paste and run `rls.test.sql` again — it now ends in `ALL RLS + MERGE TESTS PASSED`.
+
+**A second finding can also appear, on an older project template, and it is not harmless:**
+`authenticated holds CREATE on schema public`. With `CREATE`, a client can build its own table or
+function in `public`, which reopens the `TRIGGER` and `REFERENCES` routes this migration otherwise
+closes — treat this one at its real severity, not as tidiness. Fix the same way, once as `postgres`:
+
+```sql
+revoke create on schema public from anon, authenticated;
+```
+
+Re-pasting the migration file is also how you *repair* a project set up from an older copy of it —
+every grant in it revokes before it grants, so a re-run converges on the intended privilege set
+instead of adding to whatever is already there.
+
+(Supabase's own CLI documents a `supabase link` + `supabase db push` route instead of the SQL editor.
+This repo has no `config.toml` committed and `supabase init` has never been run here, so that route
+is not verified end to end against this project and is not asserted as tested — the SQL-editor path
+above is the one every finding in this section was actually produced against.)
 
 ### Running the schema tests without a project
 
@@ -1051,11 +1071,16 @@ exactly as true, limits included:
 
 - **Nothing is safe until a parent links an email.** Before that, progress is mirrored to an
   anonymous account the moment the device is online, but the *only* way back onto a wiped device is
-  an 8-character recovery code shown once, in the parent screen, with "chụp màn hình lại nhé" — lose
-  the screenshot and lose the code, and there is no other way in. A dismissible banner appears on
-  Home once a device reaches a 3-day streak while still unlinked, and it says exactly this much —
-  "Tiến độ mới lưu trên máy này — nhờ bố mẹ liên kết email để giữ an toàn" — never that anything has
-  already been lost, and never that it is safer than it is.
+  an 8-character recovery code — visible any time the parent screen is open while the account is
+  still unlinked ("chụp màn hình lại nhé" is a nudge to screenshot it, not a claim it is only shown
+  once). Link an email and the code is gone for good: a database trigger deletes it the instant the
+  account gains one, because from that moment the email is the way back in and a screenshot able to
+  take the family's account over would be a standing risk. So the honest statement is narrower than
+  "shown once" — it is **lose this device, with no screenshot taken, before an email is linked, and
+  the code is lost too.** A dismissible banner appears on Home once a device reaches a 3-day streak
+  while still unlinked, and it says exactly this much — "Tiến độ mới lưu trên máy này — nhờ bố mẹ
+  liên kết email để giữ an toàn" — never that anything has already been lost, and never that it is
+  safer than it is.
 - **A non-installed Safari PWA loses ALL of its storage after 7 days unused.** This is WebKit's
   Intelligent Tracking Prevention, it has nothing to do with Supabase, and it fires whether or not a
   cloud project even exists — it is a fact about `localStorage` on an un-installed site, not about
@@ -1102,13 +1127,18 @@ Verified both ways by building each way and inspecting the output:
 | Build | `dist/assets/cloud-vendor-*.js` emitted? | Listed in `dist/sw.js`'s precache manifest? |
 | --- | --- | --- |
 | `client/.env` present (configured) | Yes, 209.36 kB | **Yes** — 207 precache entries, 3365.56 KiB |
-| `client/.env` absent (unconfigured) | Yes, 209.36 kB (same chunk, same content) | **No** — 206 precache entries, 3160.97 KiB |
+| `client/.env` absent (unconfigured) | Yes, 209.36 kB (same library code) | **No** — 206 precache entries, 3160.97 KiB |
 
 The chunk is still built either way (a configured device that later has its env vars added back, or
 a QA build, must still be able to fetch it on demand); it is precached — downloaded on install, before
-anyone has asked for it — only in a build that can actually reach the `import()` that needs it. The
-main chunk contains no `SupabaseClient`/`GoTrueClient` symbol in either build, confirming the code
-split is real and not just the naming.
+anyone has asked for it — only in a build that can actually reach the `import()` that needs it. **The
+two builds' `cloud-vendor-*.js` files are not byte-identical** — diffed directly, they differ in
+exactly 8 bytes: the chunk imports shared runtime helpers back from the main chunk, and the main
+chunk's own content-hashed filename differs between the two builds, so the import specifier embedded
+in `cloud-vendor` differs too. Same `@supabase/supabase-js` code either way, different file, different
+hash, different name — which is also *why* each build needs its own precache entry rather than one
+being able to stand in for the other. The main chunk contains no `SupabaseClient`/`GoTrueClient`
+symbol in either build, confirming the code split is real and not just the naming.
 
 ### The kv merge contract, in one line
 
@@ -1127,14 +1157,14 @@ OTP email.
 
 | # | Step | Expected result | Result |
 |---|------|------------------|--------|
-| 69 | Home → "👨‍👩‍👧 Phụ huynh" → answer the math gate → "Tài khoản" card → enter a parent email → submit → enter the 6-digit code from the inbox | The email now shows next to "Đăng xuất"; the recovery-code box (visible before linking) is gone; the sync line still updates normally | ⏳ pending |
-| 70 | Before doing anything else: Parent Dashboard → "Tài khoản" → screenshot the 8-character recovery code | Code shown once, labelled "chụp màn hình lại nhé" — there is no menu item to see it again later | ⏳ pending |
-| 71 (cross-device) | On a SECOND device (or a private window): open the app, answer the math gate, open "Tài khoản" → "Xem từ xa" → sign in with the SAME linked email + OTP | A card appears per profile the account owns — including one this second device has never opened — showing streak, week minutes, per-kind averages and weak phonemes, plus a line stating recordings never sync | ⏳ pending |
+| 69 | While the device is still anonymous/unlinked: Home → "👨‍👩‍👧 Phụ huynh" → answer the math gate → "Tài khoản" card → note and screenshot the 8-character recovery code shown there | The code renders every time this card is open while the account is unlinked — nothing marks it "already shown"; screenshot it now anyway, since linking (next row) removes it for good | ⏳ pending |
+| 70 | Same screen, right after: enter a parent email → submit → enter the 6-digit code from the inbox | The email now shows next to "Đăng xuất"; the recovery-code box from row 69 is gone — a trigger deletes it the instant the account gains an email; the sync line still updates normally | ⏳ pending |
+| 71 (cross-device) | On a SECOND device (or a private window): open the app, tap "Đã dùng Speak Up rồi?" → "Tôi có email đã liên kết" → the SAME linked email → the 6-digit code from the inbox → (a profile picker appears if the account owns more than one profile — pick any) | The device switches to the picked profile with its progress pulled down; from Home, answer the math gate → Parent Dashboard already shows a card for any OTHER profile the account owns, with no toggle needed — press "Xem từ xa" to additionally show THIS device's own active child's server-side numbers, for comparing them against the local ones above | ⏳ pending |
 | 72 (cache wipe, linked) | On the FIRST device: note today's stars/streak, then clear all site data (iPad Safari: Settings → Safari → Advanced → Website Data → Speak Up) and reload | Fresh-install screen; tap "Đã dùng Speak Up rồi?" → "Tôi có email đã liên kết" → the same email → OTP → (a profile picker if the account has more than one child) → the same stars/streak reappear | ⏳ pending |
 | 73 (cache wipe, not linked) | On a device that has never linked an email: screenshot its recovery code (Parent Dashboard → "Tài khoản"), note its stars/streak, then clear all site data and reload | "Đã dùng Speak Up rồi?" → "Tôi có mã khôi phục" → the 8-character code → the same stars/streak reappear; trying the same code again afterwards fails with "Không tìm thấy mã này" | ⏳ pending |
-| 74 (two profiles, one iPad) | Parent Dashboard → "+ Thêm hồ sơ" to add a second child, then reload the app | "Ai đang học nào? 👋" — an avatar picker — appears before anything else loads; tapping a face opens that child's own stars/streak, untouched by the other child's | ⏳ pending |
+| 74 (two profiles, one iPad) | Parent Dashboard → "+ Thêm hồ sơ" to add a second child, then open the app again **in a fresh tab/window** (a same-tab reload keeps this device's "already chosen" mark for up to 5 minutes and would skip the picker) | "Ai đang học nào? 👋" — an avatar picker — appears before anything else loads; tapping a face opens that child's own stars/streak, untouched by the other child's | ⏳ pending |
 | 75 (offline honesty) | Turn Wi-Fi off, use the app for a few minutes, open Parent Dashboard | Sync line reads "Ngoại tuyến", never "Đã đồng bộ ✓", while offline; turning Wi-Fi back on and reopening the dashboard eventually shows "Đã đồng bộ ✓" | ⏳ pending |
-| 76 (milestone banner) | On a device that has never linked an email, reach a 3-day streak | Home shows a dismissible banner — "Tiến độ mới lưu trên máy này — nhờ bố mẹ liên kết email để giữ an toàn" — linking to Parent Dashboard | ⏳ pending |
+| 76 (milestone banner) | On a device that has never linked an email, reach a 3-day streak (a multi-day drill — the app offers no way to fast-forward it) | Home shows a dismissible banner — "Tiến độ mới lưu trên máy này — nhờ bố mẹ liên kết email để giữ an toàn" — linking to Parent Dashboard | ⏳ pending |
 
 ## Architecture
 

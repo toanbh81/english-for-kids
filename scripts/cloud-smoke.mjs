@@ -119,6 +119,23 @@ function anonHint(error) {
   return msg
 }
 
+/**
+ * Sign in anonymously and record the account for cleanup the MOMENT an id exists — before any
+ * further assertion about it. `finally` only ever deletes what is in `createdUsers`, so recording
+ * has to happen before the first thing that can throw, or a failed assertion here leaks a real,
+ * already-created account in the family's own project — the one outcome this whole script exists
+ * to avoid. One function for both families, so this ordering cannot drift out of sync between them.
+ */
+async function signInAnonymously(sb, label, createdUsers) {
+  const { data, error } = await sb.auth.signInAnonymously()
+  if (error) throw new Error(anonHint(error))
+  const id = data?.user?.id
+  if (id) createdUsers.push({ label, id })
+  if (!id) throw new Error('no user id came back')
+  if (data.user.is_anonymous !== true) throw new Error('signed-in user is not anonymous')
+  return data.user
+}
+
 async function mergeKv(sb, profile, key, value, updated_at) {
   const { error } = await sb.rpc('merge_kv', { profile, entries: [{ key, value, updated_at }] })
   if (error) throw new Error(error.message)
@@ -152,12 +169,7 @@ async function main() {
 
   try {
     const okA = await step('1. anonymous sign-in (family A)', async () => {
-      const { data, error } = await sbA.auth.signInAnonymously()
-      if (error) throw new Error(anonHint(error))
-      if (!data?.user?.id) throw new Error('no user id came back')
-      if (data.user.is_anonymous !== true) throw new Error('signed-in user is not anonymous')
-      userA = data.user
-      createdUsers.push({ label: 'family A', id: userA.id })
+      userA = await signInAnonymously(sbA, 'family A', createdUsers)
       return `user ${userA.id}`
     })
 
@@ -234,10 +246,7 @@ async function main() {
     })
 
     const okB = await step('6. anonymous sign-in (family B)', async () => {
-      const { data, error } = await sbB.auth.signInAnonymously()
-      if (error) throw new Error(anonHint(error))
-      userB = data.user
-      createdUsers.push({ label: 'family B', id: userB.id })
+      userB = await signInAnonymously(sbB, 'family B', createdUsers)
       return `user ${userB.id}`
     })
 

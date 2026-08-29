@@ -1,5 +1,6 @@
 import { defineConfig } from 'vitest/config'
 import { loadEnv } from 'vite'
+import { fileURLToPath } from 'node:url'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 import basicSsl from '@vitejs/plugin-basic-ssl'
@@ -12,7 +13,15 @@ export default defineConfig(({ mode }) => {
   // because Vite bakes `import.meta.env.VITE_*` into the bundle once and for all, so whatever this
   // says is what that check will keep saying for the life of this build. It decides one thing
   // below: whether the `@supabase/supabase-js` chunk is worth precaching.
-  const cloudEnv = loadEnv(mode, process.cwd(), 'VITE_')
+  //
+  // `loadEnv`'s second argument is the directory it reads `.env` files from — this file's own
+  // directory (`client/`), resolved from `import.meta.url` rather than `process.cwd()`, the same
+  // "resolve against where this file lives, not wherever it happened to be invoked from" rule
+  // `scripts/gen-audio.mjs` already applies to itself. Every current invocation (`pnpm --dir client
+  // build`, `vite build` from inside `client/`) has cwd === this directory anyway, so this changes
+  // nothing observable today; it just stops being an assumption.
+  const clientDir = fileURLToPath(new URL('.', import.meta.url))
+  const cloudEnv = loadEnv(mode, clientDir, 'VITE_')
   const cloudConfigured = !!cloudEnv.VITE_SUPABASE_URL?.trim() && !!cloudEnv.VITE_SUPABASE_ANON_KEY?.trim()
 
   return {
