@@ -1,9 +1,30 @@
-import { render, screen, within } from '@testing-library/react'
+import { act, render, screen, within } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import type { TopicId } from '../content/topics'
 import { findTopic } from '../content/words'
 import { dayKey, logActivity } from '../progress/activity'
 import { getLesson } from '../progress/lesson'
+
+// Every existing test in this file predates Phase 11 and expects the byte-identical, no-cloud
+// app — so the default here is "unconfigured", exactly like a contributor's clone with no
+// Supabase env vars. `client/.env` in THIS sandbox carries real project keys (they are
+// public-by-design, safe to commit to a working copy, but not to lean on in a unit test), so the
+// mock is what keeps these tests hermetic regardless of what is on disk. Only the describe blocks
+// below that are actually about the cloud UI flip `cloud.configured`.
+const cloud = vi.hoisted(() => ({ configured: false }))
+vi.mock('../cloud/supabase', () => ({ isCloudConfigured: () => cloud.configured }))
+
+// Home reads `isAnonymous` itself; the other three are what the REAL `cloud/profileState` imports
+// (Home asks it for the roster now), stubbed so a future caller gets a no-op rather than vitest's
+// "no export defined on the mock" from somewhere unrelated.
+const auth = vi.hoisted(() => ({
+  isAnonymous: vi.fn(async () => true),
+  currentUserId: vi.fn(async () => null),
+  ensureRecoveryCode: vi.fn(async () => null),
+  startAnonymousSession: vi.fn(async () => undefined),
+}))
+vi.mock('../cloud/auth', () => auth)
+
 import { Home } from './Home'
 
 const NOW = new Date('2026-08-23T10:00:00').getTime()
@@ -59,6 +80,8 @@ function unlockAllTopics() {
 
 beforeEach(() => {
   localStorage.clear()
+  cloud.configured = false
+  auth.isAnonymous.mockResolvedValue(true)
   vi.useFakeTimers({ now: new Date(NOW) })
 })
 
@@ -184,6 +207,256 @@ it('does not show the time-limit banner under the limit', () => {
   renderHome()
 
   expect(screen.queryByTestId('limit-banner')).not.toBeInTheDocument()
+})
+
+describe('Phase 11: the milestone banner', () => {
+  function seedThreeDayStreak() {
+    seedDoneDay(NOW - 2 * DAY_MS)
+    seedDoneDay(NOW - DAY_MS)
+    seedDoneDay(NOW)
+  }
+
+  it('stays hidden with no cloud configured, however long the streak', async () => {
+    cloud.configured = false
+    seedThreeDayStreak()
+
+    renderHome()
+    await act(async () => { await Promise.resolve() })
+
+    expect(screen.queryByTestId('milestone-banner')).not.toBeInTheDocument()
+  })
+
+  it('appears after a 3-day streak on a device nobody has linked yet, and can be dismissed', async () => {
+    cloud.configured = true
+    auth.isAnonymous.mockResolvedValue(true)
+    seedThreeDayStreak()
+
+    renderHome()
+    await act(async () => { await Promise.resolve() })
+    expect(screen.getByTestId('milestone-banner')).toHaveTextContent('Tiến độ mới lưu trên máy này')
+    expect(screen.getByRole('link', { name: 'liên kết email' })).toHaveAttribute('href', '/parent')
+
+    act(() => { screen.getByLabelText('Đóng thông báo liên kết email').click() })
+    expect(screen.queryByTestId('milestone-banner')).not.toBeInTheDocument()
+  })
+
+  it('does not claim more safety than exists once the parent has already linked', async () => {
+    cloud.configured = true
+    auth.isAnonymous.mockResolvedValue(false)
+    seedThreeDayStreak()
+
+    renderHome()
+    await act(async () => { await Promise.resolve() })
+
+    expect(screen.queryByTestId('milestone-banner')).not.toBeInTheDocument()
+  })
+
+  it('stays dismissed across a remount', async () => {
+    cloud.configured = true
+    auth.isAnonymous.mockResolvedValue(true)
+    seedThreeDayStreak()
+    localStorage.setItem('speakup.cloud.bannerDismissed', '1')
+
+    renderHome()
+    await act(async () => { await Promise.resolve() })
+
+    expect(screen.queryByTestId('milestone-banner')).not.toBeInTheDocument()
+  })
+})
+
+describe('Phase 11: the Add-to-Home-Screen nudge', () => {
+  const originalUA = window.navigator.userAgent
+
+  function setUserAgent(ua: string) {
+    Object.defineProperty(window.navigator, 'userAgent', { value: ua, configurable: true })
+  }
+
+  afterEach(() => {
+    setUserAgent(originalUA)
+    delete (window.navigator as Navigator & { standalone?: boolean }).standalone
+  })
+
+  it('nudges an un-installed iPad Safari, independent of the cloud', () => {
+    cloud.configured = false
+    setUserAgent('Mozilla/5.0 (iPad; CPU OS 17_0 like Mac OS X) AppleWebKit/605.1.15 Safari/604.1')
+
+    renderHome()
+
+    expect(screen.getByTestId('a2hs-banner')).toHaveTextContent('Thêm Speak Up! vào Màn hình chính')
+  })
+
+  it('stays quiet once the app is already installed', () => {
+    setUserAgent('Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 Safari/604.1')
+    ;(window.navigator as Navigator & { standalone?: boolean }).standalone = true
+
+    renderHome()
+
+    expect(screen.queryByTestId('a2hs-banner')).not.toBeInTheDocument()
+  })
+
+  it('says nothing on a platform the WebKit 7-day wipe does not apply to', () => {
+    setUserAgent('Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 Chrome/120.0')
+
+    renderHome()
+
+    expect(screen.queryByTestId('a2hs-banner')).not.toBeInTheDocument()
+  })
+
+  it('is dismissible, once, for good', () => {
+    setUserAgent('Mozilla/5.0 (iPad; CPU OS 17_0 like Mac OS X) AppleWebKit/605.1.15 Safari/604.1')
+
+    renderHome()
+    act(() => { screen.getByTestId('a2hs-banner').querySelector('button')!.click() })
+    expect(screen.queryByTestId('a2hs-banner')).not.toBeInTheDocument()
+
+    renderHome()
+    expect(screen.queryByTestId('a2hs-banner')).not.toBeInTheDocument()
+  })
+})
+
+describe('Phase 11: "Đã dùng Speak Up rồi?"', () => {
+  it('offers the restore door on a fresh device with cloud configured', () => {
+    cloud.configured = true
+
+    renderHome()
+
+    expect(screen.getByRole('link', { name: 'Đã dùng Speak Up rồi?' })).toHaveAttribute('href', '/start')
+  })
+
+  it('stays hidden with no cloud configured', () => {
+    cloud.configured = false
+
+    renderHome()
+
+    expect(screen.queryByRole('link', { name: 'Đã dùng Speak Up rồi?' })).not.toBeInTheDocument()
+  })
+
+  it('disappears once the child has made any progress', () => {
+    cloud.configured = true
+    completeLesson(NOW, 1)
+
+    renderHome()
+
+    expect(screen.queryByRole('link', { name: 'Đã dùng Speak Up rồi?' })).not.toBeInTheDocument()
+  })
+
+  /**
+   * The bug this link had: `hasProgress` was built from `missionStatus` and `lessonStatus`, and
+   * BOTH filter the log to today. So the door that can hand this iPad to another account came back
+   * every single morning, in front of the child, on top of however much history existed — and the
+   * comment above it claimed the opposite. The old guard only ever completed a lesson *today*,
+   * which is the one case where the two readings agree.
+   */
+  it('stays away on a device with history but nothing done yet today', () => {
+    cloud.configured = true
+    seedDoneDay(NOW - 2 * DAY_MS)
+    seedDoneDay(NOW - DAY_MS)
+
+    renderHome()
+
+    expect(screen.queryByRole('link', { name: 'Đã dùng Speak Up rồi?' })).not.toBeInTheDocument()
+  })
+
+  it('stays away for a child whose stars are the only thing left on the device', () => {
+    cloud.configured = true
+    // An activity log that has rotated out, or a partial restore: the stars are still progress,
+    // and this device is still not the fresh one this link is for.
+    localStorage.setItem('speakup.stars', JSON.stringify({ 'sword:cat': 3 }))
+
+    renderHome()
+
+    expect(screen.queryByRole('link', { name: 'Đã dùng Speak Up rồi?' })).not.toBeInTheDocument()
+  })
+
+  /**
+   * The second narrowing, and the one that made flow 6's picker a route into the first: this link
+   * asked the ACTIVE namespace. A parent adds a sibling, the picker hands the iPad to that empty
+   * child, and the restore door — the one that can abandon the account both children share —
+   * appears on their Home as if the device were brand new.
+   */
+  it('stays away when a SIBLING on this device has history', () => {
+    cloud.configured = true
+    const active = '11111111-2222-4333-8444-555555555555'
+    const sibling = '22222222-3333-4444-8555-666666666666'
+    localStorage.setItem('speakup.profiles', JSON.stringify([
+      { id: active, name: 'Bé', avatar: '🦊', created: 1 },
+      { id: sibling, name: 'Sóc', avatar: '🐿️', created: 2 },
+    ]))
+    localStorage.setItem('speakup.profile', active)
+    // Child A's progress, one namespace away. The active child's own namespace is empty.
+    localStorage.setItem(`speakup.${sibling}.stars`, JSON.stringify({ 'sword:cat': 3 }))
+
+    renderHome()
+
+    expect(screen.queryByRole('link', { name: 'Đã dùng Speak Up rồi?' })).not.toBeInTheDocument()
+  })
+
+  it('still offers it when every child on the device is genuinely new', () => {
+    cloud.configured = true
+    const active = '11111111-2222-4333-8444-555555555555'
+    localStorage.setItem('speakup.profiles', JSON.stringify([
+      { id: active, name: 'Bé', avatar: '🦊', created: 1 },
+      { id: '22222222-3333-4444-8555-666666666666', name: 'Sóc', avatar: '🐿️', created: 2 },
+    ]))
+    localStorage.setItem('speakup.profile', active)
+
+    renderHome()
+
+    expect(screen.getByRole('link', { name: 'Đã dùng Speak Up rồi?' })).toBeInTheDocument()
+  })
+
+  /**
+   * `ensureLocalProfile()` wrote the roster and then could not write `speakup.profile` — it returns
+   * early there, deliberately, so the app keeps reading the pre-Phase-11 keys rather than a
+   * namespace nothing migrated into. That device has a full history and no namespace to find it
+   * under, and reading the legacy keys only when the roster was ALSO empty missed it entirely.
+   */
+  it('stays away on a device whose progress is still under the legacy keys', () => {
+    cloud.configured = true
+    localStorage.setItem('speakup.profiles', JSON.stringify([
+      { id: '11111111-2222-4333-8444-555555555555', name: 'Bé', avatar: 'A', created: 1 },
+    ]))
+    localStorage.removeItem('speakup.profile')
+    localStorage.setItem('speakup.stars', JSON.stringify({ 'sword:cat': 3 }))
+
+    renderHome()
+
+    expect(screen.queryByRole('link', { name: 'Đã dùng Speak Up rồi?' })).not.toBeInTheDocument()
+  })
+
+  it('keeps Foxy today-scoped even so', () => {
+    cloud.configured = true
+    seedDoneDay(NOW - DAY_MS)
+
+    renderHome()
+
+    // Yesterday's work is history, not this morning's greeting: the mood question and the
+    // restore-door question are different questions and no longer share an answer.
+    expect(screen.getByTestId('foxy')).toHaveAttribute('data-mood', 'idle')
+    expect(screen.getByText('Hôm nay mình luyện nói nhé!')).toBeInTheDocument()
+  })
+})
+
+/** §Rules puts the tap floor at 64 px on every child-reachable screen; the only exemption the
+ * design grants is the adult dashboard behind the math gate. Both banner close buttons were 32. */
+describe('Phase 11: the banners meet the child tap floor', () => {
+  it('gives both dismiss buttons a 64 px hit area', async () => {
+    cloud.configured = true
+    auth.isAnonymous.mockResolvedValue(true)
+    seedDoneDay(NOW - 2 * DAY_MS)
+    seedDoneDay(NOW - DAY_MS)
+    seedDoneDay(NOW)
+    Object.defineProperty(window.navigator, 'userAgent', {
+      value: 'Mozilla/5.0 (iPad; CPU OS 17_0 like Mac OS X) AppleWebKit/605.1.15 Safari/604.1',
+      configurable: true,
+    })
+
+    renderHome()
+    await act(async () => { await Promise.resolve() })
+
+    expect(screen.getByLabelText('Đóng thông báo liên kết email')).toHaveClass('h-16', 'w-16')
+    expect(screen.getByLabelText('Đóng thông báo cài vào Màn hình chính')).toHaveClass('h-16', 'w-16')
+  })
 })
 
 it('keeps the stacked layout scrollable so the mission CTA is never trapped below the fold', () => {

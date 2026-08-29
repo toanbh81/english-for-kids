@@ -235,3 +235,49 @@ it('a half-finished lesson does not make the day count', () => {
   expect(missionStatus(BASE).done).toBe(false)
   expect(completedDays().has(dayKey(BASE))).toBe(false)
 })
+
+// --- Phase 11 task 5: an injectable lesson lookup, for the remote dashboard --------------------
+
+it('completedDays/streak/weekDots default to this device\'s own lesson records', () => {
+  setBandValue(1)
+  setLessonLength('short') // under the 5-speak legacy bar
+  const lesson = getLesson(BASE)
+  playLesson(lesson, BASE + 60_000)
+
+  // No override: the local lesson record on disk is consulted, exactly as before this change.
+  expect(completedDays().has(dayKey(BASE))).toBe(true)
+  expect(streak(BASE)).toBe(1)
+  expect(weekDots(BASE)[6].done).toBe(true) // BASE is a Sunday
+})
+
+it('a lesson-lookup override that always says "no lesson" falls back to the legacy counters only', () => {
+  setBandValue(1)
+  setLessonLength('short')
+  const lesson = getLesson(BASE)
+  playLesson(lesson, BASE + 60_000) // completes the short lesson, but under 5 speaks
+
+  const noLesson = () => null
+
+  // The remote dashboard's exact call shape: it has no server-side lesson record to hand back, so
+  // it never gets to claim a day done that the legacy counters alone would call unfinished — even
+  // though a real lesson record exists RIGHT HERE, on disk, for this same day.
+  expect(completedDays(getActivity(), noLesson).has(dayKey(BASE))).toBe(false)
+  expect(streak(BASE, getActivity(), noLesson)).toBe(0)
+  expect(weekDots(BASE, getActivity(), noLesson)[6].done).toBe(false)
+
+  // The local, un-overridden query is unaffected — the override is per-call, not global state.
+  expect(completedDays().has(dayKey(BASE))).toBe(true)
+})
+
+it('a lesson-lookup override never touches localStorage, even when a local lesson record exists', () => {
+  setBandValue(1)
+  setLessonLength('short')
+  const lesson = getLesson(BASE)
+  playLesson(lesson, BASE + 60_000)
+
+  const events = getActivity()
+  const getItem = vi.spyOn(Storage.prototype, 'getItem')
+  streak(BASE, events, () => null)
+  expect(getItem).not.toHaveBeenCalled()
+  getItem.mockRestore()
+})

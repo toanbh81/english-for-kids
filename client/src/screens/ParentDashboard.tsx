@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react'
-import type { ChangeEvent } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import type { ChangeEvent, FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { getActivity, minutesPerDay, averageScoreByKind, weakPhonemes, clearActivity } from '../progress/activity'
 import { clearBand, getBand, setBandAuto, setBandValue } from '../progress/band'
@@ -13,6 +13,32 @@ import { clearStars } from '../progress/store'
 import { getLimitMinutes, setLimitMinutes } from '../progress/limit'
 import { PHONEME_TIPS } from '../scoring/feedback'
 import { playBlob } from '../audio/player'
+import {
+  currentEmail,
+  currentUserId,
+  ensureRecoveryCode,
+  isAnonymous,
+  linkEmail,
+  signOut,
+  verifyEmailOtp,
+} from '../cloud/auth'
+import type { Profile } from '../cloud/profileState'
+import {
+  activeProfileId,
+  addProfile,
+  ensureRemoteProfiles,
+  fetchRemoteProfiles,
+  listProfiles,
+  renameProfile,
+  renameRemoteProfile,
+  switchProfile,
+} from '../cloud/profileState'
+import { hasPendingReset, resetRemoteProgress, subscribeSyncStatus, syncStatus } from '../cloud/sync'
+import type { SyncStatus } from '../cloud/sync'
+import { fetchRemoteStats } from '../cloud/remote'
+import type { RemoteStats } from '../cloud/remote'
+import { isCloudConfigured } from '../cloud/supabase'
+import { ProfilePicker } from '../components/ProfilePicker'
 import { Button, Card, PAGE_SHELL } from '../components/ui'
 
 /**
@@ -32,16 +58,57 @@ const LIMIT_CHIPS = [15, 20, 30] as const
 /** How many of the chart's fourteen days a phone draws (design §12 M8c). */
 const PHONE_DAYS = 7
 const BAND_VALUES = [1, 2, 3, 4, 5] as const satisfies readonly Band[]
+/**
+ * What the parent is told when the mirror's half of a reset has not happened.
+ *
+ * The device is genuinely clear; the server copy is not, and the engine will finish it before it
+ * pulls anything back. Saying nothing was the old behaviour, and it is how a parent came back to a
+ * child whose stars had returned overnight with no explanation available anywhere.
+ */
+const PENDING_RESET_NOTICE =
+  'Đã xoá xong trên máy này. Bản lưu trên tài khoản thì chưa xoá được (có thể do mất mạng) — '
+  + 'máy sẽ tự xoá nốt khi có mạng trở lại, trước khi tải bất cứ thứ gì về.'
+
 const LENGTH_LABEL: Record<LessonLength, string> = {
   short: 'Ngắn ~8 phút',
   medium: 'Vừa ~12 phút',
   long: 'Dài ~18 phút',
 }
 
+/**
+ * Vietnamese copy for an `AuthResult`'s error code.
+ *
+ * `invalid-email`, `invalid-token`, `cloud-unconfigured` and `anonymous-session-in-use` are this
+ * app's own codes (`cloud/auth.ts` never guesses at Supabase's wording for those). Everything else
+ * is a raw Supabase message — never shown verbatim to a Vietnamese parent, and a wrong or expired
+ * OTP is exactly the shape that lands here (Supabase's own wording for both is some variant of
+ * "invalid/expired token").
+ */
+function describeAuthError(code: string): string {
+  const lower = code.toLowerCase()
+  if (code === 'invalid-email') return 'Email chưa đúng định dạng.'
+  if (code === 'cloud-unconfigured') return 'Chưa thể kết nối lúc này, thử lại sau nhé.'
+  if (code === 'anonymous-session-in-use') return 'Máy này đang có hồ sơ khác, thử lại nhé.'
+  if (code === 'invalid-token' || /invalid|expired|not\s*found/.test(lower)) {
+    return 'Mã chưa đúng hoặc đã hết hạn, thử lại nhé.'
+  }
+  if (/network|fetch/.test(lower)) return 'Không có kết nối mạng, thử lại nhé.'
+  return 'Có lỗi xảy ra, thử lại nhé.'
+}
+
+/**
+ * `navigator.onLine === false` is the reliable half of that flag — it really does mean no network,
+ * while true only ever meant an interface is up. Used here to say WHY there is no account yet, so
+ * an offline device gets an explanation instead of a form that cannot work.
+ */
+const online = (): boolean => typeof navigator === 'undefined' || navigator.onLine !== false
+
 function formatDayLabel(day: string): string {
   const [, m, d] = day.split('-')
   return `${d}/${m}`
 }
+
+const formatAvg = (n: number | null): string => (n == null ? '—' : String(Math.round(n)))
 
 function formatTs(ts: number): string {
   const d = new Date(ts)
@@ -78,6 +145,155 @@ export function ParentDashboard({ onLock }: Props) {
    * re-reads it, and the phone the design is aimed at has nothing to rotate into.)
    */
   const [recordingsOpen] = useState(() => window.matchMedia?.('(min-width: 768px)').matches ?? false)
+
+  // A build with no cloud env vars renders none of what follows — read once, synchronously, so
+  // this screen never even asks whether it is signed in (constraint: byte-identical without them).
+  const [cloudAvailable] = useState(isCloudConfigured)
+
+  // Constraint #1: `syncStatus()` parses the activity log on every store write once a subscriber
+  // exists. This is the ONE screen allowed to subscribe, and there is no timer here — only the
+  // write-driven notifications the sync engine already fires.
+  const [sync, setSync] = useState<SyncStatus>(() => (cloudAvailable ? syncStatus() : {
+    state: 'off', pending: 0, lastSyncedAt: null, lastError: null, syncing: false,
+  }))
+  useEffect(() => {
+    if (!cloudAvailable) return undefined
+    return subscribeSyncStatus(setSync)
+  }, [cloudAvailable])
+
+  /**
+   * Three states, not two — and the third one is the dangerous one.
+   *
+   * `isAnonymous()` answers **false** when there is no session at all, so asking it alone put this
+   * screen into the signed-in branch on a device that has never reached the network: an empty email
+   * line and a "Đăng xuất" button for an account that does not exist, with no link form and no
+   * recovery code anywhere. That is precisely the window in which nothing is backed up, on the one
+   * screen that exists to get out of it. So "no session" is treated as "not linked", which is what
+   * it is, and the reason is said out loud rather than left as a dead form.
+   */
+  const [authReady, setAuthReady] = useState(false)
+  const [email, setEmail] = useState<string | null>(null)
+  const [hasSession, setHasSession] = useState(true)
+  const [recoveryCode, setRecoveryCode] = useState<string | null>(null)
+  const linked = email !== null
+  useEffect(() => {
+    if (!cloudAvailable) return undefined
+    let cancelled = false
+    void (async () => {
+      const [em, anon, userId] = await Promise.all([currentEmail(), isAnonymous(), currentUserId()])
+      if (cancelled) return
+      setEmail(em)
+      setHasSession(userId !== null)
+      setAuthReady(true)
+      // The standing ruling: a LINKED account has no recovery code at all, on purpose (a trigger
+      // drops it the moment the account gains an email) — so this is only ever asked while
+      // anonymous, and `ensureRecoveryCode` is itself a no-op for a linked one regardless.
+      if (anon) {
+        const code = await ensureRecoveryCode()
+        if (!cancelled) setRecoveryCode(code)
+      }
+    })()
+    return () => { cancelled = true }
+  }, [cloudAvailable])
+
+  // ---------------------------------------------------------------------------------------------
+  // Flow 5: read-only progress from another device.
+  //
+  // `fetchRemoteProfiles()` needs a live session to mean anything (constraint: it answers `[]` for
+  // "no session" too, which is NOT "this account owns nothing" — see the trap called out in its own
+  // doc comment). So this is gated on `hasSession`, not merely `cloudAvailable`, and it is not even
+  // attempted until `authReady` says which is true. `'unknown'` is a first-class state precisely so
+  // a failed fetch can say so instead of silently rendering as "no remote profiles".
+  // ---------------------------------------------------------------------------------------------
+  type RemoteProfilesState = { status: 'idle' } | { status: 'unknown' } | { status: 'ready'; profiles: Profile[] }
+  const [remoteProfilesState, setRemoteProfilesState] = useState<RemoteProfilesState>({ status: 'idle' })
+  // The manual "Xem từ xa" toggle — off by default, the section still appears on its own the moment
+  // the account holds a profile this device's active one is not (a sibling, or simply a different
+  // device's child), which is the "differs" half of the brief's condition; the toggle is the other
+  // half, for comparing THIS device's own child against what the server holds for them.
+  const [remoteViewOn, setRemoteViewOn] = useState(false)
+  const [remoteStats, setRemoteStats] = useState<Record<string, RemoteStats | null>>({})
+  // Ids already asked for, so a re-render (the sync status line updates often) does not re-fetch a
+  // profile whose stats already came back — success OR failure both count as "asked".
+  const fetchedRemoteIds = useRef(new Set<string>())
+  /**
+   * Whether THIS COMPONENT INSTANCE is still mounted — set once, for the component's whole
+   * lifetime, never per effect run. The stats-fetch effect below used to guard its `setRemoteStats`
+   * call with a `cancelled` flag scoped to a single effect run instead, and that was a real,
+   * deterministic bug: two profiles shown, a sibling's fetch still in flight, the parent presses
+   * "Xem từ xa" — `remoteShowKey` changes, the OLD effect's cleanup sets ITS `cancelled` to true, the
+   * NEW effect run sees the sibling's id already in `fetchedRemoteIds` and does not re-fetch it, and
+   * the original promise then resolves against the stale `cancelled` and drops its own update. The
+   * id stays marked "asked" forever with no answer ever recorded for it — a card stuck on
+   * "Đang tải…" with no retry short of a reload. A fetch is requested once per id (still true here)
+   * and its result is applied whenever it lands, regardless of how many times this effect has
+   * re-run since — the only thing that should ever suppress an update is the component being gone.
+   */
+  const remoteStatsMounted = useRef(true)
+  useEffect(() => () => { remoteStatsMounted.current = false }, [])
+
+  useEffect(() => {
+    if (!cloudAvailable || !authReady || !hasSession) return undefined
+    let cancelled = false
+    void (async () => {
+      const remote = await fetchRemoteProfiles()
+      if (cancelled) return
+      setRemoteProfilesState(remote === null ? { status: 'unknown' } : { status: 'ready', profiles: remote })
+    })()
+    return () => { cancelled = true }
+  }, [cloudAvailable, authReady, hasSession])
+  // `hasSession` going false (a sign-out) must hide whatever the state above still remembers from
+  // before — but resetting it with another `setState` inside the effect above only chases that
+  // render with a second one. Deriving it here instead is the fix the lint rule itself names:
+  // "derive the value during render" rather than synchronizing it via an extra effect-driven write.
+  const remoteProfiles: RemoteProfilesState = hasSession ? remoteProfilesState : { status: 'idle' }
+
+  const [linkStage, setLinkStage] = useState<'idle' | 'otp'>('idle')
+  const [linkEmailValue, setLinkEmailValue] = useState('')
+  const [linkOtp, setLinkOtp] = useState('')
+  const [linkBusy, setLinkBusy] = useState(false)
+  const [linkError, setLinkError] = useState<string | null>(null)
+
+  const [profiles, setProfiles] = useState<Profile[]>(() => listProfiles())
+  const activeId = activeProfileId()
+
+  const remoteProfilesToShow = remoteProfiles.status === 'ready'
+    ? remoteProfiles.profiles.filter(p => remoteViewOn || p.id !== activeId)
+    : []
+  // A stable string, not the array itself: the array is a fresh reference every render (it is
+  // rebuilt above), and an effect keyed on a fresh reference every time would re-run — and tear
+  // down — on every render, which is exactly the shape of the race described above.
+  const remoteShowKey = remoteProfilesToShow.map(p => p.id).join(',')
+
+  useEffect(() => {
+    if (!remoteShowKey) return
+    for (const id of remoteShowKey.split(',')) {
+      if (fetchedRemoteIds.current.has(id)) continue
+      fetchedRemoteIds.current.add(id)
+      void fetchRemoteStats(id).then(stats => {
+        // Gated on the component's whole lifetime, not on this effect run — see `remoteStatsMounted`.
+        if (remoteStatsMounted.current) setRemoteStats(prev => ({ ...prev, [id]: stats }))
+      })
+    }
+  }, [remoteShowKey])
+
+  /**
+   * `undefined` when the roster is unreadable, and when no profile is active at all (the device is
+   * reading the legacy namespace). Either way there is no name to print — see the "Hồ sơ" block.
+   */
+  const activeProfileEntry = profiles.find(p => p.id === activeId)
+
+  /** Set when a roster write did not happen — see `handleAddProfile`. */
+  const [profileNotice, setProfileNotice] = useState<string | null>(null)
+
+  /**
+   * Set when the mirror's half of a reset did not go through — and it survives leaving the screen:
+   * a reset the sync engine still owes is still true tomorrow, so a parent coming back to check
+   * reads the same sentence rather than a screen that looks as if nothing happened.
+   */
+  const [resetNotice, setResetNotice] = useState<string | null>(
+    () => (cloudAvailable && activeId && hasPendingReset(activeId) ? PENDING_RESET_NOTICE : null),
+  )
 
   const { events, now } = snapshot
   const days = minutesPerDay(14, now, events)
@@ -132,7 +348,14 @@ export function ParentDashboard({ onLock }: Props) {
   }
 
   async function handleReset() {
-    if (!window.confirm('Xoá toàn bộ sao, lịch sử và bản ghi?')) return
+    // The old wording was from the local-only era and stopped being true the moment this button
+    // also emptied the mirror: the cloud copy of this child goes with it, and no device gets it
+    // back. A parent may not find that out afterwards.
+    const question = cloudAvailable && activeId
+      ? 'Xoá toàn bộ sao, lịch sử và bản ghi của bé trên máy này, và xoá luôn bản đã lưu trên tài khoản? Máy khác sẽ không tải lại được nữa.'
+      : 'Xoá toàn bộ sao, lịch sử và bản ghi?'
+    if (!window.confirm(question)) return
+    setResetNotice(null)
     clearStars()
     clearActivity()
     clearLeitner()
@@ -148,6 +371,90 @@ export function ParentDashboard({ onLock }: Props) {
     setBand({ value: 1, mode: 'auto' })
     setLength(getLessonLength())
     setSnapshot({ events: getActivity(), now: Date.now() })
+    // Constraint #3: reset is two halves, and this is the mirror's — called from here, the visible
+    // foreground screen, so it can never race the hidden-tab flush trigger.
+    if (!cloudAvailable || !activeId) return
+    // …and the answer is not thrown away. Offline, or on any DELETE error, the server still holds
+    // every row: the sync engine has written down that the reset is owed and will finish it before
+    // it pulls anything, but the parent is told plainly rather than left to discover it — either
+    // now (nothing looks wrong) or, worse, in a week when it does not.
+    if (!(await resetRemoteProgress(activeId))) setResetNotice(PENDING_RESET_NOTICE)
+  }
+
+  // ---------------------------------------------------------------------------------------------
+  // Tài khoản: link email, sign out, recovery code, add/rename/switch profiles.
+  // ---------------------------------------------------------------------------------------------
+
+  async function handleSendOtp(e: FormEvent) {
+    e.preventDefault()
+    setLinkBusy(true)
+    setLinkError(null)
+    const result = await linkEmail(linkEmailValue)
+    setLinkBusy(false)
+    if (!result.ok) { setLinkError(describeAuthError(result.error)); return }
+    setLinkStage('otp')
+  }
+
+  async function handleVerifyOtp(e: FormEvent) {
+    e.preventDefault()
+    setLinkBusy(true)
+    setLinkError(null)
+    const result = await verifyEmailOtp(linkEmailValue, linkOtp)
+    if (!result.ok) { setLinkBusy(false); setLinkError(describeAuthError(result.error)); return }
+    setEmail(linkEmailValue)
+    setHasSession(true)
+    // The standing ruling, the other side of it: linking just dropped the recovery code server
+    // side, so this screen must stop showing one rather than hold onto a stale value.
+    setRecoveryCode(null)
+    setLinkStage('idle')
+    setLinkOtp('')
+    setLinkEmailValue('')
+    setLinkBusy(false)
+  }
+
+  function handleEditLinkEmail() {
+    setLinkStage('idle')
+    setLinkOtp('')
+    setLinkError(null)
+  }
+
+  async function handleSignOut() {
+    if (!window.confirm('Đăng xuất khỏi tài khoản này?')) return
+    const result = await signOut()
+    // Signing out leaves this device with NO session, which is the third state above — not an
+    // anonymous one. Saying otherwise is what drew a link form that could not work.
+    if (result.ok) { setEmail(null); setHasSession(false) }
+  }
+
+  function handleAddProfile() {
+    const name = window.prompt('Tên của bé:')
+    if (name === null) return
+    setProfileNotice(null)
+    // `null` means the child is not on disk — an unreadable roster this must not write over, or a
+    // store that refused the write. Re-reading `listProfiles()` alone would simply show nothing and
+    // leave the parent tapping a button that does nothing, which is how they come to tap it twice.
+    if (!addProfile(name)) {
+      setProfileNotice('Chưa lưu được hồ sơ mới trên máy này. Tiến độ của bé vẫn an toàn — mở lại ứng dụng rồi thử lại nhé.')
+      return
+    }
+    setProfiles(listProfiles())
+    // Fire-and-forget: the new row reaches the server on the next launch regardless (`connectCloud`
+    // calls the same function), this only saves the wait for a child who taps in the next minute.
+    if (cloudAvailable) void ensureRemoteProfiles()
+  }
+
+  function handleRenameActiveProfile() {
+    const current = profiles.find(p => p.id === activeId)
+    if (!current) return
+    const name = window.prompt('Đổi tên hồ sơ:', current.name)
+    if (name === null || !name.trim()) return
+    setProfiles(renameProfile(current.id, name))
+    if (cloudAvailable) void renameRemoteProfile(current.id, name)
+  }
+
+  function handleSwitchProfile(id: string) {
+    if (id === activeId) return
+    switchProfile(id)
   }
 
   return (
@@ -179,6 +486,241 @@ export function ParentDashboard({ onLock }: Props) {
             <span className="font-display font-extrabold text-ink-900">Khoá lại</span>
           </button>
         </header>
+
+        {cloudAvailable && (
+          <Card data-testid="account-card" className="px-4 py-3.5 md:p-6">
+            <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+              <h2 className="font-display text-base font-extrabold text-ink-900 md:text-xl">Tài khoản</h2>
+              {sync.state !== 'off' && (
+                <span data-testid="sync-status" className="text-xs font-semibold text-ink-500 md:text-sm">
+                  {sync.state === 'offline' && 'Ngoại tuyến'}
+                  {sync.state === 'pending' && `Chưa đồng bộ ${sync.pending} mục`}
+                  {sync.state === 'synced' && 'Đã đồng bộ ✓'}
+                </span>
+              )}
+            </div>
+
+            {!authReady ? (
+              <p className="text-sm text-ink-500">Đang tải…</p>
+            ) : !linked ? (
+              <div className="flex flex-col gap-3">
+                {/* No session at all — offline since install, or just signed out. The account this
+                  * screen would talk about does not exist yet, so it says so instead of offering a
+                  * form that cannot possibly reach anyone. */}
+                {!hasSession && (
+                  <p data-testid="no-session" className="rounded-xl2 bg-sun-50 p-3 text-xs font-semibold text-sun-700 md:text-sm">
+                    {online()
+                      ? 'Máy này chưa kết nối được với tài khoản nào. Thử mở lại trang này sau một chút nhé.'
+                      : 'Đang ngoại tuyến nên chưa tạo được tài khoản cho máy này. Có mạng trở lại, mở lại trang này để liên kết email nhé.'}
+                    {' '}Tiến độ của bé vẫn đang được lưu trên máy này.
+                  </p>
+                )}
+                {/* With no session there is nothing to link an email TO — `linkEmail` calls
+                  * `updateUser` on a user that does not exist — so neither form is drawn. */}
+                {!hasSession ? null : linkStage === 'idle' ? (
+                  <form onSubmit={handleSendOtp} className="flex flex-col gap-2">
+                    {/* What actually travels, and only that: stars, history and lessons. The
+                      * recordings card is on this same screen and its blobs never leave the
+                      * device — "an toàn trên mọi thiết bị" promised the parent otherwise. */}
+                    <p className="text-xs font-semibold text-ink-500 md:text-sm">
+                      Liên kết email để mở lại sao, lịch sử luyện tập và bài học của bé trên máy khác
+                      (bản ghi giọng nói chỉ nằm trên máy này). Tiến độ học của bé sẽ được lưu trên
+                      tài khoản của bạn.
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      <input
+                        type="email"
+                        required
+                        aria-label="Email của bố/mẹ"
+                        placeholder="email@vidu.com"
+                        value={linkEmailValue}
+                        onChange={e => setLinkEmailValue(e.target.value)}
+                        className="h-11 min-w-0 flex-1 rounded-xl2 border-2 border-line-200 px-3 text-sm font-semibold text-ink-900"
+                      />
+                      <Button type="submit" disabled={linkBusy} className="max-md:min-h-[44px] max-md:px-4 max-md:text-sm">
+                        Liên kết
+                      </Button>
+                    </div>
+                  </form>
+                ) : (
+                  <form onSubmit={handleVerifyOtp} className="flex flex-col gap-2">
+                    <p className="text-xs font-semibold text-ink-500 md:text-sm">
+                      Nhập mã 6 số vừa gửi tới {linkEmailValue}
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      <input
+                        inputMode="numeric"
+                        required
+                        aria-label="Mã xác nhận"
+                        value={linkOtp}
+                        onChange={e => setLinkOtp(e.target.value)}
+                        className="h-11 w-32 rounded-xl2 border-2 border-line-200 px-3 text-center text-sm font-semibold text-ink-900"
+                      />
+                      <Button type="submit" disabled={linkBusy} className="max-md:min-h-[44px] max-md:px-4 max-md:text-sm">
+                        Xác nhận
+                      </Button>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleEditLinkEmail}
+                      className="min-h-[36px] self-start text-xs font-bold text-ink-500 underline"
+                    >
+                      Sửa lại email
+                    </button>
+                  </form>
+                )}
+
+                {linkError && <p role="alert" className="text-xs font-semibold text-fix-700">{linkError}</p>}
+
+                {recoveryCode && (
+                  <div className="rounded-xl2 bg-sun-50 p-3">
+                    <p className="text-xs font-bold text-sun-700">Mã khôi phục — chụp màn hình lại nhé</p>
+                    <p className="mt-1 font-display text-lg font-extrabold tracking-widest text-sun-700">{recoveryCode}</p>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-sm font-semibold text-ink-900">{email}</p>
+                <button
+                  type="button"
+                  onClick={handleSignOut}
+                  className="min-h-[44px] rounded-xl2 border border-line-200 px-3 text-xs font-semibold text-ink-500"
+                >
+                  Đăng xuất
+                </button>
+              </div>
+            )}
+
+            <div className="mt-4 border-t border-line-200 pt-3">
+              <div className="mb-2 flex items-center justify-between">
+                <h3 className="text-xs font-bold text-ink-500 md:text-sm">Hồ sơ</h3>
+                <button
+                  type="button"
+                  onClick={handleAddProfile}
+                  className="min-h-[36px] rounded-xl2 bg-teal-50 px-3 text-xs font-bold text-teal-700"
+                >
+                  + Thêm hồ sơ
+                </button>
+              </div>
+              {/* The roster can be unreadable — a half-written value this app now refuses to write
+                * over — and `speakup.profile` can be unset, in which case the device is reading the
+                * legacy namespace. Both used to render as an empty string directly beside
+                * "+ Thêm hồ sơ", which is the worst possible pairing: a parent who sees a blank
+                * name taps the button, and that button is the one that writes the roster. */}
+              {activeProfileEntry ? (
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-sm font-semibold text-ink-900">
+                    {activeProfileEntry.avatar} {activeProfileEntry.name}
+                  </p>
+                  <button type="button" onClick={handleRenameActiveProfile} className="min-h-[36px] text-xs font-bold text-ink-500 underline">
+                    Đổi tên
+                  </button>
+                </div>
+              ) : (
+                <p data-testid="profile-unreadable" className="rounded-xl2 bg-sun-50 p-3 text-xs font-semibold text-sun-700 md:text-sm">
+                  Chưa đọc được danh sách hồ sơ trên máy này. Tiến độ của bé vẫn đang được lưu bình thường —
+                  mở lại ứng dụng để kiểm tra, và tạm thời đừng thêm hồ sơ mới.
+                </p>
+              )}
+              {profileNotice && (
+                <p role="status" data-testid="profile-notice" className="mt-2 rounded-xl2 bg-fix-50 p-3 text-xs font-semibold text-fix-700 md:text-sm">
+                  {profileNotice}
+                </p>
+              )}
+              {profiles.length > 1 && (
+                <div className="mt-2">
+                  <ProfilePicker profiles={profiles} activeId={activeId} onSelect={handleSwitchProfile} />
+                </div>
+              )}
+              {/* Flow 5's manual door. Shown whenever the account is known to hold at least one
+                * profile — even when it is only the one already active here — so the affordance is
+                * discoverable regardless of whether the section below is currently visible on its
+                * own (it appears without this being pressed once a DIFFERENT profile is on the
+                * account; pressing it adds this device's own child, for comparing the two). */}
+              {remoteProfiles.status === 'ready' && remoteProfiles.profiles.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setRemoteViewOn(v => !v)}
+                  aria-pressed={remoteViewOn}
+                  data-testid="remote-view-toggle"
+                  className="mt-2 min-h-[36px] rounded-xl2 border border-line-200 px-3 text-xs font-bold text-ink-500"
+                >
+                  Xem từ xa
+                </button>
+              )}
+            </div>
+          </Card>
+        )}
+
+        {/* A read that failed must never render as "no remote profiles" — the whole reason this is
+          * its own branch rather than folded into an empty list below. */}
+        {cloudAvailable && remoteProfiles.status === 'unknown' && (
+          <Card data-testid="remote-progress-unknown" className="px-4 py-3.5 md:p-6">
+            <p className="text-xs font-semibold text-ink-500 md:text-sm">
+              Chưa xem được tiến độ từ xa lúc này (máy chủ chưa trả lời). Thử tải lại trang sau nhé.
+            </p>
+          </Card>
+        )}
+
+        {/* Flow 5: per-profile read-only stats pulled straight from the server, computed with the
+          * same queries (`progress/activity.ts`) the numbers above use on local data. Shown once
+          * there is at least one profile to show — either a sibling this device is not currently
+          * showing, or this device's own child with "Xem từ xa" pressed. */}
+        {cloudAvailable && remoteProfilesToShow.length > 0 && (
+          <Card data-testid="remote-progress-card" className="px-4 py-3.5 md:p-6">
+            <h2 className="font-display text-base font-extrabold text-ink-900 md:text-xl">Tiến độ từ xa</h2>
+            <p className="mb-2 mt-1 text-xs font-semibold text-ink-500 md:text-sm">
+              Lấy từ máy chủ — có thể khác số trên chính máy này (máy có thể đã tự xoá bớt lịch sử cũ).
+            </p>
+            <ul className="flex flex-col gap-3">
+              {remoteProfilesToShow.map(p => {
+                const loaded = p.id in remoteStats
+                const entry = remoteStats[p.id]
+                return (
+                  <li key={p.id} data-testid="remote-profile" className="rounded-xl2 border border-line-200 p-3">
+                    <p className="font-semibold text-ink-900">
+                      {p.avatar} {p.name}
+                      {p.id === activeId && <span className="font-normal text-ink-500"> · đang dùng trên máy này</span>}
+                    </p>
+                    {!loaded ? (
+                      <p className="mt-1 text-xs font-semibold text-ink-500">Đang tải…</p>
+                    ) : entry === null ? (
+                      <p className="mt-1 text-xs font-semibold text-fix-700">Không tải được tiến độ của bé lúc này.</p>
+                    ) : (
+                      <div className="mt-1 flex flex-col gap-1 text-xs font-semibold text-ink-500 md:text-sm">
+                        {/* A profile the server holds nothing for gets a sentence, not a
+                          * measurement: "Chuỗi ngày: 0 · Tuần này: 0 phút" reads as a confident
+                          * statement about a child who has been idle, and it is exactly what an
+                          * empty placeholder row produces. Hiding such a profile instead would hide
+                          * a real child a parent added on another device and is checking arrived —
+                          * the same error class, pointing the other way. */}
+                        {entry.eventCount === 0 ? (
+                          <p data-testid="remote-empty">Chưa có dữ liệu nào trên máy chủ</p>
+                        ) : (
+                          <>
+                            <p>Chuỗi ngày: {entry.streak} · Tuần này: {entry.weekMinutes} phút</p>
+                            <p>
+                              Điểm trung bình — Nói {formatAvg(entry.averages.speak)} · Từ vựng {formatAvg(entry.averages.word)} · Ghép câu {formatAvg(entry.averages.sentence)}
+                            </p>
+                            {entry.weak.length === 0 ? (
+                              <p>Chưa đủ dữ liệu về âm sai</p>
+                            ) : (
+                              <p>Âm hay sai: {entry.weak.map(w => `/${w.phoneme}/ (${Math.round(w.avg)})`).join(', ')}</p>
+                            )}
+                          </>
+                        )}
+                      </div>
+                    )}
+                    <p className="mt-1 text-xs font-semibold text-ink-300">
+                      Bản ghi giọng nói của bé không đồng bộ — chỉ nghe được trên máy đã ghi.
+                    </p>
+                  </li>
+                )
+              })}
+            </ul>
+          </Card>
+        )}
 
         <div className="grid grid-cols-1 gap-3 md:gap-6 ipad:grid-cols-[1.4fr_1fr]">
           <div className="flex flex-col gap-3 md:gap-6">
@@ -399,10 +941,17 @@ export function ParentDashboard({ onLock }: Props) {
           </div>
         </div>
 
-        {/* `max-md:`, because `min-h-[64px] px-8 text-[22px]` are `Button`'s own classes. */}
-        <Button variant="outline" onClick={handleReset} className="self-start max-md:min-h-[48px] max-md:px-4 max-md:text-base">
-          Đặt lại tiến trình
-        </Button>
+        <div className="flex flex-col items-start gap-2">
+          {/* `max-md:`, because `min-h-[64px] px-8 text-[22px]` are `Button`'s own classes. */}
+          <Button variant="outline" onClick={handleReset} className="self-start max-md:min-h-[48px] max-md:px-4 max-md:text-base">
+            Đặt lại tiến trình
+          </Button>
+          {resetNotice && (
+            <p role="status" data-testid="reset-notice" className="rounded-xl2 bg-sun-50 p-3 text-xs font-semibold text-sun-700 md:text-sm">
+              {resetNotice}
+            </p>
+          )}
+        </div>
       </div>
     </main>
   )

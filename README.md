@@ -938,6 +938,235 @@ unchanged by it, and is a landscape-frame problem for a later pass.
 | 10 | Parent Dashboard → "Bản ghi gần đây" | The card is present but collapsed by default; tapping its row opens it to show the recordings list with working play buttons | ⏳ pending |
 | 11 | Any screen, iPhone with a notch/Dynamic Island, both portrait and after rotating | Content clears the notch and the home indicator — nothing sits underneath either one | ⏳ pending |
 
+## Phase 11 — Cloud profiles & sync (Supabase)
+
+Two promises drove this phase, and the schema underneath is described in full in
+`docs/superpowers/specs/2026-08-29-phase11-cloud-profiles-design.md`: progress survives a cache
+wipe and shows up on a parent's own device, without ever making login mandatory for the child, and
+a child's voice recording never leaves the device it was made on — not before linking, not after.
+
+### Architecture — local-first, cloud as a mirror
+
+localStorage stays the source of truth the app reads synchronously; every screen keeps working,
+byte-for-byte, with the network off. The cloud is a mirror bolted on beside it, never a dependency:
+
+- **`client/src/cloud/`** — `supabase.ts` (the client, built lazily behind a dynamic `import()` —
+  see the service-worker note below), `auth.ts` (silent anonymous sign-in, the parent's email link
+  and OTP flows, the recovery code), `sync.ts` (the outbox: batches localStorage writes up, pulls
+  the server's copy down, merges by the same rules the app already uses locally), `profileState.ts`
+  (the roster of children on this iPad and their storage namespaces), `remote.ts` (a **read-only**
+  adapter that lets a parent's other device compute a child's stats straight from the server, reusing
+  `progress/activity.ts`'s existing queries instead of duplicating them).
+- **`client/src/progress/synced.ts`** — the allowlist. A stored key syncs only if it is named here,
+  with a declared shape; everything else — including every voice recording and the once-a-day
+  confetti stamp — simply never leaves the device. This is deliberately an allowlist, not a denylist:
+  a key nobody registered fails closed (it does not sync) rather than failing open (it leaks).
+- **`supabase/migrations/0001_profiles_sync.sql`** — the schema, Row Level Security policies, the
+  `merge_kv` RPC and the server-side prune/clamp triggers, committed to the repo. `supabase/README.md`
+  is the fuller reference for all of it, including a security-model walkthrough and the two findings
+  a real project's own platform objects hand you the first time you run the RLS tests against it.
+- **`api/recover.mjs`, `api/ping.mjs`** — Vercel functions holding the one real secret
+  (`SUPABASE_SERVICE_ROLE`). `recover.mjs` redeems an 8-character recovery code by re-parenting an
+  old anonymous account's children onto the current device's account; `ping.mjs` is a daily cron
+  heartbeat (`vercel.json`) that keeps a free Supabase project from pausing after 7 idle days.
+
+### Environment variables
+
+| Variable | Lives in | Secret? |
+| --- | --- | --- |
+| `VITE_SUPABASE_URL` | `client/.env` (and Vercel) | **No** — compiled into the browser bundle, public by design |
+| `VITE_SUPABASE_ANON_KEY` | `client/.env` (and Vercel) | **No** — public by design; Row Level Security is what actually protects the data, not this key |
+| `SUPABASE_URL` | `server/.env` (and Vercel) | No |
+| `SUPABASE_SERVICE_ROLE` | `server/.env` (and Vercel) | **YES.** Bypasses every RLS policy. Never in client code, never in a doc, never in a commit — `scripts/check-secrets.sh` is extended to catch both the legacy JWT shape and the current `sb_secret_…` format |
+| `CRON_SECRET` | Vercel only | Yes — without it `/api/ping` is a write anyone on the internet can trigger |
+
+Leave `client/.env`'s two Supabase variables empty (or delete the file) and the app runs exactly as
+it did before this phase, with no cloud at all — that is a tested, enforced property
+(`client/src/cloud/supabase.test.ts`, and every existing test suite passing with the file moved
+away), not an aspiration. `client/.env.example` and `server/.env.example` both carry the Phase 11
+variables, commented, so a fresh clone shows what exists without turning any of it on.
+
+### Applying the migration and running the RLS tests
+
+**The verified path is the SQL editor.** Open the project's SQL editor and paste the whole of
+`supabase/migrations/0001_profiles_sync.sql` (run it as `postgres` — a lesser role cannot create the
+trigger that drops a recovery code the moment its account gets an email, and the migration says so
+with a warning rather than failing silently), then paste and run `supabase/tests/rls.test.sql`.
+
+**On a stock project, that first run of `rls.test.sql` FAILS — expect that, it is not broken.** It
+names one of Supabase's own platform objects: `PUBLIC holds EXECUTE on function rls_auto_enable;
+anon holds EXECUTE on function rls_auto_enable; authenticated holds EXECUTE on function
+rls_auto_enable`. This finding is untidy, not exploitable (Postgres refuses to call an event-trigger
+function directly, no matter who holds `EXECUTE` on it — `supabase/README.md` has the full two-sided
+proof), and the fix is one statement, run once as `postgres`:
+
+```sql
+revoke all on function public.rls_auto_enable() from public, anon, authenticated;
+```
+
+Paste and run `rls.test.sql` again — it now ends in `ALL RLS + MERGE TESTS PASSED`.
+
+**A second finding can also appear, on an older project template, and it is not harmless:**
+`authenticated holds CREATE on schema public`. With `CREATE`, a client can build its own table or
+function in `public`, which reopens the `TRIGGER` and `REFERENCES` routes this migration otherwise
+closes — treat this one at its real severity, not as tidiness. Fix the same way, once as `postgres`:
+
+```sql
+revoke create on schema public from anon, authenticated;
+```
+
+Re-pasting the migration file is also how you *repair* a project set up from an older copy of it —
+every grant in it revokes before it grants, so a re-run converges on the intended privilege set
+instead of adding to whatever is already there.
+
+(Supabase's own CLI documents a `supabase link` + `supabase db push` route instead of the SQL editor.
+This repo has no `config.toml` committed and `supabase init` has never been run here, so that route
+is not verified end to end against this project and is not asserted as tested — the SQL-editor path
+above is the one every finding in this section was actually produced against.)
+
+### Running the schema tests without a project
+
+```bash
+cd supabase/tests/harness
+pnpm install --ignore-workspace
+node run.mjs
+```
+
+This runs the whole migration and `rls.test.sql` against a throwaway PGlite Postgres — no Docker, no
+Supabase project, no keys of any kind — in two scenarios (a stock project, where the strict privilege
+inventory is *supposed* to fail naming Supabase's own `rls_auto_enable()`, and a remediated one,
+where it passes), so both the schema and the one real-project gotcha above are exercised by CI-style
+automation. `node run.mjs --audit` prints the full client-privilege table for either state.
+
+### Running the live smoke test — `scripts/cloud-smoke.mjs`
+
+The harness above proves the SQL against a stand-in Postgres; it cannot prove that *your* project has
+anonymous sign-ins enabled, that its real RLS policies behave as written once PostgREST and GoTrue are
+in the loop, or that the server's clock (which the ts-clamp depends on) is what it claims to be. Once
+`client/.env` and `server/.env` both hold real project keys:
+
+```bash
+node scripts/cloud-smoke.mjs
+```
+
+It signs in two throwaway anonymous "families" against your actual project, and in order: signs in
+anonymously; inserts a profile; proves `merge_kv`'s stars rule takes the per-entry **maximum** and
+ignores the clock (a later-but-lower write cannot undo an earlier-but-higher star, and an
+earlier-but-new key still merges in); proves replaying the same event twice leaves one row, not two;
+proves a client clock 10 days in the future is clamped back to roughly a day ahead of the *server's*
+own clock; proves a client cannot choose its own recovery code (only a server-drawn one is ever
+persisted); and proves one family can neither read nor write the other's profile, kv or recovery
+code — RLS refuses silently (an empty result, never an error that would confirm the row exists).
+It prints one `ok`/`FAIL` line per step, **never prints a key or a recovery code**, and deletes both
+throwaway accounts in a `finally` regardless of outcome — deleting an account cascades every row it
+owns, via the same `on delete cascade` the schema already declares, so cleanup is the same one
+`DELETE` per family every time, not a growing list of tables to remember. It runs against the same
+database your family's own data lives in, so treat a failed cleanup line as something to go check by
+hand in the Supabase dashboard, not something to shrug off.
+
+### The honest persistence story
+
+This is the part a confident README could get wrong in the dangerous direction, so it is stated
+exactly as true, limits included:
+
+- **Nothing is safe until a parent links an email.** Before that, progress is mirrored to an
+  anonymous account the moment the device is online, but the *only* way back onto a wiped device is
+  an 8-character recovery code — visible any time the parent screen is open while the account is
+  still unlinked ("chụp màn hình lại nhé" is a nudge to screenshot it, not a claim it is only shown
+  once). Link an email and the code is gone for good: a database trigger deletes it the instant the
+  account gains one, because from that moment the email is the way back in and a screenshot able to
+  take the family's account over would be a standing risk. So the honest statement is narrower than
+  "shown once" — it is **lose this device, with no screenshot taken, before an email is linked, and
+  the code is lost too.** A dismissible banner appears on Home once a device reaches a 3-day streak
+  while still unlinked, and it says exactly this much — "Tiến độ mới lưu trên máy này — nhờ bố mẹ
+  liên kết email để giữ an toàn" — never that anything has already been lost, and never that it is
+  safer than it is.
+- **A non-installed Safari PWA loses ALL of its storage after 7 days unused.** This is WebKit's
+  Intelligent Tracking Prevention, it has nothing to do with Supabase, and it fires whether or not a
+  cloud project even exists — it is a fact about `localStorage` on an un-installed site, not about
+  this phase's mirror. The app nudges "Add to Home Screen" once, on iOS Safari, dismissible; an
+  installed PWA is exempt from ITP's storage eviction.
+- **A child's voice recording never leaves the device — before linking, after linking, forever.**
+  Only scores and weak-phoneme summaries sync as rows in the `events` table; the actual audio blobs
+  stay in IndexedDB and no code path in `cloud/` ever opens that store. This is enforced by what
+  `progress/synced.ts` does and does not name, not by a comment promising it separately.
+- **A parent-initiated reset can be *owed* for days, not undone.** Resetting a child's progress is a
+  server-side `DELETE`, never a merge (stars merge by maximum, so an empty write would just be
+  out-merged by the next device to sync and the stars would visibly come back). If the reset happens
+  offline, the deletion is queued and carried out the next time that device reaches the network —
+  which can take everything a *different* device pushed for that child in the meantime with it. The
+  parent screen says the deletion is still owed for as long as it is; nothing here pretends a reset
+  is instantaneous when the device that asked for it has no signal.
+- **The sync line lives in exactly one place — the parent dashboard — and the child never sees it.**
+  "Đã đồng bộ ✓" (nothing is queued), "Chưa đồng bộ n mục" (n items still waiting), "Ngoại tuyến" (no
+  network right now); with no cloud configured at all, the line does not render.
+- **A remote view is allowed to disagree with the local one, on purpose.** A parent looking at a
+  child's progress from a second device reads whatever the server currently holds, which can show
+  *more* history than the device sitting next to the child (old lesson records the local device has
+  already pruned) and can lag behind a reset that has not run yet on the device that asked for it.
+  This is called out on screen, not reconciled away.
+
+### The `@supabase/supabase-js` chunk — a decision, not an oversight
+
+`client/src/cloud/supabase.ts` builds the Supabase client behind `isCloudConfigured()` and a dynamic
+`import()`, specifically so the ~209 kB `@supabase/supabase-js` library is its own chunk rather than
+inflating the app every child waits for on every visit. But Vite cannot prove a dynamic `import()` is
+unreachable, so it always emits that chunk — even for a build with no cloud env vars at all, which
+can never take the branch that would `import()` it. Left alone, the service worker's
+`globPatterns: ['**/*.{js,css,html,svg,png,mp3}']` in `client/vite.config.ts` would precache that
+chunk regardless, meaning a family who has never set up Supabase — and every contributor's clone,
+and CI — would still download ~209 kB of code on first install that their build can never execute.
+
+**Decision: exclude it from precache when the build is unconfigured, and prove the configured build
+still precaches it.** `client/vite.config.ts` now names the chunk explicitly (`manualChunks`, so the
+glob below does not depend on a third-party package's internal file layout) and reads the same two
+`VITE_SUPABASE_*` variables `isCloudConfigured()` checks at runtime — at *build* time, via Vite's own
+`loadEnv`, since Vite bakes `import.meta.env.VITE_*` into the bundle once and for all anyway.
+Verified both ways by building each way and inspecting the output:
+
+| Build | `dist/assets/cloud-vendor-*.js` emitted? | Listed in `dist/sw.js`'s precache manifest? |
+| --- | --- | --- |
+| `client/.env` present (configured) | Yes, 209.36 kB | **Yes** — 207 precache entries, 3365.56 KiB |
+| `client/.env` absent (unconfigured) | Yes, 209.36 kB (same library code) | **No** — 206 precache entries, 3160.97 KiB |
+
+The chunk is still built either way (a configured device that later has its env vars added back, or
+a QA build, must still be able to fetch it on demand); it is precached — downloaded on install, before
+anyone has asked for it — only in a build that can actually reach the `import()` that needs it. **The
+two builds' `cloud-vendor-*.js` files are not byte-identical** — diffed directly, they differ in
+exactly 8 bytes: the chunk imports shared runtime helpers back from the main chunk, and the main
+chunk's own content-hashed filename differs between the two builds, so the import specifier embedded
+in `cloud-vendor` differs too. Same `@supabase/supabase-js` code either way, different file, different
+hash, different name — so a build's precache manifest can only ever name its own copy, never the
+other's. (The unconfigured build names it nowhere, which is the point of this section.) The main
+chunk contains no `SupabaseClient`/`GoTrueClient`
+symbol in either build, confirming the code split is real and not just the naming.
+
+### The kv merge contract, in one line
+
+`stars` merges by **per-entry maximum**, ignoring the clock — a device offline for a week cannot push
+a lower star over one already earned. Every other synced key (`leitner`, `band`, `limit.minutes`,
+`lesson.length`, `lesson.<day>`) is last-write-wins by the client's own `updated_at`. See
+`supabase/README.md` for the full table and the reasoning; `client/src/progress/synced.ts` is the one
+place a new synced key has to be registered, with its own shape, or it silently never syncs at all.
+
+### iPad checklist rows for this phase
+
+The setup and full running checklist are under **"iPad setup & testing"** above; these rows continue
+that table's numbering for the cross-device and cache-wipe drills specific to this phase. They need a
+second physical device (or a private/incognito window standing in for one) and a real inbox for the
+OTP email.
+
+| # | Step | Expected result | Result |
+|---|------|------------------|--------|
+| 69 | While the device is still anonymous/unlinked: Home → "👨‍👩‍👧 Phụ huynh" → answer the math gate → "Tài khoản" card → note and screenshot the 8-character recovery code shown there | The code renders every time this card is open while the account is unlinked — nothing marks it "already shown"; screenshot it now anyway, since linking (next row) removes it for good | ⏳ pending |
+| 70 | Same screen, right after: enter a parent email → submit → enter the 6-digit code from the inbox | The email now shows next to "Đăng xuất"; the recovery-code box from row 69 is gone — a trigger deletes it the instant the account gains an email; the sync line still updates normally | ⏳ pending |
+| 71 (cross-device) | On a SECOND device (or a private window): open the app, tap "Đã dùng Speak Up rồi?" → "Tôi có email đã liên kết" → the SAME linked email → the 6-digit code from the inbox → (a profile picker appears if the account owns more than one profile — pick any) | The device switches to the picked profile with its progress pulled down; from Home, answer the math gate → Parent Dashboard. If the account owns a SECOND profile, its card appears automatically, no toggle needed; press "Xem từ xa" either way to additionally show THIS device's own active child's server-side numbers, for comparing them against the local ones above (with only one profile on the account, this is the only way the section appears at all) | ⏳ pending |
+| 72 (cache wipe, linked) | On the FIRST device: note today's stars/streak, then clear all site data (iPad Safari: Settings → Safari → Advanced → Website Data → Speak Up) and reload | Fresh-install screen; tap "Đã dùng Speak Up rồi?" → "Tôi có email đã liên kết" → the same email → OTP → (a profile picker if the account has more than one child) → the same stars/streak reappear. Then reload once more: the app opens **straight into that child's Home — no "Ai đang học nào?" picker**, because the restore removed the empty placeholder profile this device minted at launch rather than leaving a second, identical fox on the roster for the child to choose between | ⏳ pending |
+| 73 (cache wipe, not linked) | On a device that has never linked an email: screenshot its recovery code (Parent Dashboard → "Tài khoản"), note its stars/streak, then clear all site data and reload | "Đã dùng Speak Up rồi?" → "Tôi có mã khôi phục" → the 8-character code → the same stars/streak reappear; trying the same code again afterwards fails with "Không tìm thấy mã này". Reload once more: **no "Ai đang học nào?" picker** — the device holds exactly one child again (the placeholder it minted at launch is gone), so a family with one child never meets the picker at all | ⏳ pending |
+| 74 (two profiles, one iPad) | Parent Dashboard → "+ Thêm hồ sơ" to add a second child, then reload (a plain reload is enough the first time — this device has never shown the picker, so it holds no "already chosen" mark; to *repeat* the drill within 5 minutes, use a fresh tab, because that mark survives a same-tab reload) | "Ai đang học nào? 👋" — an avatar picker — appears before anything else loads; tapping a face opens that child's own stars/streak, untouched by the other child's | ⏳ pending |
+| 75 (offline honesty) | Turn Wi-Fi off, use the app for a few minutes, open Parent Dashboard | Sync line reads "Ngoại tuyến", never "Đã đồng bộ ✓", while offline; turning Wi-Fi back on and reopening the dashboard eventually shows "Đã đồng bộ ✓" | ⏳ pending |
+| 76 (milestone banner) | On a device that has never linked an email, reach a 3-day streak (a multi-day drill — the app offers no way to fast-forward it) | Home shows a dismissible banner — "Tiến độ mới lưu trên máy này — nhờ bố mẹ liên kết email để giữ an toàn" — linking to Parent Dashboard | ⏳ pending |
+
 ## Architecture
 
 ```
@@ -946,10 +1175,13 @@ client/src/
   scoring/       # pronunciation scoring: Azure scorer, Web Speech fallback, feedback/star logic
   content/       # lesson content data (Sound Zoo, Word Pop word lists) and types
   progress/      # stars/progress persistence (localStorage-backed store)
+  cloud/         # Phase 11: Supabase client, auth, sync outbox, profile roster, remote read-only stats
   components/    # shared UI: MicButton, Stars, HintCard, ScoredWords
   screens/       # routed pages: Home, LevelSelect, PracticeCard
 
 server/src/      # Express API: issues short-lived Azure Speech tokens (GET /api/speech-token)
+api/             # Vercel functions: /api/recover, /api/ping (Phase 11, service-role only)
+supabase/        # Phase 11: migrations, RLS tests, the PGlite harness — see supabase/README.md
 ```
 
 ## Deploy

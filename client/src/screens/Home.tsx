@@ -4,26 +4,72 @@ import { TOPICS } from '../content/topics'
 import { totalStars } from '../progress/store'
 import { dayKey, getActivity, missionStatus, streak, weekDots, minutesToday } from '../progress/activity'
 import { lessonStatus } from '../progress/lesson'
+import { hasAnyHistory, sumHistory } from '../progress/history'
 import { getLimitMinutes } from '../progress/limit'
+import { activeProfileId, storageKey } from '../progress/storageKeys'
 import { topicStars, topicUnlocked } from '../progress/topicProgress'
+import { listProfiles } from '../cloud/profileState'
+import { isAnonymous } from '../cloud/auth'
+import { isCloudConfigured } from '../cloud/supabase'
 import { Foxy } from '../components/Foxy'
 import type { FoxyMood } from '../components/Foxy'
 import { MissionCard } from '../components/MissionCard'
 import { StreakWeek } from '../components/StreakWeek'
 import { Chip, PAGE_SHELL, SpeechBubble, StarRow } from '../components/ui'
 
-const CELEBRATED_KEY = 'speakup.celebrated'
+// Per child, like every other stored value — see progress/storageKeys.ts.
+const celebratedKey = () => storageKey('celebrated')
 
 // The celebration is once per day, not once per visit to Home — the day it last fired is
 // remembered so coming back to Home does not re-throw confetti at the child.
 function alreadyCelebrated(day: string): boolean {
-  try { return localStorage.getItem(CELEBRATED_KEY) === day }
+  try { return localStorage.getItem(celebratedKey()) === day }
   catch { return false }
 }
 
 function markCelebrated(day: string): void {
-  try { localStorage.setItem(CELEBRATED_KEY, day) }
+  try { localStorage.setItem(celebratedKey(), day) }
   catch { /* ignore: storage unavailable */ }
+}
+
+// ---------------------------------------------------------------------------
+// Phase 11: the milestone banner and the Add-to-Home-Screen nudge.
+//
+// Both are dismiss-once flags, profile-scoped like `celebrated` above, and neither is a synced
+// key — `progress/synced.ts`'s allowlist has never heard of either name, so `isSyncedName` says no
+// and the outbox never queues them. That is what makes them safe to write with a bare
+// `localStorage.setItem`, exactly like the celebration stamp.
+// ---------------------------------------------------------------------------
+
+const bannerDismissedKey = () => storageKey('cloud.bannerDismissed')
+const a2hsDismissedKey = () => storageKey('a2hs.dismissed')
+
+function wasDismissed(key: string): boolean {
+  try { return localStorage.getItem(key) === '1' } catch { return false }
+}
+
+function dismiss(key: string): void {
+  try { localStorage.setItem(key, '1') } catch { /* ignore: storage unavailable */ }
+}
+
+/** Already installed, on whatever platform bothers to say so. */
+function isStandaloneDisplay(): boolean {
+  try {
+    if ((window.navigator as Navigator & { standalone?: boolean }).standalone) return true
+    return window.matchMedia?.('(display-mode: standalone)').matches ?? false
+  } catch {
+    return false
+  }
+}
+
+/**
+ * The ITP-7-day wipe this nudge exists for is a WebKit thing, and on iOS EVERY browser is WebKit —
+ * Chrome and Firefox there are Safari's engine in a different shell, and they lose the storage the
+ * same way. So the test is the platform, not the browser, which is exactly what this regex asks;
+ * the copy names no browser either, and says "Màn hình chính", which is what all of them call it.
+ */
+function looksLikeIOS(): boolean {
+  try { return /iP(hone|od|ad)/.test(window.navigator.userAgent) } catch { return false }
 }
 
 /**
@@ -129,14 +175,40 @@ export function Home() {
     return { events, now, lesson: lessonStatus(now, events) }
   })
   const counters = missionStatus(now, events)
-  const hasProgress =
+  // TODAY's work, and only today's: `missionStatus` and `lessonStatus` both filter the log to the
+  // current day. It is the right question for Foxy's mood and greeting ("Giỏi lắm, tiếp tục nhé!"
+  // is about this morning) and the wrong one for anything about the child's history — see
+  // `hasHistory` below.
+  const doneToday =
     lesson.doneCount > 0 || counters.story > 0 || counters.speak > 0 || counters.word > 0
-  const mood: FoxyMood = lesson.done ? 'cheer' : hasProgress ? 'happy' : 'idle'
+  const mood: FoxyMood = lesson.done ? 'cheer' : doneToday ? 'happy' : 'idle'
   const say = lesson.done
     ? 'Hoàn thành nhiệm vụ rồi! 🎉'
-    : hasProgress
+    : doneToday
       ? 'Giỏi lắm, tiếp tục nhé!'
       : 'Hôm nay mình luyện nói nhé!'
+  /**
+   * Has ANY child on this iPad ever done anything — the whole log, and every namespace, not today's
+   * slice of the active one.
+   *
+   * Two narrowings, both fixed here, because the restore link below is the door that abandons an
+   * account and it may only appear on a device with nothing to lose:
+   *
+   *  - **Not today-scoped.** `missionStatus`/`lessonStatus` filter to the current day, so this used
+   *    to reappear every morning before the child's first tap, on top of months of history.
+   *  - **Not active-profile-scoped.** Every child on this iPad belongs to the SAME account, so a
+   *    sibling's stars are exactly as strandable as this child's. Asking only about the active
+   *    namespace put the link on the empty sibling's Home — which flow 6's picker makes a one-tap
+   *    everyday destination — while the first child's months of progress sat one namespace away.
+   */
+  // A Set, so a child who is both in the roster and active is counted once — and `null` is always
+  // in it, because the legacy un-namespaced keys are where everything lives on a device whose
+  // `speakup.profile` write failed (roster written, active not, `ensureLocalProfile` returns
+  // early). That device has a full history and no namespace to find it under.
+  const historyIds = new Set<string | null>(listProfiles().map(p => p.id))
+  historyIds.add(activeProfileId())
+  historyIds.add(null)
+  const hasHistory = hasAnyHistory(sumHistory([...historyIds]))
   const overLimit = minutesToday(now, events) >= getLimitMinutes()
 
   // Decided once per mount, then remembered in storage by the effect below, so the trip to the
@@ -147,6 +219,35 @@ export function Home() {
     markCelebrated(dayKey(now))
     navigate('/mission/done')
   }, [celebrating, now, navigate])
+
+  // A build with no cloud env vars has nothing below to show: no banner, no "already used
+  // this?" link. `cloudAvailable` is read once, synchronously, so a device without the env
+  // vars never even asks whether it is signed in — no chunk load, no effect, byte for byte the
+  // app before Phase 11.
+  const [cloudAvailable] = useState(isCloudConfigured)
+  // null = not answered yet (or no cloud at all) — the banner needs a definite "still anonymous"
+  // before it may claim the parent has not linked, so it stays hidden rather than guessing.
+  const [linked, setLinked] = useState<boolean | null>(null)
+  useEffect(() => {
+    if (!cloudAvailable) return
+    let cancelled = false
+    isAnonymous().then(anon => { if (!cancelled) setLinked(!anon) }).catch(() => undefined)
+    return () => { cancelled = true }
+  }, [cloudAvailable])
+
+  const [bannerDismissed, setBannerDismissed] = useState(() => cloudAvailable && wasDismissed(bannerDismissedKey()))
+  const showMilestoneBanner = cloudAvailable && linked === false && streak(now, events) >= 3 && !bannerDismissed
+  function handleDismissBanner() {
+    dismiss(bannerDismissedKey())
+    setBannerDismissed(true)
+  }
+
+  const [a2hsDismissed, setA2hsDismissed] = useState(() => wasDismissed(a2hsDismissedKey()))
+  const showA2hs = !a2hsDismissed && looksLikeIOS() && !isStandaloneDisplay()
+  function handleDismissA2hs() {
+    dismiss(a2hsDismissedKey())
+    setA2hsDismissed(true)
+  }
 
   return (
     // `min-h-full`, never `h-full`: the stacked portrait layout is taller than the viewport, and a
@@ -209,6 +310,54 @@ export function Home() {
             className="rounded-xl2 bg-sun-50 px-5 py-4 text-center font-display text-xl font-extrabold text-sun-700 shadow-card-sm"
           >
             Hôm nay bé học đủ rồi 🦊 Mai gặp lại nhé!
+          </div>
+        )}
+
+        {/* Spec flow 1's milestone banner: three days in, on a device nobody has linked yet, this
+          * is the one place the app admits the safety net is thinner than it looks. Honest, not
+          * alarming — "mới lưu trên máy này", never "đã mất" or "sắp mất". */}
+        {showMilestoneBanner && (
+          <div data-testid="milestone-banner" className="flex items-center justify-between gap-3 rounded-xl2 bg-teal-50 px-4 py-3 shadow-card-sm">
+            <p className="flex-1 text-sm font-semibold text-teal-700">
+              Tiến độ mới lưu trên máy này — nhờ bố mẹ{' '}
+              <Link to="/parent" className="underline">liên kết email</Link> để giữ an toàn.
+            </p>
+            <button
+              type="button"
+              aria-label="Đóng thông báo liên kết email"
+              onClick={handleDismissBanner}
+              // §Rules' 64 px floor: this is the child's Home, not the adult dashboard, and the
+              // exemption the design grants is for that screen alone. The glyph stays small; the
+              // HIT AREA is what has to reach the floor, so the padding does the work. `-my-3`
+              // gives it back the height it borrows from the banner's own padding, so a 64 px
+              // target does not make the banner taller than it was.
+              className="-my-3 flex h-16 w-16 shrink-0 items-center justify-center rounded-full text-teal-700"
+            >
+              ✕
+            </button>
+          </div>
+        )}
+
+        {/* Non-negotiable principles §5: a non-installed Safari PWA loses all storage after seven
+          * idle days (WebKit ITP). Independent of the cloud — it fires whether or not a Supabase
+          * project exists, because it is about localStorage, not about the mirror. */}
+        {showA2hs && (
+          <div data-testid="a2hs-banner" className="flex items-center justify-between gap-3 rounded-xl2 bg-sun-50 px-4 py-3 shadow-card-sm">
+            {/* "ít bị xoá hơn", not "không mất": installing lifts the app out of the 7-day sweep,
+              * it does not make storage permanent — a full disk, a manual clear or a reinstall
+              * still take it. The banner may not promise what only a linked email can. */}
+            <p className="flex-1 text-sm font-semibold text-sun-700">
+              Thêm Speak Up! vào Màn hình chính để tiến độ ít bị xoá hơn khi lâu ngày không mở.
+            </p>
+            <button
+              type="button"
+              aria-label="Đóng thông báo cài vào Màn hình chính"
+              onClick={handleDismissA2hs}
+              // The 64 px floor again — same reasoning as the banner above.
+              className="-my-3 flex h-16 w-16 shrink-0 items-center justify-center rounded-full text-sun-700"
+            >
+              ✕
+            </button>
           </div>
         )}
 
@@ -333,6 +482,20 @@ export function Home() {
                 🗣️ Các bậc luyện nói
               </Link>
             </div>
+
+            {/* Spec flows 3/4's other door, and it is only ever offered on a device that has
+              * nothing of its own to lose: a fresh install, or a cache the browser wiped. The test
+              * is the child's whole HISTORY (`hasHistory`), never today's activity — a today-scoped
+              * one put this link back on screen every morning before the first tap, on top of
+              * months of progress, in front of a child, one tap from a screen that can hand this
+              * iPad to a different account. */}
+            {cloudAvailable && !hasHistory && (
+              <div className="flex items-center justify-center ipad:absolute ipad:bottom-[100px] ipad:left-1/2 ipad:-translate-x-1/2">
+                <Link to="/start" className="text-xs font-bold text-ink-500 underline ipad:text-sm">
+                  Đã dùng Speak Up rồi?
+                </Link>
+              </div>
+            )}
 
             <div className="flex justify-end ipad:absolute ipad:bottom-2 ipad:right-2">
               <Link

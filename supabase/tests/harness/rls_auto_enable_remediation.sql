@@ -1,0 +1,13 @@
+-- The one-line fix supabase/README.md documents under "Expected findings the
+-- first time you run rls.test.sql on a real project" for the platform-owned
+-- rls_auto_enable() grant. Kept in its own file and executed verbatim by
+-- run.mjs's "remediated project" scenario, so the README's prose and the
+-- harness's proof of it cannot drift apart on what the fix actually is.
+--
+-- Safe and proven on the real project: a client-created table still gets RLS
+-- auto-enabled after this revoke (the event trigger fires at DDL time
+-- regardless of the caller's EXECUTE privilege on the function it invokes),
+-- while a direct call to the function changes from 0A000 (trigger functions
+-- can only be called as triggers) to 42501 (permission denied) — an impostor
+-- refusal becomes a privilege refusal, without disabling the feature.
+revoke all on function public.rls_auto_enable() from public, anon, authenticated;

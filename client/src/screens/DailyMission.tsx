@@ -4,22 +4,24 @@ import { dayKey, getActivity } from '../progress/activity'
 import { getLesson, lessonStatus } from '../progress/lesson'
 import type { LessonItemKind } from '../progress/lesson'
 import { MISSION_STATE, groupItems } from '../progress/missionNav'
+import { storageKey } from '../progress/storageKeys'
 import { Foxy } from '../components/Foxy'
 import { BackButton, Button, Chip, HomeLabel, PAGE_SHELL } from '../components/ui'
 import type { ChipTone } from '../components/ui'
 
-const CELEBRATED_KEY = 'speakup.celebrated'
+// Per child, like every other stored value — see progress/storageKeys.ts.
+const celebratedKey = () => storageKey('celebrated')
 
 // The same once-a-day guard Home keeps: the finish screen fires wherever the last item happens to
 // be ticked off — on the way back to the map, or here, when the child ends their lesson on
 // /mission — and never twice on the same day.
 function alreadyCelebrated(day: string): boolean {
-  try { return localStorage.getItem(CELEBRATED_KEY) === day }
+  try { return localStorage.getItem(celebratedKey()) === day }
   catch { return false }
 }
 
 function markCelebrated(day: string): void {
-  try { localStorage.setItem(CELEBRATED_KEY, day) }
+  try { localStorage.setItem(celebratedKey(), day) }
   catch { /* ignore: storage unavailable */ }
 }
 

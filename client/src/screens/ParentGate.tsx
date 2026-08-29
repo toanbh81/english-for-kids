@@ -1,19 +1,11 @@
 import { useEffect, useState } from 'react'
-import type { ChangeEvent, FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { ParentDashboard } from './ParentDashboard'
-import { Button, Card, PAGE_SHELL } from '../components/ui'
+import { ParentQuestion } from '../components/ParentQuestion'
+import { Card, PAGE_SHELL } from '../components/ui'
 
 const FLAG_KEY = 'speakup.parent'
 const MAX_AGE_MS = 10 * 60 * 1000
-
-function randInt(min: number, max: number): number {
-  return min + Math.floor(Math.random() * (max - min + 1))
-}
-
-function newQuestion(): { a: number; b: number } {
-  return { a: randInt(3, 9), b: randInt(3, 9) }
-}
 
 /** The flag stores when the gate was passed; anything older than 10 minutes asks again, so a
  * tab left open on /parent does not stay unlocked for the rest of the session. */
@@ -30,9 +22,9 @@ function clearFlag() {
 
 export function ParentGate() {
   const [unlocked, setUnlocked] = useState(isUnlocked)
-  const [question, setQuestion] = useState(newQuestion)
-  const [value, setValue] = useState('')
-  const [wrong, setWrong] = useState(false)
+  // Bumped on every lock, so the question component is thrown away and remounted with a fresh
+  // question rather than keeping the one the parent just answered.
+  const [attempt, setAttempt] = useState(0)
 
   // Leaving /parent re-locks: the flag never outlives the screen that owns it.
   useEffect(() => clearFlag, [])
@@ -40,28 +32,15 @@ export function ParentGate() {
   // ParentDashboard owns none of the unlocked state — "Khoá lại" just hands control back here.
   function handleLock() {
     clearFlag()
-    setQuestion(newQuestion())
-    setValue('')
-    setWrong(false)
+    setAttempt(n => n + 1)
     setUnlocked(false)
   }
 
   if (unlocked) return <ParentDashboard onLock={handleLock} />
 
-  function handleAnswer(e: ChangeEvent<HTMLInputElement>) {
-    setValue(e.target.value)
-  }
-
-  function handleSubmit(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault()
-    if (Number(value.trim()) === question.a * question.b) {
-      try { sessionStorage.setItem(FLAG_KEY, String(Date.now())) } catch { /* ignore: storage unavailable */ }
-      setUnlocked(true)
-      return
-    }
-    setWrong(true)
-    setQuestion(newQuestion())
-    setValue('')
+  function handlePass() {
+    try { sessionStorage.setItem(FLAG_KEY, String(Date.now())) } catch { /* ignore: storage unavailable */ }
+    setUnlocked(true)
   }
 
   return (
@@ -74,23 +53,7 @@ export function ParentGate() {
       </Link>
 
       <Card className="flex w-full max-w-md flex-col items-center gap-6 p-8 text-center">
-        <h1 className="text-base font-bold text-ink-500">Dành cho phụ huynh</h1>
-        <p className="font-display text-[44px] font-extrabold text-ink-900">{question.a} × {question.b} = ?</p>
-
-        <form onSubmit={handleSubmit} className="flex flex-col items-center gap-6">
-          <input
-            aria-label="Đáp án"
-            inputMode="numeric"
-            type="text"
-            value={value}
-            onChange={handleAnswer}
-            className="h-16 w-32 rounded-2xl border-2 border-line-200 text-center font-display text-2xl font-extrabold text-ink-900"
-          />
-
-          {wrong && <p className="font-bold text-fix">Chưa đúng, thử lại</p>}
-
-          <Button type="submit">Vào</Button>
-        </form>
+        <ParentQuestion key={attempt} onPass={handlePass} />
       </Card>
     </main>
   )

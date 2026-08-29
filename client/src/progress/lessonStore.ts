@@ -1,5 +1,6 @@
 import type { ActivityEvent, ActivityKind } from './activity'
 import { findSound } from '../content'
+import { onStoreWrite, storageKey } from './storageKeys'
 
 /**
  * Storage and done-matching for the daily lesson, split out of `lesson.ts` so the dependency graph
@@ -24,8 +25,9 @@ export type LessonLength = 'short' | 'medium' | 'long'
 export const LESSON_LENGTHS: LessonLength[] = ['short', 'medium', 'long']
 const DEFAULT_LENGTH: LessonLength = 'medium'
 
-const PREFIX = 'speakup.lesson.'
-const LENGTH_KEY = `${PREFIX}length`
+// Resolved per call, never captured: the active child is only known once the app has booted.
+const prefix = () => storageKey('lesson.')
+const lengthKey = () => `${prefix()}length`
 const DAY_RE = /^\d{4}-\d{2}-\d{2}$/
 /**
  * Schema stamp on every persisted lesson. A record without it — or with any other value — is a
@@ -34,12 +36,32 @@ const DAY_RE = /^\d{4}-\d{2}-\d{2}$/
  * take the whole app down with it).
  */
 const VERSION = 1
-/** Lesson records kept in storage; older days are pruned so the child's quota never fills up. */
-const KEEP_DAYS = 30
+/**
+ * Lesson records kept in storage; older days are pruned so the child's quota never fills up.
+ *
+ * Exported because the sync pull has to obey the same policy: a server that still holds a year of
+ * lesson records must not write them all back for `saveLesson` to delete again on the next launch —
+ * a ping-pong that costs the child's storage quota, and on a full store costs them a star (the
+ * `setItem` in `store.ts` is a swallowed failure, not a visible one).
+ */
+export const KEEP_DAYS = 30
 /** Same bar as the Leitner unlock and the legacy word mission. */
 const PASS_SCORE = 60
 
-const lessonKey = (day: string) => `${PREFIX}${day}`
+const lessonKey = (day: string) => `${prefix()}${day}`
+
+/**
+ * The day inside a stored name (`lesson.2026-08-29` → `2026-08-29`), or null for anything else —
+ * `lesson.length`, or a key this module does not own.
+ *
+ * The naming rule stays in here, with the code that writes it, so the sync engine can ask which of
+ * the server's kv keys are lesson records without restating the shape.
+ */
+export function lessonDayInName(name: string): string | null {
+  if (!name.startsWith('lesson.')) return null
+  const day = name.slice('lesson.'.length)
+  return DAY_RE.test(day) ? day : null
+}
 
 /** Every field a screen reads off an item must be a string, or the row renders `undefined` — and
  * `route.startsWith(...)` in `matchIds` throws, which is what bricked the app. */
@@ -52,6 +74,28 @@ function isLessonItem(value: unknown): value is LessonItem {
 }
 
 /**
+ * A stored lesson value, already `JSON.parse`'d, validated against the exact shape `saveLesson`
+ * writes — split out of `lessonForDay` so the SAME validation covers a value that never went
+ * through `localStorage` at all.
+ *
+ * That second caller is `cloud/remote.ts`'s remote dashboard: a `kv` row's `value` column is jsonb,
+ * so PostgREST hands it back already parsed, never as a JSON string to `JSON.parse` again. Without
+ * this split, giving the remote view its own lesson-completion rule (Phase 11 task 5) would have
+ * meant a second copy of these five checks drifting from this one the moment either changed.
+ */
+export function parseLesson(parsed: unknown): Lesson | null {
+  if (!parsed || typeof parsed !== 'object') return null
+  const { v, day: storedDay, created, band, items } = parsed as Partial<Lesson> & { v?: unknown }
+  if (v !== VERSION) return null
+  // `created` gates every done-match, so a record without it would mark the whole day complete.
+  if (typeof storedDay !== 'string' || typeof created !== 'number' || typeof band !== 'number') return null
+  if (!Array.isArray(items) || !items.every(isLessonItem)) return null
+  // Rebuilt rather than passed through, so the version stamp stays a storage detail and two
+  // lessons of the same day still compare equal whether they were just generated or read back.
+  return { day: storedDay, created, band, items }
+}
+
+/**
  * Corrupt or unavailable storage (private mode, hand-edited value) must not crash the app: a record
  * that fails any check reads as "no lesson yet", so the caller generates a fresh one over the top.
  */
@@ -59,16 +103,7 @@ export function lessonForDay(day: string): Lesson | null {
   try {
     const raw = localStorage.getItem(lessonKey(day))
     if (!raw) return null
-    const parsed: unknown = JSON.parse(raw)
-    if (!parsed || typeof parsed !== 'object') return null
-    const { v, day: storedDay, created, band, items } = parsed as Partial<Lesson> & { v?: unknown }
-    if (v !== VERSION) return null
-    // `created` gates every done-match, so a record without it would mark the whole day complete.
-    if (typeof storedDay !== 'string' || typeof created !== 'number' || typeof band !== 'number') return null
-    if (!Array.isArray(items) || !items.every(isLessonItem)) return null
-    // Rebuilt rather than passed through, so the version stamp stays a storage detail and two
-    // lessons of the same day still compare equal whether they were just generated or read back.
-    return { day: storedDay, created, band, items }
+    return parseLesson(JSON.parse(raw))
   } catch { return null }
 }
 
@@ -76,10 +111,11 @@ export function lessonForDay(day: string): Lesson | null {
 export function lessonDays(): string[] {
   const days: string[] = []
   try {
+    const p = prefix()
     for (let i = 0; i < localStorage.length; i++) {
       const key = localStorage.key(i)
-      if (!key?.startsWith(PREFIX)) continue
-      const day = key.slice(PREFIX.length)
+      if (!key?.startsWith(p)) continue
+      const day = key.slice(p.length)
       if (DAY_RE.test(day)) days.push(day)
     }
   } catch { return [] }
@@ -98,8 +134,11 @@ export function saveLesson(lesson: Lesson): void {
     }
   } catch { /* ignore: storage unavailable */ }
 
-  try { localStorage.setItem(lessonKey(lesson.day), JSON.stringify({ ...lesson, v: VERSION })) }
-  catch { /* ignore: storage unavailable */ }
+  try {
+    const key = lessonKey(lesson.day)
+    localStorage.setItem(key, JSON.stringify({ ...lesson, v: VERSION }))
+    onStoreWrite(key)
+  } catch { /* ignore: storage unavailable */ }
 }
 
 /** Every key this module owns — day records, the length setting, and anything left over from an
@@ -107,9 +146,10 @@ export function saveLesson(lesson: Lesson): void {
 function lessonKeys(): string[] {
   const keys: string[] = []
   try {
+    const p = prefix()
     for (let i = 0; i < localStorage.length; i++) {
       const key = localStorage.key(i)
-      if (key?.startsWith(PREFIX)) keys.push(key)
+      if (key?.startsWith(p)) keys.push(key)
     }
   } catch { return [] }
   return keys
@@ -123,14 +163,17 @@ export function clearLessons(): void {
 
 export function getLessonLength(): LessonLength {
   try {
-    const raw = localStorage.getItem(LENGTH_KEY)
+    const raw = localStorage.getItem(lengthKey())
     return LESSON_LENGTHS.includes(raw as LessonLength) ? (raw as LessonLength) : DEFAULT_LENGTH
   } catch { return DEFAULT_LENGTH }
 }
 
 export function setLessonLength(length: LessonLength): void {
-  try { localStorage.setItem(LENGTH_KEY, length) }
-  catch { /* ignore: storage unavailable */ }
+  try {
+    const key = lengthKey()
+    localStorage.setItem(key, length)
+    onStoreWrite(key)
+  } catch { /* ignore: storage unavailable */ }
 }
 
 /**

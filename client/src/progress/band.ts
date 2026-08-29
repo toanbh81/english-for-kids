@@ -4,6 +4,7 @@ import type { ActivityEvent } from './activity'
 // `lessonStore`, not `lesson`: lesson generation reads the band, so importing the generator here
 // would close the loop. The store sits below both.
 import { itemDone, lessonForDay } from './lessonStore'
+import { onStoreWrite, storageKey } from './storageKeys'
 import { getStars } from './store'
 
 /**
@@ -14,7 +15,8 @@ export type Band = 1 | 2 | 3 | 4 | 5
 export type BandMode = 'auto' | 'manual'
 export type BandState = { value: Band; mode: BandMode }
 
-const KEY = 'speakup.band'
+// Resolved per call, never captured: the active child is only known once the app has booted.
+const bandKey = () => storageKey('band')
 const DAY_MS = 24 * 60 * 60 * 1000
 /** Three days this good in a row move the child up a band. */
 const GOOD_DAYS = 3
@@ -30,7 +32,7 @@ const isBand = (n: unknown): n is Band => typeof n === 'number' && Number.isInte
 /** Corrupt or unavailable storage (private mode, hand-edited value) must not crash the app. */
 function read(): BandState | null {
   try {
-    const raw = localStorage.getItem(KEY)
+    const raw = localStorage.getItem(bandKey())
     if (!raw) return null
     const parsed: unknown = JSON.parse(raw)
     if (!parsed || typeof parsed !== 'object') return null
@@ -41,8 +43,11 @@ function read(): BandState | null {
 }
 
 function write(state: BandState): void {
-  try { localStorage.setItem(KEY, JSON.stringify(state)) }
-  catch { /* ignore: storage unavailable */ }
+  try {
+    const key = bandKey()
+    localStorage.setItem(key, JSON.stringify(state))
+    onStoreWrite(key)
+  } catch { /* ignore: storage unavailable */ }
 }
 
 const wordPopCards = () => LEVELS.find(l => l.id === 'word-pop')?.cards ?? []
@@ -77,7 +82,7 @@ export function setBandAuto(): void {
 }
 
 export function clearBand(): void {
-  try { localStorage.removeItem(KEY) }
+  try { localStorage.removeItem(bandKey()) }
   catch { /* ignore: storage unavailable */ }
 }
 

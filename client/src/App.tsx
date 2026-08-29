@@ -24,6 +24,7 @@ import { SentenceList } from './screens/SentenceList'
 import { SentenceBuilder } from './screens/SentenceBuilder'
 import { TopicHub } from './screens/TopicHub'
 import { ParentGate } from './screens/ParentGate'
+import { CloudStart } from './screens/CloudStart'
 import { LessonChip } from './components/LessonChip'
 
 export default function App() {
@@ -59,6 +60,12 @@ export default function App() {
         <Route path="/sentences" element={<SentenceList />} />
         <Route path="/sentence/:id" element={<SentenceBuilder />} />
         <Route path="/parent" element={<ParentGate />} />
+        {/* The route is open; the DOORS behind it are not. `/start` is only ever linked from a
+          * device with no history at all, but a typed URL still lands here, so the math question
+          * sits in front of both actions — the one that can sign this iPad into another account
+          * and the one that re-parents profiles onto it. Reading the two-button menu is harmless
+          * (spec flows 3, 4). */}
+        <Route path="/start" element={<CloudStart />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
 
