@@ -114,11 +114,14 @@ async function assessStranding(mintedId: string | null): Promise<Stranding | nul
   if (owned === null) return { kind: 'unchecked' }
 
   const ids = new Set<string | null>(listProfiles().map(p => p.id))
-  const active = activeProfileId()
-  if (active) ids.add(active)
-  // A device that never got a namespace (storage refused the migration) keeps its progress under
-  // the legacy keys, and `profileHistory(null)` is how those are read.
-  if (!ids.size) ids.add(null)
+  ids.add(activeProfileId())
+  // **Always**, not only when the roster is empty. The legacy, un-namespaced keys are where a
+  // device's whole progress sits when `ensureLocalProfile()` wrote the roster and then could not
+  // write `speakup.profile` — it returns early there, deliberately, so the app keeps reading the
+  // pre-Phase-11 keys rather than a namespace nothing migrated into. Roster present, no active
+  // profile, every star under `speakup.*`: gating this read on an empty roster missed exactly that
+  // device, and `profileHistory(null)` on a migrated one is two `getItem`s that return zero.
+  ids.add(null)
   for (const p of owned) ids.add(p.id)
 
   const ownedIds = new Set(owned.map(p => p.id))
@@ -428,11 +431,24 @@ export function CloudStart() {
                 <h2 className="font-display text-base font-extrabold text-ink-900">
                   Tài khoản trên máy này đang giữ tiến độ của {stranding.profiles} hồ sơ
                 </h2>
-                <p className="text-sm font-semibold text-ink-500">
-                  Tổng cộng {stranding.stars} sao và {stranding.events} lượt luyện, thuộc một tài khoản chưa liên kết email —
-                  kể cả hồ sơ của bé khác trên máy này.
-                  {stranding.mirrored && ' Một phần đã được lưu lên máy chủ dưới tài khoản đó.'}
-                </p>
+                {/* A count is only printed when there IS one. The case this whole check exists for
+                  * — a child whose evidence is a row on the server, because the pull that would
+                  * have brought them down here failed — has zero of everything locally, and
+                  * "0 sao và 0 lượt luyện" under a warning is a reason to press on handed to a
+                  * parent who is looking for one. No line in this dialog may read as "there is
+                  * nothing here". */}
+                {stranding.stars > 0 || stranding.events > 0 ? (
+                  <p className="text-sm font-semibold text-ink-500">
+                    Tổng cộng {stranding.stars} sao và {stranding.events} lượt luyện, thuộc một tài khoản chưa liên kết email —
+                    kể cả hồ sơ của bé khác trên máy này.
+                    {stranding.mirrored && ' Một phần đã được lưu lên máy chủ dưới tài khoản đó.'}
+                  </p>
+                ) : (
+                  <p className="text-sm font-semibold text-ink-500">
+                    Tiến độ của hồ sơ này đang nằm trên máy chủ, dưới một tài khoản chưa liên kết email. Máy này chưa tải về
+                    được nên chưa hiện ra ở đây — chưa hiện không có nghĩa là không có.
+                  </p>
+                )}
               </>
             ) : (
               <>

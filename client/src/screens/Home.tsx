@@ -201,8 +201,14 @@ export function Home() {
    *    namespace put the link on the empty sibling's Home — which flow 6's picker makes a one-tap
    *    everyday destination — while the first child's months of progress sat one namespace away.
    */
-  const roster = listProfiles()
-  const hasHistory = hasAnyHistory(sumHistory(roster.length ? roster.map(p => p.id) : [activeProfileId()]))
+  // A Set, so a child who is both in the roster and active is counted once — and `null` is always
+  // in it, because the legacy un-namespaced keys are where everything lives on a device whose
+  // `speakup.profile` write failed (roster written, active not, `ensureLocalProfile` returns
+  // early). That device has a full history and no namespace to find it under.
+  const historyIds = new Set<string | null>(listProfiles().map(p => p.id))
+  historyIds.add(activeProfileId())
+  historyIds.add(null)
+  const hasHistory = hasAnyHistory(sumHistory([...historyIds]))
   const overLimit = minutesToday(now, events) >= getLimitMinutes()
 
   // Decided once per mount, then remembered in storage by the effect below, so the trip to the

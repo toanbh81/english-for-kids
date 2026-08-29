@@ -405,6 +405,25 @@ describe('Phase 11: "Đã dùng Speak Up rồi?"', () => {
     expect(screen.getByRole('link', { name: 'Đã dùng Speak Up rồi?' })).toBeInTheDocument()
   })
 
+  /**
+   * `ensureLocalProfile()` wrote the roster and then could not write `speakup.profile` — it returns
+   * early there, deliberately, so the app keeps reading the pre-Phase-11 keys rather than a
+   * namespace nothing migrated into. That device has a full history and no namespace to find it
+   * under, and reading the legacy keys only when the roster was ALSO empty missed it entirely.
+   */
+  it('stays away on a device whose progress is still under the legacy keys', () => {
+    cloud.configured = true
+    localStorage.setItem('speakup.profiles', JSON.stringify([
+      { id: '11111111-2222-4333-8444-555555555555', name: 'Bé', avatar: 'A', created: 1 },
+    ]))
+    localStorage.removeItem('speakup.profile')
+    localStorage.setItem('speakup.stars', JSON.stringify({ 'sword:cat': 3 }))
+
+    renderHome()
+
+    expect(screen.queryByRole('link', { name: 'Đã dùng Speak Up rồi?' })).not.toBeInTheDocument()
+  })
+
   it('keeps Foxy today-scoped even so', () => {
     cloud.configured = true
     seedDoneDay(NOW - DAY_MS)

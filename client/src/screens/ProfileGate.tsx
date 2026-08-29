@@ -79,9 +79,22 @@ function writeMark(id: string, at: number): void {
   try { sessionStorage.setItem(CHOSEN_KEY, JSON.stringify({ id, at })) } catch { /* ignore: storage unavailable */ }
 }
 
-/** Answered, for this child, recently enough that nobody can have swapped seats since. */
+/**
+ * Answered, for this child, recently enough that nobody can have swapped seats since.
+ *
+ * The `age >= 0` half is not defensive noise. A NEGATIVE age — a mark stamped while the device's
+ * clock read later than it does now — passed the "less than five minutes" test for ever, so the
+ * gate never asked again for the rest of the session: straight back to the pre-picker behaviour,
+ * where the next child lands in their sibling's profile and writes to it. It is reachable by
+ * something this codebase already plans for elsewhere (`clamp_client_ts` exists because children
+ * move the iPad's date forward): stamp the mark while the clock is ahead, correct the date, and
+ * every later comparison is against a timestamp from the future. An age that is not a real
+ * duration is not evidence of anything, so it asks.
+ */
 function markIsFresh(mark: Mark | null): boolean {
-  return mark !== null && mark.id === activeProfileId() && Date.now() - mark.at < RE_ASK_AFTER_MS
+  if (mark === null || mark.id !== activeProfileId()) return false
+  const age = Date.now() - mark.at
+  return age >= 0 && age < RE_ASK_AFTER_MS
 }
 
 function alreadyChosen(): boolean {

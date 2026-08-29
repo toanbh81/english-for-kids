@@ -247,6 +247,29 @@ describe('the email door', () => {
     expect(screen.getByText(/kể cả hồ sơ của bé khác trên máy này/)).toBeInTheDocument()
   })
 
+  /**
+   * Roster written, `speakup.profile` NOT written — `ensureLocalProfile()` returns early when that
+   * `setItem` fails, deliberately, so the app carries on reading the pre-Phase-11 keys rather than
+   * a namespace nothing migrated into. Every star and every event on such a device is under the
+   * bare `speakup.*` keys, and reading them only when the roster was ALSO empty missed exactly this
+   * device: a full history, and a check that said "nothing here".
+   */
+  it('reads the legacy keys even when the roster is not empty', async () => {
+    localStorage.setItem('speakup.profiles', JSON.stringify([profile(MINTED), profile(SOC, 'Sóc')]))
+    localStorage.removeItem('speakup.profile') // the write that failed
+    localStorage.setItem('speakup.stars', JSON.stringify({ 'sword:cat': 3, 'sword:dog': 3, 'sword:fox': 2 }))
+    localStorage.setItem('speakup.activity', JSON.stringify(
+      Array.from({ length: 200 }, (_, i) => ({ ts: 1000 + i, kind: 'word', id: `w-${i}` })),
+    ))
+    auth.signInWithEmail.mockResolvedValue({ ok: false, error: 'anonymous-session-in-use' })
+
+    await goToEmail()
+
+    expect(auth.signInWithEmail).toHaveBeenCalledTimes(1)
+    expect(auth.signInWithEmail).not.toHaveBeenCalledWith('bome@example.com', { abandonAnonymous: true })
+    expect(screen.getByText(/8 sao và 200 lượt luyện/)).toBeInTheDocument()
+  })
+
   it('sees a child the account owns that this roster has forgotten', async () => {
     // Nothing local for them at all — the roster entry is gone. Their rows are still up there under
     // the owner about to be abandoned, which is exactly why they count.
@@ -256,7 +279,8 @@ describe('the email door', () => {
     await goToEmail()
 
     expect(auth.signInWithEmail).toHaveBeenCalledTimes(1)
-    expect(screen.getByText(/đã được lưu lên máy chủ dưới tài khoản đó/)).toBeInTheDocument()
+    // Nothing local to count, so the dialog says where the progress IS rather than counting it.
+    expect(screen.getByText(/đang nằm trên máy chủ/)).toBeInTheDocument()
   })
 
   /**
@@ -339,7 +363,25 @@ describe('the email door', () => {
 
     await goToEmail()
 
-    expect(screen.getByText(/đã được lưu lên máy chủ dưới tài khoản đó/)).toBeInTheDocument()
+    expect(screen.getByText(/đang nằm trên máy chủ/)).toBeInTheDocument()
+  })
+
+  /**
+   * The dialog must never argue against its own warning. In the case round 3 exists for the
+   * evidence is a row on the server, so every local sum is zero — and "0 sao và 0 lượt luyện"
+   * printed under "sẽ không mở lại được nữa" is a reason to press on, handed to a parent who is
+   * already looking for one.
+   */
+  it('never prints a zero count next to the warning', async () => {
+    sync.hasMirroredData.mockReturnValue(true)
+    auth.signInWithEmail.mockResolvedValue({ ok: false, error: 'anonymous-session-in-use' })
+
+    await goToEmail()
+
+    const dialog = screen.getByText(/đang giữ tiến độ của/).closest('div')!
+    expect(dialog.textContent).not.toMatch(/(^|[^0-9])0 (sao|lượt)/)
+    // …and the irreversibility line is still the one thing it cannot lose.
+    expect(dialog.textContent).toMatch(/không mở lại được nữa/)
   })
 
   it('passes the flag only after the parent says so in as many words', async () => {

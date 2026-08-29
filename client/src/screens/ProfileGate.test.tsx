@@ -212,6 +212,38 @@ describe('two children, one iPad', () => {
       expect(screen.queryByText('màn hình chính')).not.toBeInTheDocument()
     })
 
+    /**
+     * A mark stamped while the clock read LATER than it does now has a negative age, and
+     * `age < RE_ASK_AFTER_MS` was true for every negative number — so the gate counted it fresh for
+     * ever and never asked again, which is the pre-picker behaviour it exists to end. Reachable by
+     * something this codebase already plans for (`clamp_client_ts` exists because children move the
+     * iPad's date forward): stamp while the clock is ahead, correct the date, done.
+     */
+    it('asks when the mark is stamped in the future', () => {
+      chosenInSession(SOC, Date.now() + 365 * 24 * 60 * 60 * 1000)
+
+      renderGate()
+
+      expect(screen.getByText(/Ai đang học nào/)).toBeInTheDocument()
+    })
+
+    it('asks on a resume whose mark was stamped by a clock running ahead', () => {
+      chosenInSession(SOC)
+      renderGate()
+
+      // Backgrounded while the date was wrong: the stamp goes into the future…
+      const real = Date.now()
+      vi.spyOn(Date, 'now').mockReturnValue(real + 365 * 24 * 60 * 60 * 1000)
+      Object.defineProperty(document, 'visibilityState', { value: 'hidden', configurable: true })
+      fireEvent(document, new Event('visibilitychange'))
+      // …the parent corrects the date, and the sibling picks the iPad up later.
+      vi.spyOn(Date, 'now').mockReturnValue(real + 20 * 60 * 1000)
+      Object.defineProperty(document, 'visibilityState', { value: 'visible', configurable: true })
+      fireEvent(document, new Event('visibilitychange'))
+
+      expect(screen.getByTestId('profile-reask')).toBeInTheDocument()
+    })
+
     it('does not ask at a cold start moments after the answer', () => {
       chosenInSession(SOC, Date.now() - 5 * 1000)
 
