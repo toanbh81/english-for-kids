@@ -1,5 +1,6 @@
 import type { ActivityEvent, ActivityKind } from './activity'
 import { findSound } from '../content'
+import { storageKey } from './storageKeys'
 
 /**
  * Storage and done-matching for the daily lesson, split out of `lesson.ts` so the dependency graph
@@ -24,8 +25,9 @@ export type LessonLength = 'short' | 'medium' | 'long'
 export const LESSON_LENGTHS: LessonLength[] = ['short', 'medium', 'long']
 const DEFAULT_LENGTH: LessonLength = 'medium'
 
-const PREFIX = 'speakup.lesson.'
-const LENGTH_KEY = `${PREFIX}length`
+// Resolved per call, never captured: the active child is only known once the app has booted.
+const prefix = () => storageKey('lesson.')
+const lengthKey = () => `${prefix()}length`
 const DAY_RE = /^\d{4}-\d{2}-\d{2}$/
 /**
  * Schema stamp on every persisted lesson. A record without it — or with any other value — is a
@@ -39,7 +41,7 @@ const KEEP_DAYS = 30
 /** Same bar as the Leitner unlock and the legacy word mission. */
 const PASS_SCORE = 60
 
-const lessonKey = (day: string) => `${PREFIX}${day}`
+const lessonKey = (day: string) => `${prefix()}${day}`
 
 /** Every field a screen reads off an item must be a string, or the row renders `undefined` — and
  * `route.startsWith(...)` in `matchIds` throws, which is what bricked the app. */
@@ -76,10 +78,11 @@ export function lessonForDay(day: string): Lesson | null {
 export function lessonDays(): string[] {
   const days: string[] = []
   try {
+    const p = prefix()
     for (let i = 0; i < localStorage.length; i++) {
       const key = localStorage.key(i)
-      if (!key?.startsWith(PREFIX)) continue
-      const day = key.slice(PREFIX.length)
+      if (!key?.startsWith(p)) continue
+      const day = key.slice(p.length)
       if (DAY_RE.test(day)) days.push(day)
     }
   } catch { return [] }
@@ -107,9 +110,10 @@ export function saveLesson(lesson: Lesson): void {
 function lessonKeys(): string[] {
   const keys: string[] = []
   try {
+    const p = prefix()
     for (let i = 0; i < localStorage.length; i++) {
       const key = localStorage.key(i)
-      if (key?.startsWith(PREFIX)) keys.push(key)
+      if (key?.startsWith(p)) keys.push(key)
     }
   } catch { return [] }
   return keys
@@ -123,13 +127,13 @@ export function clearLessons(): void {
 
 export function getLessonLength(): LessonLength {
   try {
-    const raw = localStorage.getItem(LENGTH_KEY)
+    const raw = localStorage.getItem(lengthKey())
     return LESSON_LENGTHS.includes(raw as LessonLength) ? (raw as LessonLength) : DEFAULT_LENGTH
   } catch { return DEFAULT_LENGTH }
 }
 
 export function setLessonLength(length: LessonLength): void {
-  try { localStorage.setItem(LENGTH_KEY, length) }
+  try { localStorage.setItem(lengthKey(), length) }
   catch { /* ignore: storage unavailable */ }
 }
 

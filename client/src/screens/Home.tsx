@@ -5,6 +5,7 @@ import { totalStars } from '../progress/store'
 import { dayKey, getActivity, missionStatus, streak, weekDots, minutesToday } from '../progress/activity'
 import { lessonStatus } from '../progress/lesson'
 import { getLimitMinutes } from '../progress/limit'
+import { storageKey } from '../progress/storageKeys'
 import { topicStars, topicUnlocked } from '../progress/topicProgress'
 import { Foxy } from '../components/Foxy'
 import type { FoxyMood } from '../components/Foxy'
@@ -12,17 +13,18 @@ import { MissionCard } from '../components/MissionCard'
 import { StreakWeek } from '../components/StreakWeek'
 import { Chip, PAGE_SHELL, SpeechBubble, StarRow } from '../components/ui'
 
-const CELEBRATED_KEY = 'speakup.celebrated'
+// Per child, like every other stored value — see progress/storageKeys.ts.
+const celebratedKey = () => storageKey('celebrated')
 
 // The celebration is once per day, not once per visit to Home — the day it last fired is
 // remembered so coming back to Home does not re-throw confetti at the child.
 function alreadyCelebrated(day: string): boolean {
-  try { return localStorage.getItem(CELEBRATED_KEY) === day }
+  try { return localStorage.getItem(celebratedKey()) === day }
   catch { return false }
 }
 
 function markCelebrated(day: string): void {
-  try { localStorage.setItem(CELEBRATED_KEY, day) }
+  try { localStorage.setItem(celebratedKey(), day) }
   catch { /* ignore: storage unavailable */ }
 }
 

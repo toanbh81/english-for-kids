@@ -1,0 +1,282 @@
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
+import { getStars, setStars, totalStars } from '../progress/store'
+import { getActivity, logActivity } from '../progress/activity'
+import { getLimitMinutes, setLimitMinutes } from '../progress/limit'
+import { getLessonLength, lessonForDay, saveLesson, setLessonLength } from '../progress/lessonStore'
+import { activeProfileId, storageKey } from '../progress/storageKeys'
+
+const cloud = vi.hoisted(() => ({ client: null as unknown }))
+const auth = vi.hoisted(() => ({
+  startAnonymousSession: vi.fn(async () => undefined),
+  currentUserId: vi.fn(async (): Promise<string | null> => null),
+  ensureRecoveryCode: vi.fn(async (): Promise<string | null> => null),
+}))
+
+vi.mock('./supabase', () => ({
+  getSupabase: () => cloud.client,
+  isCloudConfigured: () => cloud.client !== null,
+  resetSupabaseClient: () => undefined,
+}))
+vi.mock('./auth', () => auth)
+
+import {
+  DEFAULT_PROFILE_AVATAR,
+  DEFAULT_PROFILE_NAME,
+  addProfile,
+  adoptProfiles,
+  bootstrapProfiles,
+  connectCloud,
+  ensureLocalProfile,
+  ensureRemoteProfiles,
+  fetchRemoteProfiles,
+  listProfiles,
+  activeProfile,
+  switchProfile,
+} from './profileState'
+
+type Reply = { data: unknown; error: { message: string } | null }
+type Query = { table: string; verb: string; payload?: unknown; options?: unknown }
+
+/** Only the two calls profileState makes: a profiles upsert and a profiles select. */
+function makeClient(select: Reply = { data: [], error: null }, upsert: Reply = { data: null, error: null }) {
+  const queries: Query[] = []
+  const from = vi.fn((table: string) => {
+    const entry: Query = { table, verb: 'select' }
+    const run = async (): Promise<Reply> => {
+      queries.push({ ...entry })
+      return entry.verb === 'select' ? select : upsert
+    }
+    const chain = {
+      select: () => chain,
+      eq: () => chain,
+      upsert: (payload: unknown, options?: unknown) => { entry.verb = 'upsert'; entry.payload = payload; entry.options = options; return chain },
+      then: (onOk: (r: Reply) => unknown, onErr?: (e: unknown) => unknown) => run().then(onOk, onErr),
+    }
+    return chain
+  })
+  return { from, queries }
+}
+
+/** A device that has been in use since before Phase 11: real progress, on the legacy keys. */
+const seedLegacyProgress = () => {
+  localStorage.setItem('speakup.stars', JSON.stringify({ 'sword:cat': 3, 'pair:pair-ship-sheep': 2 }))
+  localStorage.setItem('speakup.activity', JSON.stringify([{ ts: 1000, kind: 'word', id: 'cat', score: 91 }]))
+  localStorage.setItem('speakup.limit.minutes', '30')
+  localStorage.setItem('speakup.lesson.length', 'long')
+  localStorage.setItem('speakup.lesson.2026-08-28', JSON.stringify({
+    v: 1, day: '2026-08-28', created: 900, band: 4, items: [],
+  }))
+}
+
+beforeEach(() => {
+  localStorage.clear()
+  cloud.client = null
+  vi.clearAllMocks()
+  auth.currentUserId.mockResolvedValue(null)
+  auth.ensureRecoveryCode.mockResolvedValue(null)
+})
+afterEach(() => vi.restoreAllMocks())
+
+describe('the first launch after the update', () => {
+  it('gives the child a profile and carries every value they had into it', () => {
+    seedLegacyProgress()
+
+    const profile = ensureLocalProfile()
+
+    expect(profile.name).toBe(DEFAULT_PROFILE_NAME)
+    expect(profile.avatar).toBe(DEFAULT_PROFILE_AVATAR)
+    expect(activeProfileId()).toBe(profile.id)
+    expect(storageKey('stars')).toBe(`speakup.${profile.id}.stars`)
+
+    // The proof that the seam is in the right place: the modules were not told about any of this
+    // and still read exactly what the child earned yesterday.
+    expect(getStars('sword:cat')).toBe(3)
+    expect(totalStars()).toBe(5)
+    expect(getActivity()).toEqual([{ ts: 1000, kind: 'word', id: 'cat', score: 91 }])
+    expect(getLimitMinutes()).toBe(30)
+    expect(getLessonLength()).toBe('long')
+    expect(lessonForDay('2026-08-28')?.band).toBe(4)
+
+    expect(localStorage.getItem('speakup.stars')).toBeNull()
+  })
+
+  it('is the same profile on every launch after that, and writes keep landing in it', () => {
+    seedLegacyProgress()
+    const first = bootstrapProfiles()
+
+    setStars('sword:dog', 2)
+    logActivity({ ts: 2000, kind: 'speak', id: 'hello', score: 88 })
+    setLimitMinutes(45)
+
+    const second = bootstrapProfiles()
+    expect(second.id).toBe(first.id)
+    expect(listProfiles()).toHaveLength(1)
+    expect(getStars('sword:cat')).toBe(3)
+    expect(getStars('sword:dog')).toBe(2)
+    expect(getActivity()).toHaveLength(2)
+    expect(getLimitMinutes()).toBe(45)
+    expect(localStorage.getItem(`speakup.${first.id}.limit.minutes`)).toBe('45')
+  })
+
+  it('leaves the app on the legacy keys when storage refuses to remember the profile', () => {
+    seedLegacyProgress()
+    const setItem = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new DOMException('quota', 'QuotaExceededError')
+    })
+
+    const profile = ensureLocalProfile()
+    setItem.mockRestore()
+
+    // Nothing was moved, because nothing could be pointed at: the child keeps reading the same
+    // keys they always did rather than opening an empty namespace.
+    expect(profile.id).toBeTruthy()
+    expect(activeProfileId()).toBeNull()
+    expect(storageKey('stars')).toBe('speakup.stars')
+    expect(getStars('sword:cat')).toBe(3)
+    expect(localStorage.getItem('speakup.stars')).not.toBeNull()
+  })
+})
+
+describe('two children, one iPad', () => {
+  // `{ reload: false }` throughout: the real switch reloads the document, which is the point of it
+  // (see switchProfile) and which jsdom has no navigation to perform.
+  it('keeps their progress apart', () => {
+    seedLegacyProgress()
+    const first = ensureLocalProfile()
+    expect(getStars('sword:cat')).toBe(3)
+
+    const second = addProfile('Bơ', '🐨')
+    expect(listProfiles().map(p => p.name)).toEqual([DEFAULT_PROFILE_NAME, 'Bơ'])
+
+    expect(switchProfile(second.id, { reload: false })).toBe(true)
+    expect(activeProfile()?.name).toBe('Bơ')
+    // A new child starts new: none of the first child's stars, and none of their minutes either.
+    expect(getStars('sword:cat')).toBe(0)
+    expect(totalStars()).toBe(0)
+    expect(getActivity()).toEqual([])
+
+    setStars('sword:dog', 3)
+    saveLesson({ day: '2026-08-29', created: 1, band: 2, items: [] })
+    setLessonLength('short')
+
+    expect(switchProfile(first.id, { reload: false })).toBe(true)
+    expect(getStars('sword:cat')).toBe(3)
+    expect(getStars('sword:dog')).toBe(0)
+    expect(getLessonLength()).toBe('long')
+    expect(lessonForDay('2026-08-29')).toBeNull()
+
+    expect(switchProfile(second.id, { reload: false })).toBe(true)
+    expect(getStars('sword:dog')).toBe(3)
+    expect(lessonForDay('2026-08-29')?.band).toBe(2)
+  })
+
+  it('refuses to switch to a child who does not live here', () => {
+    const first = ensureLocalProfile()
+    expect(switchProfile('11111111-2222-4333-8444-555555555555', { reload: false })).toBe(false)
+    expect(switchProfile('not-an-id', { reload: false })).toBe(false)
+    expect(activeProfileId()).toBe(first.id)
+  })
+
+  it('repairs a half-written roster instead of losing the child behind it', () => {
+    const id = '11111111-2222-4333-8444-555555555555'
+    localStorage.setItem('speakup.profiles', JSON.stringify([
+      { id },                        // an entry with nothing but the pointer to its namespace
+      { name: 'no id' },             // nothing to point at: dropped
+      'rubbish',
+    ]))
+    localStorage.setItem(`speakup.${id}.stars`, JSON.stringify({ 'sword:cat': 3 }))
+
+    const profiles = listProfiles()
+    expect(profiles).toEqual([{ id, name: DEFAULT_PROFILE_NAME, avatar: DEFAULT_PROFILE_AVATAR, created: 0 }])
+    expect(ensureLocalProfile().id).toBe(id)
+    expect(getStars('sword:cat')).toBe(3)
+  })
+
+  it('reads no roster at all out of corrupt storage', () => {
+    localStorage.setItem('speakup.profiles', '{not json')
+    expect(listProfiles()).toEqual([])
+    expect(activeProfile()).toBeNull()
+    expect(ensureLocalProfile().id).toBeTruthy()
+  })
+})
+
+describe('the server side', () => {
+  it('does nothing at all without a cloud', async () => {
+    seedLegacyProgress()
+    const profile = bootstrapProfiles()
+    await connectCloud()
+
+    expect(auth.startAnonymousSession).not.toHaveBeenCalled()
+    expect(auth.ensureRecoveryCode).not.toHaveBeenCalled()
+    expect(await ensureRemoteProfiles()).toBe(false)
+    expect(await fetchRemoteProfiles()).toEqual([])
+    // …and the local half happened anyway, which is the whole local-first promise.
+    expect(activeProfileId()).toBe(profile.id)
+    expect(getStars('sword:cat')).toBe(3)
+  })
+
+  it('signs in silently, then makes sure the children and the recovery code exist', async () => {
+    const client = makeClient()
+    cloud.client = client
+    auth.currentUserId.mockResolvedValue('anon-1')
+    const profile = ensureLocalProfile()
+
+    await connectCloud()
+
+    expect(auth.startAnonymousSession).toHaveBeenCalledTimes(1)
+    expect(auth.ensureRecoveryCode).toHaveBeenCalledTimes(1)
+
+    const upsert = client.queries.find(q => q.verb === 'upsert')
+    expect(upsert?.table).toBe('profiles')
+    // The id the device chose IS the server row's id — that is what makes the localStorage
+    // namespace permanent and the sync outbox able to name a profile before it exists.
+    expect(upsert?.payload).toEqual([{ id: profile.id, owner_id: 'anon-1', name: DEFAULT_PROFILE_NAME, avatar: DEFAULT_PROFILE_AVATAR }])
+    // An existing row is already right; re-sending the local name would undo a rename made on
+    // another device.
+    expect(upsert?.options).toEqual({ onConflict: 'id', ignoreDuplicates: true })
+  })
+
+  it('does not touch the server while nobody is signed in', async () => {
+    cloud.client = makeClient()
+    auth.currentUserId.mockResolvedValue(null)
+    ensureLocalProfile()
+
+    await connectCloud()
+
+    expect(auth.startAnonymousSession).toHaveBeenCalledTimes(1)
+    expect(auth.ensureRecoveryCode).not.toHaveBeenCalled()
+    expect(await ensureRemoteProfiles()).toBe(false)
+  })
+
+  it('swallows a refusal from the server rather than surfacing it', async () => {
+    cloud.client = makeClient({ data: null, error: { message: 'permission denied' } }, { data: null, error: { message: 'permission denied' } })
+    auth.currentUserId.mockResolvedValue('anon-1')
+    ensureLocalProfile()
+
+    expect(await ensureRemoteProfiles()).toBe(false)
+    expect(await fetchRemoteProfiles()).toEqual([])
+    await expect(connectCloud()).resolves.toBeUndefined()
+  })
+
+  it('brings the account\'s other children onto this device, keeping the ones already here', async () => {
+    const remoteId = '11111111-2222-4333-8444-555555555555'
+    cloud.client = makeClient({
+      data: [
+        { id: remoteId, name: 'Bơ', avatar: '🐨', created_at: '2026-08-01T00:00:00Z' },
+        { id: 'not-a-uuid', name: 'nonsense', avatar: '👻', created_at: 'never' },
+      ],
+      error: null,
+    })
+    auth.currentUserId.mockResolvedValue('anon-1')
+    const local = ensureLocalProfile()
+
+    const remote = await fetchRemoteProfiles()
+    expect(remote).toEqual([{ id: remoteId, name: 'Bơ', avatar: '🐨', created: Date.parse('2026-08-01T00:00:00Z') }])
+
+    const merged = adoptProfiles(remote)
+    expect(merged.map(p => p.id)).toEqual([local.id, remoteId])
+    // Adopting twice must not clone anybody.
+    expect(adoptProfiles(remote).map(p => p.id)).toEqual([local.id, remoteId])
+    expect(listProfiles()).toHaveLength(2)
+  })
+})

@@ -1,4 +1,7 @@
-const KEY = 'speakup.leitner'
+import { storageKey } from './storageKeys'
+
+// Resolved per call, never captured: the active child is only known once the app has booted.
+const leitnerKey = () => storageKey('leitner')
 const DAY_MS = 24 * 60 * 60 * 1000
 
 export type LeitnerEntry = { box: 1 | 2 | 3 | 4; due: number }
@@ -10,12 +13,12 @@ type LeitnerMap = Record<string, LeitnerEntry>
 // including valid JSON of the wrong shape, e.g. an array, which would break the map lookups.
 const read = (): LeitnerMap => {
   try {
-    const parsed: unknown = JSON.parse(localStorage.getItem(KEY) ?? '{}')
+    const parsed: unknown = JSON.parse(localStorage.getItem(leitnerKey()) ?? '{}')
     return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? (parsed as LeitnerMap) : {}
   } catch { return {} }
 }
 const write = (m: LeitnerMap) => {
-  try { localStorage.setItem(KEY, JSON.stringify(m)) }
+  try { localStorage.setItem(leitnerKey(), JSON.stringify(m)) }
   catch { /* ignore: storage unavailable */ }
 }
 
@@ -52,6 +55,6 @@ export function unlockedCount(): number {
 }
 
 export function clearLeitner(): void {
-  try { localStorage.removeItem(KEY) }
+  try { localStorage.removeItem(leitnerKey()) }
   catch { /* ignore: storage unavailable */ }
 }

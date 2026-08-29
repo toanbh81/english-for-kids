@@ -1,6 +1,8 @@
 import { lessonDone, lessonForDay } from './lessonStore'
+import { storageKey } from './storageKeys'
 
-const KEY = 'speakup.activity'
+// Resolved per call, never captured: the active child is only known once the app has booted.
+const activityKey = () => storageKey('activity')
 const CAP = 2000
 const MISSION_TARGET = { story: 1, speak: 5, word: 3 } as const
 const WORD_MISSION_SCORE = 60 // same bar as the Leitner unlock in WordCard
@@ -21,12 +23,12 @@ export type ActivityEvent = {
 // including valid JSON of the wrong shape, e.g. '{}', which would break every array query.
 const read = (): ActivityEvent[] => {
   try {
-    const parsed: unknown = JSON.parse(localStorage.getItem(KEY) ?? '[]')
+    const parsed: unknown = JSON.parse(localStorage.getItem(activityKey()) ?? '[]')
     return Array.isArray(parsed) ? (parsed as ActivityEvent[]) : []
   } catch { return [] }
 }
 const write = (events: ActivityEvent[]) => {
-  try { localStorage.setItem(KEY, JSON.stringify(events)) }
+  try { localStorage.setItem(activityKey(), JSON.stringify(events)) }
   catch { /* ignore: storage unavailable */ }
 }
 
@@ -52,7 +54,7 @@ export function getActivity(sinceTs = 0): ActivityEvent[] {
 }
 
 export function clearActivity(): void {
-  try { localStorage.removeItem(KEY) }
+  try { localStorage.removeItem(activityKey()) }
   catch { /* ignore: storage unavailable */ }
 }
 
