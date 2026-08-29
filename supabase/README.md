@@ -267,6 +267,14 @@ the next one.
 revoke all on function public.rls_auto_enable() from public, anon, authenticated;
 ```
 
+This exact statement lives in one place —
+`supabase/tests/harness/rls_auto_enable_remediation.sql` — and nowhere else,
+so this section and the harness cannot drift apart on what "the fix" actually
+is. `tests/harness/run.mjs` runs it verbatim in its "remediated project"
+scenario and asserts `rls.test.sql` passes afterward, so the claim above is
+exercised on every harness run, not just written down here — see
+`tests/harness/README.md`.
+
 This is safe and proven, not just plausible: after this revoke, a client
 still creating a table still gets RLS auto-enabled on it (the event trigger
 fires at DDL time regardless of the caller's `EXECUTE` privilege on the
@@ -308,4 +316,10 @@ allowlist for "platform objects" would give the *next* platform object a free
 pass too, which defeats the assertion's whole purpose. The cost is that a
 fresh real-project run of `rls.test.sql` is expected to fail here until you
 apply the two revokes above — that is a feature of a strict guard, not a bug
-in it.
+in it. `tests/harness/run.mjs` encodes this trade-off directly for the
+`rls_auto_enable` finding: it runs a "stock project" scenario where it
+*asserts* that `rls.test.sql` fails naming `rls_auto_enable`, so the guard's
+ability to catch this specific platform object is itself a regression test,
+not just a hopeful comment. (The `CREATE on schema public` finding is a
+project-configuration difference the shim does not reproduce, since a stock
+project's own default already denies it — there is nothing to model there.)

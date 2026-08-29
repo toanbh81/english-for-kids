@@ -12,12 +12,25 @@ root and leaves this one empty. Staying outside is the point — PGlite is a
 whole Postgres, and it has no business anywhere near `pnpm test` or the client
 bundle.
 
-It applies `supabase/migrations/0001_profiles_sync.sql`, applies it twice more
-(the repair path for an already-live project is "paste the same file again", so
-re-runnability is a property worth testing, not assuming), then runs
-`supabase/tests/rls.test.sql`. One `PASS` / `FAIL` line at the end, exit code to
-match. `--audit` also prints every privilege `anon` and `authenticated` hold in
-`public`, which is the fastest way to see what a change to the grant block did.
+It runs **two scenarios**, each on its own fresh database, and only prints
+`PASS` (exit code 0) if both land as expected:
+
+1. **Stock project** — `shim.sql` (Automatic RLS on, see below) and the
+   migration, nothing else. `rls.test.sql` is *expected* to **FAIL** here,
+   naming `rls_auto_enable`. That is not a bug in the harness — it is the
+   regression test for the §11 guard's reach, proving it still notices a
+   platform object this migration does not own. A PASS in this scenario would
+   mean the guard stopped seeing it.
+2. **Remediated project** — the same, plus the migration applied twice more
+   (the repair path for an already-live project is "paste the same file
+   again", so re-runnability is tested, not assumed), plus
+   `rls_auto_enable_remediation.sql` — the exact statement
+   `supabase/README.md` tells a real operator to run. `rls.test.sql` must
+   **PASS** here.
+
+`--audit` also prints every privilege `anon` and `authenticated` hold in
+`public`, for both scenarios — the fastest way to see what a change to the
+grant block (or the remediation) did.
 
 No Docker, no project, no keys. `--migration <path>` runs a different file —
 useful for proving a new test actually fails against the old SQL:
@@ -66,22 +79,36 @@ another such difference, add it here rather than working around it in a test.
 `shim.sql` also installs `rls_auto_enable()` and the `ensure_rls` event
 trigger — Supabase's "Automatic RLS" feature, which turns RLS on for every
 table created in `public` whether or not the migration that creates it
-remembers to. It changes nothing observable here: every table
+remembers to. It changes nothing observable about RLS itself: every table
 `0001_profiles_sync.sql` creates, `heartbeat` and `kv_merge_rules` included,
 already carries its own explicit `enable row level security` statement, so
 `ensure_rls` firing first is redundant, not corrective (confirmed by querying
 `pg_class.relrowsecurity` for all six tables with and without the trigger
-installed — identical, all `true`). What it *does* change is `rls.test.sql`
-§11: `rls_auto_enable()` is born with `EXECUTE` for `PUBLIC`/`anon`/
-`authenticated` like every function in this schema, nobody revokes it because
-this migration does not own it, and §11 is strict enough to name it. That is
-this harness correctly reproducing a real finding rather than a harness bug —
-see `supabase/README.md`, "Expected findings the first time you run
-`rls.test.sql` on a real project", for the full story and why it is untidy
-rather than exploitable. **This means `node run.mjs` no longer ends in `PASS`
-as of that shim addition** — the `FAIL` at §11 naming `rls_auto_enable` is the
-harness telling the truth about a stock project's first-run state, not
-something to route around here.
+installed — identical, all `true`).
+
+What it *does* change is `rls.test.sql` §11: `rls_auto_enable()` is born with
+`EXECUTE` for `PUBLIC`/`anon`/`authenticated` like every function in this
+schema, and nobody revokes it — this migration does not own the function, so
+it has no business revoking it silently, and a real operator has to run
+`rls_auto_enable_remediation.sql`'s statement themselves. §11 is strict enough
+to name it, which is exactly why this harness now runs the two scenarios
+above instead of one: scenario 1 turns that `FAIL` into the proof that the
+guard still reaches platform objects, and scenario 2 turns the README's fix
+into something executed, not just written down. See `supabase/README.md`,
+"Expected findings the first time you run `rls.test.sql` on a real project",
+for the full story of why the grant is untidy rather than exploitable.
+
+**On determinism.** §11 is not a loop of per-object assertions that could stop
+at the first violation and never reach `rls_auto_enable` — it is a single
+`do $$ … $$` block computing one `extra` value via a 4-way `union all`
+(table, column, function, and schema privileges) fed through one
+`string_agg(... order by h.obj, h.priv)`, followed by exactly one
+`assert extra is null`. Every violation that exists gets collected into that
+one string before the assert ever runs, so as long as `rls_auto_enable` is a
+violation at all, its name is in the message — there is no code path where
+§11 "gets stuck" on a different object first. `run.mjs` matches on the
+substring `rls_auto_enable`, not the full message, so a future wording change
+to the assertion's text will not make scenario 1 flaky either.
 
 ## One artifact that looks alarming and is not
 
