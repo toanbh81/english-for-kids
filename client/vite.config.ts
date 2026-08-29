@@ -56,5 +56,8 @@ export default defineConfig(({ mode }) => ({
   ],
   server: { host: true, proxy: { '/api': 'http://localhost:8787' } },
   preview: { proxy: { '/api': 'http://localhost:8787' } },
-  test: { environment: 'jsdom', setupFiles: './src/test-setup.ts', globals: true },
+  // testTimeout: the default 5s (and testing-library's 1s findBy* wait) flake under full-suite
+  // parallelism on this machine — the same test passes 4/4 standalone and fails ~1/5 full runs,
+  // always by timeout, never by assertion. The ceilings are for worker CPU starvation, not slowness.
+  test: { environment: 'jsdom', setupFiles: './src/test-setup.ts', globals: true, testTimeout: 20000 },
 }))
