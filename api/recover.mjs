@@ -65,12 +65,35 @@ const jsonHeaders = (serviceKey) => ({
 // could — an email, a phone, an OAuth identity — makes the code a second,
 // weaker credential for a real account, which is exactly what we refuse.
 // `is_anonymous` is only trusted when it says false; an older GoTrue that
-// omits it falls back to the absence of every other credential.
+// omits it falls back to the absence of every other credential. Every check
+// here fails CLOSED: an identity whose provider we cannot read is not assumed
+// to be anonymous, because the cost of guessing wrong is a stranger taking
+// over a family's account.
 function isAnonymousUser(user) {
   if (!user || user.is_anonymous === false) return false
   if (user.email || user.new_email || user.phone) return false
   const identities = Array.isArray(user.identities) ? user.identities : []
-  return identities.every(i => !i?.provider || i.provider === 'anonymous')
+  return identities.every(i => i?.provider === 'anonymous')
+}
+
+/**
+ * Put a claimed code back after a failed rescue. Tries twice and REPORTS the
+ * outcome: this row is the family's only credential, so "it probably worked"
+ * is not good enough to hide behind a caught exception.
+ * @returns {Promise<boolean>} true if the code is safely back in the table
+ */
+async function restoreCode(url, serviceKey, fetchImpl, row) {
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const res = await fetchImpl(`${url}/rest/v1/recovery_codes`, {
+        method: 'POST',
+        headers: { ...jsonHeaders(serviceKey), prefer: 'resolution=merge-duplicates' },
+        body: JSON.stringify([row]),
+      })
+      if (res?.ok) return true
+    } catch { /* try once more, then report the failure honestly */ }
+  }
+  return false
 }
 
 /**
@@ -101,52 +124,57 @@ export async function recover({ code, authorization, env = process.env, fetchImp
       return { status: 401, body: { error: 'Invalid session' } }
     }
 
-    // 2. CLAIM the code by deleting it. Reading it first and deleting it later
-    //    would leave a window in which two requests both believe they own it;
-    //    the delete is atomic, so exactly one caller gets the row back. Every
-    //    refusal below therefore has to put the row back — a parent whose
-    //    rescue was refused must not lose their code because of it.
-    const claimRes = await fetchImpl(
-      `${url}/rest/v1/recovery_codes?code=eq.${encodeURIComponent(cleaned)}`,
-      {
-        method: 'DELETE',
-        headers: { ...jsonHeaders(serviceKey), prefer: 'return=representation' },
-      },
+    // 2. LOOK the code up. Nothing is deleted here: for a family whose device
+    //    was wiped this row is the only credential they have left, so it may
+    //    not be destroyed on the way to a refusal.
+    const codeRes = await fetchImpl(
+      `${url}/rest/v1/recovery_codes?select=user_id&code=eq.${encodeURIComponent(cleaned)}`,
+      { headers: jsonHeaders(serviceKey) },
     )
-    if (!claimRes.ok) return { status: 502, body: { error: 'Lookup failed' } }
-    const rows = await claimRes.json()
-    const claimed = Array.isArray(rows) && rows.length === 1 ? rows[0] : null
-    if (!claimed?.user_id) return { status: 404, body: { error: 'Unknown code' } }
-    const oldUserId = claimed.user_id
-
-    const restore = () => fetchImpl(`${url}/rest/v1/recovery_codes`, {
-      method: 'POST',
-      headers: { ...jsonHeaders(serviceKey), prefer: 'resolution=merge-duplicates' },
-      body: JSON.stringify([claimed]),
-    }).catch(() => {})
+    if (!codeRes.ok) return { status: 502, body: { error: 'Lookup failed' } }
+    const rows = await codeRes.json()
+    const oldUserId = Array.isArray(rows) && rows.length === 1 ? rows[0].user_id : null
+    if (!oldUserId) return { status: 404, body: { error: 'Unknown code' } }
 
     // Redeeming your own code would delete the account you are signed into.
-    if (oldUserId === me.id) {
-      await restore()
-      return { status: 409, body: { error: 'Code already yours' } }
-    }
+    if (oldUserId === me.id) return { status: 409, body: { error: 'Code already yours' } }
 
     // 3. Only anonymous accounts may be rescued this way (see the header).
     const ownerRes = await fetchImpl(
       `${url}/auth/v1/admin/users/${encodeURIComponent(oldUserId)}`,
       { headers: jsonHeaders(serviceKey) },
     )
-    if (!ownerRes.ok) {
-      await restore()
-      return { status: 502, body: { error: 'Lookup failed' } }
-    }
+    if (!ownerRes.ok) return { status: 502, body: { error: 'Lookup failed' } }
     if (!isAnonymousUser(await ownerRes.json())) {
-      await restore()
       return { status: 403, body: { error: 'Code belongs to a linked account' } }
     }
 
-    // 4. Re-parent the children. This is the only step that must not be lost,
-    //    so the old account is not touched until it has succeeded.
+    // 4. CLAIM it, now that it is going to be used. The DELETE carries BOTH
+    //    the code and the owner we validated, so it is a compare-and-swap: it
+    //    matches a row only if nothing changed since step 2. Two racing
+    //    requests cannot both win, and — because the database drops the code
+    //    the moment an account gains an email — a parent who linked their
+    //    email in the meantime takes the row out from under this request
+    //    rather than having their account handed over.
+    const claimRes = await fetchImpl(
+      `${url}/rest/v1/recovery_codes?code=eq.${encodeURIComponent(cleaned)}`
+      + `&user_id=eq.${encodeURIComponent(oldUserId)}`,
+      {
+        method: 'DELETE',
+        headers: { ...jsonHeaders(serviceKey), prefer: 'return=representation' },
+      },
+    )
+    if (!claimRes.ok) return { status: 502, body: { error: 'Lookup failed' } }
+    const claimed = await claimRes.json()
+    if (!Array.isArray(claimed) || claimed.length !== 1) {
+      // Lost the race, or the account was linked a moment ago. Either way the
+      // code is not ours to spend and nothing has been changed.
+      return { status: 409, body: { error: 'Code was just used' } }
+    }
+
+    // 5. Re-parent the children. If this fails the code has already been spent,
+    //    so put it back — and say plainly in the response whether that worked,
+    //    because a silently swallowed failure here is a family locked out.
     const moveRes = await fetchImpl(
       `${url}/rest/v1/profiles?owner_id=eq.${encodeURIComponent(oldUserId)}`,
       {
@@ -156,13 +184,21 @@ export async function recover({ code, authorization, env = process.env, fetchImp
       },
     )
     if (!moveRes.ok) {
-      await restore()
-      return { status: 502, body: { error: 'Re-parenting failed' } }
+      const restored = await restoreCode(url, serviceKey, fetchImpl, claimed[0])
+      return {
+        status: 502,
+        body: {
+          error: 'Re-parenting failed',
+          // false = the code is gone and the rescue did not happen: the
+          // operator has to hand this family a new code from the dashboard.
+          codeRestored: restored,
+        },
+      }
     }
     const moved = await moveRes.json()
     const profiles = Array.isArray(moved) ? moved.length : 0
 
-    // 5. The old account is now empty AND provably anonymous, so removing it
+    // 6. The old account is now empty AND provably anonymous, so removing it
     //    takes nobody's way in with it.
     const delRes = await fetchImpl(
       `${url}/auth/v1/admin/users/${encodeURIComponent(oldUserId)}`,

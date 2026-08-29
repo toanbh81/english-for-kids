@@ -26,7 +26,10 @@ function fakeFetch(overrides = {}) {
     const method = init.method ?? 'GET'
     calls.push({ url, method, body: init.body, headers: init.headers })
     if (url.includes('/auth/v1/user')) return overrides.user ?? ok({ id: CALLER, role: 'authenticated' })
-    // the claim: deleting the row IS the lock on it
+    // look up first (destroys nothing)…
+    if (url.includes('/rest/v1/recovery_codes') && method === 'GET')
+      return overrides.code ?? ok([{ user_id: OLD_USER }])
+    // …then claim it with a compare-and-swap delete once it will be used
     if (url.includes('/rest/v1/recovery_codes') && method === 'DELETE')
       return overrides.claim ?? ok([{ user_id: OLD_USER, code: 'ABC23XYZ' }])
     if (url.includes('/rest/v1/recovery_codes') && method === 'POST')
@@ -41,6 +44,7 @@ function fakeFetch(overrides = {}) {
   impl.calls = calls
   impl.wrote = () => calls.filter(c => c.method !== 'GET')
   impl.restored = () => calls.some(c => c.method === 'POST' && c.url.includes('recovery_codes'))
+  impl.claimedCode = () => calls.some(c => c.method === 'DELETE' && c.url.includes('recovery_codes'))
   impl.deletedUser = () => calls.some(c => c.method === 'DELETE' && c.url.includes('/admin/users/'))
   impl.moved = () => calls.some(c => c.method === 'PATCH')
   return impl
@@ -60,17 +64,25 @@ describe('POST /api/recover', () => {
     expect(patch.url).toContain(`owner_id=eq.${OLD_USER}`)
     expect(JSON.parse(patch.body)).toEqual({ owner_id: CALLER })
 
-    // the code is claimed by deleting it, the old account is proved anonymous,
-    // and only then is the emptied user removed
+    // read, prove the old account anonymous, THEN claim the code, then move,
+    // and only at the very end remove the emptied user
     const order = f.calls.map(c => `${c.method} ${c.url.split('demo.supabase.co')[1].split('?')[0]}`)
     expect(order).toEqual([
       'GET /auth/v1/user',
-      'DELETE /rest/v1/recovery_codes',
+      'GET /rest/v1/recovery_codes',
       `GET /auth/v1/admin/users/${OLD_USER}`,
+      'DELETE /rest/v1/recovery_codes',
       'PATCH /rest/v1/profiles',
       `DELETE /auth/v1/admin/users/${OLD_USER}`,
     ])
     expect(f.restored()).toBe(false)
+
+    // the claim is a compare-and-swap: it names the owner it validated, so a
+    // row that changed underneath it (a parent linking their email) is missed
+    // rather than spent
+    const claim = f.calls.find(c => c.method === 'DELETE' && c.url.includes('recovery_codes'))
+    expect(claim.url).toContain('code=eq.ABC23XYZ')
+    expect(claim.url).toContain(`user_id=eq.${OLD_USER}`)
   })
 
   // The finding that made this fix urgent: a code screenshotted before the
@@ -81,28 +93,34 @@ describe('POST /api/recover', () => {
     ['a pending email change', { id: OLD_USER, new_email: 'parent@example.invalid' }],
     ['is_anonymous false', { id: OLD_USER, is_anonymous: false }],
     ['a google identity', { id: OLD_USER, identities: [{ provider: 'google' }] }],
-  ])('refuses a code whose account has %s, and puts the code back', async (_label, owner) => {
+    // fails CLOSED: an identity we cannot read is not assumed to be anonymous
+    ['an identity with no provider field', { id: OLD_USER, identities: [{ id: 'x' }] }],
+  ])('refuses a code whose account has %s, and does not spend it', async (_label, owner) => {
     const f = fakeFetch({ owner: ok(owner) })
     expect(await recover({ code: 'ABC23XYZ', authorization: auth, env, fetchImpl: f }))
       .toEqual({ status: 403, body: { error: 'Code belongs to a linked account' } })
     expect(f.moved()).toBe(false)
     expect(f.deletedUser()).toBe(false)
-    expect(f.restored()).toBe(true)
+    // a refusal must never cost anyone their code — so there is nothing to
+    // restore, because nothing was deleted
+    expect(f.claimedCode()).toBe(false)
+    expect(f.restored()).toBe(false)
   })
 
-  it('never deletes an account it did not prove anonymous', async () => {
+  it('never deletes an account — or a code — it did not prove anonymous', async () => {
     const f = fakeFetch({ owner: fail(500) })
     expect(await recover({ code: 'ABC23XYZ', authorization: auth, env, fetchImpl: f }))
       .toEqual({ status: 502, body: { error: 'Lookup failed' } })
     expect(f.deletedUser()).toBe(false)
-    expect(f.restored()).toBe(true)
+    expect(f.claimedCode()).toBe(false)
   })
 
   it('gives the code to exactly one of two racing requests', async () => {
-    // the loser's DELETE comes back empty: the row was already claimed
+    // the loser's compare-and-swap DELETE matches nothing: the row was claimed
+    // (or dropped by the link trigger) between the read and the claim
     const f = fakeFetch({ claim: ok([]) })
     expect(await recover({ code: 'ABC23XYZ', authorization: auth, env, fetchImpl: f }))
-      .toEqual({ status: 404, body: { error: 'Unknown code' } })
+      .toEqual({ status: 409, body: { error: 'Code was just used' } })
     expect(f.moved()).toBe(false)
     expect(f.deletedUser()).toBe(false)
   })
@@ -111,7 +129,7 @@ describe('POST /api/recover', () => {
     const f = fakeFetch()
     const r = await recover({ code: ' abc2-3xyz ', authorization: auth, env, fetchImpl: f })
     expect(r.status).toBe(200)
-    expect(f.calls[1]).toMatchObject({ method: 'DELETE' })
+    expect(f.calls[1]).toMatchObject({ method: 'GET' })
     expect(f.calls[1].url).toContain('code=eq.ABC23XYZ')
   })
 
@@ -148,30 +166,47 @@ describe('POST /api/recover', () => {
   })
 
   it('refuses an unknown code and changes nothing', async () => {
-    const f = fakeFetch({ claim: ok([]) })
+    const f = fakeFetch({ code: ok([]) })
     expect(await recover({ code: 'ABC23XYZ', authorization: auth, env, fetchImpl: f }))
       .toEqual({ status: 404, body: { error: 'Unknown code' } })
-    expect(f.moved()).toBe(false)
-    expect(f.deletedUser()).toBe(false)
+    expect(f.wrote()).toEqual([])
   })
 
-  it('refuses the caller\'s own code and hands it straight back', async () => {
-    const f = fakeFetch({ claim: ok([{ user_id: CALLER, code: 'ABC23XYZ' }]) })
+  it('refuses the caller\'s own code without spending it', async () => {
+    const f = fakeFetch({ code: ok([{ user_id: CALLER }]) })
     expect(await recover({ code: 'ABC23XYZ', authorization: auth, env, fetchImpl: f }))
       .toEqual({ status: 409, body: { error: 'Code already yours' } })
-    expect(f.moved()).toBe(false)
-    expect(f.deletedUser()).toBe(false)
-    // the claim deleted it; a refusal must not cost the parent their code
-    const put = f.calls.find(c => c.method === 'POST' && c.url.includes('recovery_codes'))
-    expect(JSON.parse(put.body)).toEqual([{ user_id: CALLER, code: 'ABC23XYZ' }])
+    expect(f.wrote()).toEqual([])
   })
 
-  it('keeps the old user when re-parenting fails — data first, tidiness never', async () => {
+  it('puts the code back when re-parenting fails, and says so', async () => {
     const f = fakeFetch({ move: fail(500) })
     expect(await recover({ code: 'ABC23XYZ', authorization: auth, env, fetchImpl: f }))
-      .toEqual({ status: 502, body: { error: 'Re-parenting failed' } })
+      .toEqual({ status: 502, body: { error: 'Re-parenting failed', codeRestored: true } })
     expect(f.deletedUser()).toBe(false)
-    expect(f.restored()).toBe(true)
+    const put = f.calls.find(c => c.method === 'POST' && c.url.includes('recovery_codes'))
+    expect(JSON.parse(put.body)).toEqual([{ user_id: OLD_USER, code: 'ABC23XYZ' }])
+  })
+
+  it('retries the restore once before giving up on it', async () => {
+    let attempt = 0
+    const f = fakeFetch({ move: fail(500), restore: undefined })
+    const wrapped = vi.fn(async (url, init = {}) => {
+      if (url.includes('recovery_codes') && init.method === 'POST' && attempt++ === 0) {
+        throw new Error('connection reset')
+      }
+      return f(url, init)
+    })
+    expect(await recover({ code: 'ABC23XYZ', authorization: auth, env, fetchImpl: wrapped }))
+      .toEqual({ status: 502, body: { error: 'Re-parenting failed', codeRestored: true } })
+  })
+
+  // The one path that can still cost a family their code. It must be reported,
+  // never swallowed: the operator has to issue a new code by hand.
+  it('admits it when the code could not be put back', async () => {
+    const f = fakeFetch({ move: fail(500), restore: fail(500) })
+    expect(await recover({ code: 'ABC23XYZ', authorization: auth, env, fetchImpl: f }))
+      .toEqual({ status: 502, body: { error: 'Re-parenting failed', codeRestored: false } })
   })
 
   it('reports a rescue that worked even if deleting the empty user did not', async () => {

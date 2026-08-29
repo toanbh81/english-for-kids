@@ -199,10 +199,32 @@ begin
 end;
 $$;
 
+create or replace function public.clamp_kv_updated_at()
+returns trigger
+language plpgsql
+set search_path = pg_catalog, public
+as $$
+begin
+  new.updated_at := public.clamp_client_ts(new.updated_at);
+  return new;
+end;
+$$;
+
+-- The clamp has to guard the TABLE, not just merge_kv. Owners hold INSERT and
+-- UPDATE on kv (they need DELETE and INSERT for the reset path below), so a
+-- modified client could otherwise write updated_at = 2^62 straight through
+-- PostgREST and freeze the row against every future merge. The cap only ever
+-- rises, so a value clamped in an earlier hour is still under today's ceiling
+-- and this never fights merge_kv's "the clock never moves backwards" rule.
 drop trigger if exists events_clamp_ts on public.events;
 create trigger events_clamp_ts
 before insert or update of ts on public.events
 for each row execute function public.clamp_event_ts();
+
+drop trigger if exists kv_clamp_updated_at on public.kv;
+create trigger kv_clamp_updated_at
+before insert or update of updated_at on public.kv
+for each row execute function public.clamp_kv_updated_at();
 
 -- One iPad, one family: a handful of children, not a thousand rows created by
 -- a script. The cap is on INSERT only, so re-parenting during a recovery
@@ -574,6 +596,7 @@ revoke execute on function public.kv_strategy(text) from public;
 revoke execute on function public.gen_recovery_code() from public;
 revoke execute on function public.clamp_client_ts(bigint) from public;
 revoke execute on function public.clamp_event_ts() from public;
+revoke execute on function public.clamp_kv_updated_at() from public;
 revoke execute on function public.enforce_profile_cap() from public;
 revoke execute on function public.drop_recovery_code_on_link() from public;
 revoke execute on function public.kv_merge_value(text, jsonb, bigint, jsonb, bigint) from public;

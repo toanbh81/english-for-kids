@@ -431,6 +431,26 @@ begin
   assert (select value from public.kv where profile_id = p3 and key = 'band')
          = '{"level": 1}'::jsonb, 'a far-future write froze an LWW key permanently';
 
+  -- …and the ceiling guards the TABLE, not just the RPC. Owners hold INSERT
+  -- and UPDATE on kv (the reset path needs them), so a modified client could
+  -- otherwise skip merge_kv entirely and write a wild clock straight through
+  -- PostgREST.
+  insert into public.kv (profile_id, key, value, updated_at)
+  values (p3, 'leitner', '{"cat": 1}', 253402300799000);   -- year 9999
+  select updated_at into u from public.kv where profile_id = p3 and key = 'leitner';
+  assert u = cap, 'a direct kv insert kept its far-future clock: ' || u;
+
+  update public.kv set updated_at = 253402300799000
+  where profile_id = p3 and key = 'leitner';
+  select updated_at into u from public.kv where profile_id = p3 and key = 'leitner';
+  assert u = cap, 'a direct kv update kept its far-future clock: ' || u;
+
+  perform public.merge_kv(p3, jsonb_build_array(jsonb_build_object(
+    'key', 'leitner', 'value', jsonb_build_object('cat', 2), 'updated_at', cap)));
+  assert (select value from public.kv where profile_id = p3 and key = 'leitner')
+         = '{"cat": 2}'::jsonb,
+    'a direct far-future write froze the row against every later merge';
+
   -- events: the same ceiling, applied by a trigger before the primary key is
   -- decided, so a replay of the poisoned event still lands on the same row
   -- instead of multiplying.

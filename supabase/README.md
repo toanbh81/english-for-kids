@@ -99,7 +99,16 @@ at 24 hours ahead of the server (`clamp_client_ts`, applied inside `merge_kv`
 and by a trigger on `events`). An iPad set to 2030 would otherwise freeze every
 LWW key for ever — nothing would ever be "newer" — and park its events at the
 top of the pruning order for a decade. The cap is quantised to the hour so a
-replayed event still lands on the same primary key instead of multiplying.
+replayed event still lands on the same primary key instead of multiplying, and
+it is applied by triggers on `kv` and `events` as well as inside `merge_kv` —
+owners hold INSERT/UPDATE on those tables, so guarding only the RPC would guard
+only the door.
+
+Residual, stated plainly: a poisoned clock can still evict up to the full
+2000-row window for that profile, because every clamped event sorts above the
+real ones. It self-heals within 24 hours — once real time passes the ceiling,
+genuine events outrank the poisoned ones again and the device re-uploads its
+own log — instead of lasting until whatever year the clock was set to.
 
 **Resetting a child's progress is a DELETE, not a merge.** There is no
 tombstone verb: stars merge by max, so an "empty" write would simply be
