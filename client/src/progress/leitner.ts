@@ -1,4 +1,4 @@
-import { storageKey } from './storageKeys'
+import { onStoreWrite, storageKey } from './storageKeys'
 
 // Resolved per call, never captured: the active child is only known once the app has booted.
 const leitnerKey = () => storageKey('leitner')
@@ -18,8 +18,11 @@ const read = (): LeitnerMap => {
   } catch { return {} }
 }
 const write = (m: LeitnerMap) => {
-  try { localStorage.setItem(leitnerKey(), JSON.stringify(m)) }
-  catch { /* ignore: storage unavailable */ }
+  try {
+    const key = leitnerKey()
+    localStorage.setItem(key, JSON.stringify(m))
+    onStoreWrite(key)
+  } catch { /* ignore: storage unavailable */ }
 }
 
 export function getBox(wordId: string): 0 | 1 | 2 | 3 | 4 {

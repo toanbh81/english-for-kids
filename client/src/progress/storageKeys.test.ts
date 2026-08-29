@@ -4,12 +4,16 @@ import {
   PROFILES_KEY,
   activeProfileId,
   isProfileId,
+  mergeStoredValue,
   migrateKeysInto,
   namespacePrefix,
+  onStoreWrite,
+  profileStorageKey,
   rescueOrphanNamespaces,
   setActiveProfileId,
   storageKey,
   storageName,
+  subscribeStoreWrites,
 } from './storageKeys'
 
 const ID = '11111111-2222-4333-8444-555555555555'
@@ -351,6 +355,79 @@ describe('the orphan rescue', () => {
     localStorage.setItem(`speakup.${ORPHAN}.stars`, '{}')
     expect(rescueOrphanNamespaces('nobody', [])).toBe(0)
     expect(localStorage.getItem(`speakup.${ORPHAN}.stars`)).toBe('{}')
+  })
+})
+
+describe('a key belonging to a child who is not the active one', () => {
+  beforeEach(() => localStorage.clear())
+
+  it('is built from the profile it names, not from whoever is using the iPad', () => {
+    setActiveProfileId(ID)
+    expect(profileStorageKey(OTHER, 'stars')).toBe(`speakup.${OTHER}.stars`)
+    expect(profileStorageKey(ID, 'stars')).toBe(storageKey('stars'))
+    // The sync outbox can hold an op for a child written before the iPad changed hands; reading it
+    // out of the ACTIVE namespace would put one child's stars in the other's row.
+    expect(profileStorageKey('not-an-id', 'stars')).toBe('speakup.stars')
+  })
+})
+
+describe('the write seam', () => {
+  beforeEach(() => localStorage.clear())
+
+  it('is silent while nobody is subscribed — which is every build with no cloud', () => {
+    // Not a formality: `onStoreWrite` is called on every star, every promotion and every lesson,
+    // in an app that most often has no Supabase project behind it.
+    expect(() => onStoreWrite('speakup.stars')).not.toThrow()
+  })
+
+  it('hands every subscriber the key that was written, and stops on unsubscribe', () => {
+    const seen: string[] = []
+    const off = subscribeStoreWrites(key => seen.push(key))
+    const offToo = subscribeStoreWrites(key => seen.push(`2:${key}`))
+
+    setActiveProfileId(ID)
+    onStoreWrite(storageKey('stars'))
+    off()
+    onStoreWrite(storageKey('band'))
+    offToo()
+    onStoreWrite(storageKey('leitner'))
+
+    expect(seen).toEqual([`speakup.${ID}.stars`, `2:speakup.${ID}.stars`, `2:speakup.${ID}.band`])
+  })
+
+  it('never lets a listener\'s failure reach the store that was writing', () => {
+    const seen: string[] = []
+    const off = subscribeStoreWrites(() => { throw new Error('the mirror fell over') })
+    const offToo = subscribeStoreWrites(key => seen.push(key))
+
+    expect(() => onStoreWrite('speakup.stars')).not.toThrow()
+    expect(seen).toEqual(['speakup.stars']) // and the other subscriber still heard it
+    off()
+    offToo()
+  })
+})
+
+describe('the merge contract', () => {
+  const event = (ts: number, id: string) => ({ ts, kind: 'word', id })
+
+  it('takes the higher star, never the newer one', () => {
+    const merged = mergeStoredValue('stars', JSON.stringify({ a: 3, b: 1 }), JSON.stringify({ a: 1, c: 2 }), true)
+    expect(JSON.parse(merged)).toEqual({ a: 3, b: 1, c: 2 })
+  })
+
+  it('unions the event log on (ts, kind, id) whichever side is preferred', () => {
+    const mine = JSON.stringify([event(2, 'b')])
+    const theirs = JSON.stringify([event(1, 'a'), event(2, 'b')])
+    for (const prefer of [true, false]) {
+      expect(JSON.parse(mergeStoredValue('activity', mine, theirs, prefer))).toEqual([event(1, 'a'), event(2, 'b')])
+    }
+  })
+
+  it('lets the caller decide last-write-wins for everything else', () => {
+    expect(mergeStoredValue('band', '{"value":4}', '{"value":1}', false)).toBe('{"value":4}')
+    expect(mergeStoredValue('band', '{"value":4}', '{"value":1}', true)).toBe('{"value":1}')
+    // Nothing local: there is nothing to weigh, and this is the restore after a wiped cache.
+    expect(mergeStoredValue('band', null, '{"value":1}', false)).toBe('{"value":1}')
   })
 })
 

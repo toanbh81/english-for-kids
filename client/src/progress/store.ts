@@ -1,5 +1,5 @@
 import { findSound } from '../content'
-import { storageKey } from './storageKeys'
+import { onStoreWrite, storageKey } from './storageKeys'
 
 // Resolved per call, never captured: the active child is only known once the app has booted.
 const starsKey = () => storageKey('stars')
@@ -11,7 +11,13 @@ const read = (): StarMap => {
 }
 export function getStars(id: string): 0 | 1 | 2 | 3 { return read()[id] ?? 0 }
 export function setStars(id: string, stars: 1 | 2 | 3) {
-  const m = read(); if ((m[id] ?? 0) < stars) { m[id] = stars; localStorage.setItem(starsKey(), JSON.stringify(m)) }
+  const m = read()
+  if ((m[id] ?? 0) < stars) {
+    m[id] = stars
+    const key = starsKey()
+    localStorage.setItem(key, JSON.stringify(m))
+    onStoreWrite(key)
+  }
 }
 export function totalStars() { return Object.values(read()).reduce((s, v) => s + v, 0) }
 

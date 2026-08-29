@@ -117,8 +117,19 @@ export function setActiveProfileId(id: string): boolean {
 
 /** `speakup.` or `speakup.<profileId>.` — everything below is built from this. */
 export function namespacePrefix(): string {
-  const id = activeProfileId()
-  return id ? `${ROOT}${id}.` : ROOT
+  return profilePrefix(activeProfileId())
+}
+
+/**
+ * The prefix a given child's keys live under — the active one or any other.
+ *
+ * The sync engine needs this half: an outbox op names the profile it was written for, and it may
+ * still be waiting when another child is using the iPad. Building the key from the op's own profile
+ * id (rather than from whoever is active at flush time) is what keeps one child's stars out of the
+ * other's namespace, and it stays here so the format lives in exactly one file.
+ */
+export function profilePrefix(profileId: string | null): string {
+  return isProfileId(profileId) ? `${ROOT}${profileId}.` : ROOT
 }
 
 /**
@@ -129,6 +140,11 @@ export function namespacePrefix(): string {
  */
 export function storageKey(name: string): string {
   return `${namespacePrefix()}${name}`
+}
+
+/** `storageKey`, for a child who is not the one currently using the iPad. */
+export function profileStorageKey(profileId: string, name: string): string {
+  return `${profilePrefix(profileId)}${name}`
 }
 
 /**
@@ -150,6 +166,47 @@ export function storageName(key: string): string | null {
   const head = dot === -1 ? name : name.slice(0, dot)
   if (isProfileId(head) || DEVICE_SEGMENTS.has(head)) return null
   return name
+}
+
+// ---------------------------------------------------------------------------
+// The write seam
+// ---------------------------------------------------------------------------
+
+/**
+ * The ONE place the app announces that a child's stored value changed.
+ *
+ * Every progress module already imports this file for its key, so the announcement costs each of
+ * them one line next to the `setItem` they were already making — and, crucially, there is exactly
+ * one of them per module. The alternative (the sync engine reaching into a dozen call sites, or a
+ * `setItem` wrapper each store had to remember to use) is a seam that goes stale the first time
+ * somebody adds a store and forgets.
+ *
+ * It stays in `progress/` and knows nothing about the cloud: `cloud/sync.ts` subscribes to it. That
+ * keeps the direction of the dependency the same as it has always been — progress never imports
+ * cloud, so no build without Supabase env vars pays for a mirror it does not have. With nobody
+ * subscribed (every existing test, and every build with no cloud configured) this is a loop over an
+ * empty array.
+ *
+ * Deliberately NOT announced: removals. A `clearActivity()`/`clearStars()` is a parent resetting the
+ * child, and a reset is a DELETE of the server rows, not a merge of an empty value — max-merge would
+ * resurrect exactly what was reset. `cloud/sync.ts` owns that path (`resetRemoteProgress`).
+ */
+type StoreWriteListener = (key: string) => void
+
+const storeWriteListeners = new Set<StoreWriteListener>()
+
+/** Called by the stores, right after a successful write. Never throws into the caller. */
+export function onStoreWrite(key: string): void {
+  if (storeWriteListeners.size === 0) return
+  for (const listener of [...storeWriteListeners]) {
+    try { listener(key) } catch { /* a mirror must never break the write it was mirroring */ }
+  }
+}
+
+/** Subscribe to those writes. Returns the unsubscribe. */
+export function subscribeStoreWrites(listener: StoreWriteListener): () => void {
+  storeWriteListeners.add(listener)
+  return () => { storeWriteListeners.delete(listener) }
 }
 
 /**
@@ -308,20 +365,34 @@ function mergeActivity(existing: string, incoming: string): string {
 }
 
 /**
- * What one rescued value becomes.
+ * What one stored value becomes when a second copy of it turns up.
  *
- * The three rules are the app's own, not new ones: stars take the maximum, the event log is a
- * union, and everything else (the band, the lesson records, the daily limit, the celebration
- * stamp, and any key a future phase adds) keeps what the ACTIVE namespace already says. Preferring
- * what is already active is the conservative half of last-write-wins: the child has been using
- * that value, and a namespace that fell out of the roster is by definition the one nothing has
- * been reading.
+ * **This is the app's merge contract, and the only copy of it.** Two callers need it and must never
+ * drift apart: the orphan rescue below (a namespace the roster lost) and `cloud/sync.ts`'s pull (a
+ * namespace the server has). It is also the same contract the server's `merge_kv` applies, for the
+ * same reasons — see supabase/migrations/0001_profiles_sync.sql.
+ *
+ *  - `stars` — per-entry **maximum**. A star the child earned is never lowered, whatever the clocks
+ *    say. Stars only ever go up, which makes max both correct and replay-proof.
+ *  - `activity` — **union**, deduped on `(ts, kind, id)` (the server's primary key), sorted, capped
+ *    at the 2000 `activity.ts` already enforces.
+ *  - everything else — **last write wins**, and `preferIncoming` is that decision. The rescue leaves
+ *    it false: an orphaned namespace carries no clock, and the value the child has been using is the
+ *    better guess. The pull passes the comparison of the two `updated_at`s.
+ *
+ * Where there is no existing value at all the incoming one is taken outright — that is the restore
+ * after a wiped cache, and it is the one case that has nothing to weigh.
  */
-function mergeRescued(name: string, existing: string | null, incoming: string): string {
+export function mergeStoredValue(
+  name: string,
+  existing: string | null,
+  incoming: string,
+  preferIncoming = false,
+): string {
   if (existing === null) return incoming
   if (name === 'stars') return mergeStars(existing, incoming)
   if (name === 'activity') return mergeActivity(existing, incoming)
-  return existing
+  return preferIncoming ? incoming : existing
 }
 
 /**
@@ -375,7 +446,7 @@ export function rescueOrphanNamespaces(activeId: string, knownIds: string[]): nu
       if (incoming === null) continue
       const target = `${prefix}${name}`
       const existing = localStorage.getItem(target)
-      const merged = mergeRescued(name, existing, incoming)
+      const merged = mergeStoredValue(name, existing, incoming)
       if (merged !== existing && !copyValue(target, merged)) continue
       if (localStorage.getItem(target) !== merged) continue
       localStorage.removeItem(key)

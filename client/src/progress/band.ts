@@ -4,7 +4,7 @@ import type { ActivityEvent } from './activity'
 // `lessonStore`, not `lesson`: lesson generation reads the band, so importing the generator here
 // would close the loop. The store sits below both.
 import { itemDone, lessonForDay } from './lessonStore'
-import { storageKey } from './storageKeys'
+import { onStoreWrite, storageKey } from './storageKeys'
 import { getStars } from './store'
 
 /**
@@ -43,8 +43,11 @@ function read(): BandState | null {
 }
 
 function write(state: BandState): void {
-  try { localStorage.setItem(bandKey(), JSON.stringify(state)) }
-  catch { /* ignore: storage unavailable */ }
+  try {
+    const key = bandKey()
+    localStorage.setItem(key, JSON.stringify(state))
+    onStoreWrite(key)
+  } catch { /* ignore: storage unavailable */ }
 }
 
 const wordPopCards = () => LEVELS.find(l => l.id === 'word-pop')?.cards ?? []

@@ -1,5 +1,5 @@
 import { lessonDone, lessonForDay } from './lessonStore'
-import { storageKey } from './storageKeys'
+import { onStoreWrite, storageKey } from './storageKeys'
 
 // Resolved per call, never captured: the active child is only known once the app has booted.
 const activityKey = () => storageKey('activity')
@@ -28,8 +28,13 @@ const read = (): ActivityEvent[] => {
   } catch { return [] }
 }
 const write = (events: ActivityEvent[]) => {
-  try { localStorage.setItem(activityKey(), JSON.stringify(events)) }
-  catch { /* ignore: storage unavailable */ }
+  try {
+    const key = activityKey()
+    localStorage.setItem(key, JSON.stringify(events))
+    // The one announcement the sync engine hears; it turns into rows in `events` (never into a kv
+    // value — the log outgrows kv's 16 KB ceiling). See progress/storageKeys.ts.
+    onStoreWrite(key)
+  } catch { /* ignore: storage unavailable */ }
 }
 
 // Only weak phonemes are ever read back (weakPhonemes / the parent dashboard), and a scored

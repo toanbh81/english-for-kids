@@ -1,4 +1,4 @@
-import { storageKey } from './storageKeys'
+import { onStoreWrite, storageKey } from './storageKeys'
 
 // Resolved per call, never captured: the active child is only known once the app has booted.
 const limitKey = () => storageKey('limit.minutes')
@@ -25,7 +25,10 @@ function clamp(n: number): number {
 
 export function setLimitMinutes(n: number): number {
   const clamped = clamp(Number.isFinite(n) ? n : DEFAULT_LIMIT_MINUTES)
-  try { localStorage.setItem(limitKey(), String(clamped)) }
-  catch { /* ignore: storage unavailable */ }
+  try {
+    const key = limitKey()
+    localStorage.setItem(key, String(clamped))
+    onStoreWrite(key)
+  } catch { /* ignore: storage unavailable */ }
   return clamped
 }

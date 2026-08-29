@@ -1,6 +1,6 @@
 import type { ActivityEvent, ActivityKind } from './activity'
 import { findSound } from '../content'
-import { storageKey } from './storageKeys'
+import { onStoreWrite, storageKey } from './storageKeys'
 
 /**
  * Storage and done-matching for the daily lesson, split out of `lesson.ts` so the dependency graph
@@ -101,8 +101,11 @@ export function saveLesson(lesson: Lesson): void {
     }
   } catch { /* ignore: storage unavailable */ }
 
-  try { localStorage.setItem(lessonKey(lesson.day), JSON.stringify({ ...lesson, v: VERSION })) }
-  catch { /* ignore: storage unavailable */ }
+  try {
+    const key = lessonKey(lesson.day)
+    localStorage.setItem(key, JSON.stringify({ ...lesson, v: VERSION }))
+    onStoreWrite(key)
+  } catch { /* ignore: storage unavailable */ }
 }
 
 /** Every key this module owns — day records, the length setting, and anything left over from an
@@ -133,8 +136,11 @@ export function getLessonLength(): LessonLength {
 }
 
 export function setLessonLength(length: LessonLength): void {
-  try { localStorage.setItem(lengthKey(), length) }
-  catch { /* ignore: storage unavailable */ }
+  try {
+    const key = lengthKey()
+    localStorage.setItem(key, length)
+    onStoreWrite(key)
+  } catch { /* ignore: storage unavailable */ }
 }
 
 /**
