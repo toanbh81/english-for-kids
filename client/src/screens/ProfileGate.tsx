@@ -44,26 +44,54 @@ const CHOSEN_KEY = 'speakup.profileChosen'
 const RE_ASK_AFTER_MS = 5 * 60 * 1000
 
 /**
- * Which child this document has already been handed to.
+ * Which child this document has been handed to, and WHEN it was last actively in use.
  *
- * `switchProfile` reloads (deliberately — it is the only way to guarantee no module cache still
- * holds the previous child's numbers), which would land right back on this screen. The mark is in
- * sessionStorage, so it survives that reload and dies with the tab: the next real app start asks
- * again, which is what "app start shows an avatar picker" means.
+ * The timestamp lives on the mark rather than in the component's closure, and that is the whole
+ * difference between "asks after a resume" and "asks after a resume, unless iOS threw the document
+ * away first". A closure variable dies with the JS context: an iPad that terminates the app under
+ * memory pressure and relaunches it hours later — the common way a PWA comes back — starts with an
+ * empty closure and a sessionStorage that iOS restored, so the mark said "already answered" and
+ * nothing asked. Persisted with the answer, the staleness survives exactly as long as the answer
+ * does, and both `alreadyChosen()` (cold start) and `resume()` read the same clock.
+ *
+ * sessionStorage, not localStorage, is still right: the mark must not outlive the browsing session.
  */
-function alreadyChosen(): boolean {
+type Mark = { id: string; at: number }
+
+function readMark(): Mark | null {
   try {
-    const chosen = sessionStorage.getItem(CHOSEN_KEY)
-    return chosen !== null && chosen === activeProfileId()
+    const raw = sessionStorage.getItem(CHOSEN_KEY)
+    if (!raw) return null
+    const parsed: unknown = JSON.parse(raw)
+    if (!parsed || typeof parsed !== 'object') return null
+    const { id, at } = parsed as Partial<Mark>
+    if (typeof id !== 'string' || !id) return null
+    // A mark with no usable stamp reads as infinitely old, which asks. That covers a value written
+    // by the previous build (a bare id string, which does not parse as an object anyway) and any
+    // hand-edited nonsense: the safe direction here is one extra tap.
+    return { id, at: typeof at === 'number' && Number.isFinite(at) ? at : 0 }
   } catch {
-    // Storage unavailable (private mode): asking once per mount is the safe direction — the wrong
-    // answer here is writing to a sibling's profile, not one extra tap.
-    return false
+    return null
   }
 }
 
+function writeMark(id: string, at: number): void {
+  try { sessionStorage.setItem(CHOSEN_KEY, JSON.stringify({ id, at })) } catch { /* ignore: storage unavailable */ }
+}
+
+/** Answered, for this child, recently enough that nobody can have swapped seats since. */
+function markIsFresh(mark: Mark | null): boolean {
+  return mark !== null && mark.id === activeProfileId() && Date.now() - mark.at < RE_ASK_AFTER_MS
+}
+
+function alreadyChosen(): boolean {
+  // Storage unavailable (private mode) reads as "nobody has answered": asking once per mount is the
+  // safe direction — the wrong answer here is writing to a sibling's profile, not one extra tap.
+  return markIsFresh(readMark())
+}
+
 function remember(id: string): void {
-  try { sessionStorage.setItem(CHOSEN_KEY, id) } catch { /* ignore: storage unavailable */ }
+  writeMark(id, Date.now())
 }
 
 export function ProfileGate({ children }: { children: ReactNode }) {
@@ -75,23 +103,30 @@ export function ProfileGate({ children }: { children: ReactNode }) {
   useEffect(() => {
     // Subscribed even for a one-profile device: the parent can add a sibling from the dashboard and
     // hand the iPad over in the same minute, and the roster is re-read below rather than captured.
-    let hiddenAt = 0
     function resume() {
-      const away = hiddenAt === 0 ? 0 : Date.now() - hiddenAt
-      hiddenAt = 0
-      if (away < RE_ASK_AFTER_MS) return
       const roster = listProfiles()
       if (roster.length < 2) return
+      // The mark carries its own age, so this asks the same question the cold start asks and gets
+      // the same answer whether or not the document survived the trip.
+      if (markIsFresh(readMark())) return
       setProfiles(roster)
       setReasking(true)
     }
+    function goingAway() {
+      // Stamp the answer as it stops being watched: the absence is measured from the moment the
+      // iPad went into somebody's bag, not from whenever the child last tapped a card. Only an
+      // existing answer is re-stamped — writing one here would wave a question through that nobody
+      // has answered yet.
+      const mark = readMark()
+      if (mark) writeMark(mark.id, Date.now())
+    }
     function onVisibility() {
-      if (typeof document === 'undefined') return
-      if (document.visibilityState === 'hidden') { hiddenAt = Date.now(); return }
-      resume()
+      if (document.visibilityState === 'hidden') goingAway()
+      else resume()
     }
     // `pageshow` with `persisted` is the other way back in — a document restored from the
-    // back/forward cache, which iOS uses freely. The same threshold applies to it.
+    // back/forward cache, which iOS uses freely. It stands on its own now: the age it reads is on
+    // the mark, so this fires the ask whether or not a `visibilitychange` came first.
     function onPageShow(e: PageTransitionEvent) {
       if (e.persisted) resume()
     }

@@ -34,7 +34,7 @@ vi.mock('../cloud/auth', () => auth)
  * visible, which is why the ids below are real UUIDs.
  */
 const profileState = vi.hoisted(() => ({
-  fetchRemoteProfiles: vi.fn<() => Promise<Profile[]>>(async () => []),
+  fetchRemoteProfiles: vi.fn<() => Promise<Profile[] | null>>(async () => []),
   switchProfile: vi.fn(() => true),
 }))
 vi.mock('../cloud/profileState', async importOriginal => ({
@@ -259,6 +259,78 @@ describe('the email door', () => {
     expect(screen.getByText(/đã được lưu lên máy chủ dưới tài khoản đó/)).toBeInTheDocument()
   })
 
+  /**
+   * C1. An owned profile that IS in the roster but has no local trace.
+   *
+   * Reached by an ordinary sequence, every step of it intended: a recovery-code restore adopts the
+   * child into the roster, the pull fails on a network blip, the parent sees an empty child, backs
+   * out and tries the email door instead. Local history: none. Local `mirrored` meta: none. The
+   * only surviving fact about that child is the row the account owns — so the row is the evidence,
+   * and it is the one that cannot be lost.
+   */
+  it('counts a profile the account owns even with nothing local to show for it', async () => {
+    localStorage.setItem('speakup.profiles', JSON.stringify([profile(MINTED), profile(SOC, 'Sóc')]))
+    localStorage.setItem('speakup.profile', MINTED)
+    // Nothing seeded for SOC: no stars, no activity, no mirrored meta. Only the account owns them.
+    profileState.fetchRemoteProfiles.mockResolvedValue([profile(MINTED), profile(SOC, 'Sóc')])
+    auth.signInWithEmail.mockResolvedValue({ ok: false, error: 'anonymous-session-in-use' })
+
+    await goToEmail()
+
+    expect(auth.signInWithEmail).toHaveBeenCalledTimes(1)
+    expect(auth.signInWithEmail).not.toHaveBeenCalledWith('bome@example.com', { abandonAnonymous: true })
+    expect(screen.getByText(/đang giữ tiến độ của 1 hồ sơ/)).toBeInTheDocument()
+  })
+
+  it('still continues by itself when the only row the account owns is the empty one', async () => {
+    // The other side of that rule, and the one flow 3 depends on: a genuinely wiped device owns
+    // exactly the profile it minted on launch, and the server said so.
+    profileState.fetchRemoteProfiles.mockResolvedValue([profile(MINTED)])
+    auth.signInWithEmail
+      .mockResolvedValueOnce({ ok: false, error: 'anonymous-session-in-use' })
+      .mockResolvedValueOnce({ ok: true, userId: 'u1' })
+
+    await goToEmail()
+
+    expect(auth.signInWithEmail).toHaveBeenNthCalledWith(2, 'bome@example.com', { abandonAnonymous: true })
+    expect(screen.getByText(/Nhập mã 6 số/)).toBeInTheDocument()
+  })
+
+  /**
+   * C2. The read failing and the account being empty were the same value.
+   *
+   * Offline is self-limiting (the OTP send fails first), but a transient 500 or a slow query on a
+   * live network is not — and it authorised the one thing in this app that cannot be undone.
+   */
+  it('stops and says so when it could not check the account at all', async () => {
+    profileState.fetchRemoteProfiles.mockResolvedValue(null)
+    auth.signInWithEmail.mockResolvedValue({ ok: false, error: 'anonymous-session-in-use' })
+
+    await goToEmail()
+
+    expect(auth.signInWithEmail).toHaveBeenCalledTimes(1)
+    expect(auth.signInWithEmail).not.toHaveBeenCalledWith('bome@example.com', { abandonAnonymous: true })
+    expect(screen.getByText('Chưa kiểm tra được tài khoản trên máy này')).toBeInTheDocument()
+    // …and it does not dress the unknown up as a finding, in either direction.
+    expect(screen.getByText(/không có nghĩa là không có gì/)).toBeInTheDocument()
+    // The parent may still go ahead — knowing that nobody checked.
+    expect(screen.getByText(/Vẫn tiếp tục với bome@example.com/)).toBeInTheDocument()
+  })
+
+  it('never announces an unchecked account as an empty one after signing in', async () => {
+    // The same conflation one screen later: this sentence tells a parent their child is gone.
+    profileState.fetchRemoteProfiles.mockResolvedValue(null)
+    await goToEmail()
+    await act(async () => {
+      fireEvent.change(screen.getByLabelText('Mã xác nhận'), { target: { value: '123456' } })
+      fireEvent.submit(screen.getByLabelText('Mã xác nhận').closest('form')!)
+    })
+
+    expect(screen.queryByText(/chưa có hồ sơ nào/)).not.toBeInTheDocument()
+    expect(screen.getByRole('alert')).toHaveTextContent('Chưa xem được danh sách hồ sơ')
+    expect(sync.pullProfile).not.toHaveBeenCalled()
+  })
+
   it('counts rows that only exist on the server as something to lose', async () => {
     // Nothing on disk (a trimmed cache) but rows mirrored under the anonymous user id: those are
     // exactly what becomes unreachable, and they used to be nobody's business.
@@ -426,6 +498,60 @@ describe('the email door', () => {
 
     expect(await screen.findByText('Sóc')).toBeInTheDocument()
     expect(screen.getAllByRole('button').some(b => b.textContent?.includes('Bé'))).toBe(true)
+  })
+
+  /**
+   * A pull that failed used to end in `switchProfile` anyway: the parent landed in a profile with
+   * the right name and none of the progress, concluded the restore had failed, and went looking for
+   * another way in — which is the first step of the sequence that abandons the account holding the
+   * real data. A restore that could not restore has to say so.
+   */
+  describe('when the pull does not come down', () => {
+    async function restoreWithFailedPull() {
+      sync.pullProfile.mockResolvedValue(false)
+      profileState.fetchRemoteProfiles.mockResolvedValue([profile(SOC, 'Sóc')])
+      await goToEmail()
+      await act(async () => {
+        fireEvent.change(screen.getByLabelText('Mã xác nhận'), { target: { value: '123456' } })
+        fireEvent.submit(screen.getByLabelText('Mã xác nhận').closest('form')!)
+      })
+    }
+
+    it('does not switch into a child whose progress never arrived', async () => {
+      await restoreWithFailedPull()
+
+      expect(sync.pullProfile).toHaveBeenCalledWith(SOC)
+      expect(profileState.switchProfile).not.toHaveBeenCalled()
+      expect(screen.getByRole('alert')).toHaveTextContent('chưa tải được tiến độ')
+      // …and says where the device actually stands, which is: nowhere new.
+      expect(screen.getByRole('alert')).toHaveTextContent('vẫn đang ở hồ sơ cũ')
+    })
+
+    it('offers the same child again rather than the menu', async () => {
+      await restoreWithFailedPull()
+
+      sync.pullProfile.mockResolvedValue(true)
+      await act(async () => { fireEvent.click(screen.getByText('Thử tải lại')) })
+
+      expect(sync.pullProfile).toHaveBeenLastCalledWith(SOC)
+      expect(profileState.switchProfile).toHaveBeenCalledWith(SOC)
+    })
+
+    it('says it next to the picker when there was a choice to make', async () => {
+      sync.pullProfile.mockResolvedValue(false)
+      profileState.fetchRemoteProfiles.mockResolvedValue([profile(SOC, 'Sóc'), profile(CAO, 'Cáo')])
+      await goToEmail()
+      await act(async () => {
+        fireEvent.change(screen.getByLabelText('Mã xác nhận'), { target: { value: '123456' } })
+        fireEvent.submit(screen.getByLabelText('Mã xác nhận').closest('form')!)
+      })
+      await act(async () => { fireEvent.click(await screen.findByText('Cáo')) })
+
+      expect(profileState.switchProfile).not.toHaveBeenCalled()
+      expect(screen.getByRole('alert')).toHaveTextContent('chưa tải được tiến độ')
+      // The picker is still up: tapping the same face again IS the retry.
+      expect(screen.getByText('Cáo')).toBeInTheDocument()
+    })
   })
 
   it('shows a picker when the account owns more than one profile', async () => {

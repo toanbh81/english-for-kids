@@ -36,8 +36,16 @@ import { Button, Card, PAGE_SHELL } from '../components/ui'
 type Stage = 'menu' | 'gate' | 'email' | 'email-otp' | 'code' | 'abandon'
 type Door = 'email' | 'code'
 
-/** What the ACCOUNT on this device would be left holding, unreachably, after signing in elsewhere. */
-type Stranding = { profiles: number; stars: number; events: number; mirrored: boolean }
+/**
+ * What the ACCOUNT on this device would be left holding, unreachably, after signing in elsewhere.
+ *
+ * Two shapes, because there are two different reasons to stop and only one of them has numbers.
+ * `unchecked` is not "nothing found" — it is "could not find out", and for a one-way action those
+ * must never collapse into the same answer.
+ */
+type Stranding =
+  | { kind: 'holding'; profiles: number; stars: number; events: number; mirrored: boolean }
+  | { kind: 'unchecked' }
 
 function describeAuthError(code: string): string {
   const lower = code.toLowerCase()
@@ -72,26 +80,38 @@ function describeRecoverError(status: number): string {
 }
 
 /**
- * What signing in as another account would strand — or null if there is genuinely nothing.
+ * What signing in as another account would strand — or null ONLY when that has been established.
  *
  * **The question is what the ACCOUNT loses, not what the device loses**, and the difference is a
  * whole child. Every profile on this iPad belongs to the same anonymous owner, so the first version
  * of this — `totalStars()`, `getActivity()`, `hasMirroredData(activeProfileId())`, all three
  * resolving through the ACTIVE namespace — was blind to a sibling. That is not a corner: flow 6's
  * picker makes "hand the iPad to the other child" a one-tap everyday action, and the empty child's
- * Home is where the restore link appears. Parent taps it in good faith with their real linked
- * address, this returns null, the screen abandons the account by itself, and the first child's
- * months of progress belong to an owner nothing can reach again.
+ * Home is where the restore link appears.
  *
- * So the scan is every id this device knows about AND every id the account actually owns — the
- * second read `fetchRemoteProfiles()`, which answers rather than infers, and catches a child whose
- * roster entry this device has lost (its rows are still up there, still about to be orphaned).
+ * **A profile the account owns is evidence by itself.** Local history and local `mirrored` meta are
+ * both things this device happens to remember, and neither survives the ordinary sequence that gets
+ * a family here: a recovery restores a child into the roster, the pull fails on a blip, the parent
+ * backs out and tries the email door instead. That child has rows on the server, a row in the
+ * roster, and nothing else — invisible to any check that asks the device what it remembers. The row
+ * itself is the fact that cannot be lost, so the row is what is counted. The one exception is the
+ * empty profile this device minted seconds ago, which is what flow 3 exists to replace.
+ *
+ * **And an answer that could not be obtained is not an empty answer.** `fetchRemoteProfiles()`
+ * returns null when the read failed, which on a live session means stop and ask — the parent can
+ * still say yes, but they say it knowing nobody checked. Three rounds of review found this same
+ * class of narrowing three times, always in the same direction: a silent "I could not see it"
+ * reported as "there is nothing there".
  *
  * A device whose parent has ALREADY linked an email is not at risk — signing in there is the same
  * account or a deliberate second one, and the guard in `auth.ts` never fires for it either.
  */
-async function assessStranding(): Promise<Stranding | null> {
+async function assessStranding(mintedId: string | null): Promise<Stranding | null> {
   if (await currentEmail()) return null
+
+  const owned = await fetchRemoteProfiles()
+  // Unknown, on a session that exists: the account may be holding anything at all.
+  if (owned === null) return { kind: 'unchecked' }
 
   const ids = new Set<string | null>(listProfiles().map(p => p.id))
   const active = activeProfileId()
@@ -99,25 +119,20 @@ async function assessStranding(): Promise<Stranding | null> {
   // A device that never got a namespace (storage refused the migration) keeps its progress under
   // the legacy keys, and `profileHistory(null)` is how those are read.
   if (!ids.size) ids.add(null)
-
-  const owned = await fetchRemoteProfiles()
-  // A child the account owns but this roster does not name. There is nothing local left to count
-  // for them, and that is exactly why they matter: only the server still has them.
-  const forgotten = owned.filter(p => !ids.has(p.id)).length
   for (const p of owned) ids.add(p.id)
 
+  const ownedIds = new Set(owned.map(p => p.id))
   let profiles = 0
-  let mirrored = forgotten > 0
+  let mirrored = false
   for (const id of ids) {
-    const history = profileHistory(id)
+    const ownedRemotely = id !== null && id !== mintedId && ownedIds.has(id)
     const mirroredHere = id !== null && hasMirroredData(id)
-    if (hasAnyHistory(history) || mirroredHere) profiles++
-    mirrored ||= mirroredHere
+    if (hasAnyHistory(profileHistory(id)) || mirroredHere || ownedRemotely) profiles++
+    mirrored ||= mirroredHere || ownedRemotely
   }
-  profiles += forgotten
 
   const { stars, events } = sumHistory([...ids])
-  return profiles > 0 || mirrored ? { profiles, stars, events, mirrored } : null
+  return profiles > 0 || mirrored ? { kind: 'holding', profiles, stars, events, mirrored } : null
 }
 
 export function CloudStart() {
@@ -136,6 +151,8 @@ export function CloudStart() {
   const [error, setError] = useState<string | null>(null)
   const [info, setInfo] = useState<string | null>(null)
   const [stranding, setStranding] = useState<Stranding | null>(null)
+  /** The child a failed pull left un-restored, so the parent can try that same one again. */
+  const [retryId, setRetryId] = useState<string | null>(null)
   const [candidates, setCandidates] = useState<Profile[] | null>(null)
 
   /**
@@ -174,6 +191,15 @@ export function CloudStart() {
   /** After either door finishes: the account's profiles are ready to be joined into this roster. */
   async function afterAuthenticated() {
     const remote = await fetchRemoteProfiles()
+    // The same distinction the abandonment check turns on, and it matters just as much here: a read
+    // that failed must never be announced as "this account has no profiles", which is the sentence
+    // that tells a parent their child is gone.
+    if (remote === null) {
+      setError('Chưa xem được danh sách hồ sơ của tài khoản (máy chủ chưa trả lời). Đừng lo, chưa có gì mất cả — thử lại khi mạng ổn định hơn nhé.')
+      setCandidates(null)
+      setStage('menu')
+      return
+    }
     // Adopted BEFORE anything is pulled, and this order is a rule, not a preference: until the
     // roster names an id, `rescueOrphanNamespaces` reads the keys a pull writes as abandoned and
     // folds them into the active child. `pullProfile` refuses an id that is not in the roster.
@@ -197,10 +223,28 @@ export function CloudStart() {
     setCandidates(restorable)
   }
 
+  /**
+   * Pull the chosen child down, then hand the device to them — **in that order, and only if the
+   * pull worked**.
+   *
+   * The boolean used to be dropped. A pull that failed (a blip, a slow query) therefore ended in
+   * `switchProfile`, which reloads into a profile whose namespace is empty: the parent sees the
+   * child's name and none of their progress, concludes the restore failed, and goes looking for
+   * another way in — which is how the account with the real data comes to be abandoned two screens
+   * later. A restore that could not restore must say so and offer to try again, not present itself
+   * as finished.
+   */
   async function finishRestore(id: string) {
     setBusy(true)
-    await pullProfile(id)
+    setError(null)
+    const pulled = await pullProfile(id)
     setBusy(false)
+    if (!pulled) {
+      setRetryId(id)
+      setError('Đã tìm thấy hồ sơ của bé, nhưng chưa tải được tiến độ về máy này. Máy vẫn đang ở hồ sơ cũ — kiểm tra mạng rồi thử tải lại nhé.')
+      return
+    }
+    setRetryId(null)
     // Reloads by default — the one move that guarantees no screen still holds the previous
     // (empty) child's numbers in React state or a module cache. See `switchProfile`.
     switchProfile(id)
@@ -225,17 +269,16 @@ export function CloudStart() {
       return
     }
 
-    const risk = await assessStranding()
+    const risk = await assessStranding(mintedId)
     if (risk) {
       setBusy(false)
       setStranding(risk)
       setStage('abandon')
       return
     }
-    // Nothing on this device and nothing of ours on the server: the empty profile the app mints on
-    // every launch is the only thing being left behind, and it is what this screen exists to
-    // replace. This is the ONE place the flag may be passed without asking, and it is passed
-    // knowing that — not assuming it.
+    // Established, not assumed: the account owns exactly the empty profile this device minted on
+    // launch, holds nothing else, and the server said so rather than failing to answer. That is the
+    // ONE case where the flag may be passed without asking, and it is what flow 3 exists for.
     const retry = await signInWithEmail(email, { abandonAnonymous: true })
     setBusy(false)
     if (!retry.ok) { setError(describeAuthError(retry.error)); return }
@@ -287,6 +330,9 @@ export function CloudStart() {
         <Card className="flex w-full max-w-md flex-col gap-4 p-6 text-center">
           <h1 className="font-display text-xl font-extrabold text-ink-900">Chọn hồ sơ của bé</h1>
           <p className="text-sm font-semibold text-ink-500">Tài khoản này có {candidates.length} hồ sơ. Chọn một để khôi phục lên máy này.</p>
+          {/* A failed pull says so HERE too, next to the picker that is still up — tapping the same
+            * face again is the retry. */}
+          {error && <p role="alert" className="rounded-xl2 bg-fix-50 p-3 text-sm font-semibold text-fix-700">{error}</p>}
           <ProfilePicker profiles={candidates} onSelect={finishRestore} busy={busy} />
         </Card>
       </main>
@@ -310,6 +356,13 @@ export function CloudStart() {
 
         {info && <p className="rounded-xl2 bg-sun-50 p-3 text-sm font-semibold text-sun-700">{info}</p>}
         {error && <p role="alert" className="rounded-xl2 bg-fix-50 p-3 text-sm font-semibold text-fix-700">{error}</p>}
+        {/* A pull that failed leaves the parent one tap from trying again, on the same child —
+          * rather than back at a menu with no idea which door to take twice. */}
+        {retryId && (
+          <Button disabled={busy} onClick={() => { void finishRestore(retryId) }} className="w-full">
+            Thử tải lại
+          </Button>
+        )}
 
         {stage === 'menu' && (
           <div className="flex flex-col gap-3">
@@ -368,21 +421,38 @@ export function CloudStart() {
           * is something real to lose — the numbers below are read off this device, not guessed. */}
         {stage === 'abandon' && stranding && (
           <div className="flex flex-col gap-3 text-left">
-            {/* "hồ sơ", counted — the account can be holding a child who is not the one using the
-              * iPad right now, and a parent reading "một bé" would picture the wrong one. */}
-            <h2 className="font-display text-base font-extrabold text-ink-900">
-              Tài khoản trên máy này đang giữ tiến độ của {stranding.profiles} hồ sơ
-            </h2>
-            <p className="text-sm font-semibold text-ink-500">
-              Tổng cộng {stranding.stars} sao và {stranding.events} lượt luyện, thuộc một tài khoản chưa liên kết email —
-              kể cả hồ sơ của bé khác trên máy này.
-              {stranding.mirrored && ' Một phần đã được lưu lên máy chủ dưới tài khoản đó.'}
-            </p>
+            {stranding.kind === 'holding' ? (
+              <>
+                {/* "hồ sơ", counted — the account can be holding a child who is not the one using
+                  * the iPad right now, and a parent reading "một bé" would picture the wrong one. */}
+                <h2 className="font-display text-base font-extrabold text-ink-900">
+                  Tài khoản trên máy này đang giữ tiến độ của {stranding.profiles} hồ sơ
+                </h2>
+                <p className="text-sm font-semibold text-ink-500">
+                  Tổng cộng {stranding.stars} sao và {stranding.events} lượt luyện, thuộc một tài khoản chưa liên kết email —
+                  kể cả hồ sơ của bé khác trên máy này.
+                  {stranding.mirrored && ' Một phần đã được lưu lên máy chủ dưới tài khoản đó.'}
+                </p>
+              </>
+            ) : (
+              <>
+                {/* Nothing was found and nothing was ruled out — and the parent is told which of
+                  * those two it is. Claiming "không có gì" here would be a guess wearing a fact's
+                  * clothes, in front of the one button in this app that cannot be undone. */}
+                <h2 className="font-display text-base font-extrabold text-ink-900">Chưa kiểm tra được tài khoản trên máy này</h2>
+                <p className="text-sm font-semibold text-ink-500">
+                  Máy chủ chưa trả lời, nên chưa biết tài khoản đang dùng ở đây có đang giữ tiến độ của bé nào không.
+                  Chưa kiểm tra được không có nghĩa là không có gì.
+                </p>
+              </>
+            )}
             <p className="rounded-xl2 bg-fix-50 p-3 text-sm font-semibold text-fix-700">
-              Nếu đăng nhập bằng {email}, máy này sẽ chuyển sang tài khoản đó và phần tiến độ trên sẽ không mở lại được nữa.
+              {/* Worded to be true in both branches: with numbers above it names them, and
+                * without them it does not pretend to know what is being given up. */}
+              Nếu đăng nhập bằng {email}, máy này sẽ chuyển sang tài khoản đó, và những gì tài khoản cũ đang giữ sẽ không mở lại được nữa.
             </p>
             <p className="text-sm font-semibold text-ink-500">
-              Muốn giữ tiến độ này? Vào <Link to="/parent" className="underline">Góc phụ huynh</Link> và liên kết email cho chính tài khoản đang có.
+              Muốn giữ lại? Vào <Link to="/parent" className="underline">Góc phụ huynh</Link> và liên kết email cho chính tài khoản đang có.
             </p>
             <Button
               variant="outline"

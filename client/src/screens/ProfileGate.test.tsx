@@ -35,6 +35,11 @@ function renderGate() {
   return render(<ProfileGate><p>màn hình chính</p></ProfileGate>)
 }
 
+/** The mark `switchProfile`'s reload leaves behind: who was chosen, and when they were last here. */
+function chosenInSession(id: string, at = Date.now()) {
+  sessionStorage.setItem('speakup.profileChosen', JSON.stringify({ id, at }))
+}
+
 beforeEach(() => {
   localStorage.clear()
   sessionStorage.clear()
@@ -103,7 +108,7 @@ describe('two children, one iPad', () => {
     fireEvent.click(screen.getByRole('button', { name: /Cáo/ }))
 
     expect(profileState.switchProfile).toHaveBeenCalledWith(CAO)
-    expect(sessionStorage.getItem('speakup.profileChosen')).toBe(CAO)
+    expect(JSON.parse(sessionStorage.getItem('speakup.profileChosen')!).id).toBe(CAO)
   })
 
   it('lets the child already using the iPad through without a reload', () => {
@@ -117,7 +122,7 @@ describe('two children, one iPad', () => {
 
   it('does not ask again after the reload its own answer caused', () => {
     // What `switchProfile` leaves behind: the new active profile, and the mark from before it.
-    sessionStorage.setItem('speakup.profileChosen', CAO)
+    chosenInSession(CAO)
     localStorage.setItem('speakup.profile', CAO)
 
     renderGate()
@@ -146,7 +151,7 @@ describe('two children, one iPad', () => {
     beforeEach(() => {
       // Already answered this session: the mount-time gate is satisfied, which is the state a
       // resume actually finds.
-      sessionStorage.setItem('speakup.profileChosen', SOC)
+      chosenInSession(SOC)
     })
 
     it('asks again after the iPad has been put down', () => {
@@ -188,7 +193,42 @@ describe('two children, one iPad', () => {
       fireEvent.click(screen.getByRole('button', { name: /Cáo/ }))
 
       expect(profileState.switchProfile).toHaveBeenCalledWith(CAO)
-      expect(sessionStorage.getItem('speakup.profileChosen')).toBe(CAO)
+      expect(JSON.parse(sessionStorage.getItem('speakup.profileChosen')!).id).toBe(CAO)
+    })
+
+    /**
+     * The residual the closure timestamp left behind: iOS terminates the app under memory pressure
+     * and relaunches it hours later — the ordinary way a PWA comes back — restoring sessionStorage
+     * into a brand-new JS context. A `hiddenAt` living in the component died with that context, so
+     * the mark alone said "already answered" and nobody was asked. The age travels with the answer.
+     */
+    it('asks at a cold start when the surviving mark is old', () => {
+      chosenInSession(SOC, Date.now() - 30 * 60 * 1000)
+
+      renderGate()
+
+      expect(screen.getByText(/Ai đang học nào/)).toBeInTheDocument()
+      // Cold start, so the app is not rendered behind the question at all.
+      expect(screen.queryByText('màn hình chính')).not.toBeInTheDocument()
+    })
+
+    it('does not ask at a cold start moments after the answer', () => {
+      chosenInSession(SOC, Date.now() - 5 * 1000)
+
+      renderGate()
+
+      expect(screen.getByText('màn hình chính')).toBeInTheDocument()
+    })
+
+    it('measures the absence from the moment the iPad was put down', () => {
+      renderGate()
+      const answeredAt = Date.now()
+      // Half an hour of USE, then a two-minute trip out of the app: the child is not interrupted,
+      // because what counts is time away, not time since the answer.
+      vi.spyOn(Date, 'now').mockReturnValue(answeredAt + 30 * 60 * 1000)
+      goAway(2 * 60 * 1000)
+
+      expect(screen.queryByTestId('profile-reask')).not.toBeInTheDocument()
     })
 
     it('asks on a document restored from the back/forward cache', () => {
@@ -200,6 +240,23 @@ describe('two children, one iPad', () => {
       fireEvent(document, new Event('visibilitychange'))
       vi.spyOn(Date, 'now').mockReturnValue(start + 10 * 60 * 1000)
       Object.defineProperty(document, 'visibilityState', { value: 'visible', configurable: true })
+      fireEvent(window, Object.assign(new Event('pageshow'), { persisted: true }))
+
+      expect(screen.getByTestId('profile-reask')).toBeInTheDocument()
+    })
+
+    it('asks on a pageshow that no visibilitychange preceded', () => {
+      // The comment used to claim `pageshow` stood on its own while the age lived in a closure that
+      // only `visibilitychange` ever set — so it could not, and quietly never fired. Now it reads
+      // the mark, so a restored document asks on its own evidence.
+      chosenInSession(SOC, Date.now() - 30 * 60 * 1000)
+      render(<ProfileGate><p>màn hình chính</p></ProfileGate>)
+      // The cold-start gate already asks for a mark that old; answer it, so what follows is a
+      // resume rather than the mount question.
+      fireEvent.click(screen.getByRole('button', { name: /Sóc/ }))
+      expect(screen.getByText('màn hình chính')).toBeInTheDocument()
+
+      vi.spyOn(Date, 'now').mockReturnValue(Date.now() + 30 * 60 * 1000)
       fireEvent(window, Object.assign(new Event('pageshow'), { persisted: true }))
 
       expect(screen.getByTestId('profile-reask')).toBeInTheDocument()
@@ -229,7 +286,7 @@ describe('two children, one iPad', () => {
   })
 
   it('asks again on the next app start, when the mark is for a different child', () => {
-    sessionStorage.setItem('speakup.profileChosen', CAO)
+    chosenInSession(CAO)
     // …but the device is pointed at Sóc: a stale mark must never wave the wrong child through.
     localStorage.setItem('speakup.profile', SOC)
 

@@ -314,8 +314,19 @@ export async function renameRemoteProfile(id: string, name: string): Promise<boo
   }
 }
 
-/** The children this account owns, as the server sees them. RLS scopes the select to them. */
-export async function fetchRemoteProfiles(): Promise<Profile[]> {
+/**
+ * The children this account owns, as the server sees them. RLS scopes the select to them.
+ *
+ * **`null` means "could not find out"; `[]` means "this account owns nothing".** They used to be
+ * the same value, and a caller cannot tell a transient 500 from an empty account by looking at an
+ * empty array — which is how a failed read came to authorise the one irreversible thing this app
+ * can do. Task 4's `/start` reads this before it may abandon an anonymous account, and for that
+ * decision an unknown answer has to stop and ask the parent, never continue.
+ *
+ * The two `[]` returns below are deliberate and are not failures: with no cloud configured, and
+ * with no session at all, there is no account, so "owns nothing" is the true answer.
+ */
+export async function fetchRemoteProfiles(): Promise<Profile[] | null> {
   const sb = await getSupabase()
   if (!sb) return []
   const userId = await currentUserId()
@@ -325,7 +336,8 @@ export async function fetchRemoteProfiles(): Promise<Profile[]> {
       .from('profiles')
       .select('id, name, avatar, created_at')
       .eq('owner_id', userId)
-    if (error || !Array.isArray(data)) return []
+    // A refusal, a 500, or a shape this build does not recognise: all of them are "unknown".
+    if (error || !Array.isArray(data)) return null
     return data
       .map(row => toProfile({
         id: row.id,
@@ -335,7 +347,7 @@ export async function fetchRemoteProfiles(): Promise<Profile[]> {
       }))
       .filter((p): p is Profile => p !== null)
   } catch {
-    return []
+    return null
   }
 }
 

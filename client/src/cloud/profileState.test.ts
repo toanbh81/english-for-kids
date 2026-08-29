@@ -378,8 +378,27 @@ describe('the server side', () => {
     ensureLocalProfile()
 
     expect(await ensureRemoteProfiles()).toEqual([])
-    expect(await fetchRemoteProfiles()).toEqual([])
+    // `null`, not `[]`: a refusal is "could not find out", and Task 4's `/start` may only abandon
+    // an anonymous account on an answer, never on a failure that looks like an empty one.
+    expect(await fetchRemoteProfiles()).toBeNull()
     await expect(connectCloud()).resolves.toBeUndefined()
+  })
+
+  it('tells an empty account apart from a read that failed', async () => {
+    cloud.client = makeClient({ data: [], error: null })
+    auth.currentUserId.mockResolvedValue('anon-1')
+    ensureLocalProfile()
+
+    // The account genuinely owns nothing: that is an answer, and it is `[]`.
+    expect(await fetchRemoteProfiles()).toEqual([])
+
+    cloud.client = makeClient({ data: null, error: { message: 'timeout' } })
+    expect(await fetchRemoteProfiles()).toBeNull()
+
+    // A thrown client is the same news as a refusal.
+    cloud.client = makeClient({ data: [], error: null })
+    ;(cloud.client as { from: unknown }).from = () => { throw new Error('network') }
+    expect(await fetchRemoteProfiles()).toBeNull()
   })
 
   it('brings the account\'s other children onto this device, keeping the ones already here', async () => {
@@ -397,10 +416,10 @@ describe('the server side', () => {
     const remote = await fetchRemoteProfiles()
     expect(remote).toEqual([{ id: remoteId, name: 'Bơ', avatar: '🐨', created: Date.parse('2026-08-01T00:00:00Z') }])
 
-    const merged = adoptProfiles(remote)
+    const merged = adoptProfiles(remote!)
     expect(merged.map(p => p.id)).toEqual([local.id, remoteId])
     // Adopting twice must not clone anybody.
-    expect(adoptProfiles(remote).map(p => p.id)).toEqual([local.id, remoteId])
+    expect(adoptProfiles(remote!).map(p => p.id)).toEqual([local.id, remoteId])
     expect(listProfiles()).toHaveLength(2)
   })
 
