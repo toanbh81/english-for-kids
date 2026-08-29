@@ -2,6 +2,16 @@
 
 Approved by the user 2026-08-29 after a two-track research pass (product patterns: Duolingo/ClassDojo/Khan Kids/Prodigy/Clever; platforms: Supabase vs Firebase vs self-hosted — briefs summarized in the conversation record). Decisions locked: **Supabase**; leaderboards (Phase 12) rank effort, never pronunciation scores; **child voice recordings never leave the device**.
 
+**Status: implemented 2026-08-29 on branch `phase11-cloud-profiles` (tasks 1–6).** All seven flows
+ship, including flow 6's app-start avatar picker ("tap your face, no password") — worth stating
+plainly because it very nearly did not: task 4's own report recorded it as scoped out and "not wired
+in", but a later fix round (`5631ae8`) built and wired `client/src/screens/ProfileGate.tsx` into
+`client/src/main.tsx` after all, and the code, not that superseded report, is what shipped. See the
+README's Phase 11 section for environment setup, the honest-persistence story and how to run the live
+smoke test (`scripts/cloud-smoke.mjs`); `supabase/README.md` for the schema/RLS/grants detail this
+spec leaves at "exact"; and `.superpowers/sdd/2026-08-29-phase11-cloud-profiles/task-6-report.md` for
+the one place task reports and shipped code were found to disagree, and why the code wins.
+
 ## What this phase delivers
 
 1. Progress survives a cache wipe and appears on other devices, without making login mandatory.
@@ -15,6 +25,17 @@ Approved by the user 2026-08-29 after a two-track research pass (product pattern
 - **The child owns no credentials.** Only a parent email ever touches the system. No child email/phone fields exist anywhere. When a parent links, one consent line is shown ("Tiến độ học của bé sẽ được lưu trên tài khoản của bạn").
 - **Voice audio stays local** (IndexedDB, last 20, as today). Scores, phoneme stats, events sync; blobs do not.
 - **Honesty about persistence.** Until linked, the app may say progress is mirrored, but recovery needs the recovery code; the banner never claims more safety than exists. Non-installed Safari PWAs lose all storage after 7 days unused (WebKit ITP) — the app nudges Add to Home Screen once, dismissible.
+  **[Shipped, task 6]** The milestone banner (`client/src/screens/Home.tsx`) fires at streak ≥ 3
+  while still anonymous and says only "Tiến độ mới lưu trên máy này — nhờ bố mẹ liên kết email để
+  giữ an toàn" — never that anything is already lost. The A2HS nudge is gated on the iOS-Safari
+  heuristic alone, independent of `isCloudConfigured()`, because ITP is a fact about `localStorage`
+  with no cloud involved. One elaboration this bullet did not originally spell out, found true during
+  implementation and worth stating here rather than only in `client/src/cloud/sync.ts`'s comments: a
+  parent-initiated reset is honest about *timing*, not just about safety — it is a server DELETE
+  queued while offline, so it can carry away a different device's pushes made in the interim once it
+  finally runs, and the parent screen says the deletion is still owed for as long as it is rather than
+  claiming it happened the moment it was asked for. See the README's "honest persistence story" for
+  the full, current list of these caveats in one place.
 
 ## Architecture
 
