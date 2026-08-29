@@ -11,7 +11,9 @@ mode="${1:-staged}"
 fail=0
 red() { printf '\033[31m%s\033[0m\n' "$*"; }
 
-# 1) Forbidden files must never be committed (example files are fine).
+# 1) Forbidden files must never be committed. `.env.example` is exempt from
+#    THIS rule only — being allowed to exist is not being allowed to contain a
+#    key, and its contents are scanned like every other file's below.
 forbidden_file='(^|/)\.env(\.[A-Za-z0-9_-]+)?$|(^|/)\.env\.local$|\.pem$|\.key$|\.p12$|\.pfx$|id_rsa|id_ed25519'
 allowed_file='\.env\.example$'
 
@@ -85,13 +87,32 @@ esac
 # Never echo the secret itself: keep the first 6 chars of any long token.
 mask() { sed -E 's/([A-Za-z0-9_-]{6})[A-Za-z0-9_-]{10,}/\1********/g'; }
 
+# Placeholder exemptions must be tested against the LINE, never against the file
+# name in front of it: matching the whole "path: content" string would exempt
+# every line of, say, server/.env.example just because the path says "example".
+# Only lines that already matched a secret pattern reach this, so the per-line
+# grep is cheap.
+#   $1 = 'diff' for "<path>: <content>", 'tree' for "<path>:<lineno>:<content>"
+drop_placeholders() {
+  local shape="$1" line content
+  while IFS= read -r line; do
+    [ -z "$line" ] && continue
+    if [ "$shape" = tree ]; then
+      content="${line#*:}"; content="${content#*:}"
+    else
+      content="${line#*: }"
+    fi
+    printf '%s\n' "$content" | grep -Eiq -e "$ignore" || printf '%s\n' "$line"
+  done
+}
+
 if [ -n "$diff_cmd" ]; then
   # Extract added lines with file names.
   added=$($diff_cmd | awk '
     /^\+\+\+ b\// { file=substr($0,7); next }
     /^\+/ && !/^\+\+\+/ { print file ": " substr($0,2) }')
   for p in "${patterns[@]}"; do
-    hits=$(printf '%s\n' "$added" | grep -Ei -e "$p" | grep -Eiv "$ignore" || true)
+    hits=$(printf '%s\n' "$added" | grep -Ei -e "$p" | drop_placeholders diff || true)
     if [ -n "$hits" ]; then
       red "LEAK: possible secret in added lines (pattern: $p)"; echo "$hits" | head -5 | mask; fail=1
     fi
@@ -105,13 +126,13 @@ if [ -n "$diff_cmd" ]; then
 else
   # tree mode: scan file contents.
   for p in "${patterns[@]}"; do
-    hits=$(echo "$files" | grep -Ev "$allowed_file" | xargs -r grep -EinH -e "$p" 2>/dev/null | grep -Eiv "$ignore" || true)
+    hits=$(echo "$files" | xargs -r grep -EinH -e "$p" 2>/dev/null | drop_placeholders tree || true)
     if [ -n "$hits" ]; then
       red "LEAK: possible secret in tracked file (pattern: $p)"; echo "$hits" | head -5 | mask; fail=1
     fi
   done
   for p in "${hard_patterns[@]}"; do
-    hits=$(echo "$files" | grep -Ev "$allowed_file" | xargs -r grep -EinH -e "$p" 2>/dev/null || true)
+    hits=$(echo "$files" | xargs -r grep -EinH -e "$p" 2>/dev/null || true)
     if [ -n "$hits" ]; then
       red "LEAK: service-role key in tracked file (pattern: $p)"; echo "$hits" | head -5 | mask; fail=1
     fi
