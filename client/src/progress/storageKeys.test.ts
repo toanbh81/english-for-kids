@@ -6,6 +6,7 @@ import {
   isProfileId,
   migrateKeysInto,
   namespacePrefix,
+  rescueOrphanNamespaces,
   setActiveProfileId,
   storageKey,
   storageName,
@@ -241,3 +242,123 @@ describe('the one-time migration', () => {
     key.mockRestore()
   })
 })
+
+/**
+ * The net under the one race localStorage cannot close: two documents booting the same update,
+ * both reading an empty roster before either writes one. The loser's id disappears from the roster
+ * while its namespace — possibly holding everything the child ever earned — stays on disk,
+ * addressed by nothing. What a parent saw was a child with no stars.
+ */
+describe('the orphan rescue', () => {
+  const ORPHAN = '77777777-6666-4555-8444-333333333333'
+  beforeEach(() => localStorage.clear())
+  afterEach(() => vi.restoreAllMocks())
+
+  const event = (ts: number, id: string, score?: number) => ({ ts, kind: 'word', id, score })
+
+  it('brings every kind of value home under the app\'s own rules', () => {
+    localStorage.setItem(`speakup.${ID}.stars`, JSON.stringify({ 'sword:cat': 3, 'sword:dog': 1 }))
+    localStorage.setItem(`speakup.${ID}.activity`, JSON.stringify([event(1, 'cat', 90)]))
+    localStorage.setItem(`speakup.${ID}.band`, JSON.stringify({ value: 4, mode: 'manual' }))
+
+    localStorage.setItem(`speakup.${ORPHAN}.stars`, JSON.stringify({ 'sword:cat': 1, 'sword:dog': 3, 'sword:fox': 2 }))
+    localStorage.setItem(`speakup.${ORPHAN}.activity`, JSON.stringify([event(1, 'cat', 90), event(2, 'dog', 70)]))
+    localStorage.setItem(`speakup.${ORPHAN}.band`, JSON.stringify({ value: 1, mode: 'auto' }))
+    localStorage.setItem(`speakup.${ORPHAN}.lesson.2026-08-28`, 'a lesson record')
+
+    expect(rescueOrphanNamespaces(ID, [ID])).toBe(4)
+
+    // Stars take the maximum per card: a star the child earned is never lowered by the other side.
+    expect(JSON.parse(localStorage.getItem(`speakup.${ID}.stars`) ?? '{}'))
+      .toEqual({ 'sword:cat': 3, 'sword:dog': 3, 'sword:fox': 2 })
+    // The event log is a union, deduped on (ts, kind, id) — the server's own primary key.
+    expect(JSON.parse(localStorage.getItem(`speakup.${ID}.activity`) ?? '[]'))
+      .toEqual([event(1, 'cat', 90), event(2, 'dog', 70)])
+    // Everything else keeps what the active child has been using…
+    expect(JSON.parse(localStorage.getItem(`speakup.${ID}.band`) ?? '{}')).toEqual({ value: 4, mode: 'manual' })
+    // …and takes the orphan's where the active child has nothing at all.
+    expect(localStorage.getItem(`speakup.${ID}.lesson.2026-08-28`)).toBe('a lesson record')
+
+    // Nothing is left addressed by nobody.
+    for (let i = 0; i < localStorage.length; i++) {
+      expect(localStorage.key(i)?.startsWith(`speakup.${ORPHAN}.`)).toBe(false)
+    }
+  })
+
+  it('never lets a lower orphan star clobber a higher one', () => {
+    localStorage.setItem(`speakup.${ID}.stars`, JSON.stringify({ 'sword:cat': 3 }))
+    localStorage.setItem(`speakup.${ORPHAN}.stars`, JSON.stringify({ 'sword:cat': 1 }))
+
+    rescueOrphanNamespaces(ID, [ID])
+
+    expect(JSON.parse(localStorage.getItem(`speakup.${ID}.stars`) ?? '{}')).toEqual({ 'sword:cat': 3 })
+  })
+
+  it('does nothing when nothing is orphaned', () => {
+    localStorage.setItem(`speakup.${ID}.stars`, JSON.stringify({ 'sword:cat': 3 }))
+    localStorage.setItem(`speakup.${OTHER}.stars`, JSON.stringify({ 'sword:dog': 2 }))
+    const before = snapshotAll()
+
+    expect(rescueOrphanNamespaces(ID, [ID, OTHER])).toBe(0)
+    expect(rescueOrphanNamespaces(ID, [ID, OTHER])).toBe(0)
+    expect(snapshotAll()).toEqual(before)
+  })
+
+  it('leaves the other children and the device alone', () => {
+    // The second child on this iPad is in the roster, so their namespace is somebody's, not litter.
+    localStorage.setItem(`speakup.${OTHER}.stars`, JSON.stringify({ 'sword:dog': 3 }))
+    localStorage.setItem(ACTIVE_PROFILE_KEY, ID)
+    localStorage.setItem(PROFILES_KEY, JSON.stringify([{ id: ID }, { id: OTHER }]))
+    localStorage.setItem('speakup.auth', '{"access_token":"x"}')
+    localStorage.setItem('speakup.outbox', '[]')
+    localStorage.setItem('other-app.stars', 'not ours')
+    localStorage.setItem(`speakup.${ORPHAN}.stars`, JSON.stringify({ 'sword:fox': 1 }))
+
+    expect(rescueOrphanNamespaces(ID, [ID, OTHER])).toBe(1)
+
+    expect(JSON.parse(localStorage.getItem(`speakup.${OTHER}.stars`) ?? '{}')).toEqual({ 'sword:dog': 3 })
+    expect(localStorage.getItem('speakup.auth')).toBe('{"access_token":"x"}')
+    expect(localStorage.getItem('speakup.outbox')).toBe('[]')
+    expect(localStorage.getItem('other-app.stars')).toBe('not ours')
+    expect(JSON.parse(localStorage.getItem(`speakup.${ID}.stars`) ?? '{}')).toEqual({ 'sword:fox': 1 })
+  })
+
+  it('keeps both copies when the store will not take the write', () => {
+    localStorage.setItem(`speakup.${ORPHAN}.stars`, JSON.stringify({ 'sword:fox': 1 }))
+    const setItem = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new DOMException('quota', 'QuotaExceededError')
+    })
+
+    expect(rescueOrphanNamespaces(ID, [ID])).toBe(0)
+    setItem.mockRestore()
+
+    expect(localStorage.getItem(`speakup.${ORPHAN}.stars`)).toBe(JSON.stringify({ 'sword:fox': 1 }))
+  })
+
+  it('falls back to keeping the active value when either side is corrupt', () => {
+    localStorage.setItem(`speakup.${ID}.stars`, '{not json')
+    localStorage.setItem(`speakup.${ORPHAN}.stars`, JSON.stringify({ 'sword:fox': 1 }))
+    localStorage.setItem(`speakup.${ID}.activity`, JSON.stringify([event(1, 'cat')]))
+    localStorage.setItem(`speakup.${ORPHAN}.activity`, '{}')
+
+    expect(rescueOrphanNamespaces(ID, [ID])).toBe(2)
+
+    expect(localStorage.getItem(`speakup.${ID}.stars`)).toBe('{not json')
+    expect(JSON.parse(localStorage.getItem(`speakup.${ID}.activity`) ?? '[]')).toEqual([event(1, 'cat')])
+  })
+
+  it('does nothing for an active id that is not a profile id', () => {
+    localStorage.setItem(`speakup.${ORPHAN}.stars`, '{}')
+    expect(rescueOrphanNamespaces('nobody', [])).toBe(0)
+    expect(localStorage.getItem(`speakup.${ORPHAN}.stars`)).toBe('{}')
+  })
+})
+
+function snapshotAll(): Record<string, string> {
+  const all: Record<string, string> = {}
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i)
+    if (key !== null) all[key] = localStorage.getItem(key) ?? ''
+  }
+  return all
+}

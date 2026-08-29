@@ -244,3 +244,143 @@ export function migrateKeysInto(profileId: string): number {
   if (pending.size !== before || pending.size > 0) writePending(pending)
   return moved
 }
+
+// ---------------------------------------------------------------------------
+// Orphan rescue
+// ---------------------------------------------------------------------------
+
+/**
+ * Mirrors the cap in `activity.ts`: the event log never grows past this, and a merge is a write
+ * like any other.
+ */
+const ACTIVITY_CAP = 2000
+
+const isMap = (value: unknown): value is Record<string, unknown> =>
+  !!value && typeof value === 'object' && !Array.isArray(value)
+
+/**
+ * Stars only ever go up. A star the child earned in one namespace cannot be lowered by an older
+ * value from another, whatever the clocks say — the same rule the server's `merge_kv` applies, for
+ * the same reason.
+ */
+function mergeStars(existing: string, incoming: string): string {
+  try {
+    const mine: unknown = JSON.parse(existing)
+    const theirs: unknown = JSON.parse(incoming)
+    if (!isMap(mine) || !isMap(theirs)) return existing
+    const out: Record<string, unknown> = { ...mine }
+    for (const [id, value] of Object.entries(theirs)) {
+      const current = out[id]
+      if (current === undefined) { out[id] = value; continue }
+      if (typeof value === 'number' && typeof current === 'number' && value > current) out[id] = value
+    }
+    return JSON.stringify(out)
+  } catch {
+    return existing
+  }
+}
+
+/** One event is the same event in both namespaces when its (ts, kind, id) match — the server's
+ * primary key, so a rescue and a sync agree about what a duplicate is. */
+const eventKey = (event: unknown): string => {
+  if (!isMap(event)) return JSON.stringify(event)
+  return `${String(event.ts)}|${String(event.kind)}|${String(event.id)}`
+}
+
+function mergeActivity(existing: string, incoming: string): string {
+  try {
+    const mine: unknown = JSON.parse(existing)
+    const theirs: unknown = JSON.parse(incoming)
+    if (!Array.isArray(mine) || !Array.isArray(theirs)) return existing
+    const seen = new Set<string>()
+    const merged: unknown[] = []
+    for (const event of [...mine, ...theirs]) {
+      const key = eventKey(event)
+      if (seen.has(key)) continue
+      seen.add(key)
+      merged.push(event)
+    }
+    merged.sort((a, b) => (isMap(a) && typeof a.ts === 'number' ? a.ts : 0) - (isMap(b) && typeof b.ts === 'number' ? b.ts : 0))
+    return JSON.stringify(merged.slice(-ACTIVITY_CAP))
+  } catch {
+    return existing
+  }
+}
+
+/**
+ * What one rescued value becomes.
+ *
+ * The three rules are the app's own, not new ones: stars take the maximum, the event log is a
+ * union, and everything else (the band, the lesson records, the daily limit, the celebration
+ * stamp, and any key a future phase adds) keeps what the ACTIVE namespace already says. Preferring
+ * what is already active is the conservative half of last-write-wins: the child has been using
+ * that value, and a namespace that fell out of the roster is by definition the one nothing has
+ * been reading.
+ */
+function mergeRescued(name: string, existing: string | null, incoming: string): string {
+  if (existing === null) return incoming
+  if (name === 'stars') return mergeStars(existing, incoming)
+  if (name === 'activity') return mergeActivity(existing, incoming)
+  return existing
+}
+
+/**
+ * Bring home any child's data left under a profile id the roster no longer knows.
+ *
+ * The race this exists for: two documents of the app boot the same update at the same moment, both
+ * read an empty roster before either has written one, and the second write replaces the first. The
+ * loser's id is then gone from the roster while its namespace — which may already hold everything
+ * the child ever earned, migrated a moment earlier — is still on disk, addressed by nothing. What
+ * the parent sees is a child with no stars. localStorage has no compare-and-swap, so that window
+ * can be narrowed but never closed; this is the net under it, and it is what makes the race
+ * harmless rather than merely unlikely.
+ *
+ * It runs on every launch, costs one key scan, and is idempotent: with nothing orphaned it does
+ * nothing at all. Each rescued value is written and read back before the orphan is deleted, so a
+ * store that refuses the write keeps both copies and tries again next launch.
+ *
+ * **The roster is the authority on what is not an orphan.** Anything adding a profile — a restore,
+ * a picker, a pull from the server — must put it in the roster BEFORE writing a single key into
+ * its namespace, or this will read that namespace as abandoned and fold it into the active child.
+ */
+export function rescueOrphanNamespaces(activeId: string, knownIds: string[]): number {
+  if (!isProfileId(activeId)) return 0
+  const known = new Set(knownIds.filter(isProfileId).map(id => id.toLowerCase()))
+  known.add(activeId.toLowerCase())
+
+  const orphans: { key: string; name: string }[] = []
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i)
+      if (!key?.startsWith(ROOT)) continue
+      const rest = key.slice(ROOT.length)
+      const dot = rest.indexOf('.')
+      if (dot === -1) continue
+      const head = rest.slice(0, dot)
+      // Only a namespace can be orphaned: device keys have no profile id in them, and a profile
+      // the roster still knows is somebody's child, not litter.
+      if (!isProfileId(head) || known.has(head.toLowerCase())) continue
+      const name = rest.slice(dot + 1)
+      if (name) orphans.push({ key, name })
+    }
+  } catch {
+    return 0
+  }
+
+  const prefix = `${ROOT}${activeId}.`
+  let rescued = 0
+  for (const { key, name } of orphans) {
+    try {
+      const incoming = localStorage.getItem(key)
+      if (incoming === null) continue
+      const target = `${prefix}${name}`
+      const existing = localStorage.getItem(target)
+      const merged = mergeRescued(name, existing, incoming)
+      if (merged !== existing && !copyValue(target, merged)) continue
+      if (localStorage.getItem(target) !== merged) continue
+      localStorage.removeItem(key)
+      rescued++
+    } catch { /* leave this one where it is; the next launch tries again */ }
+  }
+  return rescued
+}

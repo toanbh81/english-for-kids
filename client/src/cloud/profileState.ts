@@ -4,6 +4,7 @@ import {
   activeProfileId,
   isProfileId,
   migrateKeysInto,
+  rescueOrphanNamespaces,
   setActiveProfileId,
 } from '../progress/storageKeys'
 import type { BootstrapOptions } from './auth'
@@ -108,6 +109,32 @@ function writeProfiles(profiles: Profile[]): boolean {
   }
 }
 
+/**
+ * Add children to the roster without ever writing over what is already on disk.
+ *
+ * Every addition goes through here, and the read that computes the union happens in the same
+ * synchronous turn as the write, which is as close to atomic as localStorage offers: another
+ * document can still slip between two of OUR statements — the OS preempts tabs wherever it likes,
+ * no await required — but it can no longer be *silently replaced*, only raced. What is left of
+ * that race is caught at the next boot by `rescueOrphanNamespaces`.
+ *
+ * Existing entries keep their position, so `roster[0]` is stable and every document that adopts
+ * "the oldest surviving entry" adopts the same child.
+ */
+function mergeIntoRoster(additions: Profile[]): Profile[] {
+  const disk = listProfiles()
+  const known = new Set(disk.map(p => p.id))
+  const merged = [...disk, ...additions.filter(p => isProfileId(p.id) && !known.has(p.id))]
+  if (merged.length !== disk.length) writeProfiles(merged)
+  return listProfiles()
+}
+
+/** Read-filter-write in one turn. Only ever used on an id this document minted moments ago. */
+function dropProfile(id: string): void {
+  const roster = listProfiles()
+  if (roster.some(p => p.id === id)) writeProfiles(roster.filter(p => p.id !== id))
+}
+
 /** The child whose namespace the app is currently reading, or null before the first boot. */
 export function activeProfile(): Profile | null {
   const id = activeProfileId()
@@ -124,7 +151,7 @@ export function addProfile(name?: string, avatar?: string): Profile {
     avatar: avatar || DEFAULT_PROFILE_AVATAR,
     created: Date.now(),
   }
-  writeProfiles([...listProfiles(), profile])
+  mergeIntoRoster([profile])
   return profile
 }
 
@@ -153,22 +180,24 @@ export function ensureLocalProfile(): Profile {
     const minted: Profile = {
       id: newProfileId(), name: DEFAULT_PROFILE_NAME, avatar: DEFAULT_PROFILE_AVATAR, created: Date.now(),
     }
-    // Appended to whatever is on disk at this instant, not written over it. Reading and writing
-    // inside one synchronous turn is atomic against the other documents of this app — the second
-    // tab a parent left open on the school run, booting the same update at the same moment — so
-    // neither can lose the other's entry.
-    if (!writeProfiles([...listProfiles(), minted])) return minted
+    // Merged into whatever is on disk at this instant, never written over it — the second tab a
+    // parent left open on the school run is booting this same update.
+    const settled = mergeIntoRoster([minted])
+    if (!settled.length) return minted
 
     // Both documents then adopt the same child: the oldest surviving entry. The loser drops the id
     // it just minted, which has no data under it yet, rather than leaving a phantom second child in
-    // the picker and a half-migrated namespace nothing points at.
-    const settled = listProfiles()
-    profile = settled[0] ?? minted
-    if (profile.id !== minted.id) writeProfiles(settled.filter(p => p.id !== minted.id))
+    // the picker.
+    profile = settled[0]
+    if (profile.id !== minted.id) dropProfile(minted.id)
   }
 
   if (!setActiveProfileId(profile.id)) return profile
   migrateKeysInto(profile.id)
+  // Last, and on every launch: anything left under a profile id the roster no longer knows comes
+  // home to the active child. See rescueOrphanNamespaces — it is the net under the one race
+  // localStorage gives no way to close.
+  rescueOrphanNamespaces(profile.id, listProfiles().map(p => p.id))
   return profile
 }
 
@@ -194,13 +223,12 @@ export function switchProfile(id: string, options: { reload?: boolean } = {}): b
  * Merge profiles that came from the server into the roster (flows 3 and 4, driven by the parent
  * screen). Ids are the join, so a profile this device already knows keeps its local name and its
  * local namespace; one it has never seen is added, ready to be pulled into.
+ *
+ * Call this BEFORE writing anything into a new profile's namespace: until the roster names an id,
+ * `rescueOrphanNamespaces` reads its keys as abandoned and folds them into the active child.
  */
 export function adoptProfiles(remote: Profile[]): Profile[] {
-  const roster = listProfiles()
-  const known = new Set(roster.map(p => p.id))
-  const merged = [...roster, ...remote.filter(p => isProfileId(p.id) && !known.has(p.id))]
-  writeProfiles(merged)
-  return merged
+  return mergeIntoRoster(remote)
 }
 
 // ---------------------------------------------------------------------------

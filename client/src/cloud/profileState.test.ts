@@ -163,6 +163,43 @@ describe('the first launch after the update', () => {
     expect(getStars('sword:cat')).toBe(3)
   })
 
+  it('rescues the child when the other document\'s roster write lands first', () => {
+    // The window `mergeIntoRoster` cannot close: both documents read the empty roster BEFORE either
+    // writes, so neither union sees the other and the second write replaces the first. Document A
+    // gets all the way through — roster, active profile, migration — and then B's write, computed
+    // from the empty roster it read a moment earlier, lands on top.
+    seedLegacyProgress()
+    const a = ensureLocalProfile()
+    setStars('sword:dog', 2)
+    expect(getStars('sword:cat')).toBe(3)
+
+    const b = { id: '11111111-2222-4333-8444-555555555555', name: 'Bơ', avatar: '🐨', created: 2 }
+    localStorage.setItem('speakup.profiles', JSON.stringify([b]))
+    localStorage.removeItem('speakup.profile')
+
+    // This is the end state the review reproduced: the active child has NULL stars, and everything
+    // the child earned is under an id the roster has never heard of.
+    expect(localStorage.getItem(`speakup.${b.id}.stars`)).toBeNull()
+    expect(localStorage.getItem(`speakup.${a.id}.stars`)).not.toBeNull()
+
+    // B's boot continues. One key scan later, nothing has been lost.
+    const settled = ensureLocalProfile()
+
+    expect(settled.id).toBe(b.id)
+    expect(activeProfileId()).toBe(b.id)
+    expect(getStars('sword:cat')).toBe(3)
+    expect(getStars('sword:dog')).toBe(2)
+    expect(getActivity()).toEqual([{ ts: 1000, kind: 'word', id: 'cat', score: 91 }])
+    expect(getLimitMinutes()).toBe(30)
+    expect(getLessonLength()).toBe('long')
+    expect(lessonForDay('2026-08-28')?.band).toBe(4)
+    expect(localStorage.getItem(`speakup.${a.id}.stars`)).toBeNull()
+
+    // And a second launch has nothing left to do.
+    expect(ensureLocalProfile().id).toBe(b.id)
+    expect(getStars('sword:cat')).toBe(3)
+  })
+
   it('leaves the app on the legacy keys when storage refuses to remember the profile', () => {
     seedLegacyProgress()
     const setItem = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
