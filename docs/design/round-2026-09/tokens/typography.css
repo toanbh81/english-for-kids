@@ -1,0 +1,14 @@
+@import url('https://fonts.googleapis.com/css2?family=Baloo+2:wght@700;800&family=Nunito:wght@600;700;800&family=Fredoka:wght@500;600&display=swap');
+:root{
+  --font-display:'Baloo 2',sans-serif;   /* tiêu đề, nút, số — 700/800 */
+  --font-body:'Nunito',sans-serif;       /* nội dung — 600/700/800 */
+  --font-accent:'Fredoka',sans-serif;    /* điểm nhấn hiếm — 500/600 */
+  --text-hero:40px;        /* tiêu đề màn hình */
+  --text-title:36px;       /* tiêu đề khu vực */
+  --text-word:40px;        /* từ vựng lớn trên card */
+  --text-card-title:21px;  /* tên card game */
+  --text-bubble:23px;      /* lời thoại Foxy */
+  --text-body-lg:20px;     /* phụ đề, mô tả */
+  --text-body:17px;        /* nhỏ nhất trên iPad — không xuống dưới */
+  --text-chip:15px;        /* chip/badge */
+}

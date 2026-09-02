@@ -1,0 +1,11 @@
+:root{
+  --space-1:4px;--space-2:8px;--space-3:12px;--space-4:16px;
+  --space-5:24px;--space-6:28px;--space-7:40px;--space-8:56px;
+  --radius-chip:12px;      /* chip, badge */
+  --radius-bubble:22px;    /* bong bóng thoại (góc đuôi 6px) */
+  --radius-card:28px;      /* card game/nội dung */
+  --radius-panel:34px;     /* panel lớn, card quiz */
+  --radius-device:38px;    /* khung màn hình iPad */
+  --radius-full:999px;     /* nút pill, nút tròn */
+  --hit-min:44px;          /* vùng chạm tối thiểu cho trẻ */
+}

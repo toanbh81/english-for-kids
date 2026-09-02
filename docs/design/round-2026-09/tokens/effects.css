@@ -1,0 +1,17 @@
+:root{
+  /* "cạnh 3D" — shadow cứng phía dưới, KHÔNG blur: ngôn ngữ nút/card chủ đạo */
+  --edge-card:0 8px 0 var(--color-card-edge);
+  --edge-card-sm:0 5px 0 var(--color-card-edge);
+  --edge-sand:0 8px 0 var(--color-sand-edge);
+  --edge-coral:0 8px 0 var(--color-coral-press);
+  --edge-teal:0 7px 0 var(--color-teal-press);
+  /* vòng chọn / nhấn mạnh */
+  --ring-active:0 0 0 6px var(--color-teal);
+  --ring-mic:0 0 0 10px var(--color-coral-tint);
+  --ring-correct:0 0 0 7px var(--color-success-tint);
+  /* bóng mềm duy nhất — chỉ cho khung thiết bị/floating lớn */
+  --shadow-float:0 18px 50px rgba(74,59,51,.15);
+}
+@keyframes su-pulse{0%{transform:scale(1)}50%{transform:scale(1.07)}100%{transform:scale(1)}}
+@keyframes su-ring{0%{transform:scale(1);opacity:.5}100%{transform:scale(2);opacity:0}}
+@keyframes su-bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-10px)}}

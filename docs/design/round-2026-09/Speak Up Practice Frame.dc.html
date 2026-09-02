@@ -1,0 +1,588 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <meta name="design_doc_mode" content="canvas">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&family=Nunito:wght@600;700;800&display=swap" rel="stylesheet">
+  <style>
+    html,body{margin:0;padding:0;background:#EFE5D6;}
+    *{box-sizing:border-box;-webkit-font-smoothing:antialiased;}
+    a{color:#F2603D;} a:hover{color:#C94E30;}
+    @keyframes bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}
+    @keyframes halo{0%{transform:scale(1);opacity:.55}100%{transform:scale(1.3);opacity:0}}
+    @keyframes level{0%,100%{transform:scaleY(.4)}50%{transform:scaleY(1)}}
+    @keyframes peek{0%,70%,100%{transform:rotateY(0)}80%{transform:rotateY(-18deg)}}
+    @keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-6px)}75%{transform:translateX(6px)}}
+  </style>
+</helmet>
+<div style="font-family:'Nunito',sans-serif;color:#4A3B33;padding:48px 56px 120px;display:flex;flex-direction:column;gap:64px;">
+
+  <div style="max-width:1300px;display:flex;flex-direction:column;gap:14px;">
+    <div style="font-family:'Baloo 2',sans-serif;font-size:40px;font-weight:800;">🎤 Speak Up! — Vòng 2: Khung luyện nói</div>
+    <div style="font-size:17px;font-weight:700;color:#8A7A6D;max-width:1100px;line-height:1.6;">Dùng khung trang & component sheet của <a href="Speak Up Foundation.dc.html">Vòng 1</a>. Một khung cho cả 9 màn theo vòng đời B0: <b>iPad ngang = 2 cột dạy | làm</b> · <b>phone & iPad dọc = 2 tầng</b>, tầng dạy gập khi có kết quả. Carrier của khung chung là B6 Story Voice (trường hợp xấu nhất: 14 từ, đếm ngược 13, prosody).</div>
+    <div style="display:flex;gap:16px;flex-wrap:wrap;">
+      <div style="flex:1;min-width:360px;background:#FFFFFF;border-radius:20px;padding:18px 22px;box-shadow:0 6px 0 #E2D5C0;font-size:14px;line-height:1.7;">
+        <div style="font-family:'Baloo 2',sans-serif;font-size:18px;font-weight:800;margin-bottom:6px;">Vòng đời B0 → 4 trạng thái vẽ</div>
+        <b>idle</b> (gồm chờ scorer = mic disabled + vòng xoay) → <b>đang ghi</b> (mic phóng, đếm ngược, mức âm, Foxy listen, chữ mục tiêu giữ màu — không mờ) → <b>đang chấm</b> = idle + mic ⏳ (không hiện lại deck, không vẽ riêng) → <b>kết quả</b> 3★ Azure / 1★ chế độ đơn giản.<br>
+        <b>Phần "làm"</b> giống hệt ở 9 màn: Foxy + bong bóng · mic · caption/đếm ngược · dòng lỗi · ResultCard · CTA. Chỉ phần "dạy" đổi.
+      </div>
+      <div style="flex:1;min-width:360px;background:#FFFFFF;border-radius:20px;padding:18px 22px;box-shadow:0 6px 0 #E2D5C0;font-size:14px;line-height:1.7;">
+        <div style="font-family:'Baloo 2',sans-serif;font-size:18px;font-weight:800;margin-bottom:6px;">Header không đè nhau</div>
+        Back 56/64 · <b>chip giữa</b> (Đoạn 1/8 · Câu 3/10 · Âm 2/9 · Từ 1/3) + badge engine 11–12px · <b>ô phải = LessonChip</b>. Chip "Cảnh N/M", chip streak Word Pop ● ○ đều là chip giữa. Không còn gutter 66px "chừa" cho overlay.<br>
+        <b>Tầng dạy gập (phone)</b>: thu thành nhãn mờ 1 dòng 15px #D9C9AE ngay dưới header (ellipsis), chạm để mở lại. ResultCard chiếm body: ① thẻ sao ghim · ②–⑤ cuộn · ⑥ CTA footer.
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= SECTION 1: KHUNG CHUNG ================= -->
+  <div style="display:flex;flex-direction:column;gap:22px;">
+    <div style="display:flex;align-items:center;gap:12px;"><span style="background:#4A3B33;color:#FFF7EA;font-family:'Baloo 2',sans-serif;font-size:15px;font-weight:800;padding:6px 14px;border-radius:12px;">1</span><span style="font-family:'Baloo 2',sans-serif;font-size:26px;font-weight:800;">Khung chung — B6 Story Voice · 4 trạng thái × 3 frame</span></div>
+
+    <!-- PHONE ROW -->
+    <div style="font-weight:800;color:#8A7A6D;font-size:15px;">Phone 390×844</div>
+    <div style="display:flex;gap:28px;flex-wrap:wrap;align-items:flex-start;">
+
+      <!-- P idle -->
+      <div style="display:flex;flex-direction:column;gap:10px;">
+        <div style="font-size:13px;font-weight:800;color:#8A7A6D;">① idle</div>
+        <div data-screen-label="B6 phone idle" style="width:390px;height:844px;background:#FFF7EA;border-radius:44px;position:relative;overflow:hidden;box-shadow:0 18px 50px rgba(74,59,51,.18);">
+          <div style="position:absolute;left:50%;top:12px;transform:translateX(-50%);width:118px;height:32px;border-radius:18px;background:#2B2320;z-index:20;"></div>
+          <div style="position:absolute;inset:0;padding:55px 16px 44px;display:flex;flex-direction:column;gap:12px;">
+            <div style="height:56px;display:flex;align-items:center;justify-content:space-between;gap:8px;">
+              <div style="width:56px;height:56px;border-radius:50%;background:#FFFFFF;box-shadow:0 4px 0 #EFE2CC;display:flex;align-items:center;justify-content:center;font-size:22px;color:#B0A18E;flex:none;">←</div>
+              <div style="display:flex;flex-direction:column;align-items:center;gap:3px;"><div style="background:#E2F6F1;color:#1FA396;font-family:'Baloo 2',sans-serif;font-size:15px;font-weight:800;border-radius:12px;padding:7px 14px;">Đoạn 1/8</div><div style="font-size:11px;font-weight:800;color:#B0A18E;">◌ chế độ đơn giản</div></div>
+              <div style="width:56px;height:56px;border-radius:18px;background:#FFF1C9;box-shadow:0 4px 0 #EFDDA8;display:flex;flex-direction:column;align-items:center;justify-content:center;flex:none;font-family:'Baloo 2',sans-serif;font-weight:800;color:#9A6B00;line-height:1;"><span style="font-size:18px;">🌞</span><span style="font-size:13px;margin-top:2px;">3/11</span></div>
+            </div>
+            <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;text-align:center;min-height:0;">
+              <div style="display:flex;align-items:center;gap:8px;"><span style="font-size:34px;line-height:1;">😊</span><span style="font-family:'Baloo 2',sans-serif;font-size:16px;font-weight:800;color:#8A7A6D;">Đọc với giọng: <span style="color:#F2603D;">vui vẻ</span></span></div>
+              <div style="font-family:'Baloo 2',sans-serif;font-size:24px;font-weight:800;line-height:1.3;padding:0 6px;">I love my dog<span style="color:#F2603D;">!</span> He is my best friend and we play every day.</div>
+              <div style="font-size:13px;font-weight:700;color:#8A7A6D;line-height:1.4;">Con yêu chú chó của con! Nó là người bạn thân nhất và chúng con chơi cùng nhau mỗi ngày.</div>
+              <div style="height:56px;padding:0 22px;background:#E2F6F1;border-radius:18px;box-shadow:0 5px 0 #C4E8E1;display:flex;align-items:center;font-family:'Baloo 2',sans-serif;font-size:17px;font-weight:800;color:#1FA396;">🔊 Nghe mẫu</div>
+              <div style="width:100%;background:#FFFFFF;border-radius:16px;padding:10px 14px;box-shadow:0 4px 0 #EFE2CC;text-align:left;font-size:12px;font-weight:700;color:#8A7A6D;line-height:1.5;"><b style="color:#4A3B33;">🎭 Gợi ý giọng</b> · Mỡm cười khi đọc — giọng sẽ tươi hơn · Đọc hơi nhanh, nhẹ nhàng · Nhấn mạnh "love", "best"</div>
+            </div>
+            <div style="display:flex;flex-direction:column;align-items:center;gap:10px;padding-bottom:6px;">
+              <div style="display:flex;align-items:center;gap:10px;"><div style="width:60px;height:58px;">{{ foxIdle }}</div><div style="background:#FFFFFF;border-radius:16px;border-bottom-left-radius:6px;padding:9px 14px;box-shadow:0 4px 0 #EFE2CC;font-family:'Baloo 2',sans-serif;font-size:15px;font-weight:800;">Đọc cả đoạn thật có hồn nhé! <span style="color:#F2603D;">13 giây</span></div></div>
+              <div style="width:124px;height:124px;border-radius:50%;background:#FF7A59;box-shadow:0 8px 0 #E05A3A,0 0 0 10px #FFE3D7;display:flex;align-items:center;justify-content:center;font-size:50px;margin-top:8px;">🎤</div>
+              <div style="font-size:16px;font-weight:700;color:#8A7A6D;margin-top:8px;">Chạm để nói nào!</div>
+            </div>
+          </div>
+          <div style="position:absolute;left:50%;bottom:8px;transform:translateX(-50%);width:130px;height:5px;border-radius:3px;background:#D9CBB4;"></div>
+        </div>
+      </div>
+
+      <!-- P recording -->
+      <div style="display:flex;flex-direction:column;gap:10px;">
+        <div style="font-size:13px;font-weight:800;color:#8A7A6D;">② đang ghi · đếm 13→1</div>
+        <div data-screen-label="B6 phone recording" style="width:390px;height:844px;background:#FFF7EA;border-radius:44px;position:relative;overflow:hidden;box-shadow:0 18px 50px rgba(74,59,51,.18);">
+          <div style="position:absolute;left:50%;top:12px;transform:translateX(-50%);width:118px;height:32px;border-radius:18px;background:#2B2320;z-index:20;"></div>
+          <div style="position:absolute;inset:0;padding:55px 16px 44px;display:flex;flex-direction:column;gap:12px;">
+            <div style="height:56px;display:flex;align-items:center;justify-content:space-between;gap:8px;">
+              <div style="width:56px;height:56px;border-radius:50%;background:#FFFFFF;box-shadow:0 4px 0 #EFE2CC;display:flex;align-items:center;justify-content:center;font-size:22px;color:#B0A18E;flex:none;opacity:.4;">←</div>
+              <div style="display:flex;flex-direction:column;align-items:center;gap:3px;"><div style="background:#FFE9DF;color:#E05A3A;font-family:'Baloo 2',sans-serif;font-size:15px;font-weight:800;border-radius:12px;padding:7px 14px;">● Đang ghi</div><div style="font-size:11px;font-weight:800;color:#B0A18E;">◌ chế độ đơn giản</div></div>
+              <div style="width:56px;height:56px;border-radius:18px;background:#FFF1C9;box-shadow:0 4px 0 #EFDDA8;display:flex;flex-direction:column;align-items:center;justify-content:center;flex:none;font-family:'Baloo 2',sans-serif;font-weight:800;color:#9A6B00;line-height:1;opacity:.4;"><span style="font-size:18px;">🌞</span><span style="font-size:13px;margin-top:2px;">3/11</span></div>
+            </div>
+            <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;text-align:center;min-height:0;">
+              <div style="display:flex;align-items:center;gap:8px;"><span style="font-size:34px;line-height:1;">😊</span><span style="font-family:'Baloo 2',sans-serif;font-size:16px;font-weight:800;color:#8A7A6D;">Đọc với giọng: <span style="color:#F2603D;">vui vẻ</span></span></div>
+              <div style="font-family:'Baloo 2',sans-serif;font-size:26px;font-weight:800;line-height:1.3;padding:0 6px;">I love my dog<span style="color:#F2603D;">!</span> He is my best friend and we play every day.</div>
+            </div>
+            <div style="display:flex;flex-direction:column;align-items:center;gap:8px;padding-bottom:6px;">
+              <div style="display:flex;align-items:center;gap:10px;"><div style="width:60px;height:58px;">{{ foxListen }}</div><div style="background:#FFFFFF;border-radius:16px;border-bottom-left-radius:6px;padding:9px 14px;box-shadow:0 4px 0 #EFE2CC;font-family:'Baloo 2',sans-serif;font-size:15px;font-weight:800;">Foxy đang lắng nghe…</div></div>
+              <div style="position:relative;width:214px;height:214px;display:flex;align-items:center;justify-content:center;">
+                <div style="position:absolute;width:190px;height:190px;border-radius:50%;background:#FFE3D7;animation:halo 1.4s ease-out infinite;"></div>
+                <div style="position:absolute;width:190px;height:190px;border-radius:50%;background:#FFE3D7;animation:halo 1.4s ease-out .7s infinite;"></div>
+                <div style="width:150px;height:150px;border-radius:50%;background:#FF7A59;box-shadow:0 8px 0 #E05A3A,0 0 0 10px #FFE3D7;display:flex;align-items:center;justify-content:center;font-size:56px;color:#FFFFFF;position:relative;">■</div>
+              </div>
+              <div style="display:flex;align-items:center;gap:14px;">
+                <div style="display:flex;align-items:center;gap:5px;height:28px;"><sc-for list="{{ levelBars }}" as="b" hint-placeholder-count="7"><div style="{{ b.st }}"></div></sc-for></div>
+                <div style="font-family:'Baloo 2',sans-serif;font-size:44px;font-weight:800;color:#F2603D;letter-spacing:-2px;line-height:1;min-width:56px;text-align:center;">13</div>
+              </div>
+            </div>
+          </div>
+          <div style="position:absolute;left:50%;bottom:8px;transform:translateX(-50%);width:130px;height:5px;border-radius:3px;background:#D9CBB4;"></div>
+        </div>
+      </div>
+
+      <!-- P result 3★ -->
+      <sc-for list="{{ phoneResults }}" as="r" hint-placeholder-count="2">
+      <div style="display:flex;flex-direction:column;gap:10px;">
+        <div style="font-size:13px;font-weight:800;color:#8A7A6D;">{{ r.label }}</div>
+        <div data-screen-label="B6 phone result" style="width:390px;height:844px;background:#FFF7EA;border-radius:44px;position:relative;overflow:hidden;box-shadow:0 18px 50px rgba(74,59,51,.18);">
+          <div style="position:absolute;left:50%;top:12px;transform:translateX(-50%);width:118px;height:32px;border-radius:18px;background:#2B2320;z-index:20;"></div>
+          <div style="position:absolute;inset:0;padding:55px 16px 44px;display:flex;flex-direction:column;gap:10px;">
+            <div style="height:56px;display:flex;align-items:center;justify-content:space-between;gap:8px;">
+              <div style="width:56px;height:56px;border-radius:50%;background:#FFFFFF;box-shadow:0 4px 0 #EFE2CC;display:flex;align-items:center;justify-content:center;font-size:22px;color:#B0A18E;flex:none;">←</div>
+              <div style="display:flex;flex-direction:column;align-items:center;gap:3px;"><div style="background:#E2F6F1;color:#1FA396;font-family:'Baloo 2',sans-serif;font-size:15px;font-weight:800;border-radius:12px;padding:7px 14px;">Đoạn 1/8</div><div style="{{ r.badgeSt }}">◌ chế độ đơn giản</div></div>
+              <div style="width:56px;height:56px;border-radius:18px;background:#FFF1C9;box-shadow:0 4px 0 #EFDDA8;display:flex;flex-direction:column;align-items:center;justify-content:center;flex:none;font-family:'Baloo 2',sans-serif;font-weight:800;color:#9A6B00;line-height:1;"><span style="font-size:18px;">🌞</span><span style="font-size:13px;margin-top:2px;">3/11</span></div>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;height:32px;padding:0 4px;"><span style="font-size:15px;font-weight:800;color:#D9C9AE;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1;">😊 I love my dog! He is my best friend and we play every day.</span><span style="font-size:12px;font-weight:800;color:#B0A18E;flex:none;">▾ mở</span></div>
+            <div style="background:#FFFFFF;border-radius:18px;padding:12px 14px;box-shadow:0 5px 0 #EFE2CC;display:flex;align-items:center;gap:12px;">
+              <div style="display:flex;gap:3px;font-size:30px;line-height:1;"><sc-for list="{{ r.stars }}" as="s" hint-placeholder-count="3"><span style="{{ s.st }}">★</span></sc-for></div>
+              <div style="flex:1;min-width:0;"><div style="font-family:'Baloo 2',sans-serif;font-size:17px;font-weight:800;line-height:1.15;">{{ r.praise }}</div><div style="font-size:12px;font-weight:700;color:#8A7A6D;">Điểm: {{ r.score }} · {{ r.sub }}</div></div>
+              <div style="{{ r.prosodySt }}">{{ r.prosody }}</div>
+            </div>
+            <div style="flex:1;min-height:0;overflow:hidden;position:relative;display:flex;flex-direction:column;gap:10px;">
+              <div style="display:flex;flex-wrap:wrap;gap:6px;"><sc-for list="{{ r.chips }}" as="c" hint-placeholder-count="14"><div style="{{ c.st }}">{{ c.t }}</div></sc-for></div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px 14px;">
+                <sc-for list="{{ r.bars }}" as="b" hint-placeholder-count="4"><div style="display:flex;flex-direction:column;gap:4px;"><div style="display:flex;justify-content:space-between;font-size:12px;font-weight:800;"><span style="color:#8A7A6D;">{{ b.l }}</span><span>{{ b.v }}</span></div><div style="height:10px;border-radius:8px;background:#F1E7D4;overflow:hidden;"><div style="{{ b.st }}"></div></div></div></sc-for>
+              </div>
+              <sc-if value="{{ r.hint }}" hint-placeholder-val="{{ false }}"><div style="background:#FFF6E0;border:3px solid #FFDF9E;border-radius:16px;padding:9px 12px;display:flex;align-items:center;gap:10px;"><span style="font-size:24px;line-height:1;">👅</span><div style="font-size:13px;font-weight:700;color:#9A6B00;line-height:1.4;">{{ r.hint }}</div></div></sc-if>
+              <div style="display:flex;gap:8px;">
+                <sc-if value="{{ r.azure }}" hint-placeholder-val="{{ true }}"><div style="flex:1;height:48px;background:#FFFFFF;border:3px solid #C4E8E1;border-radius:14px;display:flex;align-items:center;justify-content:center;font-family:'Baloo 2',sans-serif;font-size:15px;font-weight:800;color:#1FA396;">🎧 Nghe mình</div></sc-if>
+                <div style="flex:1;height:48px;background:#FFFFFF;border:3px solid #C4E8E1;border-radius:14px;display:flex;align-items:center;justify-content:center;font-family:'Baloo 2',sans-serif;font-size:15px;font-weight:800;color:#1FA396;">🔊 Nghe mẫu</div>
+              </div>
+              <div style="display:flex;align-items:center;gap:8px;justify-content:center;"><div style="width:44px;height:42px;">{{ r.fox }}</div><div style="font-size:13px;font-weight:700;color:#8A7A6D;">{{ r.foxSay }}</div></div>
+            </div>
+            <div style="display:flex;gap:10px;position:relative;z-index:1;">
+              <div style="flex:1;height:56px;background:#FFFFFF;border:3px solid #EFE2CC;border-radius:18px;box-shadow:0 5px 0 #EFE2CC;display:flex;align-items:center;justify-content:center;font-family:'Baloo 2',sans-serif;font-size:18px;font-weight:800;color:#8A7A6D;">↻ Thử lại</div>
+              <div style="flex:1.35;height:56px;background:#FF7A59;border-radius:18px;box-shadow:0 5px 0 #E05A3A;display:flex;align-items:center;justify-content:center;font-family:'Baloo 2',sans-serif;font-size:18px;font-weight:800;color:#FFFFFF;">Tiếp theo →</div>
+            </div>
+          </div>
+          <div style="position:absolute;left:50%;bottom:8px;transform:translateX(-50%);width:130px;height:5px;border-radius:3px;background:#D9CBB4;"></div>
+        </div>
+      </div>
+      </sc-for>
+
+      <div style="width:330px;background:#FFFDF7;border:2px dashed #E2D5C0;border-radius:16px;padding:13px 16px;font-size:13px;line-height:1.65;color:#6B5B4D;">
+        <b>Phone</b> — idle: tầng dạy flex:1 căn giữa (đoạn 24px, tips 12px), tầng làm ghim đáy: Foxy 60 + bong bóng (số giây coral) · mic 124 · caption 16. <b>375×667</b>: bỏ tips + caption, đoạn 22px — mic vẫn trên fold.<br>
+        <b>Đang ghi</b>: Back & LessonChip mờ .4 (không bấm), chip giữa đổi "● Đang ghi" coral, đoạn <b>giữ màu</b> phóng 26px, tips ẩn, mic 150 + halo 190 + 7 vạch mức âm + số đếm 44px (2 chữ số, ô 56 cố định).<br>
+        <b>Kết quả</b>: tầng dạy gập thành 1 dòng 15px #D9C9AE (chạm ▾ mở), thẻ sao ghim, chip 40px wrap, bar 2×2, tip chỉ khi &lt;2★, hàng nghe 48, Foxy 44 + câu, CTA 56 ghim. Tổng nội dung cuộn ≈ 420px trong vùng ≈ 480 → <b>không cần cuộn</b> với 14 chip; 375×667 mới cuộn.
+      </div>
+    </div>
+
+    <!-- IPAD LANDSCAPE ROW -->
+    <div style="font-weight:800;color:#8A7A6D;font-size:15px;margin-top:10px;">iPad ngang 1194×834 — cột dạy flex:1 | cột làm 440. Cột dạy không đổi qua 4 trạng thái.</div>
+    <div style="display:flex;gap:28px;flex-wrap:wrap;align-items:flex-start;">
+      <sc-for list="{{ ipadStates }}" as="k" hint-placeholder-count="4">
+      <div style="display:flex;flex-direction:column;gap:10px;">
+        <div style="font-size:13px;font-weight:800;color:#8A7A6D;">{{ k.label }}</div>
+        <div data-screen-label="B6 iPad ngang" style="width:1194px;height:834px;background:#FFF7EA;border-radius:28px;position:relative;overflow:hidden;box-shadow:0 18px 50px rgba(74,59,51,.18);">
+          <div style="position:absolute;inset:0;padding:20px 24px 24px;display:flex;flex-direction:column;align-items:center;">
+            <div style="width:100%;max-width:1080px;display:flex;flex-direction:column;flex:1;min-height:0;">
+              <div style="height:64px;display:flex;align-items:center;justify-content:space-between;gap:12px;">
+                <div style="width:64px;height:64px;border-radius:50%;background:#FFFFFF;box-shadow:0 5px 0 #EFE2CC;display:flex;align-items:center;justify-content:center;font-size:24px;color:#B0A18E;flex:none;">←</div>
+                <div style="display:flex;align-items:center;gap:10px;"><div style="{{ k.chipSt }}">{{ k.chip }}</div><div style="{{ k.badgeSt }}">◌ chế độ đơn giản</div></div>
+                <div style="height:48px;padding:0 16px;border-radius:16px;background:#FFF1C9;box-shadow:0 4px 0 #EFDDA8;display:flex;align-items:center;gap:8px;flex:none;font-family:'Baloo 2',sans-serif;font-size:16px;font-weight:800;color:#9A6B00;">🌞 Nhiệm vụ 3/11</div>
+              </div>
+              <div style="flex:1;margin-top:16px;display:flex;gap:24px;min-height:0;">
+                <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;text-align:center;padding:0 24px;">
+                  <div style="display:flex;align-items:center;gap:10px;"><span style="font-size:48px;line-height:1;">😊</span><span style="font-family:'Baloo 2',sans-serif;font-size:22px;font-weight:800;color:#8A7A6D;">Đọc với giọng: <span style="color:#F2603D;">vui vẻ</span></span></div>
+                  <div style="font-family:'Baloo 2',sans-serif;font-size:34px;font-weight:800;line-height:1.3;max-width:560px;">I love my dog<span style="color:#F2603D;">!</span> He is my best friend and we play every day.</div>
+                  <div style="font-size:17px;font-weight:700;color:#8A7A6D;line-height:1.45;max-width:520px;">Con yêu chú chó của con! Nó là người bạn thân nhất và chúng con chơi cùng nhau mỗi ngày.</div>
+                  <div style="height:64px;padding:0 28px;background:#E2F6F1;border-radius:20px;box-shadow:0 5px 0 #C4E8E1;display:flex;align-items:center;font-family:'Baloo 2',sans-serif;font-size:20px;font-weight:800;color:#1FA396;">🔊 Nghe mẫu</div>
+                  <div style="width:100%;max-width:520px;background:#FFFFFF;border-radius:18px;padding:12px 16px;box-shadow:0 5px 0 #EFE2CC;text-align:left;font-size:14px;font-weight:700;color:#8A7A6D;line-height:1.55;"><b style="color:#4A3B33;">🎭 Gợi ý giọng</b><br>• Mỉm cười khi đọc — giọng sẽ tươi hơn<br>• Đọc hơi nhanh và nhẹ nhàng<br>• Nhấn mạnh vào "love", "best"</div>
+                </div>
+                <div style="width:440px;flex:none;display:flex;flex-direction:column;gap:14px;min-height:0;">
+                  <!-- idle -->
+                  <sc-if value="{{ k.isIdle }}" hint-placeholder-val="{{ true }}">
+                    <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;">
+                      <div style="display:flex;align-items:center;gap:10px;"><div style="width:72px;height:70px;">{{ foxIdle }}</div><div style="background:#FFFFFF;border-radius:16px;border-bottom-left-radius:6px;padding:10px 16px;box-shadow:0 4px 0 #EFE2CC;font-family:'Baloo 2',sans-serif;font-size:17px;font-weight:800;">Đọc cả đoạn thật có hồn nhé! <span style="color:#F2603D;">13 giây</span></div></div>
+                      <div style="width:150px;height:150px;border-radius:50%;background:#FF7A59;box-shadow:0 8px 0 #E05A3A,0 0 0 10px #FFE3D7;display:flex;align-items:center;justify-content:center;font-size:60px;margin-top:14px;">🎤</div>
+                      <div style="font-size:18px;font-weight:700;color:#8A7A6D;margin-top:10px;">Chạm để nói nào!</div>
+                    </div>
+                  </sc-if>
+                  <!-- recording -->
+                  <sc-if value="{{ k.isRec }}" hint-placeholder-val="{{ false }}">
+                    <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;">
+                      <div style="display:flex;align-items:center;gap:10px;"><div style="width:72px;height:70px;">{{ foxListen }}</div><div style="background:#FFFFFF;border-radius:16px;border-bottom-left-radius:6px;padding:10px 16px;box-shadow:0 4px 0 #EFE2CC;font-family:'Baloo 2',sans-serif;font-size:17px;font-weight:800;">Foxy đang lắng nghe…</div></div>
+                      <div style="position:relative;width:260px;height:260px;display:flex;align-items:center;justify-content:center;">
+                        <div style="position:absolute;width:240px;height:240px;border-radius:50%;background:#FFE3D7;animation:halo 1.4s ease-out infinite;"></div>
+                        <div style="position:absolute;width:240px;height:240px;border-radius:50%;background:#FFE3D7;animation:halo 1.4s ease-out .7s infinite;"></div>
+                        <div style="width:190px;height:190px;border-radius:50%;background:#FF7A59;box-shadow:0 8px 0 #E05A3A,0 0 0 10px #FFE3D7;display:flex;align-items:center;justify-content:center;font-size:72px;color:#FFFFFF;position:relative;">■</div>
+                      </div>
+                      <div style="display:flex;align-items:center;gap:16px;"><div style="display:flex;align-items:center;gap:5px;height:28px;"><sc-for list="{{ levelBars }}" as="b" hint-placeholder-count="7"><div style="{{ b.st }}"></div></sc-for></div><div style="font-family:'Baloo 2',sans-serif;font-size:56px;font-weight:800;color:#F2603D;letter-spacing:-2px;line-height:1;min-width:70px;text-align:center;">13</div></div>
+                    </div>
+                  </sc-if>
+                  <!-- result -->
+                  <sc-if value="{{ k.isRes }}" hint-placeholder-val="{{ false }}">
+                    <div style="flex:1;display:flex;flex-direction:column;gap:12px;min-height:0;">
+                      <div style="background:#FFFFFF;border-radius:18px;padding:12px 14px;box-shadow:0 5px 0 #EFE2CC;display:flex;align-items:center;gap:12px;">
+                        <div style="display:flex;gap:3px;font-size:30px;line-height:1;"><sc-for list="{{ k.r.stars }}" as="s" hint-placeholder-count="3"><span style="{{ s.st }}">★</span></sc-for></div>
+                        <div style="flex:1;min-width:0;"><div style="font-family:'Baloo 2',sans-serif;font-size:18px;font-weight:800;line-height:1.15;">{{ k.r.praise }}</div><div style="font-size:12px;font-weight:700;color:#8A7A6D;">Điểm: {{ k.r.score }} · {{ k.r.sub }}</div></div>
+                        <div style="{{ k.r.prosodySt }}">{{ k.r.prosody }}</div>
+                      </div>
+                      <div style="display:flex;flex-wrap:wrap;gap:6px;"><sc-for list="{{ k.r.chips }}" as="c" hint-placeholder-count="14"><div style="{{ c.st }}">{{ c.t }}</div></sc-for></div>
+                      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px 14px;">
+                        <sc-for list="{{ k.r.bars }}" as="b" hint-placeholder-count="4"><div style="display:flex;flex-direction:column;gap:4px;"><div style="display:flex;justify-content:space-between;font-size:12px;font-weight:800;"><span style="color:#8A7A6D;">{{ b.l }}</span><span>{{ b.v }}</span></div><div style="height:10px;border-radius:8px;background:#F1E7D4;overflow:hidden;"><div style="{{ b.st }}"></div></div></div></sc-for>
+                      </div>
+                      <sc-if value="{{ k.r.hint }}" hint-placeholder-val="{{ false }}"><div style="background:#FFF6E0;border:3px solid #FFDF9E;border-radius:16px;padding:9px 12px;display:flex;align-items:center;gap:10px;"><span style="font-size:24px;line-height:1;">👅</span><div style="font-size:13px;font-weight:700;color:#9A6B00;line-height:1.4;">{{ k.r.hint }}</div></div></sc-if>
+                      <div style="display:flex;gap:8px;">
+                        <sc-if value="{{ k.r.azure }}" hint-placeholder-val="{{ true }}"><div style="flex:1;height:48px;background:#FFFFFF;border:3px solid #C4E8E1;border-radius:14px;display:flex;align-items:center;justify-content:center;font-family:'Baloo 2',sans-serif;font-size:15px;font-weight:800;color:#1FA396;">🎧 Nghe mình</div></sc-if>
+                        <div style="flex:1;height:48px;background:#FFFFFF;border:3px solid #C4E8E1;border-radius:14px;display:flex;align-items:center;justify-content:center;font-family:'Baloo 2',sans-serif;font-size:15px;font-weight:800;color:#1FA396;">🔊 Nghe mẫu</div>
+                      </div>
+                      <div style="display:flex;align-items:center;gap:8px;justify-content:center;margin-top:auto;"><div style="width:52px;height:50px;">{{ k.r.fox }}</div><div style="font-size:14px;font-weight:700;color:#8A7A6D;">{{ k.r.foxSay }}</div></div>
+                    </div>
+                  </sc-if>
+                  <sc-if value="{{ k.isRes }}" hint-placeholder-val="{{ false }}">
+                    <div style="display:flex;gap:12px;">
+                      <div style="flex:1;height:64px;background:#FFFFFF;border:3px solid #EFE2CC;border-radius:20px;box-shadow:0 5px 0 #EFE2CC;display:flex;align-items:center;justify-content:center;font-family:'Baloo 2',sans-serif;font-size:20px;font-weight:800;color:#8A7A6D;">↻ Thử lại</div>
+                      <div style="flex:1.35;height:64px;background:#FF7A59;border-radius:20px;box-shadow:0 5px 0 #E05A3A;display:flex;align-items:center;justify-content:center;font-family:'Baloo 2',sans-serif;font-size:20px;font-weight:800;color:#FFFFFF;">Tiếp theo →</div>
+                    </div>
+                  </sc-if>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      </sc-for>
+      <div style="width:1194px;background:#FFFDF7;border:2px dashed #E2D5C0;border-radius:16px;padding:13px 16px;font-size:13px;line-height:1.65;color:#6B5B4D;">
+        <b>iPad ngang</b>: cột dạy (≈616) giữ nguyên ở cả 4 trạng thái — đoạn 34px max-width 560, nghĩa 17px, Nghe mẫu md 64, tips 14px. Cột làm 440: idle Foxy 72 + mic 150; ghi mic 190 + halo 240 + đếm 56px; kết quả ResultCard ≈ 525px + CTA md 64 ở đáy cột → tổng 690 = đúng chiều cao cột. <b>Không có gì vượt 834</b> kể cả 14 chip + hint + 4 nút.
+      </div>
+    </div>
+
+    <!-- IPAD PORTRAIT ROW -->
+    <div style="font-weight:800;color:#8A7A6D;font-size:15px;margin-top:10px;">iPad dọc 834×1194 — 2 tầng: dạy flex:1 · làm 300 cố định (kết quả: làm mở rộng, dạy gập thành dải 64)</div>
+    <div style="display:flex;gap:28px;flex-wrap:wrap;align-items:flex-start;">
+      <sc-for list="{{ portStates }}" as="k" hint-placeholder-count="4">
+      <div style="display:flex;flex-direction:column;gap:10px;">
+        <div style="font-size:13px;font-weight:800;color:#8A7A6D;">{{ k.label }}</div>
+        <div data-screen-label="B6 iPad dọc" style="width:834px;height:1194px;background:#FFF7EA;border-radius:28px;position:relative;overflow:hidden;box-shadow:0 18px 50px rgba(74,59,51,.18);">
+          <div style="position:absolute;inset:0;padding:24px;display:flex;flex-direction:column;gap:16px;">
+            <div style="height:64px;display:flex;align-items:center;justify-content:space-between;gap:12px;">
+              <div style="width:64px;height:64px;border-radius:50%;background:#FFFFFF;box-shadow:0 5px 0 #EFE2CC;display:flex;align-items:center;justify-content:center;font-size:24px;color:#B0A18E;flex:none;">←</div>
+              <div style="display:flex;align-items:center;gap:10px;"><div style="{{ k.chipSt }}">{{ k.chip }}</div><div style="{{ k.badgeSt }}">◌ chế độ đơn giản</div></div>
+              <div style="height:48px;padding:0 16px;border-radius:16px;background:#FFF1C9;box-shadow:0 4px 0 #EFDDA8;display:flex;align-items:center;gap:8px;flex:none;font-family:'Baloo 2',sans-serif;font-size:16px;font-weight:800;color:#9A6B00;">🌞 Nhiệm vụ 3/11</div>
+            </div>
+            <sc-if value="{{ k.isRes }}" hint-placeholder-val="{{ false }}">
+              <div style="height:64px;background:#FFFFFF;border-radius:18px;box-shadow:0 4px 0 #EFE2CC;display:flex;align-items:center;gap:12px;padding:0 18px;"><span style="font-size:28px;">😊</span><span style="flex:1;font-family:'Baloo 2',sans-serif;font-size:18px;font-weight:800;color:#A79781;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">I love my dog! He is my best friend and we play every day.</span><span style="font-size:13px;font-weight:800;color:#B0A18E;">▾ mở đoạn</span></div>
+            </sc-if>
+            <sc-if value="{{ k.notRes }}" hint-placeholder-val="{{ true }}">
+              <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;text-align:center;padding:0 24px;">
+                <div style="display:flex;align-items:center;gap:10px;"><span style="font-size:48px;line-height:1;">😊</span><span style="font-family:'Baloo 2',sans-serif;font-size:22px;font-weight:800;color:#8A7A6D;">Đọc với giọng: <span style="color:#F2603D;">vui vẻ</span></span></div>
+                <div style="font-family:'Baloo 2',sans-serif;font-size:34px;font-weight:800;line-height:1.3;max-width:640px;">I love my dog<span style="color:#F2603D;">!</span> He is my best friend and we play every day.</div>
+                <div style="font-size:17px;font-weight:700;color:#8A7A6D;line-height:1.45;max-width:560px;">Con yêu chú chó của con! Nó là người bạn thân nhất và chúng con chơi cùng nhau mỗi ngày.</div>
+                <sc-if value="{{ k.isIdle }}" hint-placeholder-val="{{ true }}">
+                  <div style="height:64px;padding:0 28px;background:#E2F6F1;border-radius:20px;box-shadow:0 5px 0 #C4E8E1;display:flex;align-items:center;font-family:'Baloo 2',sans-serif;font-size:20px;font-weight:800;color:#1FA396;">🔊 Nghe mẫu</div>
+                  <div style="width:100%;max-width:520px;background:#FFFFFF;border-radius:18px;padding:12px 16px;box-shadow:0 5px 0 #EFE2CC;text-align:left;font-size:14px;font-weight:700;color:#8A7A6D;line-height:1.55;"><b style="color:#4A3B33;">🎭 Gợi ý giọng</b><br>• Mỉm cười khi đọc — giọng sẽ tươi hơn<br>• Đọc hơi nhanh và nhẹ nhàng<br>• Nhấn mạnh vào "love", "best"</div>
+                </sc-if>
+              </div>
+              <div style="height:300px;flex:none;display:flex;align-items:center;justify-content:center;gap:40px;">
+                <sc-if value="{{ k.isIdle }}" hint-placeholder-val="{{ true }}">
+                  <div style="display:flex;align-items:center;gap:10px;"><div style="width:72px;height:70px;">{{ foxIdle }}</div><div style="background:#FFFFFF;border-radius:16px;border-bottom-left-radius:6px;padding:10px 16px;box-shadow:0 4px 0 #EFE2CC;font-family:'Baloo 2',sans-serif;font-size:17px;font-weight:800;">Đọc cả đoạn thật có hồn nhé! <span style="color:#F2603D;">13 giây</span></div></div>
+                  <div style="display:flex;flex-direction:column;align-items:center;gap:14px;"><div style="width:150px;height:150px;border-radius:50%;background:#FF7A59;box-shadow:0 8px 0 #E05A3A,0 0 0 10px #FFE3D7;display:flex;align-items:center;justify-content:center;font-size:60px;">🎤</div><div style="font-size:18px;font-weight:700;color:#8A7A6D;">Chạm để nói nào!</div></div>
+                </sc-if>
+                <sc-if value="{{ k.isRec }}" hint-placeholder-val="{{ false }}">
+                  <div style="display:flex;align-items:center;gap:10px;"><div style="width:72px;height:70px;">{{ foxListen }}</div><div style="background:#FFFFFF;border-radius:16px;border-bottom-left-radius:6px;padding:10px 16px;box-shadow:0 4px 0 #EFE2CC;font-family:'Baloo 2',sans-serif;font-size:17px;font-weight:800;">Foxy đang lắng nghe…</div></div>
+                  <div style="position:relative;width:260px;height:260px;display:flex;align-items:center;justify-content:center;"><div style="position:absolute;width:240px;height:240px;border-radius:50%;background:#FFE3D7;animation:halo 1.4s ease-out infinite;"></div><div style="width:190px;height:190px;border-radius:50%;background:#FF7A59;box-shadow:0 8px 0 #E05A3A,0 0 0 10px #FFE3D7;display:flex;align-items:center;justify-content:center;font-size:72px;color:#FFFFFF;position:relative;">■</div></div>
+                  <div style="display:flex;flex-direction:column;align-items:center;gap:12px;"><div style="font-family:'Baloo 2',sans-serif;font-size:56px;font-weight:800;color:#F2603D;letter-spacing:-2px;line-height:1;">13</div><div style="display:flex;align-items:center;gap:5px;height:28px;"><sc-for list="{{ levelBars }}" as="b" hint-placeholder-count="7"><div style="{{ b.st }}"></div></sc-for></div></div>
+                </sc-if>
+              </div>
+            </sc-if>
+            <sc-if value="{{ k.isRes }}" hint-placeholder-val="{{ false }}">
+              <div style="flex:1;display:flex;flex-direction:column;gap:14px;max-width:560px;align-self:center;width:100%;">
+                <div style="background:#FFFFFF;border-radius:18px;padding:14px 16px;box-shadow:0 5px 0 #EFE2CC;display:flex;align-items:center;gap:14px;">
+                  <div style="display:flex;gap:3px;font-size:36px;line-height:1;"><sc-for list="{{ k.r.stars }}" as="s" hint-placeholder-count="3"><span style="{{ s.st }}">★</span></sc-for></div>
+                  <div style="flex:1;min-width:0;"><div style="font-family:'Baloo 2',sans-serif;font-size:20px;font-weight:800;line-height:1.15;">{{ k.r.praise }}</div><div style="font-size:13px;font-weight:700;color:#8A7A6D;">Điểm: {{ k.r.score }} · {{ k.r.sub }}</div></div>
+                  <div style="{{ k.r.prosodySt }}">{{ k.r.prosody }}</div>
+                </div>
+                <div style="display:flex;flex-wrap:wrap;gap:8px;"><sc-for list="{{ k.r.chips }}" as="c" hint-placeholder-count="14"><div style="{{ c.st }}">{{ c.t }}</div></sc-for></div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px 18px;">
+                  <sc-for list="{{ k.r.bars }}" as="b" hint-placeholder-count="4"><div style="display:flex;flex-direction:column;gap:4px;"><div style="display:flex;justify-content:space-between;font-size:13px;font-weight:800;"><span style="color:#8A7A6D;">{{ b.l }}</span><span>{{ b.v }}</span></div><div style="height:10px;border-radius:8px;background:#F1E7D4;overflow:hidden;"><div style="{{ b.st }}"></div></div></div></sc-for>
+                </div>
+                <sc-if value="{{ k.r.hint }}" hint-placeholder-val="{{ false }}"><div style="background:#FFF6E0;border:3px solid #FFDF9E;border-radius:16px;padding:10px 14px;display:flex;align-items:center;gap:10px;"><span style="font-size:28px;line-height:1;">👅</span><div style="font-size:14px;font-weight:700;color:#9A6B00;line-height:1.4;">{{ k.r.hint }}</div></div></sc-if>
+                <div style="display:flex;gap:10px;">
+                  <sc-if value="{{ k.r.azure }}" hint-placeholder-val="{{ true }}"><div style="flex:1;height:48px;background:#FFFFFF;border:3px solid #C4E8E1;border-radius:14px;display:flex;align-items:center;justify-content:center;font-family:'Baloo 2',sans-serif;font-size:15px;font-weight:800;color:#1FA396;">🎧 Nghe mình</div></sc-if>
+                  <div style="flex:1;height:48px;background:#FFFFFF;border:3px solid #C4E8E1;border-radius:14px;display:flex;align-items:center;justify-content:center;font-family:'Baloo 2',sans-serif;font-size:15px;font-weight:800;color:#1FA396;">🔊 Nghe mẫu</div>
+                </div>
+                <div style="display:flex;align-items:center;gap:10px;justify-content:center;margin-top:auto;"><div style="width:96px;height:93px;">{{ k.r.fox }}</div><div style="background:#FFFFFF;border-radius:16px;border-bottom-left-radius:6px;padding:10px 16px;box-shadow:0 4px 0 #EFE2CC;font-family:'Baloo 2',sans-serif;font-size:17px;font-weight:800;">{{ k.r.foxSay }}</div></div>
+              </div>
+              <div style="display:flex;gap:12px;justify-content:center;">
+                <div style="width:240px;height:64px;background:#FFFFFF;border:3px solid #EFE2CC;border-radius:20px;box-shadow:0 5px 0 #EFE2CC;display:flex;align-items:center;justify-content:center;font-family:'Baloo 2',sans-serif;font-size:20px;font-weight:800;color:#8A7A6D;">↻ Thử lại</div>
+                <div style="width:320px;height:64px;background:#FF7A59;border-radius:20px;box-shadow:0 5px 0 #E05A3A;display:flex;align-items:center;justify-content:center;font-family:'Baloo 2',sans-serif;font-size:20px;font-weight:800;color:#FFFFFF;">Tiếp theo →</div>
+              </div>
+            </sc-if>
+          </div>
+        </div>
+      </div>
+      </sc-for>
+      <div style="width:834px;background:#FFFDF7;border:2px dashed #E2D5C0;border-radius:16px;padding:13px 16px;font-size:13px;line-height:1.65;color:#6B5B4D;">
+        <b>iPad dọc</b>: idle/ghi — tầng dạy flex:1 căn giữa (chữ cỡ iPad), tầng làm 300 xếp ngang Foxy · mic · caption/đếm. Kết quả — tầng dạy gập thành dải 64 (emoji + đoạn 1 dòng ellipsis + "▾ mở đoạn"), ResultCard max-width 560 căn giữa với Foxy 96 nói câu, CTA md căn giữa 572. Dư ≈ 300px → không bao giờ cuộn.
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= SECTION 2: 9 BIẾN THỂ ================= -->
+  <div style="display:flex;flex-direction:column;gap:26px;">
+    <div style="display:flex;align-items:center;gap:12px;"><span style="background:#4A3B33;color:#FFF7EA;font-family:'Baloo 2',sans-serif;font-size:15px;font-weight:800;padding:6px 14px;border-radius:12px;">2</span><span style="font-family:'Baloo 2',sans-serif;font-size:26px;font-weight:800;">9 biến thể — chỉ đổi phần "dạy"</span></div>
+    <div style="font-size:14px;color:#8A7A6D;font-weight:700;max-width:1100px;line-height:1.6;">Mỗi biến thể: phần dạy ở <b>phone (358 rộng)</b> và <b>iPad (cột 616)</b> trạng thái idle, kèm các pha phụ không cần mic, và thẻ ghi khác biệt ở trạng thái ghi / kết quả. Phần "làm" lấy nguyên từ mục 1.</div>
+
+    <sc-for list="{{ variants }}" as="v" hint-placeholder-count="9">
+    <div style="background:#FFFFFF;border-radius:24px;padding:22px 26px;box-shadow:0 6px 0 #E2D5C0;display:flex;flex-direction:column;gap:14px;">
+      <div style="display:flex;align-items:center;gap:12px;"><span style="{{ v.tagSt }}">{{ v.code }}</span><span style="font-family:'Baloo 2',sans-serif;font-size:21px;font-weight:800;">{{ v.name }}</span><span style="font-size:13px;color:#8A7A6D;font-weight:700;">{{ v.route }}</span></div>
+      <div style="display:flex;gap:22px;flex-wrap:wrap;align-items:flex-start;">
+        <!-- phone teach -->
+        <div style="display:flex;flex-direction:column;gap:8px;">
+          <div style="font-size:12px;font-weight:800;color:#B0A18E;">Phần dạy · phone 358 · chip giữa: <span style="color:#1FA396;">{{ v.chip }}</span></div>
+          <div style="width:390px;background:#FFF7EA;border-radius:22px;padding:16px;display:flex;flex-direction:column;align-items:center;gap:10px;text-align:center;min-height:300px;justify-content:center;">
+            <!-- B1 -->
+            <sc-if value="{{ v.isB1 }}" hint-placeholder-val="{{ false }}">
+              <div style="width:150px;height:150px;border-radius:26px;background:#FFFFFF;box-shadow:0 8px 0 #EFE2CC;display:flex;align-items:center;justify-content:center;font-size:80px;">🐱</div>
+              <div style="font-family:'Baloo 2',sans-serif;font-size:44px;font-weight:800;line-height:1.1;">cat</div>
+              <div style="height:36px;padding:0 14px;border-radius:12px;background:#F3EADA;display:flex;align-items:center;font-size:14px;font-weight:800;color:#A79781;">👁 Xem phiên âm</div>
+              <div style="display:flex;gap:10px;"><div style="height:56px;padding:0 20px;background:#E2F6F1;border-radius:18px;box-shadow:0 5px 0 #C4E8E1;display:flex;align-items:center;font-family:'Baloo 2',sans-serif;font-size:17px;font-weight:800;color:#1FA396;">🔊 Nghe mẫu</div><div style="height:56px;padding:0 16px;background:#FFF1E6;border-radius:18px;box-shadow:0 5px 0 #F2DFC9;display:flex;align-items:center;gap:6px;font-family:'Baloo 2',sans-serif;font-size:15px;font-weight:800;color:#C08457;">👄 Khẩu hình</div></div>
+              <div style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:800;color:#8A7A6D;"><span style="font-size:18px;color:#FF7A59;">●</span><span style="font-size:18px;color:#E2D5C0;">○</span> Nói đúng 2 lần liên tiếp để được 3 sao</div>
+            </sc-if>
+            <!-- B3 -->
+            <sc-if value="{{ v.isB3 }}" hint-placeholder-val="{{ false }}">
+              <div style="width:100%;background:#FFF1E6;border-radius:20px;padding:12px 14px;box-shadow:0 6px 0 #F2DFC9;display:flex;flex-direction:column;gap:8px;text-align:left;">
+                <div style="display:flex;align-items:center;gap:12px;"><div style="width:56px;height:56px;border-radius:16px;background:#FFFFFF;display:flex;align-items:center;justify-content:center;font-size:30px;">👄</div><div style="flex:1;font-family:'Baloo 2',sans-serif;font-size:40px;font-weight:800;color:#C08457;line-height:1;">/θ/</div><div style="width:56px;height:56px;border-radius:50%;background:#2EC4B6;box-shadow:0 5px 0 #1FA396;display:flex;align-items:center;justify-content:center;font-size:24px;color:#FFFFFF;">🔊</div></div>
+                <div style="font-size:13px;font-weight:700;color:#9A6B00;line-height:1.45;">Đặt đầu lưỡi giữa hai hàm răng rồi thổi nhẹ.</div>
+              </div>
+              <div style="width:100%;background:#FFFFFF;border-radius:22px;padding:14px;box-shadow:0 8px 0 #EFE2CC;display:flex;flex-direction:column;align-items:center;gap:6px;"><div style="font-size:64px;line-height:1;">3️⃣</div><div style="font-family:'Baloo 2',sans-serif;font-size:40px;font-weight:800;line-height:1.1;">three</div><div style="font-size:15px;font-weight:700;color:#A79781;">/θriː/</div><div style="height:56px;padding:0 22px;background:#E2F6F1;border-radius:18px;box-shadow:0 5px 0 #C4E8E1;display:flex;align-items:center;font-family:'Baloo 2',sans-serif;font-size:17px;font-weight:800;color:#1FA396;margin-top:4px;">🔊 Nghe mẫu</div></div>
+            </sc-if>
+            <!-- B4 -->
+            <sc-if value="{{ v.isB4 }}" hint-placeholder-val="{{ false }}">
+              <div style="font-family:'Baloo 2',sans-serif;font-size:17px;font-weight:800;">Pha 2 · Nói cả hai từ</div>
+              <div style="display:flex;gap:12px;align-items:center;"><div style="display:flex;flex-direction:column;align-items:center;gap:4px;width:140px;background:#FFFFFF;border-radius:20px;padding:14px 10px;box-shadow:0 6px 0 #EFE2CC;"><span style="font-size:48px;line-height:1;">🚢</span><span style="font-family:'Baloo 2',sans-serif;font-size:28px;font-weight:800;">ship</span><span style="font-size:13px;color:#A79781;font-weight:700;">/ʃɪp/</span></div><div style="font-family:'Baloo 2',sans-serif;font-size:22px;color:#B0A18E;font-weight:800;">·</div><div style="display:flex;flex-direction:column;align-items:center;gap:4px;width:140px;background:#FFFFFF;border-radius:20px;padding:14px 10px;box-shadow:0 6px 0 #EFE2CC;"><span style="font-size:48px;line-height:1;">🐑</span><span style="font-family:'Baloo 2',sans-serif;font-size:28px;font-weight:800;">sheep</span><span style="font-size:13px;color:#A79781;font-weight:700;">/ʃiːp/</span></div></div>
+              <div style="background:#E3F6E8;color:#2E8B4A;font-size:13px;font-weight:800;border-radius:12px;padding:6px 12px;">✓ Nghe & chọn: ship ✓ · sheep ✓</div>
+              <div style="height:56px;padding:0 22px;background:#E2F6F1;border-radius:18px;box-shadow:0 5px 0 #C4E8E1;display:flex;align-items:center;font-family:'Baloo 2',sans-serif;font-size:17px;font-weight:800;color:#1FA396;">🔊 Nghe mẫu</div>
+            </sc-if>
+            <!-- B5 -->
+            <sc-if value="{{ v.isB5 }}" hint-placeholder-val="{{ false }}">
+              <div style="font-family:'Baloo 2',sans-serif;font-weight:800;line-height:1.3;display:flex;flex-wrap:wrap;justify-content:center;gap:0 10px;align-items:baseline;"><span style="font-size:26px;">I</span><span style="font-size:32px;color:#F2603D;">have</span><span style="font-size:26px;">a</span><span style="font-size:32px;color:#F2603D;">red</span><span style="font-size:22px;color:#2EC4B6;">‿</span><span style="font-size:32px;color:#F2603D;">apple.</span></div>
+              <div style="font-size:14px;font-weight:700;color:#8A7A6D;">Con có một quả táo đỏ.</div>
+              <div style="font-size:12px;font-weight:700;color:#B0A18E;">Chữ cam = nhấn mạnh · ‿ = nối âm</div>
+              <div style="height:56px;padding:0 22px;background:#E2F6F1;border-radius:18px;box-shadow:0 5px 0 #C4E8E1;display:flex;align-items:center;font-family:'Baloo 2',sans-serif;font-size:17px;font-weight:800;color:#1FA396;">🔊 Nghe mẫu</div>
+              <div style="width:100%;background:#FFFFFF;border-radius:18px;padding:14px;box-shadow:0 5px 0 #EFE2CC;display:flex;flex-direction:column;gap:8px;"><div style="display:flex;align-items:center;justify-content:center;gap:16px;height:28px;"><sc-for list="{{ beats }}" as="b" hint-placeholder-count="5"><div style="{{ b.st }}"></div></sc-for></div><div style="font-size:12px;font-weight:800;color:#B0A18E;">Nhịp của câu — chạm 🔊 để nghe lại</div></div>
+            </sc-if>
+            <!-- B6 -->
+            <sc-if value="{{ v.isB6 }}" hint-placeholder-val="{{ false }}">
+              <div style="display:flex;align-items:center;gap:8px;"><span style="font-size:34px;line-height:1;">😊</span><span style="font-family:'Baloo 2',sans-serif;font-size:16px;font-weight:800;color:#8A7A6D;">Đọc với giọng: <span style="color:#F2603D;">vui vẻ</span></span></div>
+              <div style="font-family:'Baloo 2',sans-serif;font-size:24px;font-weight:800;line-height:1.3;">I love my dog<span style="color:#F2603D;">!</span> He is my best friend and we play every day.</div>
+              <div style="font-size:13px;font-weight:700;color:#8A7A6D;line-height:1.4;">Con yêu chú chó của con! Nó là người bạn thân nhất và chúng con chơi cùng nhau mỗi ngày.</div>
+              <div style="height:56px;padding:0 22px;background:#E2F6F1;border-radius:18px;box-shadow:0 5px 0 #C4E8E1;display:flex;align-items:center;font-family:'Baloo 2',sans-serif;font-size:17px;font-weight:800;color:#1FA396;">🔊 Nghe mẫu</div>
+              <div style="width:100%;background:#FFFFFF;border-radius:16px;padding:10px 14px;box-shadow:0 4px 0 #EFE2CC;text-align:left;font-size:12px;font-weight:700;color:#8A7A6D;line-height:1.5;"><b style="color:#4A3B33;">🎭 Gợi ý giọng</b> · Mỉm cười khi đọc · Đọc hơi nhanh, nhẹ nhàng · Nhấn "love", "best"</div>
+            </sc-if>
+            <!-- C4 -->
+            <sc-if value="{{ v.isC4 }}" hint-placeholder-val="{{ false }}">
+              <div style="width:100%;background:#FFFFFF;border-radius:22px;padding:22px 18px;box-shadow:0 8px 0 #EFE2CC;display:flex;flex-direction:column;align-items:center;gap:8px;"><div style="font-size:12px;font-weight:800;color:#B0A18E;">🦊 The Little Fox · cảnh 3/7</div><div style="font-family:'Baloo 2',sans-serif;font-size:32px;font-weight:800;line-height:1.15;">He wants an apple.</div><div style="font-size:15px;font-weight:700;color:#8A7A6D;">Cậu ấy muốn một quả táo.</div><div style="width:56px;height:56px;border-radius:50%;background:#2EC4B6;box-shadow:0 5px 0 #1FA396;display:flex;align-items:center;justify-content:center;font-size:24px;color:#FFFFFF;margin-top:4px;">🔊</div></div>
+              <div style="font-size:13px;font-weight:700;color:#8A7A6D;">Bé nghe rồi kể lại câu này nhé — ghi 8 giây</div>
+            </sc-if>
+            <!-- C7 -->
+            <sc-if value="{{ v.isC7 }}" hint-placeholder-val="{{ false }}">
+              <div style="width:min(320px,82%);aspect-ratio:16/17;background:#FFFFFF;border-radius:30px;box-shadow:0 10px 0 #EFE2CC;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;position:relative;animation:peek 6s ease-in-out infinite;"><div style="position:absolute;right:14px;top:14px;font-size:22px;opacity:.3;">🔄</div><div style="font-size:90px;line-height:1;">🐘</div><div style="font-family:'Baloo 2',sans-serif;font-size:38px;font-weight:800;line-height:1.1;">elephant</div><div style="font-size:16px;font-weight:700;color:#A79781;">/ˈeləfənt/</div><div style="width:56px;height:56px;border-radius:50%;background:#2EC4B6;box-shadow:0 5px 0 #1FA396;display:flex;align-items:center;justify-content:center;font-size:24px;color:#FFFFFF;">🔊</div></div>
+              <div style="font-size:13px;font-weight:700;color:#B0A18E;">Mặt sau: nghĩa "con voi" + câu ví dụ + 🔊</div>
+            </sc-if>
+            <!-- C9 -->
+            <sc-if value="{{ v.isC9 }}" hint-placeholder-val="{{ false }}">
+              <div style="font-size:15px;font-weight:700;color:#8A7A6D;">Chị của con có một con búp bê em bé.</div>
+              <div style="width:100%;min-height:76px;border:3px dashed #E2D5C0;border-radius:18px;display:flex;flex-wrap:wrap;gap:8px;padding:8px;align-items:center;justify-content:center;background:#FFFFFF;"><sc-for list="{{ trayTiles }}" as="t" hint-placeholder-count="6"><div style="{{ t.st }}">{{ t.w }}</div></sc-for></div>
+              <div style="display:flex;gap:8px;"><span style="background:#DDF0FB;color:#2E6F9E;font-size:11px;font-weight:800;border-radius:9px;padding:3px 9px;">Ai?</span><span style="background:#FFE7D2;color:#B85E2A;font-size:11px;font-weight:800;border-radius:9px;padding:3px 9px;">Làm gì?</span><span style="background:#FFF1C9;color:#9A6B00;font-size:11px;font-weight:800;border-radius:9px;padding:3px 9px;">Cái gì?</span></div>
+              <div style="background:#E3F6E8;color:#2E8B4A;font-family:'Baloo 2',sans-serif;font-size:15px;font-weight:800;border-radius:14px;padding:8px 16px;">Đúng rồi! 🎉 Giờ đọc câu lên nhé</div>
+              <div style="height:56px;padding:0 22px;background:#E2F6F1;border-radius:18px;box-shadow:0 5px 0 #C4E8E1;display:flex;align-items:center;font-family:'Baloo 2',sans-serif;font-size:17px;font-weight:800;color:#1FA396;">🔊 Đọc câu cho bé nghe</div>
+            </sc-if>
+          </div>
+        </div>
+
+        <!-- extra phase frames -->
+        <sc-if value="{{ v.isB4 }}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex;flex-direction:column;gap:8px;">
+            <div style="font-size:12px;font-weight:800;color:#B0A18E;">Pha 1 · Nghe & chọn (chưa có mic) · 3 trạng thái</div>
+            <div style="display:flex;gap:12px;">
+              <sc-for list="{{ pairStates }}" as="p" hint-placeholder-count="3">
+                <div style="width:230px;background:#FFF7EA;border-radius:20px;padding:14px 12px;display:flex;flex-direction:column;align-items:center;gap:10px;text-align:center;">
+                  <div style="font-size:11px;font-weight:800;color:#B0A18E;">{{ p.k }}</div>
+                  <div style="font-family:'Baloo 2',sans-serif;font-size:15px;font-weight:800;">Nghe rồi chọn từ đúng nhé!</div>
+                  <div style="{{ p.speakerSt }}">🔊 Nghe</div>
+                  <div style="display:flex;gap:8px;"><div style="{{ p.aSt }}"><span style="font-size:34px;line-height:1;">🚢</span><span style="font-family:'Baloo 2',sans-serif;font-size:18px;font-weight:800;">ship</span></div><div style="{{ p.bSt }}"><span style="font-size:34px;line-height:1;">🐑</span><span style="font-family:'Baloo 2',sans-serif;font-size:18px;font-weight:800;">sheep</span></div></div>
+                  <div style="{{ p.fbSt }}">{{ p.fb }}</div>
+                  <div style="font-size:12px;font-weight:800;color:#8A7A6D;">{{ p.ticks }}</div>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </sc-if>
+        <sc-if value="{{ v.isC7 }}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex;flex-direction:column;gap:8px;">
+            <div style="font-size:12px;font-weight:800;color:#B0A18E;">Pha 0 · Đoán nghĩa (đúng → chờ bé bấm Tiếp theo) · Pha 1b · Mặt sau thẻ</div>
+            <div style="display:flex;gap:12px;align-items:flex-start;">
+              <div style="width:300px;background:#FFF7EA;border-radius:20px;padding:14px;display:flex;flex-direction:column;align-items:center;gap:10px;text-align:center;">
+                <div style="font-size:64px;line-height:1;">🐘</div><div style="font-family:'Baloo 2',sans-serif;font-size:36px;font-weight:800;line-height:1.1;">elephant</div>
+                <div style="height:44px;padding:0 16px;background:#E2F6F1;border-radius:14px;box-shadow:0 4px 0 #C4E8E1;display:flex;align-items:center;font-family:'Baloo 2',sans-serif;font-size:15px;font-weight:800;color:#1FA396;">🔊 Nghe lại</div>
+                <div style="width:100%;display:flex;flex-direction:column;gap:8px;"><sc-for list="{{ guessOpts }}" as="g" hint-placeholder-count="3"><div style="{{ g.st }}"><span style="font-size:26px;line-height:1;">{{ g.e }}</span><span style="flex:1;text-align:left;">{{ g.t }}</span><span style="font-size:20px;">{{ g.mark }}</span></div></sc-for></div>
+                <div style="display:flex;align-items:center;gap:8px;"><div style="width:48px;height:46px;">{{ foxHappy }}</div><div style="background:#E3F6E8;color:#2E8B4A;font-family:'Baloo 2',sans-serif;font-size:15px;font-weight:800;padding:8px 14px;border-radius:14px;">Đoán đúng rồi! 🎉</div></div>
+                <div style="width:100%;height:56px;background:#FF7A59;border-radius:18px;box-shadow:0 5px 0 #E05A3A;display:flex;align-items:center;justify-content:center;font-family:'Baloo 2',sans-serif;font-size:18px;font-weight:800;color:#FFFFFF;">Tiếp theo →</div>
+              </div>
+              <div style="width:300px;background:#FFF7EA;border-radius:20px;padding:14px;display:flex;flex-direction:column;align-items:center;gap:10px;">
+                <div style="width:260px;aspect-ratio:16/17;background:#FFF1E6;border-radius:30px;box-shadow:0 10px 0 #F2DFC9;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;text-align:center;padding:16px;"><div style="font-family:'Baloo 2',sans-serif;font-size:34px;font-weight:800;color:#F2603D;line-height:1.1;">con voi</div><div style="font-size:16px;font-weight:700;color:#8A7A6D;line-height:1.4;">I see a big elephant.</div><div style="height:44px;padding:0 14px;background:#FFFFFF;border-radius:14px;box-shadow:0 4px 0 #F2DFC9;display:flex;align-items:center;font-family:'Baloo 2',sans-serif;font-size:14px;font-weight:800;color:#C08457;">🔊 Nghe câu ví dụ</div></div>
+                <div style="display:flex;align-items:center;gap:8px;background:#FFFFFF;border-radius:14px;padding:8px 12px;box-shadow:0 4px 0 #EFE2CC;"><div style="display:flex;gap:2px;font-size:22px;line-height:1;"><span style="color:#FFB020;">★★</span><span style="color:#E2D5C0;">★</span></div><div style="font-size:12px;font-weight:800;color:#8A7A6D;">Điểm: 78 · 🔓 Đã mở khoá</div></div>
+              </div>
+            </div>
+          </div>
+        </sc-if>
+        <sc-if value="{{ v.isC9 }}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex;flex-direction:column;gap:8px;">
+            <div style="font-size:12px;font-weight:800;color:#B0A18E;">Khay · 3 trạng thái trước khi có mic</div>
+            <div style="display:flex;gap:12px;">
+              <sc-for list="{{ trayStates }}" as="p" hint-placeholder-count="3">
+                <div style="width:250px;background:#FFF7EA;border-radius:20px;padding:14px 12px;display:flex;flex-direction:column;align-items:center;gap:10px;text-align:center;">
+                  <div style="font-size:11px;font-weight:800;color:#B0A18E;">{{ p.k }}</div>
+                  <div style="font-size:13px;font-weight:700;color:#8A7A6D;">Chị của con có một con búp bê em bé.</div>
+                  <div style="{{ p.traySt }}"><sc-for list="{{ p.tray }}" as="t" hint-placeholder-count="2"><div style="{{ t.st }}">{{ t.w }}</div></sc-for><sc-if value="{{ p.empty }}" hint-placeholder-val="{{ false }}"><span style="font-size:13px;font-weight:700;color:#B0A18E;">thả vào đây</span></sc-if></div>
+                  <div style="display:flex;flex-wrap:wrap;gap:6px;justify-content:center;"><sc-for list="{{ p.pool }}" as="t" hint-placeholder-count="4"><div style="{{ t.st }}">{{ t.w }}</div></sc-for></div>
+                  <div style="{{ p.fbSt }}">{{ p.fb }}</div>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </sc-if>
+
+        <!-- notes -->
+        <div style="flex:1;min-width:300px;max-width:420px;background:#FFFDF7;border:2px dashed #E2D5C0;border-radius:16px;padding:13px 16px;font-size:13px;line-height:1.65;color:#6B5B4D;display:flex;flex-direction:column;gap:6px;">
+          <div><b>Đang ghi:</b> {{ v.rec }}</div>
+          <div><b>Kết quả 3★ Azure:</b> {{ v.res3 }}</div>
+          <div><b>Kết quả 1★ đơn giản:</b> {{ v.res1 }}</div>
+          <div><b>iPad cột dạy 616:</b> {{ v.ipad }}</div>
+        </div>
+      </div>
+    </div>
+    </sc-for>
+  </div>
+
+  <!-- ================= SECTION 3: Q7–Q10 ================= -->
+  <div style="display:flex;flex-direction:column;gap:18px;">
+    <div style="display:flex;align-items:center;gap:12px;"><span style="background:#4A3B33;color:#FFF7EA;font-family:'Baloo 2',sans-serif;font-size:15px;font-weight:800;padding:6px 14px;border-radius:12px;">3</span><span style="font-family:'Baloo 2',sans-serif;font-size:26px;font-weight:800;">Trả lời Q7 · Q8 · Q9 · Q10</span></div>
+    <div style="display:flex;gap:20px;flex-wrap:wrap;align-items:stretch;">
+      <div style="width:400px;background:#FFFDF7;border:2px dashed #E2D5C0;border-radius:20px;padding:18px 20px;display:flex;flex-direction:column;gap:10px;">
+        <div style="display:flex;align-items:center;gap:10px;"><span style="background:#FF7A59;color:#FFFFFF;font-family:'Baloo 2',sans-serif;font-size:14px;font-weight:800;padding:4px 12px;border-radius:10px;">Q7</span><span style="font-family:'Baloo 2',sans-serif;font-size:18px;font-weight:800;">Badge "🔓 Mở khoá!"</span></div>
+        <div style="display:flex;align-items:center;gap:10px;background:#FFFFFF;border-radius:16px;padding:10px 12px;box-shadow:0 4px 0 #EFE2CC;"><div style="display:flex;gap:2px;font-size:26px;line-height:1;"><span style="color:#FFB020;">★★</span><span style="color:#E2D5C0;">★</span></div><div><div style="font-family:'Baloo 2',sans-serif;font-size:16px;font-weight:800;">Tốt lắm!</div><div style="font-size:12px;font-weight:800;color:#8A7A6D;">Điểm: 78 · <span style="color:#9A6B00;">🔓 Đã mở khoá</span></div></div></div>
+        <div style="font-size:13px;color:#6B5B4D;line-height:1.65;"><b>Trả lời: bỏ badge riêng, gộp vào dòng phụ của thẻ sao</b> ("Điểm: 78 · 🔓 Đã mở khoá", màu sun-700). Lý do: badge riêng 64px là phần tử thứ 4 trong hàng kết quả, gãy dòng trên phone; ý "mở khoá" chỉ cần 1 lần đọc. Chưa mở: "Điểm: 52 · thử lại để mở khoá".</div>
+      </div>
+      <div style="width:400px;background:#FFFDF7;border:2px dashed #E2D5C0;border-radius:20px;padding:18px 20px;display:flex;flex-direction:column;gap:10px;">
+        <div style="display:flex;align-items:center;gap:10px;"><span style="background:#FF7A59;color:#FFFFFF;font-family:'Baloo 2',sans-serif;font-size:14px;font-weight:800;padding:4px 12px;border-radius:10px;">Q8</span><span style="font-family:'Baloo 2',sans-serif;font-size:18px;font-weight:800;">Chip "Từ n/3" ở luyện âm</span></div>
+        <div style="display:flex;align-items:center;gap:0;align-self:center;"><div style="background:#E2F6F1;color:#1FA396;font-family:'Baloo 2',sans-serif;font-size:15px;font-weight:800;border-radius:12px 0 0 12px;padding:7px 12px;">Âm 2/9</div><div style="background:#FFE9DF;color:#E05A3A;font-family:'Baloo 2',sans-serif;font-size:15px;font-weight:800;border-radius:0 12px 12px 0;padding:7px 12px;">Từ 1/3</div></div>
+        <div style="font-size:13px;color:#6B5B4D;line-height:1.65;"><b>Trả lời: giữ cả hai, gộp thành 1 chip đôi</b> ở vị trí chip giữa header: "Âm 2/9" teal + "Từ 1/3" coral dính nhau. Luôn hiện (không chỉ khi ghi/kết quả). Bỏ 3 chấm tiến trình riêng — chip đôi đã nói đủ. Rộng ≈ 150px, vừa ô giữa phone (358 − 2×56 − 16 = 230).</div>
+      </div>
+      <div style="width:400px;background:#FFFDF7;border:2px dashed #E2D5C0;border-radius:20px;padding:18px 20px;display:flex;flex-direction:column;gap:10px;">
+        <div style="display:flex;align-items:center;gap:10px;"><span style="background:#FF7A59;color:#FFFFFF;font-family:'Baloo 2',sans-serif;font-size:14px;font-weight:800;padding:4px 12px;border-radius:10px;">Q9</span><span style="font-family:'Baloo 2',sans-serif;font-size:18px;font-weight:800;">Nhãn "chạm để lật 🔄"</span></div>
+        <div style="font-size:13px;color:#6B5B4D;line-height:1.65;"><b>Trả lời: không có nhãn chữ.</b> Giữ quyết định của code — trẻ đọc nhãn như trang trí. Thay bằng: ① animation <b>peek</b> rotateY −18° mỗi 6s tới lần lật đầu; ② icon 🔄 22px góc phải trên, opacity .3, tắt sau lần lật đầu; ③ dòng hint 13px #B0A18E <b>dưới</b> thẻ "Mặt sau: nghĩa + câu ví dụ + 🔊" (đã có trong M5). Ba tín hiệu không cần đọc chữ trên thẻ.</div>
+      </div>
+      <div style="width:400px;background:#FFFDF7;border:2px dashed #E2D5C0;border-radius:20px;padding:18px 20px;display:flex;flex-direction:column;gap:10px;">
+        <div style="display:flex;align-items:center;gap:10px;"><span style="background:#FF7A59;color:#FFFFFF;font-family:'Baloo 2',sans-serif;font-size:14px;font-weight:800;padding:4px 12px;border-radius:10px;">Q10</span><span style="font-family:'Baloo 2',sans-serif;font-size:18px;font-weight:800;">Luồng đoán nghĩa</span></div>
+        <div style="font-size:13px;color:#6B5B4D;line-height:1.65;"><b>Đã chốt: đoán đúng → chờ bé bấm "Tiếp theo →".</b> Vẽ ở C7 pha 0: lựa chọn đúng viền xanh + ✅, 2 lựa chọn còn lại mờ .5 và khoá, Foxy happy + banner xanh, CTA 56 xuất hiện ở footer (không tự chuyển). Sai: rung 400ms + ring hồng 5px, được chọn lại, Foxy surprised "Thử lại nhé" 1.5s.</div>
+      </div>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  fox(x){
+    const E=React.createElement,C='#FF8A5C',D='#5B4038',IN='#FFD6BE',M='#FFF6EA',B='#FFB899';
+    const k=[
+      E('path',{key:'a',d:'M24 44 L12 6 L48 26 Z',fill:C}),E('path',{key:'b',d:'M96 44 L108 6 L72 26 Z',fill:C}),
+      E('path',{key:'a2',d:'M27 36 L21 16 L38 26 Z',fill:IN}),E('path',{key:'b2',d:'M93 36 L99 16 L82 26 Z',fill:IN}),
+      E('circle',{key:'h',cx:60,cy:68,r:44,fill:C}),E('ellipse',{key:'mz',cx:60,cy:84,rx:27,ry:19,fill:M}),
+      E('circle',{key:'n',cx:60,cy:78,r:5.5,fill:D})
+    ];
+    const eye=(cx,t)=>t==='closed'?E('path',{key:'e'+cx,d:'M'+(cx-7)+' 62 Q'+cx+' 70 '+(cx+7)+' 62',stroke:D,strokeWidth:3.5,fill:'none',strokeLinecap:'round'})
+      :t==='happy'?E('path',{key:'e'+cx,d:'M'+(cx-7)+' 64 Q'+cx+' 55 '+(cx+7)+' 64',stroke:D,strokeWidth:3.5,fill:'none',strokeLinecap:'round'})
+      :E('circle',{key:'e'+cx,cx:cx,cy:61,r:5,fill:D});
+    if(x==='idle'){k.push(eye(44,'n'),eye(76,'n'),E('path',{key:'m',d:'M52 90 Q60 97 68 90',stroke:D,strokeWidth:3.5,fill:'none',strokeLinecap:'round'}));}
+    if(x==='listen'){k.push(eye(44,'closed'),eye(76,'closed'),E('circle',{key:'m',cx:60,cy:91,r:4.5,fill:D}));}
+    if(x==='happy'||x==='cheer'){k.push(eye(44,'happy'),eye(76,'happy'),E('path',{key:'m',d:'M47 88 Q60 103 73 88 Z',fill:D}),E('ellipse',{key:'tg',cx:60,cy:94,rx:6,ry:4,fill:'#FF8A8A'}),E('circle',{key:'bl1',cx:27,cy:80,r:6,fill:B}),E('circle',{key:'bl2',cx:93,cy:80,r:6,fill:B}));}
+    if(x==='cheer'){k.push(E('circle',{key:'sp1',cx:12,cy:58,r:4,fill:'#FFC533'}),E('circle',{key:'sp2',cx:108,cy:52,r:5,fill:'#FFC533'}),E('circle',{key:'sp3',cx:104,cy:96,r:3.5,fill:'#2EC4B6'}));}
+    return E('svg',{viewBox:'0 0 120 116',style:{width:'100%',height:'100%',display:'block'}},k);
+  }
+  renderVals(){
+    const FD="'Baloo 2',sans-serif";
+    const foxIdle=this.fox('idle'),foxListen=this.fox('listen'),foxHappy=this.fox('happy'),foxCheer=this.fox('cheer');
+    const levelBars=[10,18,28,22,14,24,12].map((h,i)=>({st:{width:'6px',height:h+'px',borderRadius:'3px',background:'#FF7A59',transformOrigin:'bottom',animation:'level '+(0.6+i*0.07)+'s ease-in-out infinite'}}));
+    const words='I love my dog! He is my best friend and we play every day.'.split(' ');
+    const TONE={good:{bg:'#E3F6E8',c:'#2E8B4A',bd:'#B9ECC8',m:'✓ '},ok:{bg:'#FFF3D6',c:'#9A6B00',bd:'#FFDF9E',m:'～ '},fix:{bg:'#FFE3E6',c:'#C2354B',bd:'#F8A3AE',m:'✗ '}};
+    const chip=(t,tone)=>({t:TONE[tone].m+t,st:{height:'40px',padding:'0 12px',borderRadius:'12px',display:'inline-flex',alignItems:'center',fontFamily:FD,fontSize:'15px',fontWeight:800,background:TONE[tone].bg,color:TONE[tone].c,border:'3px solid '+TONE[tone].bd}});
+    const tonesA=['good','good','good','ok','good','good','good','good','fix','good','good','ok','good','good'];
+    const tonesS=['good','good','fix','fix','good','fix','good','good','fix','good','fix','fix','good','fix'];
+    const bar=(l,v,nul)=>({l,v:nul?'—':v+'%',st:{width:nul?'0%':v+'%',height:'100%',borderRadius:'8px',background:v>=80?'#7ED99A':(v>=55?'#FFC533':'#FF9A8A')}});
+    const stars=n=>[0,1,2].map(i=>({st:{color:i<n?'#FFB020':'#E2D5C0'}}));
+    const pros=(bg,c)=>({height:'32px',padding:'0 10px',borderRadius:'10px',background:bg,color:c,fontSize:'12px',fontWeight:800,display:'flex',alignItems:'center',flex:'none'});
+    const R3={azure:true,stars:stars(3),praise:'Đọc có hồn quá! 🎉',score:'86',sub:'2 từ cần sửa',prosody:'🎭 Ngữ điệu tốt',prosodySt:pros('#E3F6E8','#2E8B4A'),chips:words.map((w,i)=>chip(w,tonesA[i])),bars:[bar('Chính xác',88),bar('Trôi chảy',81),bar('Đầy đủ',100),bar('Ngữ điệu',84)],hint:false,fox:foxCheer,foxSay:'Foxy: "Giọng vui thật đấy!"'};
+    const R1={azure:false,stars:stars(1),praise:'Thử lại nào!',score:'50',sub:'7 từ chưa nghe ra',prosody:'— ngữ điệu',prosodySt:pros('#F3EADA','#A79781'),chips:words.map((w,i)=>chip(w,tonesS[i])),bars:[bar('Chính xác',50),bar('Trôi chảy',50),bar('Đầy đủ',50),bar('Ngữ điệu',0,true)],hint:'Nói chậm và rõ từng từ nhé — chế độ đơn giản chỉ nghe đúng/sai.',fox:foxIdle,foxSay:'Foxy: "Thử lại lần nữa nhé!"'};
+    const badgeOn={fontSize:'11px',fontWeight:800,color:'#B0A18E'},badgeOff={display:'none'};
+    const badgeOnI={background:'#F3EADA',color:'#A79781',fontSize:'12px',fontWeight:800,borderRadius:'10px',padding:'6px 10px'};
+    const phoneResults=[
+      {label:'③ kết quả 3★ · Azure',badgeSt:badgeOff,...R3},
+      {label:'④ kết quả 1★ · chế độ đơn giản',badgeSt:badgeOn,...R1}
+    ];
+    const chipT={background:'#E2F6F1',color:'#1FA396',fontFamily:FD,fontSize:'17px',fontWeight:800,borderRadius:'14px',padding:'9px 16px'};
+    const chipR={background:'#FFE9DF',color:'#E05A3A',fontFamily:FD,fontSize:'17px',fontWeight:800,borderRadius:'14px',padding:'9px 16px'};
+    const mk=(label,state,r,badge)=>({label,isIdle:state==='idle',isRec:state==='rec',isRes:state==='res',notRes:state!=='res',r:r||R3,chip:state==='rec'?'● Đang ghi':'Đoạn 1/8',chipSt:state==='rec'?chipR:chipT,badgeSt:badge?badgeOnI:badgeOff});
+    const ipadStates=[mk('① idle','idle',null,true),mk('② đang ghi','rec',null,true),mk('③ kết quả 3★ Azure','res',R3,false),mk('④ kết quả 1★ chế độ đơn giản','res',R1,true)];
+    const portStates=ipadStates.map(k=>({...k}));
+    const beats=[0,1,0,1,1].map(s=>({st:{width:s?'24px':'12px',height:s?'24px':'12px',borderRadius:'50%',background:s?'#F2603D':'#2EC4B6'}}));
+    const ROLE={s:{bg:'#DDF0FB',bd:'#7EC8F2',c:'#2E6F9E'},v:{bg:'#FFE7D2',bd:'#FF9A62',c:'#B85E2A'},o:{bg:'#FFF1C9',bd:'#FFC533',c:'#9A6B00'}};
+    const tile=(w,r)=>({w,st:{height:'44px',minWidth:'44px',padding:'0 12px',borderRadius:'12px',display:'inline-flex',alignItems:'center',justifyContent:'center',fontFamily:FD,fontSize:'17px',fontWeight:800,background:ROLE[r].bg,border:'3px solid '+ROLE[r].bd,color:ROLE[r].c}});
+    const trayTiles=[tile('My','s'),tile('sister','s'),tile('has','v'),tile('a','o'),tile('baby','o'),tile('doll.','o')];
+    const tray=(shake)=>({minHeight:'64px',width:'100%',border:'3px dashed #E2D5C0',borderRadius:'16px',display:'flex',flexWrap:'wrap',gap:'6px',padding:'6px',alignItems:'center',justifyContent:'center',background:'#FFFFFF',animation:shake?'shake .4s ease-in-out infinite':'none',borderColor:shake?'#F8A3AE':'#E2D5C0'});
+    const fbG={background:'#E3F6E8',color:'#2E8B4A',fontSize:'13px',fontWeight:800,borderRadius:'12px',padding:'6px 12px'},fbR={background:'#FFE3E6',color:'#C2354B',fontSize:'13px',fontWeight:800,borderRadius:'12px',padding:'6px 12px'},fbN={fontSize:'12px',fontWeight:800,color:'#B0A18E'};
+    const trayStates=[
+      {k:'rỗng · kho 6 ô',traySt:tray(false),tray:[],empty:true,pool:[tile('My','s'),tile('a','o'),tile('doll.','o'),tile('baby','o'),tile('sister','s'),tile('has','v')],fb:'Chạm ô để xếp vào khay',fbSt:fbN},
+      {k:'đang xếp 2/6',traySt:tray(false),tray:[tile('My','s'),tile('sister','s')],empty:false,pool:[tile('a','o'),tile('doll.','o'),tile('baby','o'),tile('has','v')],fb:'Còn 4 ô nữa',fbSt:fbN},
+      {k:'đầy & sai → rung 400ms → xoá khay',traySt:tray(true),tray:[tile('My','s'),tile('sister','s'),tile('doll.','o'),tile('a','o'),tile('baby','o'),tile('has','v')],empty:false,pool:[],fb:'🦊 Chưa đúng — thử lại nhé',fbSt:fbR}
+    ];
+    const opt=(on,dim,ok,bad)=>({width:'96px',height:'96px',borderRadius:'18px',background:'#FFFFFF',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:'4px',boxShadow:ok?'0 6px 0 #7ED99A, 0 0 0 4px #B9ECC8':(bad?'0 6px 0 #F8A3AE, 0 0 0 4px #FFD4DA':'0 6px 0 #EFE2CC'),opacity:dim?.45:1});
+    const spk=(pulse)=>({height:'56px',padding:'0 22px',background:'#2EC4B6',borderRadius:'18px',boxShadow:'0 5px 0 #1FA396',display:'flex',alignItems:'center',fontFamily:FD,fontSize:'17px',fontWeight:800,color:'#FFFFFF',outline:pulse?'4px solid #C4E8E1':'none'});
+    const pairStates=[
+      {k:'chưa bấm loa · ô khoá',speakerSt:spk(true),aSt:opt(0,1),bSt:opt(0,1),fb:'Bấm 🔊 trước nhé',fbSt:fbN,ticks:'ship ○ · sheep ○'},
+      {k:'đã phát · chọn đúng',speakerSt:spk(false),aSt:opt(0,0,1),bSt:opt(0,0),fb:'✅ Đúng rồi! 🎉',fbSt:fbG,ticks:'ship ✓ · sheep ○'},
+      {k:'đã phát · chọn sai (1 dòng)',speakerSt:spk(false),aSt:opt(0,0),bSt:opt(0,0,0,1),fb:'🙈 Nghe lại rồi chọn nhé',fbSt:fbR,ticks:'ship ○ · sheep ○'}
+    ];
+    const gopt=(e,t,state)=>({e,t,mark:state==='ok'?'✅':'',st:{height:'56px',padding:'0 14px',borderRadius:'16px',background:'#FFFFFF',display:'flex',alignItems:'center',gap:'12px',fontFamily:FD,fontSize:'18px',fontWeight:800,color:state==='ok'?'#4A3B33':'#8A7A6D',boxShadow:state==='ok'?'0 5px 0 #7ED99A, 0 0 0 4px #B9ECC8':'0 5px 0 #EFE2CC',opacity:state==='dim'?.5:1}});
+    const guessOpts=[gopt('🐟','con cá','dim'),gopt('🐵','con khỉ','dim'),gopt('🐘','con voi','ok')];
+    const tag=(bg)=>({background:bg,color:'#FFFFFF',fontFamily:FD,fontSize:'14px',fontWeight:800,padding:'4px 12px',borderRadius:'10px'});
+    const V=(code,name,route,chip,flag,rec,res3,res1,ipad)=>({code,name,route,chip,tagSt:tag(code[0]==='B'?'#2EC4B6':'#FF7A59'),rec,res3,res1,ipad,isB1:flag==='B1',isB3:flag==='B3',isB4:flag==='B4',isB5:flag==='B5',isB6:flag==='B6',isC4:flag==='C4',isC7:flag==='C7',isC9:flag==='C9'});
+    const variants=[
+      V('B1','PracticeCard — Word Pop / Sound Zoo','/practice/:id','Thẻ 1/12 · ● ○ streak','B1',
+        'thẻ emoji thu 150→110, từ giữ 44px, ẩn nút Xem phiên âm & Khẩu hình; streak ● ○ vẫn ở chip giữa.',
+        '1 chip từ (cat) + 4 bar + thẻ sao. Word Pop: lần 1 ≥80 → sao kẹt 2★ + câu "Nói đúng lần nữa để 3★!", streak ●●; lần 2 → 3★ "Nói đúng 2 lần liên tiếp! 🎉".',
+        'chip đỏ, hint tip chung; CTA gate: <3★ và <3 lần → chỉ "↻ Thử lại" full-width, sau đó 2 nút.',
+        'thẻ emoji 220 + từ 64px + IPA 20 + hàng nút (Nghe mẫu md, Khẩu hình md) · ô khẩu hình bật thành panel 220×220 dưới hàng nút khi chạm.'),
+      V('B3','SoundPractice — Tập âm','/sound/:ph/:id','Âm 2/9 · Từ 1/3 (chip đôi, Q8)','B3',
+        'tầng âm giữ, tầng từ: từ 40px giữ màu; IPA từ ẩn. Ô khẩu hình 56 trong tầng âm wiggle.',
+        'KHÔNG có ScoredWords/ScoreBars. Thay bằng SoundChip 4 tone chấm ÂM: "✓ /θ/" xanh 40px + dòng "Từ three · 88 điểm" 13px. Sao: âm ≥80 → 3★.',
+        'SoundChip tone unknown "? /θ/" trắng viền + câu "Chế độ đơn giản chưa chấm được âm lẻ — bé thử lại nhé!" (Azure không bắt được: "Chưa nghe rõ âm này"). Tip 👅 luôn hiện khi ≠ good. Không thể 3★.',
+        'tầng âm thành hàng ngang trên cùng cột dạy (khẩu hình 64 · IPA 72 coral · loa 64 · mô tả 17px), tầng từ card 300×300 emoji 96 + từ 56 + IPA + Nghe mẫu md.'),
+      V('B4','PairPractice — Nghe & chọn','/pair/:id','Cặp 1/8 · ɪ/iː','B4',
+        'pha 2 mới có mic. 2 ô từ giữ màu, chip xanh "Nghe & chọn ✓✓" thu thành 1 dòng 12px.',
+        'ScoredWords 2 chip (ship / sheep) + 4 bar + Nghe mình trong hàng nghe (không trong vùng cuộn nữa). Chỉ 3★ mới animate.',
+        '2 chip cùng xanh hoặc cùng đỏ (0/100). CTA luôn 2 nút. Pha 1 sai: 1 dòng duy nhất "🙈 Nghe lại rồi chọn nhé" (gộp 2 dòng cũ) → hết tràn slot.',
+        'pha 1: nút Nghe md + 2 ô 200×200 (emoji 80, từ 36) + dòng tick 17px. Pha 2: 2 thẻ từ 200 cạnh nhau + Nghe mẫu md; mic ở cột làm.'),
+      V('B5','StarPractice — Sentence Stars','/star/:id','Câu 3/10','B5',
+        'câu nhấn 32/26px giữ màu (nhấn coral), card nhịp chạy animate-beat theo mẫu vừa phát; chú thích ẩn.',
+        'thứ tự cố định: thẻ sao (dòng phụ = "Nhịp: 🎵 tốt") → chip 6 từ → 4 bar → hint. Dòng nhịp 3 băng nằm ở dòng phụ thẻ sao, không thêm hàng.',
+        '"Nhịp: 🐢 chậm — nói liền hơi hơn nhé" ở dòng phụ; chip xanh/đỏ; có thể chip toàn xanh nhưng 1★ (fluency) → thẻ sao ghi rõ "Trôi chảy 42%".',
+        'câu 48/40px max-width 560 + nghĩa 20 + chú thích 14 + Nghe mẫu md + card nhịp 480 (chấm 24/12). Không có ô chừa 112 — cột làm riêng.'),
+      V('B6','VoicePractice — Story Voice','/voice/:id','Đoạn 1/8','B6',
+        'xem mục 1 (carrier): đoạn 26px giữ màu, tips ẩn, đếm 13→1 hai chữ số, mic 150.',
+        'xem mục 1: ProsodyChip nằm trong thẻ sao (không phải hàng riêng đầu tiên). 3★ cần prosody ≥80 & acc ≥70.',
+        'xem mục 1: prosody chip xám "— ngữ điệu", tối đa 2★, bar Ngữ điệu "—".',
+        'xem mục 1.'),
+      V('C4','StoryRetell — Kể lại','/story/:id/retell','Kể lại · cảnh 3/7','C4',
+        'card câu giữ, chữ 32px; Foxy listen thay Foxy idle; ghi 8s (đếm 8→1).',
+        'băng riêng dễ: ≥60 → 3★ "Tuyệt vời! 🦊". Thẻ sao + chip từ (3–4 từ) + Nghe mình/Nghe mẫu. Không bar (kể lại tự do). CTA thứ 3 biến thể → chỉ 1 primary ("Tiếp theo →" / "Hoàn thành 🎉") + Thử lại.',
+        'chip xanh/đỏ, 35–59 → 2★ "Hay lắm!", <35 → 1★ "Bé kể tốt lắm, thử lại nhé!" (Foxy idle, không surprised).',
+        'card câu 40px max-width 560 + nghĩa 20 + loa 64 + dòng "cảnh 3/7" 14. Phone giờ có rule: card 32px, H1 bỏ (chip giữa thay), mic dưới card không cuộn qua.'),
+      V('C7','WordCard — Từ mới / Ôn tập','/words/:t/:w','Từ mới 2/8 · ⭐ 128 ở ô phải khi không có LessonChip','C7',
+        'thẻ giữ kích thước (không đổi 360→300), peek dừng, icon 🔄 ẩn; mic 150. Mặt đang hiện giữ nguyên (trước hoặc sau).',
+        'kết quả hiện ĐÈ dòng hint dưới thẻ: thẻ sao mini (★ 22px + "Điểm: 78 · 🔓 Đã mở khoá" — Q7). Không ScoredWords (1 từ). Footer: Thử lại + Tiếp theo; mic ẩn (phone) / mic giữ cạnh CTA (iPad).',
+        '"Điểm: 40 · thử lại để mở khoá", Foxy surprised "Thử lại nhé", HintCard dưới thẻ sao mini. Demote Leitner nếu đã mở.',
+        'thẻ 320×360 cố định, 2 mặt 3D. Ôn tập chưa gợi ý: mặt trước = nghĩa + "?" + nút Gợi ý (không 🔊). Pha đoán nghĩa: 3 nút 56 có emoji cả iPad (không bỏ emoji ở md).'),
+      V('C9','SentenceBuilder — Ghép câu','/sentence/:id','Câu 2/4 · Ôn tập 1/3','C9',
+        'khay đầy & đúng giữ nguyên, kho ô ẩn, chú giải ẩn; câu đọc lên = các ô trong khay giữ màu vai. Mic 150.',
+        'ScoredWords 6 chip THAY khay (cùng vị trí, cùng thứ tự) → không nhảy layout; kho & chú giải ẩn. 4 bar + hint. CTA Thử lại + Tiếp theo (không xuyên chủ đề khi vào từ ?topic=).',
+        'chip xanh/đỏ; hint tip chung. Sai ở bước xếp (rung + xoá khay) không tính là kết quả nói.',
+        'prompt 22 + khay 640×96 + chú giải + kho 6 ô 56px một hàng (6 × "elephant" ≈ 700 vừa 616 với 48px) + khi đúng: nút Đọc câu md; mic ở cột làm từ đầu (disabled tới khi đúng).')
+    ];
+    return{foxIdle,foxListen,foxHappy,levelBars,phoneResults,ipadStates,portStates,beats,trayTiles,trayStates,pairStates,guessOpts,variants};
+  }
+}
+</script>
+</body>
+</html>

@@ -12,3 +12,6 @@ client/public/audio/audition/
 !client/public/audio/.gitkeep
 samples/
 .claude/launch.json
+
+# Redesign screenshot sets (24 MB of PNGs; regenerate with docs/design/current/shoot.mjs)
+docs/design/current*/**/*.png
