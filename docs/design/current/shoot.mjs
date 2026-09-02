@@ -5,7 +5,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 
 const BASE = 'http://localhost:5174'
-const OUT = path.resolve('shots')
+const OUT = path.resolve(process.env.SHOTS_DIR ?? 'shots')
 const ONLY = process.argv[2] // optional viewport filter
 
 const VIEWPORTS = {

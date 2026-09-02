@@ -1,5 +1,18 @@
 # Phase 12 — Nền tảng redesign (khung trang, component sheet, trạng thái)
 
+**Implemented 2026-09-03 on branch `phase12-foundation` (tasks 1–16).** Accepted deviations from the
+plan text, all recorded as `Ruling:` lines in `progress.md`: `ResultCardProps.canReplay` stays
+optional rather than required; dialogs take async `onConfirm`/`onSubmit` callbacks instead of the
+plan's sketched `setBusy` API; `Notice` gained an `adult?` prop for the ≥44 px adult tap floor instead
+of always using the child hit band; a story's `NotFound` keeps routing to `/mission` when reached
+mid-lesson rather than a flat `/stories`; `WeekDots.minutes` is a day-keyed map built from the real
+`minutesPerDay()` instead of an index-keyed one; the Parent Dashboard's "🔐 Khoá lại" control is
+icon-only below `md` instead of carrying a visible label at every width; and on a phone, Home's header
+shows a single greeting line instead of the full Foxy + speech-bubble chrome, which moves to the first
+body row (the header cell has no room for it at 390 px) — accepted until Phase 13 redraws Home. The
+before/after screenshots and the checklist rows this phase adds are in `README.md`'s
+"Phase 12 — Nền tảng redesign" section.
+
 Phase đầu tiên của đợt redesign toàn bộ giao diện (2026-09). Nó **không vẽ lại màn nào**; nó dựng bộ khung và component mà vòng 2–4 (Phase 13–15) sẽ lắp vào từng màn, và **chuyển mọi màn hiện có sang khung đó** để LessonChip, Back, footer, toast và các trạng thái lỗi/rỗng/tải cư xử giống nhau ở 33 màn.
 
 **Số đo nằm trong brief, không ở đây:** `docs/design/2026-09-02-round1-foundation-brief.md` là nguồn cho mọi kích thước, màu, copy (§1 khung trang, §2 component sheet, §3 Q3/Q4/Q6, §5 rủi ro iPad, §6 việc mới). Bối cảnh và trạng thái từng màn: `docs/design/2026-09-02-screen-inventory-for-redesign.md`. Ảnh app trước khi làm: `docs/design/current/`. Spec này chỉ ghi các quyết định đã chốt và luật ràng buộc.

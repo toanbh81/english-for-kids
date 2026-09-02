@@ -4,7 +4,7 @@ import { chromium } from 'playwright-core'
 import fs from 'node:fs'
 import path from 'node:path'
 
-const SHOTS = path.resolve('shots')
+const SHOTS = path.resolve(process.env.SHOTS_DIR ?? 'shots')
 const OUT = path.join(SHOTS, 'sheets')
 fs.mkdirSync(OUT, { recursive: true })
 

@@ -1168,6 +1168,123 @@ OTP email.
 | 75 (offline honesty) | Turn Wi-Fi off, use the app for a few minutes, open Parent Dashboard | Sync line reads "Ngoại tuyến", never "Đã đồng bộ ✓", while offline; turning Wi-Fi back on and reopening the dashboard eventually shows "Đã đồng bộ ✓" | ⏳ pending |
 | 76 (milestone banner) | On a device that has never linked an email, reach a 3-day streak (a multi-day drill — the app offers no way to fast-forward it) | Home shows a dismissible banner — "Tiến độ mới lưu trên máy này — nhờ bố mẹ liên kết email để giữ an toàn" — linking to Parent Dashboard | ⏳ pending |
 
+## Phase 12 — Nền tảng redesign
+
+The first phase of a full visual redesign (round 2026-09, pulled from Claude Design via `DesignSync`
+— see `docs/design/round-2026-09/README.md`). It **redraws no screen**: it builds the frame and
+component set that rounds 2–4 (Phase 13–15) will fit each screen into, and **moves all 33 existing
+screens onto that frame** so `LessonChip`, back, footer, toast and the error/empty/loading states
+behave identically everywhere. The full decision record is
+`docs/superpowers/specs/2026-09-02-phase12-foundation-redesign-design.md`.
+
+- **Tokens.** Button shadows drop from a 6 px offset to 5 px (`chunky-coral/teal/line`; `chunky-sun`
+  4 px); `Card`'s own shadows are unchanged. A `star` color token (`#FFB020`) separates the star fill
+  from `sun-400` (`#FFC533`, which stays for pills/chips/week dots) — the one call site that relied on
+  them being pixel-identical (`Confetti`'s dot) was repointed to `sun-400` to keep its rendered color.
+  A new radius scale (`r10…r28`) sits alongside the old `xl2/xl3/xl4` names, which stay until the last
+  screen migrates in Phase 15 and are then deleted.
+- **Frame.** `PageShell` / `PageHeader` / `PageBody` / `PageFooter`
+  (`client/src/components/ui/page/`) replace every screen's ad-hoc layout: `PageShell` is a
+  viewport-tall flex column with `overflow-hidden`, `PageBody` is the single scrolling region inside
+  it (`overflow-y-auto`, split into a two-column "teach/act" layout on iPad landscape), and
+  `PageFooter` is a plain flex sibling — the three separate bottom-pinning tricks that used to exist
+  (`WordCard`'s double `sticky`, `DailyMission`'s `sticky` + negative margin, `SentenceBuilder`'s
+  `mt-auto`) are all gone. **`LessonChip` now lives inside `PageHeader`'s right slot** instead of a
+  global `App.tsx` mount, which also removed nine screens' `min-w-[66px]` gutter hack that existed
+  only to leave room for it.
+- **Breakpoints stay 3 frames** (unprefixed = phone <768 · `md:` ≥768 = iPad portrait · `ipad:` ≥1024
+  landscape ≥692 tall = iPad landscape 2-column) — no new breakpoint was added, and a 768–1023 px
+  tablet gets the iPad-portrait layout, same rule as Phase 10.
+- **Speak components.** `MicButton` (4 states, including a new `locked` state), `LevelBars`,
+  `Countdown`, `ResultCard` and `WordChip` (`client/src/components/speak/`) are now the one
+  implementation behind all 9 speaking/word/sentence screens, replacing each screen's own markup.
+  Errors became a typed `SpeakError = { kind, detail? }` (`client/src/speaking/speakError.ts`) with
+  five kinds — `mic` 🎤, `noSpeech` 👂, `unsupported` 🌐, `fallback` 📡, `limit` 🌙, `notReady` 👂 — each
+  with its own copy and action, replacing five near-duplicate error strings; a shared
+  `useSpeakErrorAction` hook wires the action button (retry / open settings / dismiss / go home) once
+  instead of once per screen. `useSpeakingAttempt` now locks the mic (`micState='locked'`, 🌙) once
+  today's minute limit is reached, and `createScorer` reports *why* it fell back to Web Speech
+  (`fallbackReason: 'offline' | 'token' | 'timeout' | 'unsupported'`), surfaced once per session via
+  the 📡 notice rather than silently.
+- **State components.** `Notice`/`NoticeStack`, `Dialog` + `useDialog()` (a Promise-based
+  `confirm`/`destructive`/`prompt` that replaces all four `window.confirm`/`window.prompt` calls in
+  the app), `EmptyState`, `NotFound`, `Skeleton`, `SyncPill`, `StreakPanel` + `WeekDots` are all one
+  shared implementation now instead of per-screen copies — `Skeleton` in particular means a loading
+  row or card no longer changes height once its real content arrives (Parent Dashboard's account card
+  used to visibly resize a few times in the first second).
+
+### Before → after: the six screens that used to overflow
+
+Every one of the four *not-a-scored-result* rows below now measures exactly the frame height — the
+overflow that used to show up on `main` is gone, because `main` (`PageShell`) is capped to the
+viewport (`overflow-hidden`) and the content that used to spill past it now scrolls inside `PageBody`
+(`overflow-y-auto`) instead. That is `PageBody`'s whole job (spec decision "Footer là sibling",
+`docs/superpowers/specs/2026-09-02-phase12-foundation-redesign-design.md` decision 7), not a
+coincidence — `shoot.mjs`'s overflow probe measures `main`, so it produced zero `-full` screenshots
+across the entire three-viewport run that generated this table (`docs/design/current-phase12/shots/`).
+The two scored-result rows still need a real scored attempt to reach (no dev-only fixture route
+exists to fake one), so they are reported from the geometry Task 9 already measured instead of a new
+number:
+
+| Screen | frame | before | after |
+|---|---|---|---|
+| `/star/ss1` result | 1194×834 | 959 | not measured (needs a scored result; see Task 9 report: act column 440 px, ResultCard ≈525 px by design) |
+| `/voice/sv1` result | 1194×834 | 1140 | not measured (needs a scored result; see Task 9 report: act column 440 px, ResultCard ≈525 px by design) |
+| `/mission` (5 groups) | 1194×834 | 1189 | 834 (no overflow — `PageBody`'s own content is 874 px, scrolling inside a 607 px region) |
+| `/parent` | 390×844 / 834×1194 | 1745 / 1733 | 844 / 1194 (no overflow — `PageBody`'s own content is 1661 px / 2231 px, scrolling internally) |
+| `/words/review` (all 64 words due) | 390×844 | — (never measured before) | 844 (no overflow — the unvirtualized 16-row grid is 7028 px tall, scrolling inside `PageBody`) |
+| `/sentences` | 390×844 | 2192 | 844 (no overflow — `PageBody`'s own content is 1904 px, scrolling internally) |
+
+### Deliberate iPad changes
+
+Phase 10's rule was "iPad stays byte-identical unless named" — Phase 12 names four things the brief's
+design explicitly changes on every frame, iPad included: the **5 px** button-shadow offset (was 6 px),
+the **20/24 px** `md`/`lg` button corner radius (was a flat landscape radius), the **40 px**, no-longer-
+tappable `WordChip` (`ScoredWords` lost `onWordTap` — "Nghe mẫu" is the one way to replay a sample
+now), and the mic's `md:`/`ipad:` size prefix chain feeding off the same `MicButton` used on a phone.
+Everything the brief's §2 does not name keeps its exact iPad pixels, per the spec's own constraint.
+
+### The migration's transition mechanism, removed in Task 15
+
+While screens were migrating one batch at a time, a screen not yet on `PageHeader` still needed
+`LessonChip` to render somewhere — `PageHeader.tsx` exposed `registerHeader`/`useHeaderMounted`
+(`headerRegistry.ts`) so `LessonChip` could tell whether *any* screen's header had mounted and fall
+back to a global `App.tsx`-level chip if not. Once the last batch (C and P) moved onto `PageShell` in
+Task 15, that fallback had no screen left to serve: `<LessonChip />` was removed from `App.tsx`,
+`LessonChip`'s `global` branch and `CHIP_BOX` were deleted, and `headerRegistry.ts` was deleted
+outright — `LessonChip` now only ever renders inside a `PageHeader`'s right slot.
+
+### Accepted deviations from the plan text
+
+A handful of ambiguities in the brief were resolved during implementation and are recorded in
+`.superpowers/sdd/2026-09-02-phase12-foundation-redesign/progress.md`'s `Ruling:` lines, not silently
+picked: `ResultCardProps.canReplay` stays optional (a caller that forgets it just hides "Nghe mình"
+rather than the type forcing every caller to pass it); dialogs take async `onConfirm`/`onSubmit`
+callbacks instead of the plan's sketched `setBusy` API (the dialog stays open and busy until the
+callback settles, then closes itself); `Notice` gained an `adult?` prop so Dashboard/CloudStart notices
+keep the ≥44 px adult tap floor without the child default's larger `after:-inset-2.5` hit band; a
+story's `NotFound` keeps routing back to `/mission` when reached mid-lesson instead of a flat
+`/stories`, so a child mid-mission is never stranded; `WeekDots.minutes` became a day-keyed map (built
+from the real `minutesPerDay()`) instead of an index-keyed one, so a day's dot can't silently show
+another day's minutes; the Parent Dashboard's "🔐 Khoá lại" control became icon-only below `md`
+(`aria-label="Khoá lại"`) after an `adult`-sized label version collided with the header's H1; and on a
+phone, Home's header shows a single greeting line (Foxy and the full speech bubble move to the first
+body row) because the design's own header cell has no room for a mascot at 390 px — accepted until
+Phase 13 redraws Home.
+
+### iPad checklist rows for this phase
+
+Continuing the numbering from the table above — these need a physical iPad and, for row 79, a second
+tap into the Dashboard's reset dialog.
+
+| # | Step | Expected result | Result |
+|---|------|------------------|--------|
+| 77 (mic halo) | Any speaking screen → tap the mic on an iPhone | Mic grows from **124 px idle to 150 px recording**, with the halo rings reaching the frame edge | ⏳ pending |
+| 78 (streak sheet) | Home → tap the streak strip | Opens a sheet showing 3 numbers (current streak, longest streak, this week); swiping it down closes it | ⏳ pending |
+| 79 (reset dialog) | Parent Dashboard → "Đặt lại tiến trình" | Opens the confirm `Dialog`; tapping cancel closes it with nothing reset, reopening and tapping confirm resets and closes | ⏳ pending |
+| 80 (limit lock) | Practice a card after the daily minute limit is reached | 🌙 "Hôm nay bé học đủ rồi!" error, mic shows locked (not disabled-grey, not recording), CTA reads "Về nhà" | ⏳ pending |
+| 81 (offline notice) | Turn on airplane mode, then use a speaking screen | 📡 fallback notice appears once for the session, "Tiếp tục" dismisses it; using another speaking screen afterward shows only the "chế độ đơn giản" engine badge, no repeat notice | ⏳ pending |
+
 ## Architecture
 
 ```

@@ -11,4 +11,4 @@ Project: `claude.ai/design/p/9c792842-beb0-4158-a5d7-a3ac91730d3c` ("Speak Up", 
 
 `tokens/` — 4 file CSS token của design system trong project (colors, effects, spacing, typography). Project còn có `components/*.jsx|.d.ts|.prompt.md` (Button, Chip, Stars, GameCard, SpeechBubble, Foxy, MicButton) và `guidelines/*.card.html` — chưa kéo, kéo khi viết brief vòng 1.
 
-Bước tiếp: brief vòng 1 đã viết → `../2026-09-02-round1-foundation-brief.md`; tiếp theo là spec + plan Phase 12.
+Bước tiếp: brief vòng 1 đã viết → `../2026-09-02-round1-foundation-brief.md`; spec + plan Phase 12 đã viết và **Phase 12 đã triển khai xong** (2026-09-03, nhánh `phase12-foundation`, tasks 1–16 — xem `docs/superpowers/specs/2026-09-02-phase12-foundation-redesign-design.md` và README.md §"Phase 12 — Nền tảng redesign"). Tiếp theo là Phase 13 (vòng 2 — bố cục từng màn).
