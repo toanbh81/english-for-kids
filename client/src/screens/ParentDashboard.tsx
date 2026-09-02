@@ -145,6 +145,11 @@ type Props = {
 export function ParentDashboard({ onLock }: Props) {
   const dialog = useDialog()
   const [recordings, setRecordings] = useState<Recording[]>([])
+  // Disables the "Đặt lại tiến trình" trigger for the whole span the confirm dialog is open
+  // AND busy (see `Dialog`'s `onConfirm`) — a double-tap must not open a second dialog over an
+  // unfinished reset, which the dialog's own "one request at a time" replace-and-cancel would
+  // otherwise do (the second dialog would cancel the first mid-flight, not queue behind it).
+  const [resetBusy, setResetBusy] = useState(false)
   // One read of the activity log per mount (and per reset), shared by every query below; the
   // snapshot doubles as the reload key for the recordings list.
   const [snapshot, setSnapshot] = useState(() => ({ events: getActivity(), now: Date.now() }))
@@ -366,46 +371,53 @@ export function ParentDashboard({ onLock }: Props) {
   }
 
   async function handleReset() {
+    // Defensive, not load-bearing on its own: the trigger button below is also `disabled` while
+    // this is true, which is what actually stops a double-tap from reaching this function twice.
+    if (resetBusy) return
     // The old wording was from the local-only era and stopped being true the moment this button
     // also emptied the mirror: the cloud copy of this child goes with it, and no device gets it
     // back. A parent may not find that out afterwards.
     const body = cloudAvailable && activeId
       ? 'Sao, chuỗi ngày và bản ghi trên máy này sẽ mất. Bản lưu trên tài khoản cũng bị xoá. Không khôi phục được.'
       : 'Sao, chuỗi ngày và bản ghi trên máy này sẽ mất. Không khôi phục được.'
-    const ok = await dialog.destructive({
+    setResetBusy(true)
+    // The clearing and the mirror call both live inside `onConfirm`: the dialog stays open and
+    // busy (buttons disabled, confirm label "…", scrim/Escape ignored) for exactly as long as
+    // this callback runs, and only resolves — closing itself — once it settles. Nothing here
+    // depends on the dialog's own resolved value; if the parent cancels, `onConfirm` never runs
+    // and none of this fires, which is the whole of the "dismissed" behaviour.
+    await dialog.destructive({
       title: 'Xoá toàn bộ tiến trình của bé?',
       body,
       confirmLabel: 'Xoá tiến trình',
+      onConfirm: async () => {
+        setResetNotice(null)
+        clearStars()
+        clearActivity()
+        clearLeitner()
+        // The Phase 7 stores go too: a lesson kept from before the reset would still be pinned to
+        // the old band and still tick items off against an event log that no longer exists.
+        clearLessons()
+        clearBand()
+        await clearRecordings()
+        setLimit(String(getLimitMinutes()))
+        // Written out rather than re-read: `getBand()` and the lesson store both persist on first
+        // read, which would put back the keys this reset just removed. With no stars left, band 1
+        // / auto and the default length are exactly what the next read will derive anyway.
+        setBand({ value: 1, mode: 'auto' })
+        setLength(getLessonLength())
+        setSnapshot({ events: getActivity(), now: Date.now() })
+        // Constraint #3: reset is two halves, and this is the mirror's — called from here, the
+        // visible foreground screen, so it can never race the hidden-tab flush trigger.
+        if (!cloudAvailable || !activeId) return
+        // …and the answer is not thrown away. Offline, or on any DELETE error, the server still
+        // holds every row: the sync engine has written down that the reset is owed and will
+        // finish it before it pulls anything, but the parent is told plainly rather than left to
+        // discover it — either now (nothing looks wrong) or, worse, in a week when it does not.
+        if (!(await resetRemoteProgress(activeId))) setResetNotice(PENDING_RESET_NOTICE)
+      },
     })
-    if (!ok) return
-    setResetNotice(null)
-    clearStars()
-    clearActivity()
-    clearLeitner()
-    // The Phase 7 stores go too: a lesson kept from before the reset would still be pinned to the
-    // old band and still tick items off against an event log that no longer exists.
-    clearLessons()
-    clearBand()
-    // Busy from here to the end: the confirm dialog is already gone, but a parent double-tapping
-    // "Đặt lại tiến trình" mid-reset would otherwise re-open it over an unfinished wipe.
-    dialog.setBusy(true)
-    await clearRecordings()
-    setLimit(String(getLimitMinutes()))
-    // Written out rather than re-read: `getBand()` and the lesson store both persist on first read,
-    // which would put back the keys this reset just removed. With no stars left, band 1 / auto and
-    // the default length are exactly what the next read will derive anyway.
-    setBand({ value: 1, mode: 'auto' })
-    setLength(getLessonLength())
-    setSnapshot({ events: getActivity(), now: Date.now() })
-    // Constraint #3: reset is two halves, and this is the mirror's — called from here, the visible
-    // foreground screen, so it can never race the hidden-tab flush trigger.
-    if (!cloudAvailable || !activeId) { dialog.setBusy(false); return }
-    // …and the answer is not thrown away. Offline, or on any DELETE error, the server still holds
-    // every row: the sync engine has written down that the reset is owed and will finish it before
-    // it pulls anything, but the parent is told plainly rather than left to discover it — either
-    // now (nothing looks wrong) or, worse, in a week when it does not.
-    if (!(await resetRemoteProgress(activeId))) setResetNotice(PENDING_RESET_NOTICE)
-    dialog.setBusy(false)
+    setResetBusy(false)
   }
 
   /** The reset-notice's "Thử xoá lại" action: the same mirror-side call `handleReset` makes,
@@ -454,18 +466,19 @@ export function ParentDashboard({ onLock }: Props) {
   }
 
   async function handleSignOut() {
-    const ok = await dialog.confirm({
+    // Same shape as `handleReset`: the actual work is `onConfirm`, so the dialog stays open and
+    // busy for exactly as long as `signOut()` takes, and closes itself once it settles.
+    await dialog.confirm({
       title: 'Đăng xuất khỏi tài khoản này?',
       body: 'Bé vẫn học được, tiến độ sẽ không đồng bộ.',
       confirmLabel: 'Đăng xuất',
+      onConfirm: async () => {
+        const result = await signOut()
+        // Signing out leaves this device with NO session, which is the third state above — not
+        // an anonymous one. Saying otherwise is what drew a link form that could not work.
+        if (result.ok) { setEmail(null); setHasSession(false) }
+      },
     })
-    if (!ok) return
-    dialog.setBusy(true)
-    const result = await signOut()
-    dialog.setBusy(false)
-    // Signing out leaves this device with NO session, which is the third state above — not an
-    // anonymous one. Saying otherwise is what drew a link form that could not work.
-    if (result.ok) { setEmail(null); setHasSession(false) }
   }
 
   async function handleAddProfile() {
@@ -1006,7 +1019,7 @@ export function ParentDashboard({ onLock }: Props) {
 
         <div className="flex flex-col items-start gap-2">
           {/* `max-md:`, because `min-h-[64px] px-8 text-[22px]` are `Button`'s own classes. */}
-          <Button variant="outline" onClick={() => { void handleReset() }} className="self-start max-md:min-h-[48px] max-md:px-4 max-md:text-base">
+          <Button variant="outline" disabled={resetBusy} onClick={() => { void handleReset() }} className="self-start max-md:min-h-[48px] max-md:px-4 max-md:text-base">
             Đặt lại tiến trình
           </Button>
           {resetNotice && (

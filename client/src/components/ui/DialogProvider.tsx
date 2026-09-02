@@ -13,10 +13,13 @@ import type { DialogContextValue, DialogOptions, PromptOptions } from './DialogC
  * `current` mirrors `request` for `open` to read synchronously — updated in an effect (never
  * during render) so `open`'s own `resolve()` call, which schedules further state updates of its
  * own, never runs nested inside `setRequest`'s updater, where React would apply it out of order.
+ *
+ * Whether a dialog is BUSY mid-action (see `Dialog`'s `onConfirm`/`onSubmit`) is that one
+ * dialog's own local state, not this provider's — the provider only ever learns the final
+ * answer, once, when `resolve` fires.
  */
 export function DialogProvider({ children }: { children: ReactNode }) {
   const [request, setRequest] = useState<DialogRequest | null>(null)
-  const [busy, setBusy] = useState(false)
   const current = useRef<DialogRequest | null>(null)
   useEffect(() => { current.current = request }, [request])
 
@@ -26,14 +29,10 @@ export function DialogProvider({ children }: { children: ReactNode }) {
       if (prev.kind === 'prompt') prev.resolve(null)
       else prev.resolve(false)
     }
-    setBusy(false)
     setRequest(req)
   }, [])
 
-  const settle = useCallback(() => {
-    setRequest(null)
-    setBusy(false)
-  }, [])
+  const settle = useCallback(() => { setRequest(null) }, [])
 
   const confirm = useCallback((o: DialogOptions) => new Promise<boolean>(resolve => {
     open({ kind: 'confirm', ...o, resolve: (v: boolean) => { settle(); resolve(v) } })
@@ -47,12 +46,12 @@ export function DialogProvider({ children }: { children: ReactNode }) {
     open({ kind: 'prompt', ...o, resolve: (v: string | null) => { settle(); resolve(v) } })
   }), [open, settle])
 
-  const value: DialogContextValue = { confirm, destructive, prompt, setBusy }
+  const value: DialogContextValue = { confirm, destructive, prompt }
 
   return (
     <DialogContext.Provider value={value}>
       {children}
-      {request && <Dialog req={request} busy={busy} />}
+      {request && <Dialog req={request} />}
     </DialogContext.Provider>
   )
 }

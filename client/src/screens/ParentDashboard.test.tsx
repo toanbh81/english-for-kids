@@ -103,6 +103,15 @@ async function flush() {
   await act(async () => { await Promise.resolve() })
 }
 
+/** A promise the test controls, standing in for a slow `clearRecordings`/`resetRemoteProgress`/
+ * `signOut` — Fix round 1: the reset/sign-out dialogs stay open and busy until their own async
+ * work settles, which only shows up in a test that does not let that work resolve immediately. */
+function deferred<T>() {
+  let resolve!: (v: T) => void
+  const promise = new Promise<T>(r => { resolve = r })
+  return { promise, resolve }
+}
+
 beforeEach(() => {
   localStorage.clear()
   sessionStorage.clear()
@@ -338,6 +347,38 @@ describe('ParentDashboard', () => {
     await waitFor(() => expect(localStorage.getItem('speakup.stars')).toBeNull())
     expect(localStorage.getItem('speakup.activity')).toBeNull()
     expect(recordingsMock.clearRecordings).toHaveBeenCalled()
+  })
+
+  /**
+   * Fix round 1, finding 1: the reset dialog now carries the actual work as `onConfirm`, so it
+   * stays open and busy — and the "Đặt lại tiến trình" trigger underneath stays disabled — for as
+   * long as `clearRecordings`/`resetRemoteProgress` take. Before this fix the dialog closed the
+   * instant the button was clicked and the trigger was clickable again immediately, which is how
+   * a double-tap mid-reset could open a second dialog and start a second concurrent reset.
+   */
+  it('disables the reset trigger and keeps the dialog busy until the reset settles, cloud copy included', async () => {
+    cloud.configured = true
+    const work = deferred<void>()
+    recordingsMock.clearRecordings.mockReturnValue(work.promise)
+
+    renderWithDialogs(<ParentDashboard />)
+    await flush()
+
+    const trigger = screen.getByRole('button', { name: 'Đặt lại tiến trình' })
+    fireEvent.click(trigger)
+    fireEvent.click(screen.getByRole('button', { name: 'Xoá tiến trình' }))
+    await flush()
+
+    expect(trigger).toBeDisabled()
+    expect(screen.getByRole('dialog')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '…' })).toBeDisabled()
+    expect(syncMock.resetRemoteProgress).not.toHaveBeenCalled()
+
+    await act(async () => { work.resolve(); await Promise.resolve() })
+    await waitFor(() => expect(syncMock.resetRemoteProgress).toHaveBeenCalledWith('p1'))
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(trigger).not.toBeDisabled()
   })
 
   it('clears the lesson and band stores too, so nothing survives the reset', async () => {
@@ -663,6 +704,35 @@ describe('Phase 11: "Tài khoản"', () => {
     expect(screen.queryByRole('button', { name: 'Đăng xuất' })).not.toBeInTheDocument()
     expect(screen.getByTestId('no-session')).toBeInTheDocument()
     expect(screen.queryByLabelText('Email của bố/mẹ')).not.toBeInTheDocument()
+  })
+
+  /** Fix round 1, finding 1: the sign-out dialog carries `signOut()` as `onConfirm`, so it stays
+   * open and busy — buttons disabled, confirm label "…" — until it settles, rather than closing
+   * the instant the button is clicked. */
+  it('keeps the sign-out dialog open and busy until signOut settles', async () => {
+    cloud.configured = true
+    authMock.isAnonymous.mockResolvedValue(false)
+    authMock.currentEmail.mockResolvedValue('bome@example.com')
+    const work = deferred<{ ok: true; userId: null }>()
+    authMock.signOut.mockReturnValue(work.promise)
+
+    renderWithDialogs(<ParentDashboard />)
+    await flush()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Đăng xuất' }))
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Đăng xuất' }))
+    await flush()
+
+    expect(screen.getByRole('dialog')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '…' })).toBeDisabled()
+    expect(within(screen.getByRole('dialog')).getByRole('button', { name: 'Huỷ' })).toBeDisabled()
+    // Not yet reflected: the callback hasn't settled.
+    expect(screen.queryByTestId('no-session')).not.toBeInTheDocument()
+
+    await act(async () => { work.resolve({ ok: true, userId: null }); await Promise.resolve() })
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(screen.getByTestId('no-session')).toBeInTheDocument()
   })
 
   it('adds a profile and registers it with the server', async () => {

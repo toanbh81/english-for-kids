@@ -2,13 +2,20 @@ import { act, fireEvent, render, screen } from '@testing-library/react'
 import { DialogProvider } from './DialogProvider'
 import { useDialog } from './useDialog'
 
-function Harness({ onDone }: { onDone: (v: unknown) => void }) {
+function Harness({ onDone, delOnConfirm }: { onDone: (v: unknown) => void; delOnConfirm?: () => Promise<unknown> }) {
   const d = useDialog()
   return <>
-    <button onClick={() => void d.destructive({ title: 'Xoá toàn bộ tiến trình của bé?', body: 'Không khôi phục được.', confirmLabel: 'Xoá tiến trình' }).then(onDone)}>del</button>
+    <button onClick={() => void d.destructive({ title: 'Xoá toàn bộ tiến trình của bé?', body: 'Không khôi phục được.', confirmLabel: 'Xoá tiến trình', onConfirm: delOnConfirm }).then(onDone)}>del</button>
     <button onClick={() => void d.confirm({ title: 'Đăng xuất khỏi tài khoản này?', body: 'Bé vẫn học được, tiến độ sẽ không đồng bộ.', confirmLabel: 'Đăng xuất' }).then(onDone)}>out</button>
     <button onClick={() => void d.prompt({ title: 'Đổi tên hồ sơ', label: 'Tên của bé', initial: 'Bé', maxLength: 40 }).then(onDone)}>ren</button>
   </>
+}
+
+/** A promise the test controls, standing in for a slow `resetRemoteProgress`/`signOut`. */
+function deferred<T>() {
+  let resolve!: (v: T) => void
+  const promise = new Promise<T>(r => { resolve = r })
+  return { promise, resolve }
 }
 
 it('throws a clear error when useDialog is used outside the provider', () => {
@@ -77,4 +84,67 @@ it('prompt resolves null when cancelled', async () => {
   fireEvent.click(screen.getByRole('button', { name: 'Huỷ' }))
   await act(async () => {})
   expect(onDone).toHaveBeenCalledWith(null)
+})
+
+/**
+ * Fix round 1, finding 1: `onConfirm` must keep the dialog on screen and busy — buttons disabled,
+ * the confirm label swapped for "…", scrim and Escape ignored — for exactly as long as the
+ * callback takes, closing and resolving `true` only once it settles. Before this fix `resolve`
+ * fired (and the dialog unmounted) the instant the button was clicked, so a caller's own
+ * `setBusy` ran against nothing on screen.
+ */
+it('stays open and busy while onConfirm is pending, then closes and resolves true once it settles', async () => {
+  const onDone = vi.fn()
+  const work = deferred<void>()
+  render(<DialogProvider><Harness onDone={onDone} delOnConfirm={() => work.promise} /></DialogProvider>)
+  fireEvent.click(screen.getByText('del'))
+  fireEvent.click(screen.getByRole('button', { name: 'Xoá tiến trình' }))
+  await act(async () => {})
+
+  // Still open and busy: the confirm button's own label is now "…", both buttons are disabled,
+  // and neither the scrim nor Escape can dismiss it.
+  expect(screen.getByRole('dialog')).toBeInTheDocument()
+  const busyButton = screen.getByRole('button', { name: '…' })
+  expect(busyButton).toBeDisabled()
+  expect(screen.getByRole('button', { name: 'Huỷ' })).toBeDisabled()
+  expect(onDone).not.toHaveBeenCalled()
+
+  fireEvent.click(screen.getByRole('dialog').parentElement!)
+  fireEvent.keyDown(window, { key: 'Escape' })
+  await act(async () => {})
+  expect(screen.getByRole('dialog')).toBeInTheDocument()
+  expect(onDone).not.toHaveBeenCalled()
+
+  await act(async () => { work.resolve(); await Promise.resolve() })
+
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  expect(onDone).toHaveBeenCalledWith(true)
+})
+
+it('a thrown onConfirm still closes the dialog and resolves true — the caller owns its own errors', async () => {
+  const onDone = vi.fn()
+  render(<DialogProvider><Harness onDone={onDone} delOnConfirm={() => Promise.reject(new Error('boom'))} /></DialogProvider>)
+  fireEvent.click(screen.getByText('del'))
+  fireEvent.click(screen.getByRole('button', { name: 'Xoá tiến trình' }))
+  await act(async () => {})
+
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  expect(onDone).toHaveBeenCalledWith(true)
+})
+
+it('moves focus to the confirm button when a confirm/destructive dialog opens', async () => {
+  const onDone = vi.fn()
+  render(<DialogProvider><Harness onDone={onDone} /></DialogProvider>)
+  fireEvent.click(screen.getByText('out'))
+  expect(screen.getByRole('button', { name: 'Đăng xuất' })).toHaveFocus()
+})
+
+it('Escape cancels a dialog when it is not busy, resolving false', async () => {
+  const onDone = vi.fn()
+  render(<DialogProvider><Harness onDone={onDone} /></DialogProvider>)
+  fireEvent.click(screen.getByText('out'))
+  fireEvent.keyDown(window, { key: 'Escape' })
+  await act(async () => {})
+  expect(onDone).toHaveBeenCalledWith(false)
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
 })
