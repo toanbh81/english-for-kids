@@ -108,8 +108,8 @@ beforeEach(() => {
 
 it('shows a not-found message for an unknown sentence id', () => {
   renderBuilder('nope')
-  expect(screen.getByText('Không tìm thấy câu')).toBeInTheDocument()
-  expect(screen.getByRole('link', { name: /Ghép câu/ })).toHaveAttribute('href', '/sentences')
+  expect(screen.getByRole('heading')).toHaveTextContent('Ơ, không tìm thấy câu này 🦊')
+  expect(screen.getByRole('link', { name: '← Về trang chủ' })).toHaveAttribute('href', '/sentences')
 })
 
 // The unfiltered list only shows unlocked topics now, so a back link that dropped the filter could

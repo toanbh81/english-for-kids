@@ -107,7 +107,8 @@ beforeEach(() => {
 
 it('shows a not-found message for an unknown word id', () => {
   renderCard('food', 'nope')
-  expect(screen.getByText('Không tìm thấy từ')).toBeInTheDocument()
+  expect(screen.getByRole('heading')).toHaveTextContent('Ơ, không tìm thấy từ này 🦊')
+  expect(screen.getByRole('link', { name: '← Về trang chủ' })).toHaveAttribute('href', '/words')
 })
 
 // The header used to carry an "x/3" counter left over from the legacy word mission. The daily

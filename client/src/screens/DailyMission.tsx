@@ -6,7 +6,7 @@ import type { LessonItemKind } from '../progress/lesson'
 import { MISSION_STATE, groupItems } from '../progress/missionNav'
 import { storageKey } from '../progress/storageKeys'
 import { Foxy } from '../components/Foxy'
-import { BackButton, Button, Chip, HomeLabel } from '../components/ui'
+import { BackButton, Button, Chip, EmptyState, HomeLabel } from '../components/ui'
 import type { ChipTone } from '../components/ui'
 import { PageShell, PageHeader, PageBody, PageFooter } from '../components/ui/page'
 
@@ -114,60 +114,72 @@ export function DailyMission() {
           Nhiệm vụ hôm nay 🌞
         </h1>
       </PageHeader>
-      <PageBody>
-        <p className="text-center text-[15px] font-bold text-ink-500 md:text-lg">
-          5 bước nhỏ — 15 phút thôi!
-        </p>
+      <PageBody center={groups.length === 0}>
+        {groups.length === 0 ? (
+          <EmptyState
+            emoji="🌞"
+            title="Hôm nay chưa có nhiệm vụ"
+            sub="Bé có thể luyện tự do bất kỳ đảo nào."
+            cta={{ label: 'Luyện tự do →', to: '/' }}
+          />
+        ) : (
+          <>
+            <p className="text-center text-[15px] font-bold text-ink-500 md:text-lg">
+              5 bước nhỏ — 15 phút thôi!
+            </p>
 
-        <div className="mt-2.5 flex w-full items-center justify-center gap-2 ipad:gap-3">
-          <Chip tone="sun" className="text-sm ipad:text-lg">Bậc ⭐ {band}</Chip>
-          <Chip tone="teal" className="text-sm ipad:text-lg">{status.doneCount}/{status.total}</Chip>
-        </div>
+            <div className="mt-2.5 flex w-full items-center justify-center gap-2 ipad:gap-3">
+              <Chip tone="sun" className="text-sm ipad:text-lg">Bậc ⭐ {band}</Chip>
+              <Chip tone="teal" className="text-sm ipad:text-lg">{status.doneCount}/{status.total}</Chip>
+            </div>
 
-        <div className={`mt-2.5 grid grow content-center gap-2.5 md:mt-4 md:grow-0 ipad:gap-3 ${COLUMNS[Math.min(groups.length, MAX_GROUPS)]}`}>
-          {groups.map((group, i) => {
-            const kind = KIND[group.kind]
-            const isCurrent = i === currentIndex
-            return (
-              // A finished group stays a link — its first step, for a replay — because a group is
-              // a place on the map, not a checkbox: the ✓ says the work is done, the card still
-              // takes the child back to it.
-              <Link
-                key={group.kind}
-                data-testid={`group-${group.kind}`}
-                to={group.route}
-                state={MISSION_STATE}
-                className={`${GROUP_CARD} ${isCurrent ? 'border-4 border-teal-500' : ''}`}
-              >
-                <span aria-hidden="true" className="text-3xl md:text-5xl">{kind.emoji}</span>
-                {/* On a phone the title and the step caption are the two lines of one text block;
-                  * `md:contents` dissolves both wrappers again from the tablet breakpoint up, so
-                  * the card is the same four stacked children the iPad has always drawn. */}
-                <div className="min-w-0 flex-1 md:contents">
-                  <div className="truncate font-display text-[17px] font-extrabold text-ink-900 md:overflow-visible md:whitespace-normal md:text-2xl">
-                    {kind.title(group.items.length)}
-                  </div>
-                  <div className="flex min-w-0 items-baseline gap-1.5 md:contents">
-                    <div className="font-display text-xs font-extrabold text-teal-600 md:text-xl">
-                      {group.doneCount}/{group.items.length}
+            <div className={`mt-2.5 grid grow content-center gap-2.5 md:mt-4 md:grow-0 ipad:gap-3 ${COLUMNS[Math.min(groups.length, MAX_GROUPS)]}`}>
+              {groups.map((group, i) => {
+                const kind = KIND[group.kind]
+                const isCurrent = i === currentIndex
+                return (
+                  // A finished group stays a link — its first step, for a replay — because a
+                  // group is a place on the map, not a checkbox: the ✓ says the work is done, the
+                  // card still takes the child back to it.
+                  <Link
+                    key={group.kind}
+                    data-testid={`group-${group.kind}`}
+                    to={group.route}
+                    state={MISSION_STATE}
+                    className={`${GROUP_CARD} ${isCurrent ? 'border-4 border-teal-500' : ''}`}
+                  >
+                    <span aria-hidden="true" className="text-3xl md:text-5xl">{kind.emoji}</span>
+                    {/* On a phone the title and the step caption are the two lines of one text
+                      * block; `md:contents` dissolves both wrappers again from the tablet
+                      * breakpoint up, so the card is the same four stacked children the iPad has
+                      * always drawn. */}
+                    <div className="min-w-0 flex-1 md:contents">
+                      <div className="truncate font-display text-[17px] font-extrabold text-ink-900 md:overflow-visible md:whitespace-normal md:text-2xl">
+                        {kind.title(group.items.length)}
+                      </div>
+                      <div className="flex min-w-0 items-baseline gap-1.5 md:contents">
+                        <div className="font-display text-xs font-extrabold text-teal-600 md:text-xl">
+                          {group.doneCount}/{group.items.length}
+                        </div>
+                        <div className="truncate font-display text-xs font-extrabold text-ink-500 md:overflow-visible md:whitespace-normal md:text-base">
+                          Bước {i + 1}
+                          {isCurrent && <span className="text-teal-600"> · bắt đầu ở đây!</span>}
+                        </div>
+                      </div>
                     </div>
-                    <div className="truncate font-display text-xs font-extrabold text-ink-500 md:overflow-visible md:whitespace-normal md:text-base">
-                      Bước {i + 1}
-                      {isCurrent && <span className="text-teal-600"> · bắt đầu ở đây!</span>}
-                    </div>
-                  </div>
-                </div>
-                {group.done
-                  ? (
-                    <span className="shrink-0 rounded-xl2 bg-good-50 px-3 py-1 font-display text-sm font-extrabold text-good-700 md:bg-transparent md:p-0 md:text-xl">
-                      ✓ Xong
-                    </span>
-                  )
-                  : <Chip tone={kind.tone} className="shrink-0 text-sm md:text-lg">≈ {kind.minutes(group.items.length)} phút</Chip>}
-              </Link>
-            )
-          })}
-        </div>
+                    {group.done
+                      ? (
+                        <span className="shrink-0 rounded-xl2 bg-good-50 px-3 py-1 font-display text-sm font-extrabold text-good-700 md:bg-transparent md:p-0 md:text-xl">
+                          ✓ Xong
+                        </span>
+                      )
+                      : <Chip tone={kind.tone} className="shrink-0 text-sm md:text-lg">≈ {kind.minutes(group.items.length)} phút</Chip>}
+                  </Link>
+                )
+              })}
+            </div>
+          </>
+        )}
       </PageBody>
       <PageFooter>
         {/* 66 px beside the CTA on a phone (design M2), the 96 px mascot from the tablet

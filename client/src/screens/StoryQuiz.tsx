@@ -8,7 +8,7 @@ import { MISSION_ROUTE, MISSION_STATE, RETURN_LABEL, useMissionFlag } from '../p
 import { speakText } from '../story/speak'
 import { Foxy } from '../components/Foxy'
 import type { FoxyMood } from '../components/Foxy'
-import { Button, Chip, HomeLabel, PAGE_SHELL, SpeechBubble, StarRow } from '../components/ui'
+import { Button, Chip, HomeLabel, NotFound, PAGE_SHELL, SpeechBubble, StarRow } from '../components/ui'
 
 const ADVANCE_MS = 900
 const TAP_TARGET = 'min-h-[64px] flex items-center'
@@ -28,14 +28,8 @@ export function StoryQuiz() {
   // suppresses itself here too and this link is the only way off the screen.
   const mission = useMissionFlag()
   const story = findStory(id)
-  if (!story) {
-    return (
-      <main className={`flex h-full flex-col items-center justify-center gap-6 bg-cream-50 px-8 [--page-pad-bottom:2rem] [--page-pad-top:2rem] ${PAGE_SHELL}`}>
-        <p className="font-display text-3xl font-extrabold text-ink-900">Không tìm thấy truyện</p>
-        <Link to={mission ? MISSION_ROUTE : '/stories'} className={BACK_LINK}>{mission ? '← Nhiệm vụ' : '← Truyện'}</Link>
-      </main>
-    )
-  }
+  // A child mid-lesson who hits a dead story link must land back in the lesson, not out of it.
+  if (!story) return <NotFound what="truyện" to={mission ? MISSION_ROUTE : '/stories'} />
   return <StoryQuizInner quiz={story.quiz} id={id} mission={mission} />
 }
 

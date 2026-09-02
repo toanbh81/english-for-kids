@@ -146,5 +146,5 @@ it('carries the mission flag on into the word the child picks', () => {
 
 it('shows a not-found message for a phoneme that has no group', () => {
   renderList('nope')
-  expect(screen.getByText('Không tìm thấy âm')).toBeInTheDocument()
+  expect(screen.getByRole('heading')).toHaveTextContent('Ơ, không tìm thấy âm này 🦊')
 })

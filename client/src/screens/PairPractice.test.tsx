@@ -283,7 +283,7 @@ it('hands on to the next pair, and back to the level on the last one', async () 
 
 it('shows a not-found message for a pair that does not exist', () => {
   renderPair('nope')
-  expect(screen.getByText('Không tìm thấy cặp từ')).toBeInTheDocument()
+  expect(screen.getByRole('heading')).toHaveTextContent('Ơ, không tìm thấy cặp từ này 🦊')
 })
 
 // --- as a step of today's lesson (spec §3) ---------------------------------------------------

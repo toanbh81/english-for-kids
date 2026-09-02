@@ -268,7 +268,7 @@ it('hands on to the next passage, and finishes the level on the last one', () =>
 
 it('shows a not-found message for a passage that does not exist', () => {
   renderVoice('nope')
-  expect(screen.getByText('Không tìm thấy đoạn')).toBeInTheDocument()
+  expect(screen.getByRole('heading')).toHaveTextContent('Ơ, không tìm thấy đoạn này 🦊')
 })
 
 /** SpeakError renders the alert; a `noSpeech` action resets the attempt back to idle. */

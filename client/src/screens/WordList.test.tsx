@@ -24,7 +24,8 @@ it('sits in the shared page frame', () => {
 
 it('shows a not-found message for an unknown topic', () => {
   renderList('nope')
-  expect(screen.getByText('Không tìm thấy chủ đề')).toBeInTheDocument()
+  expect(screen.getByRole('heading')).toHaveTextContent('Ơ, không tìm thấy chủ đề này 🦊')
+  expect(screen.getByRole('link', { name: '← Về trang chủ' })).toHaveAttribute('href', '/words')
 })
 
 it('lists all 8 words of a topic, locked by default', () => {
@@ -58,7 +59,8 @@ it('links each word card to /words/:topic/:wordId', () => {
 
 it('review topic with no due words shows the empty-state message', () => {
   renderList('review')
-  expect(screen.getByText('Chưa có từ cần ôn hôm nay 🎉')).toBeInTheDocument()
+  expect(screen.getByText('Chưa có từ cần ôn hôm nay')).toBeInTheDocument()
+  expect(screen.getByRole('link', { name: 'Từ mới hôm nay →' })).toHaveAttribute('href', '/words')
 })
 
 it('review topic lists due words across all topics', () => {

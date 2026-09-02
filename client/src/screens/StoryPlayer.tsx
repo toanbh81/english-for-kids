@@ -6,7 +6,7 @@ import { useStoryPlayer } from '../story/useStoryPlayer'
 import { SceneArt } from '../components/SceneArt'
 import { Karaoke } from '../components/Karaoke'
 import { PlayerControls } from '../components/PlayerControls'
-import { BackButton, Button, Chip, PAGE_SHELL, SceneDots } from '../components/ui'
+import { BackButton, Button, Chip, NotFound, PAGE_SHELL, SceneDots } from '../components/ui'
 
 export function StoryPlayer() {
   const { id = '' } = useParams()
@@ -15,14 +15,8 @@ export function StoryPlayer() {
   // "← Truyện" would leave a child mid-lesson on a dead end with no thread back at all.
   const mission = useMissionFlag()
   const story = findStory(id)
-  if (!story) {
-    return (
-      <main className={`flex h-full flex-col items-center justify-center gap-6 bg-cream-50 px-8 [--page-pad-bottom:2rem] [--page-pad-top:2rem] ${PAGE_SHELL}`}>
-        <p className="font-display text-3xl font-extrabold text-ink-900">Không tìm thấy truyện</p>
-        <Button to={mission ? MISSION_ROUTE : '/stories'} variant="outline">{mission ? '← Nhiệm vụ' : '← Truyện'}</Button>
-      </main>
-    )
-  }
+  // A child mid-lesson who hits a dead story link must land back in the lesson, not out of it.
+  if (!story) return <NotFound what="truyện" to={mission ? MISSION_ROUTE : '/stories'} />
   return <StoryPlayerInner story={story} id={id} mission={mission} />
 }
 

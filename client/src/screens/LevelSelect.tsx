@@ -1,7 +1,7 @@
 import { Link, useParams } from 'react-router-dom'
 import { LEVELS } from '../content'
 import { getStars } from '../progress/store'
-import { BackButton, StarRow } from '../components/ui'
+import { BackButton, NotFound, StarRow } from '../components/ui'
 import { PageShell, PageHeader, PageBody } from '../components/ui/page'
 import { SoundLevel } from './SoundLevel'
 
@@ -15,15 +15,7 @@ export function LevelSelect() {
   // 27 word cards. Every other level keeps the card grid below.
   if (levelId === 'sound-zoo') return <SoundLevel />
   const level = LEVELS.find(l => l.id === levelId)
-  if (!level) {
-    return (
-      <PageShell>
-        <PageBody center>
-          <p>Không tìm thấy</p>
-        </PageBody>
-      </PageShell>
-    )
-  }
+  if (!level) return <NotFound what="bậc" />
   return (
     <PageShell>
       {/* Back goes to the map — Home is the topic map now, not a list of levels. */}

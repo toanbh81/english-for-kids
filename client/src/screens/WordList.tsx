@@ -2,7 +2,7 @@ import { Link, useParams } from 'react-router-dom'
 import type { Word } from '../content/words/types'
 import { findTopic, findWord } from '../content/words'
 import { getBox, dueWords } from '../progress/leitner'
-import { BackButton, CARD_LINK, Chip } from '../components/ui'
+import { BackButton, CARD_LINK, Chip, EmptyState, NotFound } from '../components/ui'
 import { PageShell, PageHeader, PageBody } from '../components/ui/page'
 
 export function WordList() {
@@ -10,16 +10,7 @@ export function WordList() {
   const isReview = topic === 'review'
   const t = isReview ? undefined : findTopic(topic)
 
-  if (!isReview && !t) {
-    return (
-      <PageShell>
-        <PageHeader back={<BackButton to="/words" label="Từ vựng" />} />
-        <PageBody>
-          <p className="font-display text-2xl font-extrabold text-ink-900">Không tìm thấy chủ đề</p>
-        </PageBody>
-      </PageShell>
-    )
-  }
+  if (!isReview && !t) return <NotFound what="chủ đề" to="/words" />
 
   const words: Word[] = isReview
     ? dueWords().map(findWord).filter((w): w is Word => !!w)
@@ -44,7 +35,12 @@ export function WordList() {
       </PageHeader>
       <PageBody>
         {words.length === 0 ? (
-          <p className="text-xl font-bold text-ink-500">Chưa có từ cần ôn hôm nay 🎉</p>
+          <EmptyState
+            emoji="📚"
+            title="Chưa có từ cần ôn hôm nay"
+            sub="Học thêm từ mới, mai quay lại ôn nhé!"
+            cta={{ label: 'Từ mới hôm nay →', to: '/words' }}
+          />
         ) : (
           <div className="grid grid-cols-2 gap-3 md:grid-cols-4 md:gap-6">
             {words.map(w => {

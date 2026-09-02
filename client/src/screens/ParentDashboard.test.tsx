@@ -467,6 +467,9 @@ describe('ParentDashboard', () => {
   /** Fourteen days of data at every width; a phone draws the last seven, and each hidden bar takes
    * its own date label with it so the two can never come apart. */
   it('draws the last seven of the fourteen bars on a phone', async () => {
+    // The chart shows an empty state in place of the bars with no activity at all — seed one
+    // event so this test exercises the bars, which is what it is actually about.
+    seedActivity([{ ts: Date.now(), kind: 'speak', id: 'w1', score: 80 }])
     renderWithRouter(<ParentDashboard />)
     await flush()
 

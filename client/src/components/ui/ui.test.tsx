@@ -4,6 +4,8 @@ import { MemoryRouter } from 'react-router-dom'
 import { BackButton } from './BackButton'
 import { Button } from './Button'
 import { Chip } from './Chip'
+import { EmptyState } from './EmptyState'
+import { NotFound } from './NotFound'
 import { PAGE_SHELL } from './pageShell'
 import { ProgressBar } from './ProgressBar'
 import { SceneDots } from './SceneDots'
@@ -281,6 +283,28 @@ describe('Toast', () => {
     act(() => { vi.advanceTimersByTime(1) })
     expect(result.current.message).toBeNull()
     vi.useRealTimers()
+  })
+})
+
+describe('NotFound', () => {
+  it('names the thing, shows surprised Foxy and a way home', () => {
+    router(<NotFound what="cặp từ" />)
+    expect(screen.getByRole('heading')).toHaveTextContent('Ơ, không tìm thấy cặp từ này 🦊')
+    expect(screen.getByRole('link', { name: '← Về trang chủ' })).toHaveAttribute('href', '/')
+    expect(screen.getByTestId('foxy')).toHaveAttribute('data-mood', 'surprised')
+  })
+})
+
+describe('EmptyState', () => {
+  it('centres emoji, title, sub and an optional outline CTA', () => {
+    router(<EmptyState emoji="📚" title="Chưa có từ cần ôn hôm nay" sub="Học thêm từ mới, mai quay lại ôn nhé!" cta={{ label: 'Từ mới hôm nay →', to: '/words' }} />)
+    expect(screen.getByTestId('empty-state')).toHaveClass('min-h-[150px]', 'rounded-r18', 'bg-cream-50')
+    expect(screen.getByRole('link', { name: 'Từ mới hôm nay →' })).toHaveClass('min-h-[44px]')
+  })
+
+  it('adult variant is smaller', () => {
+    render(<EmptyState adult emoji="🎙️" title="Chưa có bản ghi nào" sub="Bản ghi xuất hiện sau khi bé luyện nói." />)
+    expect(screen.getByText('Chưa có bản ghi nào')).toHaveClass('text-[14px]')
   })
 })
 

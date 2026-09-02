@@ -64,5 +64,6 @@ it('offers the stairs as a second way into the other levels', () => {
 
 it('shows a not-found message for an unknown level id', () => {
   renderLevel('nope')
-  expect(screen.getByText('Không tìm thấy')).toBeInTheDocument()
+  expect(screen.getByRole('heading')).toHaveTextContent('Ơ, không tìm thấy bậc này 🦊')
+  expect(screen.getByRole('link', { name: '← Về trang chủ' })).toHaveAttribute('href', '/')
 })

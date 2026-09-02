@@ -4,6 +4,7 @@ import { dayKey, logActivity } from '../progress/activity'
 import { getBand, setBandValue } from '../progress/band'
 import { getLesson } from '../progress/lesson'
 import type { Lesson, LessonItem, LessonItemKind } from '../progress/lesson'
+import { saveLesson } from '../progress/lessonStore'
 import { DailyMission } from './DailyMission'
 
 const NOW = new Date('2026-08-23T10:00:00').getTime()
@@ -77,6 +78,16 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.useRealTimers()
+})
+
+it('shows the empty-lesson state and no footer CTA when today has no items', () => {
+  saveLesson({ day: dayKey(NOW), created: NOW, band: 1, items: [] })
+  renderMission()
+
+  expect(screen.getByText('Hôm nay chưa có nhiệm vụ')).toBeInTheDocument()
+  expect(screen.getByRole('link', { name: 'Luyện tự do →' })).toHaveAttribute('href', '/')
+  expect(screen.queryByRole('link', { name: 'Bắt đầu ▸' })).not.toBeInTheDocument()
+  expect(screen.getByRole('contentinfo')).not.toContainElement(screen.getByRole('link', { name: 'Luyện tự do →' }))
 })
 
 it('sits in the shared page frame', () => {

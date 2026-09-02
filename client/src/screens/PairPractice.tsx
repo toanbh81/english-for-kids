@@ -12,7 +12,7 @@ import { missionNoun, useMissionNext } from '../progress/missionNav'
 import { saveRecording } from '../progress/recordings'
 import { Confetti } from '../components/Confetti'
 import { Foxy } from '../components/Foxy'
-import { BackButton, Button, Card, Chip } from '../components/ui'
+import { BackButton, Button, Card, Chip, NotFound } from '../components/ui'
 import { PageShell, PageHeader, PageBody } from '../components/ui/page'
 import { MicButton, ResultCard, SpeakError } from '../components/speak'
 import { useSpeakingAttempt } from '../speaking/useSpeakingAttempt'
@@ -43,7 +43,7 @@ export function PairPractice() {
   const { id = '' } = useParams()
   const pair = findPair(id)
   // The hooks live in the inner component so an unknown pair never renders half of them.
-  if (!pair) return <p>Không tìm thấy cặp từ</p>
+  if (!pair) return <NotFound what="cặp từ" />
   return <PairRun key={pair.id} pair={pair} />
 }
 

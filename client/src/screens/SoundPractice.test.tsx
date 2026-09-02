@@ -354,12 +354,12 @@ it('goes back to the sound’s word list, not to the bậc', () => {
 
 it('shows a not-found message for a phoneme that has no group', () => {
   renderWord('nope', 'sz-th-three')
-  expect(screen.getByText('Không tìm thấy âm')).toBeInTheDocument()
+  expect(screen.getByRole('heading')).toHaveTextContent('Ơ, không tìm thấy âm này 🦊')
 })
 
 it('shows a not-found message for a word that does not belong to the sound', () => {
   renderWord('th', 'sz-dh-this')
-  expect(screen.getByText('Không tìm thấy âm')).toBeInTheDocument()
+  expect(screen.getByRole('heading')).toHaveTextContent('Ơ, không tìm thấy âm này 🦊')
 })
 
 // --- as a step of today's lesson (spec §3) ---------------------------------------------------

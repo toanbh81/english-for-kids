@@ -322,7 +322,7 @@ it('finishes the level from the last sentence', () => {
 
 it('shows a not-found message for a sentence that does not exist', () => {
   renderStar('nope')
-  expect(screen.getByText('Không tìm thấy câu')).toBeInTheDocument()
+  expect(screen.getByRole('heading')).toHaveTextContent('Ơ, không tìm thấy câu này 🦊')
 })
 
 // --- as a step of today's lesson (spec §3) ---------------------------------------------------

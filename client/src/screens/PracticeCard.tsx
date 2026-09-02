@@ -9,7 +9,7 @@ import { logActivity } from '../progress/activity'
 import { missionNoun, useMissionNext } from '../progress/missionNav'
 import { saveRecording } from '../progress/recordings'
 import { Confetti } from '../components/Confetti'
-import { BackButton, Button, Card } from '../components/ui'
+import { BackButton, Button, Card, NotFound } from '../components/ui'
 import { PageShell, PageHeader, PageBody } from '../components/ui/page'
 import { MicButton, ResultCard, SpeakError } from '../components/speak'
 import { useSpeakingAttempt } from '../speaking/useSpeakingAttempt'
@@ -84,7 +84,7 @@ export function PracticeCard() {
     return () => clearInterval(id)
   }, [recording])
 
-  if (!card) return <p>Không tìm thấy thẻ</p>
+  if (!card) return <NotFound what="thẻ" />
   const cardIndex = level!.cards.findIndex(c => c.id === cardId)
   // "Tiếp theo" stays inside this level, so it agrees with the "Thẻ n/N" counter above it: on
   // card N of N there is no next card, and the run ends with "Hoàn thành 🎉" back at the level.

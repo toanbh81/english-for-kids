@@ -39,7 +39,7 @@ import { fetchRemoteStats } from '../cloud/remote'
 import type { RemoteStats } from '../cloud/remote'
 import { isCloudConfigured } from '../cloud/supabase'
 import { ProfilePicker } from '../components/ProfilePicker'
-import { Button, Card, PAGE_SHELL } from '../components/ui'
+import { Button, Card, EmptyState, PAGE_SHELL } from '../components/ui'
 
 /**
  * Phone styles sit at the default breakpoint and `md:` (768) puts the tablet/iPad value back — the
@@ -734,21 +734,30 @@ export function ParentDashboard({ onLock }: Props) {
               </h2>
               <p className="mb-3 mt-1 text-xs font-semibold text-ink-500 md:mb-4 md:text-sm">Mục tiêu {limitMinutes} phút/ngày</p>
 
-              <div className="relative h-24 md:h-40">
-                <div className="absolute inset-x-0 border-t-2 border-dashed border-ink-300" style={{ top: `${targetTopPct}%` }} />
-                <div className="absolute inset-0 flex items-end gap-1">
-                  {days.map((d, i) => (
-                    <div key={d.day} className={`h-full flex-1 items-end ${i < days.length - PHONE_DAYS ? 'hidden md:flex' : 'flex'}`}>
-                      <div
-                        data-testid="minute-bar"
-                        data-minutes={d.minutes}
-                        className={`w-full rounded-t ${d.day === todayKey ? 'bg-coral-500' : 'bg-teal-500'}`}
-                        style={{ height: `${Math.max(2, (d.minutes / scaleMax) * 100)}%` }}
-                      />
-                    </div>
-                  ))}
+              {events.length === 0 ? (
+                <EmptyState
+                  adult
+                  emoji="📈"
+                  title="Chưa có dữ liệu luyện tập"
+                  sub="Biểu đồ hiện ra sau khi bé bắt đầu luyện nói."
+                />
+              ) : (
+                <div className="relative h-24 md:h-40">
+                  <div className="absolute inset-x-0 border-t-2 border-dashed border-ink-300" style={{ top: `${targetTopPct}%` }} />
+                  <div className="absolute inset-0 flex items-end gap-1">
+                    {days.map((d, i) => (
+                      <div key={d.day} className={`h-full flex-1 items-end ${i < days.length - PHONE_DAYS ? 'hidden md:flex' : 'flex'}`}>
+                        <div
+                          data-testid="minute-bar"
+                          data-minutes={d.minutes}
+                          className={`w-full rounded-t ${d.day === todayKey ? 'bg-coral-500' : 'bg-teal-500'}`}
+                          style={{ height: `${Math.max(2, (d.minutes / scaleMax) * 100)}%` }}
+                        />
+                      </div>
+                    ))}
+                  </div>
                 </div>
-              </div>
+              )}
               <div className="mt-2 flex gap-1">
                 {days.map((d, i) => (
                   <span
@@ -786,7 +795,12 @@ export function ParentDashboard({ onLock }: Props) {
             <Card className="px-4 py-3.5 md:p-6">
               <h2 className="mb-2 font-display text-base font-extrabold text-ink-900 md:mb-3 md:text-xl">Âm hay sai</h2>
               {weak.length === 0 ? (
-                <p>Chưa đủ dữ liệu</p>
+                <EmptyState
+                  adult
+                  emoji="🔤"
+                  title="Chưa đủ dữ liệu"
+                  sub="Âm hay sai hiện ra sau vài lần bé luyện nói."
+                />
               ) : (
                 <ul className="flex flex-col gap-2 md:gap-3">
                   {weak.map(w => (
@@ -819,7 +833,12 @@ export function ParentDashboard({ onLock }: Props) {
                 </summary>
                 <div className="mt-2 md:mt-3">
                   {recordings.length === 0 ? (
-                    <p>Chưa có bản ghi</p>
+                    <EmptyState
+                      adult
+                      emoji="🎙️"
+                      title="Chưa có bản ghi nào"
+                      sub="Bản ghi xuất hiện sau khi bé luyện nói."
+                    />
                   ) : (
                     <ul className="flex flex-col gap-2 md:gap-3">
                       {recordings.map(r => (

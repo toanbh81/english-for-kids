@@ -12,7 +12,7 @@ import { missionNoun, useMissionNext } from '../progress/missionNav'
 import { saveRecording } from '../progress/recordings'
 import { Confetti } from '../components/Confetti'
 import { StressedSentence } from '../components/StressedSentence'
-import { BackButton, Button, Card, Chip } from '../components/ui'
+import { BackButton, Button, Card, Chip, NotFound } from '../components/ui'
 import { PageShell, PageHeader, PageBody } from '../components/ui/page'
 import { MicButton, ResultCard, SpeakError } from '../components/speak'
 import { useSpeakingAttempt } from '../speaking/useSpeakingAttempt'
@@ -45,7 +45,7 @@ export function StarPractice() {
   const { id = '' } = useParams()
   const star = findSentenceStar(id)
   // The hooks live in the inner component so an unknown sentence never renders half of them.
-  if (!star) return <p>Không tìm thấy câu</p>
+  if (!star) return <NotFound what="câu" />
   return <StarRun key={star.id} star={star} />
 }
 

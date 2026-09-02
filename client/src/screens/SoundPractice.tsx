@@ -10,7 +10,7 @@ import { logActivity } from '../progress/activity'
 import { missionNoun, useMissionNext } from '../progress/missionNav'
 import { saveRecording } from '../progress/recordings'
 import { Confetti } from '../components/Confetti'
-import { BackButton, Button, Chip } from '../components/ui'
+import { BackButton, Button, Chip, NotFound } from '../components/ui'
 import { PageShell, PageHeader, PageBody } from '../components/ui/page'
 import { MicButton, ResultCard, SpeakError, WordChip } from '../components/speak'
 import { useSpeakingAttempt } from '../speaking/useSpeakingAttempt'
@@ -70,7 +70,7 @@ export function SoundPractice() {
   const idx = sound ? sound.cards.findIndex(c => c.id === cardId) : -1
   // The hooks live in the inner component so an unknown phoneme (or word) never renders half of
   // them — and so walking to the next word remounts with a clean attempt.
-  if (!sound || idx < 0) return <p>Không tìm thấy âm</p>
+  if (!sound || idx < 0) return <NotFound what="âm" />
   return <SoundWord key={cardId} sound={sound} idx={idx} />
 }
 

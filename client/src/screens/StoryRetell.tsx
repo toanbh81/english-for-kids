@@ -11,7 +11,7 @@ import { playUrl, playBlob } from '../audio/player'
 import { useSpeakingAttempt } from '../speaking/useSpeakingAttempt'
 import { useSpeakErrorAction } from '../speaking/useSpeakErrorAction'
 import { MicButton, ResultCard, SpeakError } from '../components/speak'
-import { BackButton, Card, PAGE_SHELL } from '../components/ui'
+import { BackButton, Card, NotFound } from '../components/ui'
 import { PageShell, PageHeader, PageBody } from '../components/ui/page'
 import { retellStars, RETELL_MESSAGE } from '../story/retellStars'
 import { speakText } from '../story/speak'
@@ -26,14 +26,8 @@ export function StoryRetell() {
   // suppresses itself here too and this arrow is the only way off the screen.
   const mission = useMissionFlag()
   const story = findStory(id)
-  if (!story) {
-    return (
-      <main className={`h-full overflow-y-auto bg-cream-50 px-6 ${PAGE_SHELL}`}>
-        <p className="mb-4 font-display text-2xl font-extrabold text-ink-900">Không tìm thấy truyện</p>
-        <BackButton to={mission ? MISSION_ROUTE : '/stories'} label={mission ? 'Nhiệm vụ' : 'Truyện'} />
-      </main>
-    )
-  }
+  // A child mid-lesson who hits a dead story link must land back in the lesson, not out of it.
+  if (!story) return <NotFound what="truyện" to={mission ? MISSION_ROUTE : '/stories'} />
   return <StoryRetellInner story={story} id={id} inMission={mission} />
 }
 

@@ -11,7 +11,7 @@ import { logActivity } from '../progress/activity'
 import { missionNoun, useMissionNext } from '../progress/missionNav'
 import { saveRecording } from '../progress/recordings'
 import { Confetti } from '../components/Confetti'
-import { BackButton, Button, Card, Chip } from '../components/ui'
+import { BackButton, Button, Card, Chip, NotFound } from '../components/ui'
 import { PageShell, PageHeader, PageBody } from '../components/ui/page'
 import { MicButton, ResultCard, SpeakError } from '../components/speak'
 import { useSpeakingAttempt } from '../speaking/useSpeakingAttempt'
@@ -87,7 +87,7 @@ export function VoicePractice() {
   const { id = '' } = useParams()
   const passage = findVoice(id)
   // The hooks live in the inner component so an unknown passage never renders half of them.
-  if (!passage) return <p>Không tìm thấy đoạn</p>
+  if (!passage) return <NotFound what="đoạn" />
   return <VoiceRun key={passage.id} passage={passage} />
 }
 

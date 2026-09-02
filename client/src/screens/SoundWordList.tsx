@@ -6,7 +6,7 @@ import { playUrl } from '../audio/player'
 import { PHONEME_TIPS } from '../scoring/feedback'
 import { getStars } from '../progress/store'
 import { MISSION_STATE } from '../progress/missionNav'
-import { BackButton, Button, CARD_LINK, StarRow } from '../components/ui'
+import { BackButton, Button, CARD_LINK, NotFound, StarRow } from '../components/ui'
 import { PageShell, PageHeader, PageBody } from '../components/ui/page'
 
 /**
@@ -20,16 +20,7 @@ export function SoundWordList() {
   const { ph = '' } = useParams()
   const sound = findSound(ph)
   // The hooks live in the inner component so an unknown phoneme never renders half of them.
-  if (!sound || sound.cards.length === 0) {
-    return (
-      <PageShell>
-        <PageHeader back={<BackButton to="/levels" label="Các bậc" />} />
-        <PageBody>
-          <p>Không tìm thấy âm</p>
-        </PageBody>
-      </PageShell>
-    )
-  }
+  if (!sound || sound.cards.length === 0) return <NotFound what="âm" />
   return <WordList key={sound.ph} sound={sound} />
 }
 

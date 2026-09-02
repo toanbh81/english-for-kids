@@ -16,7 +16,7 @@ import { useSpeakingAttempt } from '../speaking/useSpeakingAttempt'
 import { useSpeakErrorAction } from '../speaking/useSpeakErrorAction'
 import { MicButton, ResultCard, SpeakError } from '../components/speak'
 import { Foxy } from '../components/Foxy'
-import { BackButton, Button, Chip, PAGE_SHELL } from '../components/ui'
+import { BackButton, Button, Chip, NotFound } from '../components/ui'
 import { PageShell, PageHeader, PageBody, PageFooter } from '../components/ui/page'
 
 const UNLOCK_SCORE = 60
@@ -44,14 +44,7 @@ export function WordCard() {
   const { topic = '', wordId = '' } = useParams()
   const word = findWord(wordId)
 
-  if (!word) {
-    return (
-      <main className={`h-full overflow-y-auto bg-cream-50 px-6 ${PAGE_SHELL}`}>
-        <p className="mb-4 font-display text-2xl font-extrabold text-ink-900">Không tìm thấy từ</p>
-        <BackButton to="/words" label="Từ vựng" />
-      </main>
-    )
-  }
+  if (!word) return <NotFound what="từ" to="/words" />
 
   const isReview = topic === 'review'
   const list: Word[] = isReview
