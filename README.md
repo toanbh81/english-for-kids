@@ -189,14 +189,15 @@ The client dev server uses HTTPS because Safari on iOS/iPadOS only allows microp
 ## Testing
 
 ```bash
-pnpm test        # client (Vitest, 703 tests) + server (Vitest, 2 tests)
+pnpm test        # client (Vitest) + server (Vitest)
 pnpm lint        # oxlint on the client
 pnpm typecheck   # tsc -b (client) + tsc --noEmit (server)
 ```
 
-`pnpm test` runs `pnpm -r test`, which executes the client suite (`vitest run`, 703 tests in 63
-files) and the server suite (`vitest run`, 2 tests). `pnpm lint` and `pnpm typecheck` fan out the
-same way.
+`pnpm test` runs `pnpm -r test`, which executes the whole client suite (`vitest run`) and then the
+whole server suite (`vitest run`). `pnpm lint` and `pnpm typecheck` fan out the same way. Both
+suites grow with every phase, so the test and file counts are deliberately not written down here —
+run `pnpm test` to see the current numbers.
 
 ## Security note
 
