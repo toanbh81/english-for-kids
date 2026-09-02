@@ -8,32 +8,16 @@ import { setStars } from '../progress/store'
 import { logActivity } from '../progress/activity'
 import { missionNoun, useMissionNext } from '../progress/missionNav'
 import { saveRecording } from '../progress/recordings'
-import { MicButton } from '../components/MicButton'
-import { Stars } from '../components/Stars'
-import { ScoredWords } from '../components/ScoredWords'
-import { ScoreBars } from '../components/ScoreBars'
-import { HintCard } from '../components/HintCard'
 import { Confetti } from '../components/Confetti'
-import { Foxy } from '../components/Foxy'
-import type { FoxyMood } from '../components/Foxy'
-import { BackButton, Button, Card, PAGE_SHELL } from '../components/ui'
+import { BackButton, Button, Card } from '../components/ui'
+import { PageShell, PageHeader, PageBody } from '../components/ui/page'
+import { MicButton, ResultCard, SpeakError } from '../components/speak'
 import { useSpeakingAttempt } from '../speaking/useSpeakingAttempt'
-import { SPEAK_ERROR_COPY } from '../speaking/speakError'
-
-/**
- * Phone layout follows `SoundPractice`'s idiom to the letter (see the comment block at the top of
- * that file): phone values sit unprefixed, `md:` restores the exact landscape value, and `max-md:`
- * appears only where a shared primitive writes a competing class of its own. Nothing is `sticky` —
- * a bottom-pinned panel paints over whatever happens to sit at its y.
- */
-const CTA_PHONE = 'max-md:min-h-[64px] max-md:px-4 max-md:text-lg'
+import type { SpeakErrorKind } from '../speaking/speakError'
 
 /** The hook stops the recording itself after this long; the countdown just mirrors it. */
 const AUTO_STOP_MS = 6000
 const COUNTDOWN_FROM = AUTO_STOP_MS / 1000
-
-const SAMPLE_CHIP =
-  'inline-flex min-h-[64px] items-center gap-2 rounded-full bg-teal-50 px-7 font-display text-xl font-extrabold text-teal-600 shadow-[0_5px_0_#C4E8E1] active:translate-y-[2px]'
 
 /** How many cards a level may have before the header's progress dots are dropped for the
  * "Thẻ n/N" counter alone — see the header below. */
@@ -114,164 +98,113 @@ export function PracticeCard() {
       ? (streak >= 2 ? 3 : (Math.min(2, feedback.stars) as 1 | 2))
       : feedback.stars
 
-  const mood: FoxyMood = recording
-    ? 'listening'
-    : effectiveStars === 3 ? 'cheer' : effectiveStars === 2 ? 'happy' : 'idle'
-
-  const isWebSpeech = attempt.engine === 'webspeech'
-
-  function retry() { attempt.reset() }
-
   /** Sample audio is generated locally and may simply not be there yet — say so, never throw. */
   function playSample() {
     playUrl(card!.audio).then(() => setAudioMissing(false), () => setAudioMissing(true))
   }
 
-  return (
-    // 20 px of side frame on a phone (design §1, the speak-frame family), the 24 px this screen
-    // has always had from the tablet breakpoint up. The vertical padding is the safe-area shell
-    // resting at the 1.25 rem of the old `py-5` — the same 20 px with no notch to clear.
-    <main className={`h-full overflow-y-auto bg-cream-50 px-5 [--page-pad-bottom:1.25rem] [--page-pad-top:1.25rem] md:px-6 ${PAGE_SHELL}`}>
-      {/* A *definite* height on the phone is what lets the result read-out below take the leftover
-        * space and scroll inside it instead of walking the CTA row off the bottom of the screen.
-        * It is switched on only for the result: a definite height also lets a `flex-1` section be
-        * squeezed below its content, which is fine for a read-out that scrolls but would paint the
-        * recording countdown over the mic. Idle and recording keep the growing `min-h-full`
-        * column, so the worst they can do is make the page scroll. */}
-      <div className={`mx-auto flex min-h-full w-full max-w-5xl flex-col items-center gap-3 md:gap-5 ${feedback ? 'max-md:h-full' : ''}`}>
-        <header className="flex w-full items-center justify-between gap-4">
-          {mission
-            ? <BackButton to="/mission" label="Nhiệm vụ" />
-            : <BackButton to={`/level/${level!.id}`} label="Quay lại" />}
-          <div className="flex min-w-0 flex-col items-center gap-2 overflow-hidden">
-            {/* In a lesson the level's own count is the wrong count — and two of them side by side
-                is one too many for a child to read — so the mission's position replaces it, dots
-                and all. */}
-            <span className="font-display text-base font-extrabold text-ink-500 md:text-xl">
-              {mission
-                ? `${missionNoun(mission.pos, 'Thẻ')} ${mission.pos.index}/${mission.pos.total}`
-                : `Thẻ ${cardIndex + 1}/${level!.cards.length}`}
-            </span>
-            {/* The dots are a nicety, the counter above them is the real read-out. Past a dozen
-                cards they stop fitting: the legacy `/practice/sz-*` route walks all 27 Sound Zoo
-                cards, and 27 of them made the header wider than a portrait iPad, squeezing the
-                66 px back button under the 64 px tap-target floor. So they wrap, and beyond
-                DOT_LIMIT they simply do not render. */}
-            {!mission && level!.cards.length <= DOT_LIMIT && (
-              <div data-testid="card-dots" className="flex flex-wrap justify-center gap-2">
-                {level!.cards.map((c, i) => (
-                  <span
-                    key={c.id}
-                    aria-hidden="true"
-                    className={`h-4 w-4 rounded-full ${i < cardIndex ? 'bg-teal-500' : i === cardIndex ? 'bg-coral-500' : 'bg-line-200'}`}
-                  />
-                ))}
-              </div>
-            )}
-          </div>
-          <span className="min-w-[66px] text-right text-base font-bold text-ink-300">{isWebSpeech ? 'chế độ đơn giản' : ''}</span>
-        </header>
+  const onErrorAction = (kind: SpeakErrorKind) => {
+    if (kind === 'limit') nav('/')
+    else if (kind === 'noSpeech' || kind === 'notReady') attempt.reset()
+  }
 
-        {feedback ? (
-          <>
-            {effectiveStars === 3 && <Confetti />}
-            {/* On a phone the read-out is a bounded scrolling region with the CTA row as its
-                *sibling* underneath — never a `sticky` overlay, which would paint over whichever
-                word chip happened to sit at its y. `md:contents` takes the wrapper out of the box
-                tree from 768 up, so the landscape frame is the same flat column it has always
-                been. */}
-            <section className="flex w-full flex-col items-center gap-2.5 pb-2 max-md:min-h-0 max-md:flex-1 md:w-auto md:gap-4">
-              <div className="flex w-full flex-col items-center gap-2.5 max-md:min-h-0 max-md:flex-1 max-md:overflow-y-auto md:contents">
-                <Stars value={effectiveStars} animate />
-                <div className="flex items-end gap-3">
-                  <Foxy mood={mood} size="sm" />
-                  <p className="font-display text-xl font-extrabold text-ink-900 md:text-3xl">
-                    {isWordPop && streak >= 2 ? 'Nói đúng 2 lần liên tiếp! 🎉' : feedback.message}
-                  </p>
-                </div>
-                <ScoredWords words={feedback.words} />
-                {feedback.hint && <HintCard hint={feedback.hint} />}
-                <div className="flex w-full flex-wrap justify-center gap-2 md:w-auto md:gap-4">
-                  {attempt.lastBlob && (
-                    <Button variant="outline" className={`${CTA_PHONE} max-md:flex-1`} onClick={() => playBlob(attempt.lastBlob!).catch(() => {})}>🎧 Nghe mình</Button>
-                  )}
-                  <Button variant="outline" className={`${CTA_PHONE} max-md:flex-1`} onClick={playSample}>🔊 Nghe mẫu</Button>
-                </div>
-                {audioMissing && <p className="text-sm font-bold text-ink-300 md:text-lg">Chưa có audio mẫu</p>}
-                {attempt.result && <ScoreBars result={attempt.result} />}
-              </div>
-              <div className="flex w-full flex-wrap justify-center gap-2 pt-1 md:w-auto md:gap-4">
-                <Button variant="outline" className={`${CTA_PHONE} max-md:flex-1`} onClick={retry}>↻ Thử lại</Button>
-                {(effectiveStars === 3 || attempts >= 3) && (
-                  mission
-                    ? <Button size="lg" pulse className={`${CTA_PHONE} max-md:flex-[1.35]`} onClick={mission.go}>{mission.label}</Button>
-                    : next
-                      ? <Button size="lg" pulse className={`${CTA_PHONE} max-md:flex-[1.35]`} onClick={() => nav(`/practice/${next.id}`)}>Tiếp theo →</Button>
-                      : <Button size="lg" pulse className={`${CTA_PHONE} max-md:flex-[1.35]`} onClick={() => nav(`/level/${level!.id}`)}>Hoàn thành 🎉</Button>
-                )}
-              </div>
-            </section>
-          </>
-        ) : recording ? (
-          <section className="flex flex-1 flex-col items-center justify-center gap-3">
-            <div className="font-display text-[32px] font-extrabold text-[#D9C9AE] md:text-[44px]">{card.text}</div>
-            <div aria-hidden="true" className="font-display text-[44px] font-extrabold leading-none text-coral-text md:text-[56px]">{secondsLeft}</div>
-            <Foxy mood="listening" size="sm" say="Foxy đang lắng nghe…" />
-          </section>
-        ) : (
-          /* Three 220 px tiles side by side is the landscape deck; at 390 px they wrap to three
-             rows of 220 and put the mic 94 px below the fold. On a phone the same three cells are
-             read as the design's stacked tiers (§6 M4): a wide meaning band, the word itself, and
-             the mouth shape folded down to one 64 px line. Every box is unset again from `md:` up,
-             where this is the same wrapping row of the same three tiles it has always been. */
-          <section className="flex w-full flex-1 flex-col items-center justify-center gap-3 md:flex-row md:flex-wrap md:gap-8">
-            <Card className="flex h-[96px] w-full shrink-0 flex-row items-center justify-center gap-4 [@media(max-width:767px)_and_(max-height:700px)]:h-[80px] md:h-[220px] md:w-[220px] md:flex-col md:gap-2">
-              <span aria-hidden="true" className="text-[56px] leading-none [@media(max-width:767px)_and_(max-height:700px)]:text-[44px] md:text-[104px]">{card.emoji}</span>
+  return (
+    <PageShell gutter="20">
+      <PageHeader back={mission ? <BackButton to="/mission" label="Nhiệm vụ" /> : <BackButton to={`/level/${level!.id}`} label="Quay lại" />} engine={attempt.engine}>
+        <div className="flex min-w-0 flex-col items-center gap-2 overflow-hidden">
+          {/* In a lesson the level's own count is the wrong count — and two of them side by side
+              is one too many for a child to read — so the mission's position replaces it, dots
+              and all. */}
+          <span className="font-display text-base font-extrabold text-ink-500 md:text-xl">
+            {mission
+              ? `${missionNoun(mission.pos, 'Thẻ')} ${mission.pos.index}/${mission.pos.total}`
+              : `Thẻ ${cardIndex + 1}/${level!.cards.length}`}
+          </span>
+          {/* The dots are a nicety, the counter above them is the real read-out. Past a dozen
+              cards they stop fitting: the legacy `/practice/sz-*` route walks all 27 Sound Zoo
+              cards, and 27 of them made the header wider than a portrait iPad. */}
+          {!mission && level!.cards.length <= DOT_LIMIT && (
+            <div data-testid="card-dots" className="flex flex-wrap justify-center gap-2">
+              {level!.cards.map((c, i) => (
+                <span
+                  key={c.id}
+                  aria-hidden="true"
+                  className={`h-4 w-4 rounded-full ${i < cardIndex ? 'bg-teal-500' : i === cardIndex ? 'bg-coral-500' : 'bg-line-200'}`}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      </PageHeader>
+      <PageBody split={{
+        teach: (
+          <div className={`flex w-full flex-1 flex-col items-center justify-center gap-3 md:flex-row md:flex-wrap md:gap-6 ${feedback ? 'max-md:hidden' : ''}`}>
+            <Card className="flex h-[96px] w-full shrink-0 flex-row items-center justify-center gap-4 md:h-[180px] md:w-[180px] md:flex-col md:gap-2">
+              <span aria-hidden="true" className="text-[56px] leading-none md:text-[88px]">{card.emoji}</span>
               <span className="text-sm font-bold text-ink-300 md:text-base">nghĩa của từ</span>
             </Card>
 
             <div className="flex w-full flex-col items-center gap-2 md:w-auto md:gap-3">
-              <div className={`font-display font-extrabold leading-none text-ink-900 md:leading-none ${card.text.length > 12 ? 'text-[32px] md:text-[46px]' : 'text-[42px] md:text-[64px]'}`}>
+              <div className={`font-display font-extrabold leading-none text-ink-900 md:leading-none ${card.text.length > 12 ? 'text-[32px] md:text-[40px]' : 'text-[42px] md:text-[54px]'}`}>
                 {card.text}
               </div>
               {isWordPop && !ipaRevealed ? (
-                <Button variant="ghost" onClick={() => setIpaRevealed(true)} className={CTA_PHONE}>Xem phiên âm</Button>
+                <Button variant="ghost" onClick={() => setIpaRevealed(true)}>Xem phiên âm</Button>
               ) : (
-                <div className="text-base font-bold text-ink-300 [@media(max-width:767px)_and_(max-height:700px)]:hidden md:text-[22px] md:leading-normal">{card.ipa}</div>
+                <div className="text-base font-bold text-ink-300 md:text-[20px] md:leading-normal">{card.ipa}</div>
               )}
-              <button onClick={playSample} className={SAMPLE_CHIP}>🔊 Nghe mẫu</button>
+              <Button variant="outline" onClick={playSample}>🔊 Nghe mẫu</Button>
               {audioMissing && <p className="text-sm font-bold text-ink-300 md:text-lg">Chưa có audio mẫu</p>}
             </div>
 
-            {/* The 220 px mouth tile is what the design cuts hardest here: on a phone it is a
-                64 px line at the foot of the deck, still on screen — and, unlike the tile, still
-                on screen while the child is recording. */}
-            <div className="flex h-16 w-full shrink-0 flex-row items-center justify-center gap-3 rounded-xl3 bg-[#FFF1E6] shadow-[0_8px_0_#F2DFC9] [@media(max-width:767px)_and_(max-height:700px)]:hidden md:h-[220px] md:w-[220px] md:flex-col md:gap-2">
-              <span aria-hidden="true" className="animate-wiggle text-[34px] leading-none md:text-[76px]">👄</span>
+            <div className="flex h-16 w-full shrink-0 flex-row items-center justify-center gap-3 rounded-xl3 bg-[#FFF1E6] shadow-[0_8px_0_#F2DFC9] md:h-[180px] md:w-[180px] md:flex-col md:gap-2">
+              <span aria-hidden="true" className="animate-wiggle text-[34px] leading-none md:text-[64px]">👄</span>
               <span className="text-sm font-bold text-ink-500 md:text-base">Khẩu hình miệng</span>
             </div>
-          </section>
-        )}
 
-        {isWordPop && (
-          <div className="flex flex-col items-center gap-1">
-            <div className="flex gap-3 text-2xl leading-none md:text-3xl md:leading-none">
-              <span aria-label="Lần 1/2" className={streak >= 1 ? 'text-coral-500' : 'text-line-200'}>{streak >= 1 ? '●' : '○'}</span>
-              <span aria-label="Lần 2/2" className={streak >= 2 ? 'text-coral-500' : 'text-line-200'}>{streak >= 2 ? '●' : '○'}</span>
-            </div>
-            <p className="text-[13px] font-bold text-ink-300 [@media(max-width:767px)_and_(max-height:700px)]:hidden md:text-base">Nói đúng 2 lần liên tiếp để được 3 sao</p>
+            {isWordPop && (
+              <div className="flex w-full flex-col items-center gap-1">
+                <div className="flex gap-3 text-2xl leading-none md:text-3xl md:leading-none">
+                  <span aria-label="Lần 1/2" className={streak >= 1 ? 'text-coral-500' : 'text-line-200'}>{streak >= 1 ? '●' : '○'}</span>
+                  <span aria-label="Lần 2/2" className={streak >= 2 ? 'text-coral-500' : 'text-line-200'}>{streak >= 2 ? '●' : '○'}</span>
+                </div>
+                <p className="text-[13px] font-bold text-ink-300 md:text-base">Nói đúng 2 lần liên tiếp để được 3 sao</p>
+              </div>
+            )}
           </div>
-        )}
-
-        {attempt.error && <p className="font-display text-xl font-extrabold text-fix-700 md:text-2xl">{SPEAK_ERROR_COPY[attempt.error.kind].title}</p>}
-
-        {!feedback && (
-          <div className="mt-auto flex flex-col items-center gap-2 pb-1 pt-1 [@media(max-width:767px)_and_(max-height:700px)]:pb-0 [@media(max-width:767px)_and_(max-height:700px)]:pt-0 md:mt-0 md:gap-3 md:pb-2">
-            <MicButton state={attempt.micState} level={attempt.level} onPress={attempt.onMic} />
-            {!recording && <p className="font-display text-base font-extrabold text-ink-500 [@media(max-width:767px)_and_(max-height:700px)]:hidden md:text-xl">Chạm để nói nào!</p>}
+        ),
+        act: feedback ? (
+          <>
+            {effectiveStars === 3 && <Confetti />}
+            <ResultCard
+              stars={effectiveStars}
+              praise={isWordPop && streak >= 2 ? 'Nói đúng 2 lần liên tiếp! 🎉' : feedback.message}
+              score={attempt.result?.overall}
+              words={feedback.words}
+              bars={attempt.result ?? undefined}
+              hint={feedback.hint}
+              canReplay={!!attempt.lastBlob}
+              onReplay={() => playBlob(attempt.lastBlob!).catch(() => {})}
+              onSample={playSample}
+              onRetry={() => attempt.reset()}
+              // Retry-only until 3★ or 3 attempts: the CTA row shows "↻ Thử lại" alone until then.
+              primary={effectiveStars === 3 || attempts >= 3
+                ? (mission
+                    ? { label: mission.label, onClick: mission.go }
+                    : next
+                      ? { label: 'Tiếp theo →', to: `/practice/${next.id}` }
+                      : { label: 'Hoàn thành 🎉', to: `/level/${level!.id}` })
+                : undefined}
+              animate
+            />
+          </>
+        ) : (
+          <div className="flex flex-col items-center gap-3">
+            {attempt.error && <SpeakError error={attempt.error} onAction={onErrorAction} onDismiss={attempt.dismissError} />}
+            <MicButton state={attempt.micState} level={attempt.level} onPress={attempt.onMic} secondsLeft={recording ? secondsLeft : undefined} />
           </div>
-        )}
-      </div>
-    </main>
+        ),
+      }} />
+    </PageShell>
   )
 }

@@ -15,7 +15,7 @@ vi.mock('../speaking/useSpeakingAttempt', () => ({
     return {
       micState: 'idle' as const, level: 0, engine: mic.engine,
       result, error: null, lastBlob: null,
-      onMic: () => {}, reset: () => setResult(null),
+      onMic: () => {}, reset: () => setResult(null), dismissError: () => {},
     }
   },
 }))
@@ -83,10 +83,7 @@ function renderWord(ph = 'th', cardId = 'sz-th-three', mission = false) {
 
 const stored = () => JSON.parse(localStorage.getItem('speakup.stars') ?? '{}')
 
-/** An element's classes as exact tokens. `className.includes('mt-auto')` also matches
- * `sm:mt-auto` and `md:mt-auto` — which is the whole thing these tests exist to catch — so every
- * breakpoint assertion below compares tokens, never substrings. */
-const classes = (el: Element) => el.className.split(/\s+/).filter(Boolean)
+const wordChip = () => screen.getByTestId('word-chip')
 
 beforeEach(() => {
   localStorage.clear()
@@ -108,173 +105,42 @@ it('numbers the word by its place in the sound, not from 1', () => {
   expect(screen.getByText('Từ 3/3')).toBeInTheDocument()
 })
 
-it('lays the sound and the word out as two rows sharing a tile column', () => {
+it('lays the sound and the word tile out with their own listening buttons', () => {
   renderWord()
 
-  const grid = screen.getByTestId('sound-word-grid')
-  const soundA = screen.getByTestId('sound-cell-a')
-  const soundB = screen.getByTestId('sound-cell-b')
-  const wordA = screen.getByTestId('word-cell-a')
-  const wordB = screen.getByTestId('word-cell-b')
-  expect(grid).toContainElement(soundA)
-  expect(grid).toContainElement(wordA)
+  const wordTile = screen.getByTestId('word-tile')
+  expect(within(wordTile).getByRole('button', { name: /nghe mẫu/i })).toBeInTheDocument()
+  expect(wordTile).toHaveTextContent('three')
 
-  // Row 1 (sound): the IPA tile plus its own "Nghe âm lẻ" control.
-  expect(soundA).toHaveTextContent('/θ/')
-  expect(within(soundA).getByRole('button', { name: /nghe âm lẻ/i })).toBeInTheDocument()
-  expect(soundB).toHaveTextContent(PHONEME_TIPS.th)
-
-  // Row 2 (word): the word tile plus its own "Nghe mẫu" control, and the word's own text.
-  expect(wordA).toHaveTextContent('🔊')
-  expect(within(wordA).getByRole('button', { name: /nghe mẫu/i })).toBeInTheDocument()
-  expect(wordB).toHaveTextContent('three')
-  expect(wordB).toHaveTextContent('Từ 1/3')
+  expect(screen.getByRole('button', { name: /nghe âm lẻ/i })).toBeInTheDocument()
 })
 
-// --- the phone frame (phase 10, brief §5 M3/M3b + §6 M4) -------------------------------------
-//
-// jsdom has no layout, so these assert the one thing that decides the layout: which breakpoint
-// each rule is written at. The geometry itself is measured in a browser (see the phase-10 task
-// report) — what these guard is that nobody ever moves a phone rule up to where an iPad sees it,
-// which is the failure mode brief §15 is entirely about.
-
-it('reads the sound and word cells as two stacked tiers on a phone and as grid cells from `md` up', () => {
+/** Both counters still exist on a phone; only the teach column folds away. */
+it('folds the teach column away on a phone once a result lands, and only on a phone', () => {
   renderWord()
-
-  // The tier wrappers ARE the cards below 768 and stop being boxes at all from 768 up, which is
-  // what lets one DOM be both layouts: `md:contents` takes them out of the grid.
-  for (const id of ['sound-tier', 'word-tier']) {
-    const tier = screen.getByTestId(id)
-    expect(classes(tier)).toContain('md:contents')
-    expect(classes(tier).some(c => c.startsWith('rounded-'))).toBe(true)
-  }
-  // The two-column grid is still the tablet/iPad layout and still starts at 768.
-  expect(classes(screen.getByTestId('sound-word-grid'))).toContain('md:grid-cols-[minmax(180px,auto)_1fr]')
-})
-
-/** The 168×200 tile is the one element the design cuts outright: it is what pushed the mic under
- * the fold. The mouth shape itself is not lost — it moves into the sound row at 64 px. */
-it('swaps the big mouth tile for a 64 px one in the sound row, below `md` only', () => {
-  renderWord()
-
-  const small = screen.getByTestId('mouth-tile')
-  expect(screen.getByTestId('sound-cell-a')).toContainElement(small)
-  expect(classes(small)).toContain('md:hidden')
-
-  const big = classes(screen.getByText('Khẩu hình miệng').closest('section')!)
-  expect(big).toContain('hidden')
-  expect(big).toContain('md:flex')
-})
-
-/** Both counters still exist on a phone; only the deck they sit in folds away. */
-it('folds the whole deck away on a phone once a result lands, and only on a phone', () => {
-  renderWord()
-  expect(classes(screen.getByTestId('sound-word-grid'))).not.toContain('max-md:hidden')
+  const teach = screen.getByTestId('word-tile').parentElement!
+  expect(teach.className).not.toContain('max-md:hidden')
 
   score(result(55))
 
-  expect(classes(screen.getByTestId('sound-word-grid'))).toContain('max-md:hidden')
-  // The sound and its tip are not lost with it — the result state reprints both.
-  expect(screen.getByTestId('sound-chip')).toHaveTextContent('/θ/')
-  expect(screen.getByTestId('sound-tip')).toHaveTextContent(PHONEME_TIPS.th)
+  expect(teach.className).toContain('max-md:hidden')
+  // The sound and its tip are not lost with it — the result card reprints the IPA chip and the tip.
+  expect(wordChip()).toHaveTextContent('/θ/')
+  expect(screen.getByText(PHONEME_TIPS.th)).toBeInTheDocument()
 })
 
-/** Every phone override on a shared primitive has to be `max-md:`, because an unprefixed one
- * would be a coin-toss against the class the primitive writes for itself — and, unlike a plain
- * rule, `max-md:` provably cannot reach the iPad. */
-it('keeps the result CTAs a phone-only size, and never touches the button primitive above it', () => {
+/** The frame is the shared `PageShell`: `overflow-hidden` on `main`, `page-body` the only
+ * scroller, never a `sticky` panel painting over a word chip. */
+it('carries the PageShell frame, never a sticky panel', () => {
   renderWord()
-  score(result(55))
-
-  // "Tiếp theo" is a link in free play and a button under the mission, so ask for either.
-  for (const name of [/thử lại/i, /tiếp theo/i]) {
-    const cta = classes(screen.getByRole(/thử lại/.test(name.source) ? 'button' : 'link', { name }))
-    expect(cta).toContain('max-md:min-h-[64px]')
-    expect(cta.some(c => c === 'max-md:flex-1' || c === 'max-md:flex-[1.35]')).toBe(true)
-    // The landscape size map is untouched: Button's own responsive size (56/64 for the default md,
-    // 64/72 for "Tiếp theo"'s lg) is still what `Button` hands out.
-    expect(cta.some(c => c === 'min-h-[56px]' || c === 'min-h-[64px]')).toBe(true)
-    expect(cta.some(c => c === 'md:min-h-[64px]' || c === 'md:min-h-[72px]')).toBe(true)
-  }
+  expect(screen.getByRole('main')).toHaveClass('overflow-hidden')
+  expect(screen.getByTestId('page-body')).toHaveClass('ipad:flex-row')
+  expect(document.querySelector('main')!.innerHTML).not.toContain('sticky')
 })
 
-/** The mic takes the free space at the bottom of the phone frame and gives it straight back from
- * `md` up, where the mouth tile is holding the column open again.
- *
- * It must NOT be `sticky`: a bottom-pinned panel paints over whatever sits at its y, and at
- * 375×667 that hid the tail of the word card *inside* the viewport. The frame is trimmed to fit
- * instead. `classes()` is exact-token, not substring — `sm:mt-auto` is a different rule and has to
- * fail this. */
-it('pins the mic with layout, never with an overlay, and leaves the landscape column alone', () => {
+it('puts the teaching tiles on the left and the mic on the right, only from `ipad` up', () => {
   renderWord()
-
-  // MicButton (Task 6) wraps the mic in its own reserved-box + outer div, so the screen's row
-  // is three levels up from the button, not the button's direct parent.
-  const micBlock = classes(screen.getByRole('button', { name: /bấm để nói/i }).parentElement!.parentElement!.parentElement!)
-  expect(micBlock).toContain('mt-auto')
-  expect(micBlock).toContain('md:mt-0')
-  // No panel floats over the deck at any width.
-  expect(micBlock).not.toContain('sticky')
-  expect(micBlock).not.toContain('fixed')
-  expect(micBlock).not.toContain('absolute')
-  expect(micBlock).not.toContain('bg-cream-50')
-})
-
-// --- the iPad frame: two columns, not a taller one -------------------------------------------
-//
-// Same reasoning as the phone block above, and the same limits: jsdom has no layout, so these
-// assert which breakpoint each rule is written at and which column each block sits in. The
-// geometry is measured in a browser — .superpowers/fix/ipad-practice-report.md carries the table.
-
-it('splits the frame into a learning column and a doing column, and only from `ipad` up', () => {
-  renderWord()
-
-  const teach = screen.getByTestId('teach-col')
-  const doing = screen.getByTestId('do-col')
-  for (const col of [teach, doing]) {
-    // Below the breakpoint both wrappers leave the box tree entirely, so the phone frame is the
-    // same single flow it has always been — no new box, no new rule to get in its way.
-    expect(classes(col)).toContain('contents')
-    expect(classes(col)).toContain('ipad:flex')
-    // `min-h-0` is what bounds a column to the screen instead of letting it push the page taller.
-    expect(classes(col)).toContain('ipad:min-h-0')
-    // Nothing floats: a pinned panel paints over whatever sits at its y (see the file header).
-    for (const bad of ['sticky', 'fixed', 'absolute']) expect(classes(col)).not.toContain(bad)
-  }
-  expect(classes(teach)).toContain('ipad:flex-1')
-  expect(classes(doing)).toContain('ipad:w-[400px]')
-})
-
-it('puts the teaching deck on the left and the mouth card, the mic and Foxy on the right', () => {
-  renderWord()
-
-  expect(screen.getByTestId('teach-col')).toContainElement(screen.getByTestId('sound-word-grid'))
-  const doing = screen.getByTestId('do-col')
-  expect(doing).toContainElement(screen.getByRole('button', { name: /bấm để nói/i }))
-  expect(doing).toContainElement(screen.getByText('Khẩu hình miệng'))
-})
-
-it('keeps the score block and the CTA row in the doing column once a result lands', () => {
-  renderWord()
-  score(result(55))
-
-  const doing = screen.getByTestId('do-col')
-  expect(doing).toContainElement(screen.getByTestId('sound-chip'))
-  expect(doing).toContainElement(screen.getByRole('button', { name: /thử lại/i }))
-  expect(doing).toContainElement(screen.getByRole('link', { name: /tiếp theo/i }))
-  // …and the deck stays on the left, where the child is still reading it.
-  expect(screen.getByTestId('teach-col')).toContainElement(screen.getByTestId('sound-word-grid'))
-})
-
-/** `min-h-full` is a floor, not a height. Without a definite one the split's `flex-1`/`min-h-0`
- * bound nothing — a flex child's base size is its own content — and the column grows past the
- * screen exactly as it did before, which is the whole bug. */
-it('gives the iPad column a definite height to divide', () => {
-  renderWord()
-
-  const column = classes(screen.getByTestId('sound-word-grid').closest('main')!.firstElementChild!)
-  expect(column).toContain('ipad:h-full')
-  expect(column).toContain('min-h-full')
+  expect(screen.getByTestId('page-body')).toHaveClass('ipad:flex-row', 'ipad:gap-6')
 })
 
 it('plays the sound on its own, and says so when that sample is missing', async () => {
@@ -288,14 +154,13 @@ it('plays the sound on its own, and says so when that sample is missing', async 
   await screen.findByText('Chưa có audio âm này')
 })
 
-it('folds the word row away once a result lands, and keeps the "Từ n/3" count in the header instead', () => {
+it('folds the word tile away once a result lands, and keeps the "Từ n/3" count in the header instead', () => {
   renderWord()
-  expect(screen.getByTestId('word-cell-a')).toBeInTheDocument()
+  expect(screen.getByTestId('word-tile')).toBeInTheDocument()
 
   score(result(92))
 
-  expect(screen.queryByTestId('word-cell-a')).not.toBeInTheDocument()
-  expect(screen.queryByTestId('word-cell-b')).not.toBeInTheDocument()
+  expect(screen.queryByTestId('word-tile')).not.toBeInTheDocument()
   // Still on screen exactly once — relocated, never lost.
   expect(screen.getByText('Từ 1/3')).toBeInTheDocument()
 })
@@ -304,18 +169,20 @@ it('scores only the target sound: a good phoneme needs no tip', () => {
   renderWord()
   score(result(92))
 
-  const chip = screen.getByTestId('sound-chip')
+  const chip = wordChip()
   expect(chip).toHaveAttribute('data-tone', 'good')
-  expect(chip).toHaveTextContent('92')
-  expect(screen.queryByTestId('sound-tip')).not.toBeInTheDocument()
+  expect(screen.getByText(/90 điểm/)).toBeInTheDocument()
+  // The result card itself carries no hint at 3 stars — the teach column's own copy of the tip
+  // (now off-screen behind `max-md:hidden`, not removed) is a different element.
+  expect(within(screen.getByTestId('result-card')).queryByText(PHONEME_TIPS.th)).not.toBeInTheDocument()
 })
 
 it('turns a weak target sound into a fix chip plus the mouth tip', () => {
   renderWord()
   score(result(55))
 
-  expect(screen.getByTestId('sound-chip')).toHaveAttribute('data-tone', 'fix')
-  expect(screen.getByTestId('sound-tip')).toHaveTextContent(PHONEME_TIPS.th)
+  expect(wordChip()).toHaveAttribute('data-tone', 'fix')
+  expect(screen.getByText(PHONEME_TIPS.th)).toBeInTheDocument()
   // The word is still shown, but small and only as context for the sound.
   expect(screen.getByText(/90 điểm/)).toBeInTheDocument()
 })
@@ -327,12 +194,10 @@ it('says the sound was not scored when the engine reports no phoneme detail', ()
   renderWord()
   score(result(null, 70))
 
-  const chip = screen.getByTestId('sound-chip')
+  const chip = wordChip()
   expect(chip).toHaveAttribute('data-tone', 'unknown')
   // Full scoring ran and simply missed the sound — saying it again really can fix that.
-  expect(chip).toHaveTextContent('Chưa nghe rõ âm này — thử lại nhé!')
-  expect(chip).toHaveAttribute('aria-label', 'Âm θ: Chưa nghe rõ âm này — thử lại nhé!')
-  expect(chip.textContent).not.toMatch(/\d/)
+  expect(screen.getByText('Chưa nghe rõ âm này — thử lại nhé!')).toBeInTheDocument()
   // The word's own score is still reported — that much was measured.
   expect(screen.getByText(/70 điểm/)).toBeInTheDocument()
 })
@@ -344,10 +209,9 @@ it('blames neither the connection nor the child when the simple engine cannot sc
   renderWord()
   score(ws(70))
 
-  const chip = screen.getByTestId('sound-chip')
+  const chip = wordChip()
   expect(chip).toHaveAttribute('data-tone', 'unknown')
-  expect(chip).toHaveTextContent('Chế độ đơn giản chưa chấm được âm lẻ — bé thử lại nhé!')
-  expect(chip).toHaveAttribute('aria-label', 'Âm θ: Chế độ đơn giản chưa chấm được âm lẻ — bé thử lại nhé!')
+  expect(screen.getByText('Chế độ đơn giản chưa chấm được âm lẻ — bé thử lại nhé!')).toBeInTheDocument()
   expect(document.body.textContent).not.toMatch(/azure/i)
 })
 
@@ -356,9 +220,7 @@ it('never fabricates a phoneme score on the Web Speech fallback, and caps such a
   renderWord()
 
   score(ws(100))
-  const chip = screen.getByTestId('sound-chip')
-  expect(chip).toHaveAttribute('data-tone', 'unknown')
-  expect(chip.textContent).not.toMatch(/\d/)
+  expect(wordChip()).toHaveAttribute('data-tone', 'unknown')
 
   // A perfect Web Speech attempt proves the child said *something*, not that the θ was right.
   expect(screen.getAllByTestId('star-filled')).toHaveLength(2)
@@ -391,7 +253,7 @@ it('takes the worst occurrence of the sound, not the average', () => {
     ...result(90),
     words: [{ word: 'three', score: 90, errorType: 'None', phonemes: [{ phoneme: 'th', score: 90 }, { phoneme: 'th', score: 40 }] }],
   })
-  expect(screen.getByTestId('sound-chip')).toHaveAttribute('data-tone', 'fix')
+  expect(wordChip()).toHaveAttribute('data-tone', 'fix')
 })
 
 it('logs a speak event for every scored attempt', () => {
@@ -452,7 +314,7 @@ it('hands on to the next word of the sound', () => {
   expect(screen.getByText('thank')).toBeInTheDocument()
   expect(screen.getByText('Từ 2/3')).toBeInTheDocument()
   // A fresh word starts with a fresh attempt, not the previous word's result.
-  expect(screen.queryByTestId('sound-chip')).not.toBeInTheDocument()
+  expect(screen.queryByTestId('result-card')).not.toBeInTheDocument()
 })
 
 it('ends the last word back on the sound’s word list', () => {

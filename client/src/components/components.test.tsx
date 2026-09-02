@@ -1,5 +1,5 @@
 import { render, screen, fireEvent } from '@testing-library/react'
-import { MicButton } from './MicButton'; import { Stars } from './Stars'
+import { MicButton } from './speak/MicButton'; import { Stars } from './Stars'
 import { ScoredWords } from './ScoredWords'; import { HintCard } from './HintCard'
 import { ScoreBars } from './ScoreBars'
 

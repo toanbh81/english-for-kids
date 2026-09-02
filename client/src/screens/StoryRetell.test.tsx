@@ -144,7 +144,7 @@ it('shows the hook error in the fix color', () => {
 it('shows a simple-mode label for the webspeech engine', () => {
   attemptControl.current = { ...baseAttempt(), engine: 'webspeech' }
   renderRetell()
-  expect(screen.getByText('chế độ đơn giản')).toBeInTheDocument()
+  expect(screen.getByTestId('engine-badge')).toHaveTextContent('chế độ đơn giản')
 })
 
 it('plays the recorded scene narration when the retell scene has word timings', () => {

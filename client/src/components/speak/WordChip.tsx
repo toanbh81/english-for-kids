@@ -9,7 +9,7 @@ const TONE: Record<WordTone, { cls: string; glyph: string; label: string }> = {
 export function WordChip({ word, tone }: { word: string; tone: WordTone }) {
   const t = TONE[tone]
   return (
-    <span data-testid="word-chip" aria-label={`${word} ${t.label}`} className={`inline-flex h-10 items-center rounded-r12 border-[3px] px-3 font-display text-[15px] font-extrabold ${t.cls}`}>
+    <span data-testid="word-chip" data-tone={tone} aria-label={`${word} ${t.label}`} className={`inline-flex h-10 items-center rounded-r12 border-[3px] px-3 font-display text-[15px] font-extrabold ${t.cls}`}>
       <span aria-hidden="true">{t.glyph} </span>{word}
     </span>
   )

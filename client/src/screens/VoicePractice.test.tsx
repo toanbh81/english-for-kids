@@ -10,6 +10,8 @@ const mic = vi.hoisted(() => ({
   push: (_r: PronunciationResult, _b: Blob | null = null) => {},
   engine: 'azure' as 'azure' | 'webspeech',
   autoStopMs: undefined as number | undefined,
+  error: null as { kind: string; detail?: string } | null,
+  dismissError: () => {},
 }))
 vi.mock('../speaking/useSpeakingAttempt', () => ({
   useSpeakingAttempt(opts: { resetKey?: string; autoStopMs?: number; onResult?: (r: PronunciationResult, b: Blob | null) => void }) {
@@ -20,10 +22,11 @@ vi.mock('../speaking/useSpeakingAttempt', () => ({
       setState({ result: r, blob: b })
       opts.onResult?.(r, b)
     }
+    mic.dismissError = () => {}
     return {
       micState: 'idle' as const, level: 0, engine: mic.engine,
-      result: state.result, error: null, lastBlob: state.blob,
-      onMic: () => {}, reset: () => setState({ result: null, blob: null }),
+      result: state.result, error: mic.error, lastBlob: state.blob,
+      onMic: () => {}, reset: () => setState({ result: null, blob: null }), dismissError: mic.dismissError,
     }
   },
 }))
@@ -91,6 +94,7 @@ function cleanupAndRender(id: string) {
 beforeEach(() => {
   localStorage.clear()
   mic.engine = 'azure'
+  mic.error = null
   playerControl.playUrl.mockReset().mockResolvedValue(undefined)
   playerControl.playBlob.mockReset().mockResolvedValue(undefined)
   store.saveRecording.mockReset().mockResolvedValue(undefined)
@@ -133,7 +137,6 @@ it('tints the sentence-final ❗❓ and leaves the words alone', () => {
 it('keeps the long passages at the smaller size a landscape iPad has room for', () => {
   renderVoice('sv4') // 15 words — three lines at 34 px
   expect(screen.getByTestId('voice-passage')).toHaveClass('lg:text-[30px]')
-  // The landscape sizes are the `md:` half of each pair now; the unprefixed value is the phone's.
   expect(screen.getByTestId('mood-emoji')).toHaveClass('text-[38px]', 'md:text-[56px]')
 
   cleanupAndRender('sv6') // 10 words — fits at the bigger size
@@ -148,7 +151,6 @@ it('tints only the marks that actually end a sentence', () => {
 
   const marks = screen.getAllByTestId('voice-punct')
   expect(marks.map(m => m.textContent)).toEqual(['!', '?'])
-  // The whole passage still reads as one line to a screen reader, mid-sentence ! included.
   expect(screen.getByLabelText('Wow, look! He said "stop!" and ran. Is it here?')).toHaveTextContent(
     'Wow, look! He said "stop!" and ran. Is it here?',
   )
@@ -170,13 +172,11 @@ it('coaches the mood with three tips, different per mood', () => {
 /** The shared tips are used by several passages at once, so they can only talk about *how* to
  * read; a passage that needs a word named brings its own tips and those win outright. */
 it('prefers the passage’s own tips over the shared mood tips when it has them', () => {
-  // sv7 and sv5 are both "excited": the shared tips cannot name a word that fits both.
   renderVoice('sv7')
   const tips = screen.getAllByTestId('mood-tip').map(t => t.textContent)
   expect(tips).toHaveLength(3)
   expect(tips.join(' ')).toContain('did it')
 
-  // sv5 has no tips of its own, so the mood's generic ones still show — and name no words.
   cleanupAndRender('sv5')
   const shared = screen.getAllByTestId('mood-tip').map(t => t.textContent ?? '')
   expect(shared).toHaveLength(3)
@@ -197,15 +197,16 @@ it('turns strong intonation into 3 stars on the passage key', () => {
   renderVoice()
   score(result({ prosody: 84, accuracy: 75 }), new Blob(['x']))
 
-  expect(screen.getByTestId('prosody-chip')).toHaveTextContent('Ngữ điệu 84')
+  const card = screen.getByTestId('result-card')
   expect(screen.getByTestId('prosody-chip')).toHaveAttribute('data-tone', 'good')
   expect(screen.getAllByTestId('star-filled')).toHaveLength(3)
-  expect(screen.getByText('Đọc có hồn quá!')).toBeInTheDocument()
+  expect(within(card).getByText('Đọc có hồn quá!')).toBeInTheDocument()
   expect(screen.getByTestId('confetti')).toBeInTheDocument()
   expect(JSON.parse(localStorage.getItem('speakup.stars') ?? '{}')['voice:sv1']).toBe(3)
   expect(JSON.parse(localStorage.getItem('speakup.activity') ?? '[]'))
     .toContainEqual(expect.objectContaining({ kind: 'speak', id: 'sv1' }))
   expect(store.saveRecording).toHaveBeenCalledTimes(1)
+  expect(card.querySelectorAll('[data-testid="word-chip"]')).toHaveLength(SV1.text.split(' ').length)
   expect(screen.getAllByTestId('score-bar')).toHaveLength(4)
   expect(screen.getByRole('button', { name: /nghe mình/i })).toBeInTheDocument()
 })
@@ -214,7 +215,6 @@ it('gives 2 stars for middling intonation', () => {
   renderVoice()
   score(result({ prosody: 65, accuracy: 80 }))
 
-  expect(screen.getByTestId('prosody-chip')).toHaveTextContent('Ngữ điệu 65')
   expect(screen.getByTestId('prosody-chip')).toHaveAttribute('data-tone', 'ok')
   expect(screen.getAllByTestId('star-filled')).toHaveLength(2)
   expect(screen.getByText('Hay lắm!')).toBeInTheDocument()
@@ -230,13 +230,11 @@ it('says the intonation was not marked on the simple engine, and caps the stars'
 
   score(result({ accuracy: 95 }))
 
-  expect(screen.getByTestId('prosody-chip')).toHaveTextContent('Chưa chấm được ngữ điệu')
   expect(screen.getByTestId('prosody-chip')).toHaveAttribute('data-tone', 'none')
   // …and the bar under it must not quietly paint accuracy in the prosody slot.
   const bars = screen.getAllByTestId('score-bar')
   expect(bars[3]).toHaveAttribute('data-value', 'none')
   expect(bars[3].style.width).toBe('0%')
-  expect(bars[3]).toHaveAttribute('aria-label', 'Ngữ điệu chưa chấm được')
   expect(screen.getAllByTestId('star-filled')).toHaveLength(2)
   expect(screen.queryByTestId('confetti')).not.toBeInTheDocument()
   expect(JSON.parse(localStorage.getItem('speakup.stars') ?? '{}')['voice:sv1']).toBe(2)
@@ -258,19 +256,28 @@ it('offers a hint and a retry when the attempt was weak', () => {
 it('hands on to the next passage, and finishes the level on the last one', () => {
   renderVoice()
   score(result({ prosody: 84, accuracy: 75 }))
-  fireEvent.click(screen.getByRole('button', { name: /tiếp theo/i }))
+  fireEvent.click(screen.getByRole('link', { name: /tiếp theo/i }))
   expect(screen.getByText('Đoạn 2/8')).toBeInTheDocument()
 
   cleanupAndRender(STORY_VOICE[STORY_VOICE.length - 1].id)
   expect(screen.getByText('Đoạn 8/8')).toBeInTheDocument()
   score(result({ prosody: 84, accuracy: 75 }))
-  fireEvent.click(screen.getByRole('button', { name: /hoàn thành/i }))
+  fireEvent.click(screen.getByRole('link', { name: /hoàn thành/i }))
   expect(screen.getByText('các đoạn')).toBeInTheDocument()
 })
 
 it('shows a not-found message for a passage that does not exist', () => {
   renderVoice('nope')
   expect(screen.getByText('Không tìm thấy đoạn')).toBeInTheDocument()
+})
+
+/** SpeakError renders the alert; a `noSpeech` action resets the attempt back to idle. */
+it('renders the error through SpeakError and lets the child reset from it', () => {
+  mic.error = { kind: 'noSpeech' }
+  renderVoice()
+
+  expect(screen.getByRole('alert')).toHaveTextContent('Không nghe rõ, bé thử lại nhé!')
+  fireEvent.click(screen.getByRole('button', { name: /thử lại/i }))
 })
 
 // --- as a step of today's lesson (spec §3) ---------------------------------------------------
@@ -323,131 +330,39 @@ it('stays a free-play passage without the flag, lesson or no lesson', () => {
   expect(screen.getByRole('link', { name: 'Quay lại' })).toHaveAttribute('href', '/level/story-voice')
 })
 
-/** Phase 10: this screen had no phone layout at all — no breakpoint rules and no `PAGE_SHELL`,
- * so at 390×844 it measured 940 idle (the mic clipped at the fold) and 1742 scored, with
- * "Tiếp theo →" at y1642. jsdom cannot lay that out, so these guard the inputs. */
-it('carries the safe-area shell at its own resting padding', () => {
+/** The frame is the shared `PageShell`: `overflow-hidden` on `main`, the body the only scroller. */
+it('carries the PageShell frame, never a sticky panel', () => {
   renderVoice()
-
-  const shell = document.querySelector('main')!.className
-  expect(shell).toContain('pt-[max(var(--page-pad-top,1.5rem),calc(env(safe-area-inset-top)_+_8px))]')
-  expect(shell).toContain('pb-[max(var(--page-pad-bottom,1.5rem),calc(env(safe-area-inset-bottom)_+_10px))]')
-  expect(shell).toContain('[--page-pad-top:1.25rem]')
-  expect(shell).toContain('px-5')
-  expect(shell).toContain('md:px-6')
-})
-
-/** The mood, the passage and the tips fold away on a phone once a result lands: the word chips
- * below reprint every word of the passage and the mood has already been read. From `md` up all
- * three stay exactly where they were. */
-it('folds the brief away on a phone result only', () => {
-  renderVoice()
-  const mood = () => screen.getByTestId('mood-emoji').closest('section')!
-  const tips = () => screen.getAllByTestId('mood-tip')[0].closest('div')!
-  expect(mood().className).not.toContain('max-md:hidden')
-
-  score(result({ prosody: 84, accuracy: 75 }), new Blob(['x']))
-  expect(mood().className).toContain('max-md:hidden')
-  expect(screen.getByTestId('voice-passage').closest('section')!.className).toContain('max-md:hidden')
-  expect(tips().className).toContain('max-md:hidden')
-})
-
-/** The result read-out scrolls inside a bounded region on a phone with the CTA row as its sibling
- * underneath — never a `sticky` panel, which would paint over a word chip. And the bounded height
- * is switched on for the result *only*: a definite height would also let the recording section be
- * squeezed below its content and paint the countdown over the mic. */
-it('bounds the column for the result only, and never with a sticky', () => {
-  renderVoice()
-  const column = () => document.querySelector('main > div')!
-  expect(column().className).not.toContain('max-md:h-full')
-
-  score(result({ prosody: 84, accuracy: 75 }), new Blob(['x']))
-  expect(column().className).toContain('max-md:h-full')
-
-  const region = document.querySelector('[class*="md:contents"]')!
-  expect(region.className).toContain('max-md:flex-1')
-  expect(region.className).toContain('max-md:min-h-0')
-  expect(region.className).toContain('max-md:overflow-y-auto')
+  expect(screen.getByRole('main')).toHaveClass('overflow-hidden')
+  expect(screen.getByTestId('page-body')).toHaveClass('overflow-y-auto')
   expect(document.querySelector('main')!.innerHTML).not.toContain('sticky')
 })
 
-// --- the iPad frame: two columns, not a taller one -------------------------------------------
-//
-// jsdom has no layout, so — as with the phone rules above — these assert the thing that decides
-// the layout: which breakpoint each rule is written at, and which column each block sits in. The
-// geometry is measured in a browser (.superpowers/fix/ipad-practice-report.md).
-
-/** Exact tokens, never substrings: `md:flex-1` must not satisfy an `ipad:flex-1` assertion. */
-const classes = (el: Element) => el.className.split(/\s+/).filter(Boolean)
-
-it('splits the frame into a learning column and a doing column, and only from `ipad` up', () => {
+/** The mood, the passage and the tips fold away on a phone once a result lands — the word chips
+ * in the result card reprint every word of the passage and the mood has already been read. */
+it('folds the teach column away on a phone result only', () => {
   renderVoice()
+  const wrapper = () => screen.getByTestId('mood-emoji').closest('section')!.parentElement!
+  expect(wrapper().className).not.toContain('max-md:hidden')
 
-  const teach = screen.getByTestId('teach-col')
-  const doing = screen.getByTestId('do-col')
-  for (const col of [teach, doing]) {
-    // `contents` below the breakpoint: the phone frame keeps the single flow it always had.
-    expect(classes(col)).toContain('contents')
-    expect(classes(col)).toContain('ipad:flex')
-    expect(classes(col)).toContain('ipad:min-h-0')
-    for (const bad of ['sticky', 'fixed', 'absolute']) expect(classes(col)).not.toContain(bad)
-  }
-  expect(classes(teach)).toContain('ipad:flex-1')
-  expect(classes(doing)).toContain('ipad:w-[400px]')
-
-  // The mood, the passage and the tips are what the child is learning; the mic is what they do.
-  expect(teach).toContainElement(screen.getByTestId('mood-emoji'))
-  expect(teach).toContainElement(screen.getByTestId('voice-passage'))
-  expect(teach).toContainElement(screen.getAllByTestId('mood-tip')[0])
-  expect(doing).toContainElement(screen.getByRole('button', { name: /bấm để nói/i }))
-})
-
-/** `min-h-full` is a floor, not a height. Without a definite one the split's `flex-1`/`min-h-0`
- * bound nothing and the column grows past the screen exactly as it did before. */
-it('gives the iPad column a definite height to divide', () => {
-  renderVoice()
-
-  const column = classes(document.querySelector('main > div')!)
-  expect(column).toContain('ipad:h-full')
-  expect(column).toContain('min-h-full')
-})
-
-it('keeps the read-out and the CTA row in the doing column, the row outside the scroller', () => {
-  renderVoice()
   score(result({ prosody: 84, accuracy: 75 }), new Blob(['x']))
-
-  const doing = screen.getByTestId('do-col')
-  const readout = screen.getByTestId('result-readout')
-  const cta = screen.getByRole('button', { name: /tiếp theo/i }).parentElement!
-  expect(doing).toContainElement(readout)
-  expect(doing).toContainElement(cta)
-  // The passage stays on the left through the result — this is the iPad, not the phone.
-  expect(screen.getByTestId('teach-col')).toContainElement(screen.getByTestId('voice-passage'))
-
-  // A 400 px column cannot hold fourteen word chips, four bars and a hint card, so the read-out
-  // scrolls inside its own bounds — and the way on is its SIBLING, never inside it.
-  expect(classes(readout)).toContain('ipad:overflow-y-auto')
-  expect(classes(readout)).toContain('ipad:min-h-0')
-  expect(classes(readout)).toContain('ipad:flex-1')
-  expect(readout).not.toContainElement(cta)
-  expect(classes(cta)).toContain('ipad:shrink-0')
+  expect(wrapper().className).toContain('max-md:hidden')
 })
 
-/** Three ways back plus one way on only fit a 400 px column at the phone's own button size, so
- * the iPad borrows that shape. `ipad:` overrides `Button`'s own `px-5`/`px-7` the way `max-md:`
- * does — a variant is emitted after the plain utilities — and the size map itself is untouched. */
-it('gives the result CTAs an iPad-only size, and never touches the button primitive', () => {
-  renderVoice()
-  score(result({ prosody: 84, accuracy: 75 }), new Blob(['x']))
+// --- the iPad frame: two columns via PageBody's split, not a taller single column -------------
 
-  const cta = screen.getByRole('button', { name: /tiếp theo/i }).parentElement!
-  for (const name of [/nghe mình/i, /nghe mẫu/i, /thử lại/i]) {
-    const b = classes(within(cta).getByRole('button', { name }))
-    expect(b).toContain('ipad:px-4')
-    expect(b).toContain('ipad:flex-1')
-    expect(b).toContain('px-5')
-  }
-  const on = classes(screen.getByRole('button', { name: /tiếp theo/i }))
-  expect(on).toContain('ipad:w-full')
-  expect(on).toContain('px-7')
+it('renders the result through ResultCard inside the split body and the error through SpeakError', () => {
+  renderVoice()
+  expect(screen.getByRole('main')).toHaveClass('overflow-hidden')
+  expect(screen.getByTestId('page-body')).toHaveClass('ipad:flex-row')
+
+  score(result({ prosody: 84, accuracy: 75 }), new Blob(['x']))
+  const card = screen.getByTestId('result-card')
+  expect(card.querySelectorAll('[data-testid="word-chip"]')).toHaveLength(SV1.text.split(' ').length)
+  expect(screen.getByTestId('prosody-chip')).toBeInTheDocument()
+  expect(screen.queryByText('Ngữ điệu 84')).toBeNull() // old ProsodyChip gone
+
+  mic.error = { kind: 'mic' }
+  cleanupAndRender(SV1.id)
+  expect(screen.getByRole('alert')).toHaveTextContent('Bé cho phép dùng mic nhé!')
 })

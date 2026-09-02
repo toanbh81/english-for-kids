@@ -156,7 +156,7 @@ it('Tiếp theo goes to the next card of the same level', async () => {
   renderCard()
   await scoreOnce()
 
-  fireEvent.click(screen.getByRole('button', { name: /tiếp theo/i }))
+  fireEvent.click(screen.getByRole('link', { name: /tiếp theo/i }))
   await scorerReady() // the next card mints its own scorer
 
   expect(screen.getByText(soundZooCards[1].text)).toBeInTheDocument() // the 2nd Sound Zoo card
@@ -168,9 +168,9 @@ it('the last card of a level finishes back at the level instead of jumping to th
   renderCard(soundZooCards.at(-1)!.id) // last Sound Zoo card
   await scoreOnce()
   expect(screen.getByText(`Thẻ ${total}/${total}`)).toBeInTheDocument()
-  expect(screen.queryByRole('button', { name: /tiếp theo/i })).not.toBeInTheDocument()
+  expect(screen.queryByRole('link', { name: /tiếp theo/i })).not.toBeInTheDocument()
 
-  fireEvent.click(screen.getByRole('button', { name: /hoàn thành/i }))
+  fireEvent.click(screen.getByRole('link', { name: /hoàn thành/i }))
 
   // Not Word Pop's first card: the counter says total/total, so the run is over.
   expect(screen.getByText('danh sách thẻ')).toBeInTheDocument()
@@ -252,7 +252,7 @@ describe('Web Speech engine', () => {
     scorerControl.queue.push({ engine: 'webspeech', scorer }, { engine: 'webspeech', scorer })
     renderCard()
     await waitFor(() => expect(screen.getByRole('button', { name: /bấm để nói/i })).toBeEnabled())
-    expect(screen.getByText('chế độ đơn giản')).toBeInTheDocument()
+    expect(screen.getByTestId('engine-badge')).toHaveTextContent('chế độ đơn giản')
 
     vi.useFakeTimers()
     fireEvent.click(screen.getByRole('button', { name: /bấm để nói/i }))
@@ -471,32 +471,28 @@ it('carries the safe-area shell and its own resting padding', async () => {
   expect(shell).toContain('md:px-6')
 })
 
-/** The 220 px meaning tile and the 220 px mouth tile are what wrapped to three rows at 390 px and
- * pushed the mic below the fold. Both come down on a phone and both are restored at `md:`. */
+/** The meaning tile and the mouth tile stack on a phone and are restored at `md:`. */
 it('stacks the deck on a phone and restores the landscape tiles from md up', async () => {
   renderCard()
   await scorerReady()
 
   const meaning = screen.getByText('nghĩa của từ').closest('div')!
   expect(meaning.className).toContain('h-[96px]')
-  expect(meaning.className).toContain('md:h-[220px]')
-  expect(meaning.className).toContain('md:w-[220px]')
+  expect(meaning.className).toContain('md:h-[180px]')
+  expect(meaning.className).toContain('md:w-[180px]')
 
   const mouth = screen.getByText('Khẩu hình miệng').closest('div')!
   expect(mouth.className).toContain('h-16')
-  expect(mouth.className).toContain('md:h-[220px]')
+  expect(mouth.className).toContain('md:h-[180px]')
 })
 
-/** The result read-out scrolls *inside* a bounded region on a phone, with the CTA row as its
- * sibling underneath — never a `sticky` panel, which would paint over a word chip. `md:contents`
- * is what makes the landscape frame the same flat column it has always been. */
-it('gives the phone result a bounded scroller and never a sticky', async () => {
+/** The frame is the shared `PageShell`: `overflow-hidden` on `main`, `page-body` the only
+ * scroller, never a `sticky` panel painting over a word chip. */
+it('carries the PageShell frame, never a sticky panel', async () => {
   renderCard()
   await scoreOnce()
 
-  const region = document.querySelector('[class*="md:contents"]')!
-  expect(region.className).toContain('max-md:flex-1')
-  expect(region.className).toContain('max-md:min-h-0')
-  expect(region.className).toContain('max-md:overflow-y-auto')
+  expect(screen.getByRole('main')).toHaveClass('overflow-hidden')
+  expect(screen.getByTestId('page-body')).toHaveClass('overflow-y-auto')
   expect(document.querySelector('main')!.innerHTML).not.toContain('sticky')
 })

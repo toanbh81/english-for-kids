@@ -248,8 +248,8 @@ it('unlocks a locked word at score >= 60, logs the activity event, and saves the
   act(() => { attemptControl.onResult?.(resultHigh, blob) })
 
   expect(getBox('food-apple')).toBe(1)
-  expect(screen.getByText('🔓 Mở khoá!')).toBeInTheDocument()
-  expect(screen.getByText('Điểm: 70')).toBeInTheDocument()
+  expect(screen.getByText(/🔓 Mở khoá!/)).toBeInTheDocument()
+  expect(screen.getByText(/Điểm: 70/)).toBeInTheDocument()
 
   const events = JSON.parse(localStorage.getItem('speakup.activity') ?? '[]')
   expect(events).toHaveLength(1)
@@ -279,7 +279,7 @@ it('demotes an already-unlocked word (box 2) back to box 1 on a low score, and s
   act(() => { attemptControl.onResult?.(resultLow, null) })
 
   expect(getBox('food-apple')).toBe(1)
-  expect(screen.getByText('Thử lại nhé')).toBeInTheDocument()
+  expect(screen.getByText('Thử lại nào!')).toBeInTheDocument()
   expect(screen.getByText(/Sửa từ này/)).toBeInTheDocument()
 
   const events = JSON.parse(localStorage.getItem('speakup.activity') ?? '[]')
@@ -295,7 +295,7 @@ it('a low score on a still-locked word stays locked (no box entry created)', () 
   act(() => { attemptControl.onResult?.(resultLow, null) })
 
   expect(getBox('food-apple')).toBe(0)
-  expect(screen.getByText('Thử lại nhé')).toBeInTheDocument()
+  expect(screen.getByText('Thử lại nào!')).toBeInTheDocument()
 })
 
 /** The attempt was scored all along — the screen simply never showed it, so a child who spoke saw
@@ -309,28 +309,23 @@ it('shows the stars and the score of the attempt under the card', () => {
 
   expect(screen.getAllByTestId('star-filled')).toHaveLength(2) // 70 → 2 stars
   expect(screen.getAllByTestId('star-empty')).toHaveLength(1)
-  expect(screen.getByText('Điểm: 70')).toBeInTheDocument()
+  expect(screen.getByText(/Điểm: 70/)).toBeInTheDocument()
 })
 
-/** The iPad's 834 px landscape is the whole screen the child has, and they do not scroll to find
- * a button. So the result reads as ONE row — stars, score, 🔓 badge — and the CTAs stand beside
- * the mic instead of below it; stacked into bands of their own, "Tiếp theo" fell off the fold. */
-it('keeps the result on one row and the CTAs beside the mic', () => {
+/** The result reads as ONE card — stars, score, 🔓 badge and the CTA row all inside `ResultCard`,
+ * so nothing stacks into bands of its own that could push "Tiếp theo" off the fold. */
+it('keeps the result in one ResultCard, stars and the unlock badge on the head row', () => {
   attemptControl.current = { ...baseAttempt(), result: resultHigh }
   renderCard('food', 'food-apple')
   passGuess('quả táo')
 
   act(() => { attemptControl.onResult?.(resultHigh, null) })
 
-  const row = screen.getByText('🔓 Mở khoá!').closest('section')!
-  expect(within(row).getAllByTestId('star-filled')).toHaveLength(2)
-  expect(within(row).getByText('Điểm: 70')).toBeInTheDocument()
-
-  const mic = screen.getByRole('button', { name: 'Bấm để nói' })
-  const cta = screen.getByRole('button', { name: /Tiếp theo/ })
-  // MicButton (Task 6) wraps the mic in its own reserved-box + outer div, so the local wrapper
-  // WordCard renders around it is two levels further up than the button's nearest div.
-  expect(mic.closest('div')?.parentElement?.parentElement?.parentElement).toBe(cta.closest('div')?.parentElement)
+  const card = screen.getByTestId('result-card')
+  expect(within(card).getAllByTestId('star-filled')).toHaveLength(2)
+  expect(within(card).getByText(/Điểm: 70/)).toBeInTheDocument()
+  expect(within(card).getByText(/🔓 Mở khoá!/)).toBeInTheDocument()
+  expect(within(card).getByRole('button', { name: /Tiếp theo/ })).toBeInTheDocument()
 })
 
 it('shows the stars but no score chip when the engine returned no usable number', () => {
@@ -355,18 +350,21 @@ it('shows no stars before the first attempt', () => {
 })
 
 it('Thử lại clears the outcome so the child can record the word again', () => {
-  attemptControl.current = { ...baseAttempt(), result: resultHigh }
+  // `reset` mutates the shared mock object, the way the real hook clears `result` — so the
+  // re-render `setOutcome(null)` triggers alongside it picks up a fresh, result-less attempt.
+  const reset = vi.fn(() => { (attemptControl.current as SpeakingAttempt).result = null })
+  attemptControl.current = { ...baseAttempt(), result: resultHigh, reset }
   renderCard('food', 'food-apple')
   passGuess('quả táo')
 
   act(() => { attemptControl.onResult?.(resultHigh, null) })
-  expect(screen.getByText('🔓 Mở khoá!')).toBeInTheDocument()
+  expect(screen.getByText(/🔓 Mở khoá!/)).toBeInTheDocument()
 
-  fireEvent.click(screen.getByRole('button', { name: 'Thử lại' }))
+  fireEvent.click(screen.getByRole('button', { name: /Thử lại/ }))
 
-  expect(screen.queryByText('🔓 Mở khoá!')).not.toBeInTheDocument()
+  expect(screen.queryByText(/🔓 Mở khoá!/)).not.toBeInTheDocument()
   expect(screen.queryByRole('button', { name: /Tiếp theo/ })).not.toBeInTheDocument()
-  expect((attemptControl.current as SpeakingAttempt).reset).toHaveBeenCalled()
+  expect(reset).toHaveBeenCalled()
 })
 
 it('Tiếp theo goes to the next word in topic order', () => {
@@ -394,7 +392,7 @@ it('Tiếp theo goes back to the topic island from the last word', () => {
 it('shows a simple-mode label for the webspeech engine', () => {
   attemptControl.current = { ...baseAttempt(), engine: 'webspeech' }
   renderCard('food', 'food-apple')
-  expect(screen.getByText('chế độ đơn giản')).toBeInTheDocument()
+  expect(screen.getByTestId('engine-badge')).toHaveTextContent('chế độ đơn giản')
 })
 
 it('a locked new word opens on a meaning-guess step: a wrong option shakes and invites another try, the right one praises and waits', () => {
@@ -424,8 +422,7 @@ it('a locked new word opens on a meaning-guess step: a wrong option shakes and i
   expect(screen.queryByText('🎤 Nói để mở khoá')).not.toBeInTheDocument()
 
   const cta = screen.getByRole('button', { name: 'Tiếp theo →' })
-  // ≥64 px at every width: the phone override, and `size="lg"`'s own 64/72 px map from md up.
-  expect(cta.className).toContain('max-md:min-h-[64px]')
+  // ≥64 px at every width: `size="lg"`'s own 64/72 px map, in the `PageFooter`.
   expect(cta).toHaveClass('min-h-[64px]', 'md:min-h-[72px]')
 
   fireEvent.click(cta)
@@ -506,41 +503,42 @@ it('keeps the phone card the same size through the result, and only shrinks the 
   expect(shell.className).not.toMatch(/(^|\s)h-\[/)
 })
 
-/** Design §5 M3b: in the result state the phone drops the mic and gives the bottom row to the two
- * CTAs. "Thử lại" is the way back to recording — and it brings the mic with it. */
-it('hides the mic on a phone once a result lands, leaving the landscape row untouched', () => {
-  attemptControl.current = { ...baseAttempt(), result: resultHigh }
+/** The mic block and the `ResultCard` occupy the same `act` slot of the split body, so a result
+ * swaps one for the other outright rather than hiding a sibling behind `max-md:hidden`. */
+it('shows the mic, and no ResultCard, before there is a result', () => {
+  attemptControl.current = { ...baseAttempt(), result: null }
   promote('food-apple')
   renderCard('food', 'food-apple')
 
-  // MicButton (Task 6) wraps the mic in its own reserved-box + outer div, so WordCard's local
-  // wrapper (which carries the conditional `max-md:hidden`) is two levels further up.
-  const micBlock = screen.getByRole('button', { name: 'Bấm để nói' }).closest('div')!.parentElement!.parentElement!
-  expect(micBlock.className).not.toContain('max-md:hidden')
-
-  act(() => { attemptControl.onResult?.(resultHigh, null) })
-
-  expect(micBlock.className).toContain('max-md:hidden')
-  expect(screen.getByRole('button', { name: 'Thử lại' }).className).toContain('max-md:flex-1')
-  expect(screen.getByRole('button', { name: /Tiếp theo/ }).className).toContain('max-md:flex-[1.35]')
+  expect(screen.getByRole('button', { name: 'Bấm để nói' })).toBeInTheDocument()
+  expect(screen.queryByTestId('result-card')).not.toBeInTheDocument()
 })
 
-/** A `sticky bottom-0` row with an opaque background is stuck on first paint whenever the content
- * is taller than the screen, and then it covers what is behind it. The short-phone rules are what
- * keep that from happening at 375×667 — measured there, they leave the tip card ending 1 px above
- * the pinned row instead of 48 px under it. */
-it('pins the bottom block on a phone and shrinks the card at 375×667 so nothing hides under it', () => {
+it('shows the ResultCard, and no mic, once a result exists, leaving the flip card in place', () => {
+  attemptControl.current = { ...baseAttempt(), result: resultHigh }
+  promote('food-apple')
+  renderCard('food', 'food-apple')
+
+  expect(screen.queryByRole('button', { name: 'Bấm để nói' })).not.toBeInTheDocument()
+  const card = screen.getByTestId('result-card')
+  expect(within(card).getByRole('button', { name: /Thử lại/ })).toBeInTheDocument()
+  expect(within(card).getByRole('button', { name: /Tiếp theo/ })).toBeInTheDocument()
+  // The flip card itself is untouched — this is the `teach` column, still on screen.
+  expect(screen.getByTestId('flip-card')).toBeInTheDocument()
+})
+
+/** Nothing on this screen is `sticky` any more — the CTA row lives inside `ResultCard`, a sibling
+ * of the scrolling `page-body`, never an opaque panel painted over the content behind it. */
+it('carries the PageShell frame, never a sticky panel', () => {
   attemptControl.current = { ...baseAttempt(), result: resultHigh }
   promote('food-apple')
   renderCard('food', 'food-apple')
 
   act(() => { attemptControl.onResult?.(resultHigh, null) })
 
-  const block = screen.getByRole('button', { name: /Tiếp theo/ }).closest('div')!.parentElement!
-  expect(block).toHaveClass('sticky', 'bottom-0', 'bg-cream-50', 'md:static', 'md:bg-transparent')
-
-  const shell = screen.getByTestId('flip-card').parentElement!
-  expect(shell.className).toContain('[@media(max-width:767px)_and_(max-height:700px)]:w-[min(320px,68%)]')
+  expect(screen.getByRole('main')).toHaveClass('overflow-hidden')
+  expect(screen.getByTestId('page-body')).toHaveClass('overflow-y-auto')
+  expect(document.querySelector('main')!.innerHTML).not.toContain('sticky')
 })
 
 it('stacks the three meaning options as full-width rows on a phone and keeps the pills from md up', () => {

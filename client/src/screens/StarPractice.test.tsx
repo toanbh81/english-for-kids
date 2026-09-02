@@ -250,7 +250,7 @@ it('turns an accurate, fluent, complete attempt into 3 stars on the sentence key
 
   expect(screen.getAllByTestId('star-filled')).toHaveLength(3)
   expect(screen.getByText('Tuyệt vời!')).toBeInTheDocument()
-  expect(screen.getByText('Nhịp: 🎵 tốt')).toBeInTheDocument()
+  expect(screen.getByText(/Nhịp: 🎵 tốt/)).toBeInTheDocument()
   expect(screen.getByTestId('confetti')).toBeInTheDocument()
   expect(JSON.parse(localStorage.getItem('speakup.stars') ?? '{}')['sstar:ss1']).toBe(3)
   expect(JSON.parse(localStorage.getItem('speakup.activity') ?? '[]'))
@@ -270,7 +270,7 @@ it('drops to 2 stars and names the slow rhythm when fluency is low', () => {
 
   expect(screen.getAllByTestId('star-filled')).toHaveLength(2)
   expect(screen.getByText('Hay lắm!')).toBeInTheDocument()
-  expect(screen.getByText('Nhịp: 🐢 chậm')).toBeInTheDocument()
+  expect(screen.getByText(/Nhịp: 🐢 chậm/)).toBeInTheDocument()
   expect(screen.queryByTestId('confetti')).not.toBeInTheDocument()
   expect(JSON.parse(localStorage.getItem('speakup.stars') ?? '{}')['sstar:ss1']).toBe(2)
   // No recording button when the attempt produced no blob.
@@ -284,9 +284,9 @@ it('names the middle rhythm band instead of calling a near-fluent read slow', ()
   score(result(85, 70, 100))
 
   expect(screen.getAllByTestId('star-filled')).toHaveLength(2)
-  expect(screen.getByText('Nhịp: 🙂 khá — nói liền hơi hơn nhé')).toBeInTheDocument()
-  expect(screen.queryByText('Nhịp: 🐢 chậm')).not.toBeInTheDocument()
-  expect(screen.queryByText('Nhịp: 🎵 tốt')).not.toBeInTheDocument()
+  expect(screen.getByText(/Nhịp: 🙂 khá — nói liền hơi hơn nhé/)).toBeInTheDocument()
+  expect(screen.queryByText(/Nhịp: 🐢 chậm/)).not.toBeInTheDocument()
+  expect(screen.queryByText(/Nhịp: 🎵 tốt/)).not.toBeInTheDocument()
 })
 
 it('offers a hint and a retry when the attempt was weak', () => {
@@ -304,11 +304,11 @@ it('offers a hint and a retry when the attempt was weak', () => {
 it('hands on to the next sentence, and back to the level on the last one', () => {
   renderStar()
   score(result(85, 85))
-  fireEvent.click(screen.getByRole('button', { name: /tiếp theo/i }))
+  fireEvent.click(screen.getByRole('link', { name: /tiếp theo/i }))
   expect(screen.getByText('Câu 2/10')).toBeInTheDocument()
 
   score(result(85, 85))
-  expect(screen.getByRole('button', { name: /tiếp theo/i })).toBeInTheDocument()
+  expect(screen.getByRole('link', { name: /tiếp theo/i })).toBeInTheDocument()
 })
 
 it('finishes the level from the last sentence', () => {
@@ -316,7 +316,7 @@ it('finishes the level from the last sentence', () => {
   expect(screen.getByText('Câu 10/10')).toBeInTheDocument()
 
   score(result(85, 85))
-  fireEvent.click(screen.getByRole('button', { name: /hoàn thành/i }))
+  fireEvent.click(screen.getByRole('link', { name: /hoàn thành/i }))
   expect(screen.getByText('các câu')).toBeInTheDocument()
 })
 
@@ -392,105 +392,32 @@ it('carries the safe-area shell at its own resting padding', () => {
 /** The sentence and its rhythm card fold away on a phone once a result lands: `ScoredWords`
  * reprints every word with its own score, so the pair would only repeat itself over the room the
  * CTA row needs. From `md` up both stay exactly where they were. */
-it('folds the sentence and the rhythm card away on a phone result only', () => {
+it('folds the teach column away on a phone result only', () => {
   renderStar()
-  const legend = () => screen.getByText('Chữ cam = nhấn mạnh · ‿ = nối âm').closest('section')!
-  expect(legend().className).not.toContain('max-md:hidden')
+  const teach = () => screen.getByText('Chữ cam = nhấn mạnh · ‿ = nối âm').closest('section')!.parentElement!
+  expect(teach().className).not.toContain('max-md:hidden')
 
   score(result(85, 85, 100), new Blob(['x']))
-  expect(legend().className).toContain('max-md:hidden')
-  expect(screen.getByText('Nhịp của câu — chạm để nghe lại').closest('div')!.className).toContain('max-md:hidden')
+  expect(teach().className).toContain('max-md:hidden')
 })
 
-/** The result read-out scrolls inside a bounded region on a phone with the CTA row as its sibling
- * underneath — never a `sticky` panel, which would paint over a word chip. */
-it('gives the phone result a bounded scroller and never a sticky', () => {
+/** The frame is the shared `PageShell`: `overflow-hidden` on `main`, `page-body` the only
+ * scroller, never a `sticky` panel painting over a word chip. */
+it('carries the PageShell frame, never a sticky panel', () => {
   renderStar()
-  score(result(85, 85, 100), new Blob(['x']))
-
-  const region = document.querySelector('[class*="md:contents"]')!
-  expect(region.className).toContain('max-md:flex-1')
-  expect(region.className).toContain('max-md:min-h-0')
-  expect(region.className).toContain('max-md:overflow-y-auto')
+  expect(screen.getByRole('main')).toHaveClass('overflow-hidden')
+  expect(screen.getByTestId('page-body')).toHaveClass('overflow-y-auto', 'ipad:flex-row')
   expect(document.querySelector('main')!.innerHTML).not.toContain('sticky')
 })
 
-// --- the iPad frame: two columns, not a taller one -------------------------------------------
-//
-// jsdom has no layout, so — as with the phone rules above — these assert the thing that decides
-// the layout: which breakpoint each rule is written at, and which column each block sits in. The
-// geometry is measured in a browser (.superpowers/fix/ipad-practice-report.md).
-
-/** Exact tokens, never substrings: `md:flex-1` must not satisfy an `ipad:flex-1` assertion. */
-const classes = (el: Element) => el.className.split(/\s+/).filter(Boolean)
-
-it('splits the frame into a learning column and a doing column, and only from `ipad` up', () => {
-  renderStar()
-
-  const teach = screen.getByTestId('teach-col')
-  const doing = screen.getByTestId('do-col')
-  for (const col of [teach, doing]) {
-    // `contents` below the breakpoint: the phone frame keeps the single flow it always had.
-    expect(classes(col)).toContain('contents')
-    expect(classes(col)).toContain('ipad:flex')
-    expect(classes(col)).toContain('ipad:min-h-0')
-    for (const bad of ['sticky', 'fixed', 'absolute']) expect(classes(col)).not.toContain(bad)
-  }
-  expect(classes(teach)).toContain('ipad:flex-1')
-  expect(classes(doing)).toContain('ipad:w-[400px]')
-
-  // The sentence and its rhythm card are what the child is learning; the mic is what they do.
-  expect(teach).toContainElement(screen.getByText('Chữ cam = nhấn mạnh · ‿ = nối âm'))
-  expect(teach).toContainElement(screen.getByRole('button', { name: 'Nghe nhịp của câu' }))
-  expect(doing).toContainElement(screen.getByRole('button', { name: /bấm để nói/i }))
-})
-
-/** `min-h-full` is a floor, not a height. Without a definite one the split's `flex-1`/`min-h-0`
- * bound nothing and the column grows past the screen exactly as it did before. */
-it('gives the iPad column a definite height to divide', () => {
-  renderStar()
-
-  const column = classes(document.querySelector('main > div')!)
-  expect(column).toContain('ipad:h-full')
-  expect(column).toContain('min-h-full')
-})
-
-it('keeps the read-out and the CTA row in the doing column, the row outside the scroller', () => {
+it('renders the result through ResultCard inside the split body', () => {
   renderStar()
   score(result(85, 85, 100), new Blob(['x']))
 
-  const doing = screen.getByTestId('do-col')
-  const readout = screen.getByTestId('result-readout')
-  const cta = screen.getByRole('button', { name: /tiếp theo/i }).parentElement!
-  expect(doing).toContainElement(readout)
-  expect(doing).toContainElement(cta)
-  // The sentence stays on the left through the result — this is the iPad, not the phone.
-  expect(screen.getByTestId('teach-col')).toContainElement(screen.getByRole('button', { name: 'Nghe nhịp của câu' }))
-
-  // A 400 px column cannot hold seven word chips, four bars and a hint card, so the read-out
-  // scrolls inside its own bounds — and the way on is its SIBLING, never inside it.
-  expect(classes(readout)).toContain('ipad:overflow-y-auto')
-  expect(classes(readout)).toContain('ipad:min-h-0')
-  expect(classes(readout)).toContain('ipad:flex-1')
-  expect(readout).not.toContainElement(cta)
-  expect(classes(cta)).toContain('ipad:shrink-0')
-})
-
-/** Three ways back plus one way on only fit a 400 px column at the phone's own button size, so
- * the iPad borrows that shape. `ipad:` overrides `Button`'s own `px-5`/`px-7` the way `max-md:`
- * does — a variant is emitted after the plain utilities — and the size map itself is untouched. */
-it('gives the result CTAs an iPad-only size, and never touches the button primitive', () => {
-  renderStar()
-  score(result(85, 85, 100), new Blob(['x']))
-
-  const cta = screen.getByRole('button', { name: /tiếp theo/i }).parentElement!
-  for (const name of [/nghe mình/i, /nghe mẫu/i, /thử lại/i]) {
-    const b = classes(within(cta).getByRole('button', { name }))
-    expect(b).toContain('ipad:px-4')
-    expect(b).toContain('ipad:flex-1')
-    expect(b).toContain('px-5')
-  }
-  const on = classes(screen.getByRole('button', { name: /tiếp theo/i }))
-  expect(on).toContain('ipad:w-full')
-  expect(on).toContain('px-7')
+  const card = screen.getByTestId('result-card')
+  expect(card.querySelectorAll('[data-testid="word-chip"]')).toHaveLength(SS1.words.length)
+  expect(within(card).getByRole('link', { name: /tiếp theo/i })).toBeInTheDocument()
+  // The sentence and its rhythm card stay reachable — this is the iPad column split, not a phone
+  // fold: `getByRole` below still finds the rhythm button in the document.
+  expect(screen.getByRole('button', { name: 'Nghe nhịp của câu' })).toBeInTheDocument()
 })

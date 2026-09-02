@@ -10,22 +10,13 @@ import { setStars } from '../progress/store'
 import { logActivity } from '../progress/activity'
 import { missionNoun, useMissionNext } from '../progress/missionNav'
 import { saveRecording } from '../progress/recordings'
-import { MicButton } from '../components/MicButton'
-import { Stars } from '../components/Stars'
-import { ScoredWords } from '../components/ScoredWords'
-import { HintCard } from '../components/HintCard'
 import { Confetti } from '../components/Confetti'
 import { Foxy } from '../components/Foxy'
-import { BackButton, Button, Card, Chip, PAGE_SHELL } from '../components/ui'
+import { BackButton, Button, Card, Chip } from '../components/ui'
+import { PageShell, PageHeader, PageBody } from '../components/ui/page'
+import { MicButton, ResultCard, SpeakError } from '../components/speak'
 import { useSpeakingAttempt } from '../speaking/useSpeakingAttempt'
-import { SPEAK_ERROR_COPY } from '../speaking/speakError'
-
-/**
- * Phone layout follows `SoundPractice`'s idiom to the letter (see the comment block at the top of
- * that file): phone values sit unprefixed, `md:` restores the exact landscape value, and `max-md:`
- * appears only where a shared primitive writes a competing class of its own. Nothing is `sticky`.
- */
-const CTA_PHONE = 'max-md:min-h-[64px] max-md:px-4 max-md:text-lg'
+import type { SpeakErrorKind } from '../speaking/speakError'
 
 /** The hook stops the recording itself after this long; the countdown just mirrors it. */
 const AUTO_STOP_MS = 6000
@@ -44,10 +35,6 @@ function targetFor(pair: PairItem, listens: number): Side {
   return seededSide(pair.id, listens, SIDES)
 }
 
-/** Two 220×240 slabs side by side is the landscape pair; at 390 px they wrap to two rows and cut
- * the second word off the bottom of the screen. On a phone they are half-width tiles on one line
- * instead — still 150 px tall, so each is a comfortably large target for a small finger — and
- * `md:` puts the landscape numbers back exactly (`md:flex-initial`, never `md:flex-none`). */
 const OPTION =
   'flex min-h-[150px] min-w-0 flex-1 flex-col items-center justify-center gap-1 rounded-xl3 bg-white p-3 shadow-card transition-transform active:translate-y-[2px] disabled:opacity-50 disabled:active:translate-y-0'
   + ' md:min-h-[240px] md:w-[220px] md:flex-initial md:gap-2 md:p-5'
@@ -146,56 +133,31 @@ function PairRun({ pair }: { pair: PairItem }) {
         aria-label={w.word}
         className={OPTION}
       >
-        <span aria-hidden="true" className="text-[56px] leading-none md:text-[96px]">{w.emoji}</span>
-        <span className="font-display text-[26px] font-extrabold leading-none text-ink-900 md:text-[44px]">{w.word}</span>
-        <span className="text-[13px] font-bold text-ink-300 md:text-[20px]">{w.ipa}</span>
+        <span aria-hidden="true" className="text-[56px] leading-none md:text-[88px]">{w.emoji}</span>
+        <span className="font-display text-[26px] font-extrabold leading-none text-ink-900 md:text-[40px]">{w.word}</span>
+        <span className="text-[13px] font-bold text-ink-300 md:text-[18px]">{w.ipa}</span>
       </button>
     )
   }
 
-  return (
-    // 20 px of side frame on a phone (design §1, the speak-frame family), the 24 px this screen
-    // has always had from the tablet breakpoint up. The vertical padding is the safe-area shell
-    // resting at the 1.25 rem of the old `py-5` — the same 20 px with no notch to clear.
-    <main className={`h-full overflow-y-auto bg-cream-50 px-5 [--page-pad-bottom:1.25rem] [--page-pad-top:1.25rem] md:px-6 ${PAGE_SHELL}`}>
-      {/* A *definite* height on the phone is what lets the result read-out below take the leftover
-        * space and scroll inside it instead of walking the CTA row off the bottom of the screen.
-        * It is switched on only for the result: a definite height also lets a `flex-1` section be
-        * squeezed below its content, which is fine for a read-out that scrolls but would paint the
-        * recording countdown over the mic. Every other state keeps the growing `min-h-full`
-        * column, so the worst it can do is make the page scroll. */}
-      <div className={`mx-auto flex min-h-full w-full max-w-5xl flex-col items-center gap-2.5 md:gap-4 ${feedback ? 'max-md:h-full' : ''}`}>
-        <header className="flex w-full items-center justify-between gap-4">
-          {mission
-            ? <BackButton to="/mission" label="Nhiệm vụ" />
-            : <BackButton to="/level/minimal-pairs" label="Quay lại" />}
-          <div className="flex flex-col items-center gap-2">
-            {/* In a lesson the bậc's own count is the wrong count, and two counters are one too
-                many for a child to read — so the mission's position replaces it. */}
-            {mission
-              ? <Chip tone="coral">{missionNoun(mission.pos, 'Thẻ')} {mission.pos.index}/{mission.pos.total}</Chip>
-              : <Chip tone="coral">Cặp {index + 1}/{PAIRS.length}</Chip>}
-            <Chip tone="teal" size="sm">{pair.contrast}</Chip>
-          </div>
-          <span className="min-w-[66px] text-right text-base font-bold text-ink-300">
-            {attempt.engine === 'webspeech' ? 'chế độ đơn giản' : ''}
-          </span>
-        </header>
+  const onErrorAction = (kind: SpeakErrorKind) => {
+    if (kind === 'limit') nav('/')
+    else if (kind === 'noSpeech' || kind === 'notReady') attempt.reset()
+  }
 
-        {listening ? (
-          <section className="flex w-full flex-1 flex-col items-center gap-2.5 md:gap-4">
+  return (
+    <PageShell gutter="20">
+      <PageHeader back={mission ? <BackButton to="/mission" label="Nhiệm vụ" /> : <BackButton to="/level/minimal-pairs" label="Quay lại" />} engine={attempt.engine}>
+        {mission
+          ? <Chip tone="coral">{missionNoun(mission.pos, 'Thẻ')} {mission.pos.index}/{mission.pos.total}</Chip>
+          : <Chip tone="coral">Cặp {index + 1}/{PAIRS.length}</Chip>}
+        <Chip tone="teal" size="sm">{pair.contrast}</Chip>
+      </PageHeader>
+      {listening ? (
+        <PageBody center>
+          <div className="flex w-full flex-1 flex-col items-center gap-2.5 md:gap-4">
             <p className="font-display text-lg font-extrabold text-ink-900 md:text-2xl">Nghe rồi chọn từ đúng nhé!</p>
 
-            {/* 30 px type in the landscape frame, 24 px on a phone — the 30 px version is 215 px
-                wide, which is most of a 350 px column.
-                The height is `Button`'s own lg 72 px and always has been. This call site used to
-                carry `min-h-[104px]`, and it never won: two *plain* arbitrary utilities for the
-                same property are decided by Tailwind's own emission order, and `min-h-[72px]` is
-                emitted after `min-h-[104px]`. That is exactly the coin toss the phase's `max-md:`
-                rule exists to avoid. Restating it as `md:min-h-[104px]` would have won — every
-                variant is emitted after the plain utilities — and grown the iPad's button by
-                32 px, which the phase forbids, so the dead class is gone instead of left here
-                reading like a promise. 72 px is comfortably over the 64 px floor. */}
             <Button
               variant="secondary"
               size="lg"
@@ -234,64 +196,50 @@ function PairRun({ pair }: { pair: PairItem }) {
             </div>
 
             <p className="font-display text-base font-extrabold text-ink-500 md:text-xl">{ticks}</p>
-          </section>
-        ) : (
-          <>
-            {/* The listening game is over, so it shrinks to one line and hands the screen to the mic. */}
-            <Card className={`flex min-h-[64px] items-center justify-center gap-3 px-4 py-2 md:px-6 md:py-3 ${feedback ? 'max-md:hidden' : ''}`}>
+          </div>
+        </PageBody>
+      ) : (
+        <PageBody split={{
+          teach: (
+            <Card className="flex min-h-[64px] w-full items-center justify-center gap-3 px-4 py-2 md:px-6 md:py-3">
               <span aria-hidden="true" className="text-[24px] leading-none md:text-[28px]">👂</span>
               <span className="font-display text-base font-extrabold text-ink-900 md:text-xl">{`Nghe & chọn: ${ticks}`}</span>
             </Card>
-
-            {feedback ? (
-              /* On a phone the read-out is a bounded scrolling region with the CTA row as its
-                 *sibling* underneath — never a `sticky` overlay, which would paint over whichever
-                 word chip happened to sit at its y. `md:contents` takes the wrapper out of the box
-                 tree from 768 up, so the landscape frame is the same flat column it always was. */
-              <section className="flex w-full flex-col items-center gap-2.5 pb-2 max-md:min-h-0 max-md:flex-1 md:w-auto md:gap-4">
-                {feedback.stars === 3 && <Confetti />}
-                <div className="flex w-full flex-col items-center gap-2.5 max-md:min-h-0 max-md:flex-1 max-md:overflow-y-auto md:contents">
-                  <Stars value={feedback.stars} animate={feedback.stars === 3} />
-                  <p className="font-display text-xl font-extrabold text-ink-900 md:text-3xl">{feedback.message}</p>
-                  <ScoredWords words={feedback.words} />
-                  {feedback.hint && <HintCard hint={feedback.hint} />}
-                  {attempt.lastBlob && (
-                    <Button variant="outline" className={CTA_PHONE} onClick={() => playBlob(attempt.lastBlob!).catch(() => {})}>🎧 Nghe mình</Button>
-                  )}
-                </div>
-                <div className="flex w-full flex-wrap justify-center gap-2 pt-1 md:w-auto md:gap-4">
-                  <Button variant="outline" className={`${CTA_PHONE} max-md:flex-1`} onClick={attempt.reset}>↻ Thử lại</Button>
-                  {mission
-                    ? <Button size="lg" pulse className={`${CTA_PHONE} max-md:flex-[1.35]`} onClick={mission.go}>{mission.label}</Button>
-                    : next
-                      ? <Button size="lg" pulse className={`${CTA_PHONE} max-md:flex-[1.35]`} onClick={() => nav(`/pair/${next.id}`)}>Tiếp theo →</Button>
-                      : <Button size="lg" pulse className={`${CTA_PHONE} max-md:flex-[1.35]`} onClick={() => nav('/level/minimal-pairs')}>Hoàn thành 🎉</Button>}
-                </div>
-              </section>
-            ) : (
-              <section className="flex flex-1 flex-col items-center justify-center gap-3">
-                <p className="font-display text-base font-extrabold text-ink-900 [@media(max-width:767px)_and_(max-height:700px)]:hidden md:text-2xl">Giờ đọc cả hai từ nào!</p>
-                <div className="font-display text-[30px] font-extrabold leading-none text-ink-900 md:text-[44px]">{targetText}</div>
-                {recording && (
-                  <>
-                    <div aria-hidden="true" className="font-display text-[44px] font-extrabold leading-none text-coral-text md:text-[56px]">{secondsLeft}</div>
-                    <Foxy mood="listening" size="sm" say="Foxy đang lắng nghe…" />
-                  </>
-                )}
-              </section>
-            )}
-
-            {attempt.error && <p className="font-display text-xl font-extrabold text-fix-700 md:text-2xl">{SPEAK_ERROR_COPY[attempt.error.kind].title}</p>}
-
-            {!feedback && (
-              <div className="mt-auto flex flex-col items-center gap-2 pb-1 pt-1 [@media(max-width:767px)_and_(max-height:700px)]:pb-0 [@media(max-width:767px)_and_(max-height:700px)]:pt-0 md:mt-0 md:gap-3 md:pb-2">
-                <MicButton state={attempt.micState} level={attempt.level} onPress={attempt.onMic} />
-                {!recording && <p className="font-display text-base font-extrabold text-ink-500 [@media(max-width:767px)_and_(max-height:700px)]:hidden md:text-xl">Chạm để nói nào!</p>}
-              </div>
-            )}
-          </>
-        )}
-      </div>
-    </main>
+          ),
+          act: feedback ? (
+            <>
+              {feedback.stars === 3 && <Confetti />}
+              <ResultCard
+                stars={feedback.stars}
+                praise={feedback.message}
+                score={attempt.result?.overall}
+                words={feedback.words}
+                hint={feedback.hint}
+                canReplay={!!attempt.lastBlob}
+                onReplay={() => playBlob(attempt.lastBlob!).catch(() => {})}
+                onRetry={() => attempt.reset()}
+                primary={mission
+                  ? { label: mission.label, onClick: mission.go }
+                  : next
+                    ? { label: 'Tiếp theo →', to: `/pair/${next.id}` }
+                    : { label: 'Hoàn thành 🎉', to: '/level/minimal-pairs' }}
+                animate={feedback.stars === 3}
+              />
+            </>
+          ) : (
+            <div className="flex flex-col items-center gap-3">
+              {!recording && (
+                <>
+                  <p className="font-display text-base font-extrabold text-ink-900 md:text-2xl">Giờ đọc cả hai từ nào!</p>
+                  <div className="font-display text-[30px] font-extrabold leading-none text-ink-900 md:text-[40px]">{targetText}</div>
+                </>
+              )}
+              {attempt.error && <SpeakError error={attempt.error} onAction={onErrorAction} onDismiss={attempt.dismissError} />}
+              <MicButton state={attempt.micState} level={attempt.level} onPress={attempt.onMic} secondsLeft={recording ? secondsLeft : undefined} />
+            </div>
+          ),
+        }} />
+      )}
+    </PageShell>
   )
 }

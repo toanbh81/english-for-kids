@@ -275,9 +275,9 @@ it('offers a hint and a retry when the attempt was weak', async () => {
 it('hands on to the next pair, and back to the level on the last one', async () => {
   await reachMic()
   score(result(85))
-  expect(screen.getByRole('button', { name: /tiếp theo/i })).toBeInTheDocument()
+  expect(screen.getByRole('link', { name: /tiếp theo/i })).toBeInTheDocument()
 
-  fireEvent.click(screen.getByRole('button', { name: /tiếp theo/i }))
+  fireEvent.click(screen.getByRole('link', { name: /tiếp theo/i }))
   expect(screen.getByText('Cặp 2/8')).toBeInTheDocument()
 })
 

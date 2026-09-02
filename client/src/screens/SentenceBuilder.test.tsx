@@ -211,10 +211,13 @@ it('shows the missing-audio notice when the sample fails to play', async () => {
 })
 
 it('a spoken score of 85 shows 3 filled stars, stores sentence:s1 = 3, and logs a sentence activity event', async () => {
+  // Pre-seeding the result (rather than firing it after the tap, as the "reveals the mic" test
+  // above does) means the ResultCard is what a completed tray shows straight away — this test is
+  // about the score it carries, not the transient hand-off from the tray to the mic.
   attemptControl.current = { ...baseAttempt(), result: result85 }
   renderBuilder('s1')
   await tapInCorrectOrder('s1')
-  expect(screen.getByText('Đúng rồi! 🎉')).toBeInTheDocument()
+  expect(screen.getByTestId('result-card')).toBeInTheDocument()
 
   const blob = new Blob(['x'])
   act(() => { attemptControl.onResult?.(result85, blob) })
@@ -273,7 +276,7 @@ it('"Thử lại" resets the spoken attempt', async () => {
   await tapInCorrectOrder('s1')
 
   act(() => { attemptControl.onResult?.(result85, null) })
-  fireEvent.click(screen.getByRole('button', { name: 'Thử lại' }))
+  fireEvent.click(screen.getByRole('button', { name: /Thử lại/ }))
 
   expect((attemptControl.current as SpeakingAttempt).reset).toHaveBeenCalled()
 })
@@ -322,57 +325,28 @@ it('folds the tray, the legend and the pool away on a phone once a score is in, 
   expect(screen.getAllByTestId('word-chip')[0]).toHaveAttribute('aria-label', expect.stringMatching(/^I /))
 })
 
-/** The two CTAs are the bottom row of the phone frame, put there by layout — never by a pinned
- * overlay, which paints over whatever happens to sit at its y (see SoundPractice's file note). */
-it('sits the result CTAs on the bottom edge with layout, never with an overlay', async () => {
+/** The CTAs live inside `ResultCard`, never a pinned overlay that would paint over whatever sits
+ * at its y (see SoundPractice's file note) — `ResultCard`'s own suite covers the row's own
+ * layout, so this only has to guard that nothing on this screen resurrects a sticky panel. */
+it('carries the PageShell frame, never a sticky panel', async () => {
   attemptControl.current = { ...baseAttempt(), result: result85 }
   renderBuilder('s1')
   await tapInCorrectOrder('s1')
   act(() => { attemptControl.onResult?.(result85, null) })
 
-  const row = classes(screen.getByRole('button', { name: /Tiếp theo/ }).parentElement!)
-  expect(row).toContain('max-md:mt-auto')
-  expect(row).not.toContain('sticky')
-  expect(row).not.toContain('fixed')
-  expect(row).not.toContain('absolute')
-
-  // Every phone override of the shared Button is `max-md:`, which provably cannot reach the iPad,
-  // and Button's own responsive size (56/64 for the default md, 64/72 for "Tiếp theo"'s lg) survives it.
-  for (const name of [/Tiếp theo/, /^Thử lại$/]) {
-    const cta = classes(screen.getByRole('button', { name }))
-    expect(cta).toContain('max-md:min-h-[64px]')
-    expect(cta.some(c => c === 'max-md:flex-1' || c === 'max-md:flex-[1.35]')).toBe(true)
-    expect(cta.some(c => c === 'min-h-[56px]' || c === 'min-h-[64px]')).toBe(true)
-    expect(cta.some(c => c === 'md:min-h-[64px]' || c === 'md:min-h-[72px]')).toBe(true)
-  }
+  expect(screen.getByRole('main')).toHaveClass('overflow-hidden')
+  expect(screen.getByTestId('page-body')).toHaveClass('overflow-y-auto')
+  expect(document.querySelector('main')!.innerHTML).not.toContain('sticky')
 })
 
-/** Until the score arrives the speaking row IS the bottom row, pinned by layout rather than by a
- * `sticky` panel that would ride up over the tiles behind it. */
-it('pins the speaking row to the bottom edge with layout, and gives the landscape row straight back', async () => {
+/** The mic block and the `ResultCard` occupy the same `act` slot of the split body, so a score
+ * swaps one for the other outright — never a phone-only `max-md:hidden` sibling. */
+it('swaps the speaking row for the ResultCard once a score is in', async () => {
   renderBuilder('s1')
   await tapInCorrectOrder('s1')
 
-  // MicButton (Task 6) wraps the mic in its own reserved-box + outer div, so the screen's row
-  // is three levels up from the button, not the button's direct parent.
-  const row = classes(screen.getByRole('button', { name: 'Bấm để nói' }).parentElement!.parentElement!.parentElement!)
-  expect(row).toContain('mt-auto')
-  expect(row).toContain('md:mt-0')
-  expect(row).toContain('md:gap-6')
-  expect(row).not.toContain('max-md:hidden')
-  expect(row).not.toContain('sticky')
-  expect(row).not.toContain('fixed')
-})
-
-/** …and it goes when the score arrives, exactly as the sound screen's does (design §5 M3b).
- * "Thử lại" is the way back to recording and brings the mic with it. */
-it('drops the speaking row on a phone once a score is in, and only on a phone', async () => {
-  attemptControl.current = { ...baseAttempt(), result: result85 }
-  renderBuilder('s1')
-  await tapInCorrectOrder('s1')
-  act(() => { attemptControl.onResult?.(result85, null) })
-
-  expect(classes(screen.getByRole('button', { name: 'Bấm để nói' }).parentElement!.parentElement!.parentElement!)).toContain('max-md:hidden')
+  expect(screen.getByRole('button', { name: 'Bấm để nói' })).toBeInTheDocument()
+  expect(screen.queryByTestId('result-card')).not.toBeInTheDocument()
 })
 
 // --- as a step of today's lesson (spec §3) ---------------------------------------------------
