@@ -26,16 +26,20 @@ async function settle(page, ms = 350) {
 
 // Viewport shot, plus a "-full" shot when the app's own scroll container overflows: the page never
 // scrolls itself (#root is 100% tall, <main> scrolls), so fullPage alone would show nothing extra.
+// Since Phase 12's PageShell, <main> itself is overflow-hidden and pinned to the viewport — the
+// screen that actually scrolls is PageBody ([data-testid="page-body"], flex-1 min-h-0
+// overflow-y-auto) — so the probe has to read that element (falling back to <main>/body for any
+// screen not yet on PageShell) or it is permanently blind to overflow.
 const WANT = process.env.SHOTS?.split(',')
 async function shot(page, dir, name, quick = false) {
   if (!quick) await settle(page)
   await page.screenshot({ path: path.join(dir, `${name}.png`) })
   const overflow = await page.evaluate(() => {
-    const m = document.querySelector('main') ?? document.body
+    const m = document.querySelector('[data-testid="page-body"]') ?? document.querySelector('main') ?? document.body
     return { sh: m.scrollHeight, ch: m.clientHeight }
   })
   if (overflow.sh > overflow.ch + 8) {
-    await page.addStyleTag({ content: 'html,body,#root{height:auto!important} main{height:auto!important;overflow:visible!important;max-height:none!important} [class*="overflow-y-auto"]{overflow:visible!important;max-height:none!important}' })
+    await page.addStyleTag({ content: 'html,body,#root{height:auto!important} main{height:auto!important;overflow:visible!important;max-height:none!important} [data-testid="page-body"]{overflow:visible!important;max-height:none!important;flex:none!important} [class*="overflow-y-auto"]{overflow:visible!important;max-height:none!important}' })
     await sleep(150)
     await page.screenshot({ path: path.join(dir, `${name}-full.png`), fullPage: true })
     log(`   ${name}: overflow ${overflow.sh}px > ${overflow.ch}px → -full`)

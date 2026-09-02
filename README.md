@@ -1215,25 +1215,34 @@ behave identically everywhere. The full decision record is
 
 ### Before → after: the six screens that used to overflow
 
-Every one of the four *not-a-scored-result* rows below now measures exactly the frame height — the
-overflow that used to show up on `main` is gone, because `main` (`PageShell`) is capped to the
-viewport (`overflow-hidden`) and the content that used to spill past it now scrolls inside `PageBody`
-(`overflow-y-auto`) instead. That is `PageBody`'s whole job (spec decision "Footer là sibling",
-`docs/superpowers/specs/2026-09-02-phase12-foundation-redesign-design.md` decision 7), not a
-coincidence — `shoot.mjs`'s overflow probe measures `main`, so it produced zero `-full` screenshots
-across the entire three-viewport run that generated this table (`docs/design/current-phase12/shots/`).
-The two scored-result rows still need a real scored attempt to reach (no dev-only fixture route
+Phase 12 didn't shrink any of this content — it changed *what scrolls*. Before, `<main>` itself grew
+to fit everything and the whole page scrolled past the viewport; after, `<main>` (`PageShell`) is
+pinned to the viewport (`overflow-hidden`) and `PageBody` (`[data-testid="page-body"]`,
+`overflow-y-auto`) is the one scrolling region, so the same content now scrolls inside a bounded frame
+instead of stretching the page. That is `PageBody`'s whole job (spec decision "Footer là sibling",
+`docs/superpowers/specs/2026-09-02-phase12-foundation-redesign-design.md` decision 7) — but it also
+means `shoot.mjs`'s overflow probe has to read `PageBody`, not `main` (an earlier pass of this table
+read `main` and got zero overflow everywhere, which was the probe being blind, not the app being
+overflow-free). With the probe reading `PageBody`, this run wrote `mission-full.png`,
+`parent-dashboard-full.png` (phone and iPad portrait) and `sentences-full.png` into
+`docs/design/current-phase12/shots/` — 20 `-full.png` files across the three viewports in total, not
+zero. The two scored-result rows still need a real scored attempt to reach (no dev-only fixture route
 exists to fake one), so they are reported from the geometry Task 9 already measured instead of a new
 number:
 
-| Screen | frame | before | after |
+| Screen | frame | before (old `main`) | after (`PageBody` content, still scrolls — bounded now) |
 |---|---|---|---|
 | `/star/ss1` result | 1194×834 | 959 | not measured (needs a scored result; see Task 9 report: act column 440 px, ResultCard ≈525 px by design) |
 | `/voice/sv1` result | 1194×834 | 1140 | not measured (needs a scored result; see Task 9 report: act column 440 px, ResultCard ≈525 px by design) |
-| `/mission` (5 groups) | 1194×834 | 1189 | 834 (no overflow — `PageBody`'s own content is 874 px, scrolling inside a 607 px region) |
-| `/parent` | 390×844 / 834×1194 | 1745 / 1733 | 844 / 1194 (no overflow — `PageBody`'s own content is 1661 px / 2231 px, scrolling internally) |
-| `/words/review` (all 64 words due) | 390×844 | — (never measured before) | 844 (no overflow — the unvirtualized 16-row grid is 7028 px tall, scrolling inside `PageBody`) |
-| `/sentences` | 390×844 | 2192 | 844 (no overflow — `PageBody`'s own content is 1904 px, scrolling internally) |
+| `/mission` (5 groups) | 1194×834 | 1189 | 874, inside a 607 px region (`ipad/mission-full.png`) |
+| `/parent` phone | 390×844 | 1745 | 1661, inside a 738 px region (`phone/parent-dashboard-full.png`) |
+| `/parent` iPad portrait | 834×1194 | 1733 | 2231, inside a 1070 px region (`ipadp/parent-dashboard-full.png`) |
+| `/words/review` (all 64 words due) | 390×844 | — (never measured before) | 7028, inside a 738 px region — the unvirtualized 16-row grid; not part of `shoot.mjs`'s standard seed (the review deck is empty by default), measured with a one-off script that seeds every word in the game as due today |
+| `/sentences` | 390×844 | 2192 | 1904, inside a 738 px region (`phone/sentences-full.png`) |
+
+Every row's content is still taller than its frame — nothing here got shorter — but only `PageBody`
+grows now, not the whole page, so the header, mic and footer CTA stay fixed and reachable while the
+middle of the screen scrolls underneath them.
 
 ### Deliberate iPad changes
 
@@ -1267,10 +1276,15 @@ story's `NotFound` keeps routing back to `/mission` when reached mid-lesson inst
 `/stories`, so a child mid-mission is never stranded; `WeekDots.minutes` became a day-keyed map (built
 from the real `minutesPerDay()`) instead of an index-keyed one, so a day's dot can't silently show
 another day's minutes; the Parent Dashboard's "🔐 Khoá lại" control became icon-only below `md`
-(`aria-label="Khoá lại"`) after an `adult`-sized label version collided with the header's H1; and on a
+(`aria-label="Khoá lại"`) after an `adult`-sized label version collided with the header's H1; on a
 phone, Home's header shows a single greeting line (Foxy and the full speech bubble move to the first
 body row) because the design's own header cell has no room for a mascot at 390 px — accepted until
-Phase 13 redraws Home.
+Phase 13 redraws Home; LevelSelect's "Xem các bậc" stairs pill moved out of the header and into the
+body's first row (`self-end`) at every width, rather than staying a header-right override, so the
+header can keep its default `LessonChip` slot — the cost is one extra row on iPad until Phase 13; and
+loading skeletons *are* the row/card while they're up (a `<li>` carries no border/padding of its own,
+the skeleton drops its own background/padding inside `Card`) instead of the plan's sketch of a
+skeleton nested inside an already-styled frame.
 
 ### iPad checklist rows for this phase
 
