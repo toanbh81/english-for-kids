@@ -2,20 +2,27 @@ import type { AnchorHTMLAttributes, ButtonHTMLAttributes } from 'react'
 import { Link } from 'react-router-dom'
 
 export type ButtonVariant = 'primary' | 'secondary' | 'outline' | 'ghost'
-export type ButtonSize = 'md' | 'lg'
+/** `md` and `lg` are responsive (brief §1: phone 56, iPad 64; lg one step up). `adult` is the
+ * parent area's fixed 44 (brief §2.1). */
+export type ButtonSize = 'md' | 'lg' | 'adult'
 
 // The press sinks the button into its own shadow: the offset halves as the face moves down 2 px,
 // so the button looks pushed rather than just nudged. Shadowless variants only move.
 const VARIANT: Record<ButtonVariant, string> = {
-  primary: 'bg-coral-500 text-white shadow-chunky-coral active:shadow-[0_3px_0_#E05A3A]',
-  secondary: 'bg-teal-500 text-white shadow-chunky-teal active:shadow-[0_3px_0_#1FA396]',
-  outline: 'bg-white text-teal-600 border-[3px] border-teal-500/30',
-  ghost: 'bg-transparent text-ink-300 border-[3px] border-dashed border-line-200',
+  primary: 'bg-coral-500 text-white shadow-chunky-coral active:shadow-none',
+  secondary: 'bg-teal-500 text-white shadow-chunky-teal active:shadow-none',
+  outline: 'bg-white text-teal-600 border-[3px] border-teal-line shadow-edge-outline active:shadow-none',
+  ghost: 'bg-transparent text-ink-500 border-[3px] border-dashed border-sand-edge',
 }
 
+// The phone button is 56 tall but its tap target is 64: an invisible 4 px band above and below,
+// drawn by the pseudo-element, catches the finger without changing the layout (brief §2.1).
+const HIT = "relative after:absolute after:-top-1 after:-bottom-1 after:left-0 after:right-0 after:content-['']"
+
 const SIZE: Record<ButtonSize, string> = {
-  md: 'min-h-[64px] px-8 text-[22px] rounded-xl3',
-  lg: 'min-h-[72px] px-10 text-[26px] rounded-xl4',
+  md: `min-h-[56px] px-5 text-[18px] rounded-r18 md:min-h-[64px] md:px-7 md:text-[22px] md:rounded-r20 ${HIT} md:after:hidden`,
+  lg: `min-h-[64px] px-7 text-[22px] rounded-r20 md:min-h-[72px] md:px-9 md:text-[26px] md:rounded-r24`,
+  adult: 'min-h-[44px] px-4 text-[14px] rounded-r12',
 }
 
 type Props = ButtonHTMLAttributes<HTMLButtonElement> & {
@@ -32,14 +39,15 @@ type Props = ButtonHTMLAttributes<HTMLButtonElement> & {
 }
 
 /** The chunky handoff button: hard offset shadow that the press sinks into
- * (`active:translate-y-[2px]`), Baloo display type and a ≥64 px tap target. */
+ * (`active:translate-y-[2px]`), Baloo display type and a ≥44 px tap target (56/64/72 for the
+ * responsive `md`/`lg` sizes, a fixed 44 for `adult`). */
 export function Button({ variant = 'primary', size = 'md', pulse, to, state, className = '', children, ...rest }: Props) {
   const classes = [
-    'inline-flex items-center justify-center gap-2 font-display font-extrabold',
-    'transition-transform active:translate-y-[2px] disabled:opacity-60 disabled:active:translate-y-0',
+    'inline-flex items-center justify-center gap-2 font-display font-extrabold whitespace-nowrap',
+    'transition-transform active:translate-y-[2px] disabled:opacity-45 disabled:shadow-none disabled:active:translate-y-0',
     SIZE[size],
     VARIANT[variant],
-    pulse ? 'animate-pulse-soft' : '',
+    pulse && variant === 'primary' ? 'animate-pulse-coral' : '',
     className,
   ].filter(Boolean).join(' ')
 

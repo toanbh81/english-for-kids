@@ -336,12 +336,13 @@ it('sits the result CTAs on the bottom edge with layout, never with an overlay',
   expect(row).not.toContain('absolute')
 
   // Every phone override of the shared Button is `max-md:`, which provably cannot reach the iPad,
-  // and the 64 px tap target survives it.
+  // and Button's own responsive size (56/64 for the default md, 64/72 for "Tiếp theo"'s lg) survives it.
   for (const name of [/Tiếp theo/, /^Thử lại$/]) {
     const cta = classes(screen.getByRole('button', { name }))
     expect(cta).toContain('max-md:min-h-[64px]')
     expect(cta.some(c => c === 'max-md:flex-1' || c === 'max-md:flex-[1.35]')).toBe(true)
-    expect(cta.some(c => c === 'min-h-[64px]' || c === 'min-h-[72px]')).toBe(true)
+    expect(cta.some(c => c === 'min-h-[56px]' || c === 'min-h-[64px]')).toBe(true)
+    expect(cta.some(c => c === 'md:min-h-[64px]' || c === 'md:min-h-[72px]')).toBe(true)
   }
 })
 

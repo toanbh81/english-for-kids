@@ -191,8 +191,10 @@ it('keeps the result CTAs a phone-only size, and never touches the button primit
     const cta = classes(screen.getByRole(/thử lại/.test(name.source) ? 'button' : 'link', { name }))
     expect(cta).toContain('max-md:min-h-[64px]')
     expect(cta.some(c => c === 'max-md:flex-1' || c === 'max-md:flex-[1.35]')).toBe(true)
-    // The landscape size map is untouched: 72 px and 64 px are still what `Button` hands out.
-    expect(cta.some(c => c === 'min-h-[64px]' || c === 'min-h-[72px]')).toBe(true)
+    // The landscape size map is untouched: Button's own responsive size (56/64 for the default md,
+    // 64/72 for "Tiếp theo"'s lg) is still what `Button` hands out.
+    expect(cta.some(c => c === 'min-h-[56px]' || c === 'min-h-[64px]')).toBe(true)
+    expect(cta.some(c => c === 'md:min-h-[64px]' || c === 'md:min-h-[72px]')).toBe(true)
   }
 })
 

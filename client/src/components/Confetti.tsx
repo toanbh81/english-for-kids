@@ -4,7 +4,7 @@ const PIECE_COUNT = 24
 const LIFETIME_MS = 2000
 
 const EMOJI = ['🎉', '⭐', '🦊']
-const DOT_COLORS = ['bg-coral', 'bg-teal', 'bg-star']
+const DOT_COLORS = ['bg-coral', 'bg-teal', 'bg-sun-400']
 
 /** Positions come from the piece index, never Math.random: the shower looks scattered but two
  * renders lay the pieces out identically, which keeps it testable and avoids a re-render

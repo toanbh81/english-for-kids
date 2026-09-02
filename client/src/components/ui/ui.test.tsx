@@ -26,7 +26,7 @@ describe('Button', () => {
     fireEvent.click(button)
 
     expect(onClick).toHaveBeenCalledTimes(1)
-    expect(button).toHaveClass('min-h-[64px]', 'font-display')
+    expect(button).toHaveClass('min-h-[56px]', 'md:min-h-[64px]', 'font-display')
   })
 
   it('does not fire when disabled', () => {
@@ -51,10 +51,10 @@ describe('Button', () => {
 
   it('pulses only when asked to', () => {
     const { rerender } = render(<Button pulse>A</Button>)
-    expect(screen.getByRole('button')).toHaveClass('animate-pulse-soft')
+    expect(screen.getByRole('button')).toHaveClass('animate-pulse-coral')
 
     rerender(<Button>A</Button>)
-    expect(screen.getByRole('button')).not.toHaveClass('animate-pulse-soft')
+    expect(screen.getByRole('button')).not.toHaveClass('animate-pulse-coral')
   })
 
   it('renders a router link, not a button, when given a destination', () => {
@@ -63,6 +63,35 @@ describe('Button', () => {
     expect(screen.queryByRole('button')).not.toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Bắt đầu' })).toHaveAttribute('href', '/mission')
     expect(screen.getByRole('link', { name: 'Bắt đầu' })).toHaveClass('bg-teal-500')
+  })
+
+  it('md is 56 on a phone and 64 from md, with the design radius and 5px edge', () => {
+    render(<Button>Bắt đầu ▸</Button>)
+    const b = screen.getByRole('button')
+    expect(b).toHaveClass('min-h-[56px]', 'md:min-h-[64px]', 'rounded-r18', 'md:rounded-r20', 'text-[18px]', 'md:text-[22px]', 'shadow-chunky-coral')
+    expect(b).not.toHaveClass('rounded-xl3')
+  })
+
+  it('lg is 64 on a phone and 72 from md', () => {
+    render(<Button size="lg">Về trang chủ</Button>)
+    expect(screen.getByRole('button')).toHaveClass('min-h-[64px]', 'md:min-h-[72px]', 'rounded-r20', 'md:rounded-r24', 'md:text-[26px]')
+  })
+
+  it('adult is 44 at every width', () => {
+    render(<Button size="adult">Lưu</Button>)
+    const b = screen.getByRole('button')
+    expect(b).toHaveClass('min-h-[44px]', 'rounded-r12', 'text-[14px]')
+    expect(b.className).not.toMatch(/md:min-h/)
+  })
+
+  it('outline has the teal edge and disabled flattens the shadow', () => {
+    render(<Button variant="outline" disabled>Nghe lại</Button>)
+    expect(screen.getByRole('button')).toHaveClass('border-teal-line', 'shadow-edge-outline', 'disabled:opacity-45', 'disabled:shadow-none')
+  })
+
+  it('pulse uses the coral ring animation', () => {
+    render(<Button pulse>Bắt đầu ▸</Button>)
+    expect(screen.getByRole('button')).toHaveClass('animate-pulse-coral')
   })
 })
 

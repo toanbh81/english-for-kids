@@ -434,7 +434,7 @@ it('keeps the read-out and the CTA row in the doing column, the row outside the 
 })
 
 /** Three ways back plus one way on only fit a 400 px column at the phone's own button size, so
- * the iPad borrows that shape. `ipad:` overrides `Button`'s own `px-8`/`px-10` the way `max-md:`
+ * the iPad borrows that shape. `ipad:` overrides `Button`'s own `px-5`/`px-7` the way `max-md:`
  * does — a variant is emitted after the plain utilities — and the size map itself is untouched. */
 it('gives the result CTAs an iPad-only size, and never touches the button primitive', () => {
   renderVoice()
@@ -445,9 +445,9 @@ it('gives the result CTAs an iPad-only size, and never touches the button primit
     const b = classes(within(cta).getByRole('button', { name }))
     expect(b).toContain('ipad:px-4')
     expect(b).toContain('ipad:flex-1')
-    expect(b).toContain('px-8')
+    expect(b).toContain('px-5')
   }
   const on = classes(screen.getByRole('button', { name: /tiếp theo/i }))
   expect(on).toContain('ipad:w-full')
-  expect(on).toContain('px-10')
+  expect(on).toContain('px-7')
 })

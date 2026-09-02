@@ -207,7 +207,7 @@ it('pulses a "Tiếp tục ▸" link to the quiz when the story has ended', () =
   renderPlayer()
   const link = screen.getByRole('link', { name: /Tiếp tục/ })
   expect(link).toHaveAttribute('href', '/story/little-fox/quiz')
-  expect(link).toHaveClass('animate-pulse-soft')
+  expect(link).toHaveClass('animate-pulse-coral')
   expect(screen.queryByRole('link', { name: /Bỏ qua/ })).not.toBeInTheDocument()
 })
 

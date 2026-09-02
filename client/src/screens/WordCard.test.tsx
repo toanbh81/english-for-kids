@@ -421,9 +421,9 @@ it('a locked new word opens on a meaning-guess step: a wrong option shakes and i
   expect(screen.queryByText('🎤 Nói để mở khoá')).not.toBeInTheDocument()
 
   const cta = screen.getByRole('button', { name: 'Tiếp theo →' })
-  // ≥64 px at every width: the phone override, and `size="lg"`'s own 72 px from md up.
+  // ≥64 px at every width: the phone override, and `size="lg"`'s own 64/72 px map from md up.
   expect(cta.className).toContain('max-md:min-h-[64px]')
-  expect(cta).toHaveClass('min-h-[72px]')
+  expect(cta).toHaveClass('min-h-[64px]', 'md:min-h-[72px]')
 
   fireEvent.click(cta)
   expect(screen.queryByText('Từ này nghĩa là gì?')).not.toBeInTheDocument()
