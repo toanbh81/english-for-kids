@@ -40,8 +40,14 @@ describe('PageShell', () => {
   it('split body lays teach/act as two columns on ipad and two tiers below', () => {
     wrap(<PageShell><PageBody split={{ teach: <p>dạy</p>, act: <p>làm</p> }} /></PageShell>)
     const body = screen.getByTestId('page-body')
-    expect(body).toHaveClass('ipad:flex-row', 'ipad:gap-6')
-    expect(screen.getByText('làm').parentElement).toHaveClass('md:h-[300px]', 'md:shrink-0', 'ipad:h-auto', 'ipad:w-[440px]', 'ipad:shrink-0')
+    expect(body).toHaveClass('ipad:flex-row', 'ipad:gap-6', 'ipad:overflow-visible')
+    expect(screen.getByText('làm').parentElement).toHaveClass('md:h-[300px]', 'md:shrink-0', 'ipad:h-auto', 'ipad:max-h-full', 'ipad:w-[440px]', 'ipad:shrink-0')
+  })
+
+  it('both split columns scroll independently on ipad (the outer body stays overflow-visible)', () => {
+    wrap(<PageShell><PageBody split={{ teach: <p>dạy</p>, act: <p>làm</p> }} /></PageShell>)
+    expect(screen.getByText('dạy').parentElement).toHaveClass('ipad:min-h-0', 'ipad:overflow-y-auto')
+    expect(screen.getByText('làm').parentElement).toHaveClass('ipad:min-h-0', 'ipad:overflow-y-auto')
   })
 })
 

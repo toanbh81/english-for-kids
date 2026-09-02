@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { Button } from './ui'
 import { WeekDots } from './ui/WeekDots'
 
@@ -22,6 +22,8 @@ export function StreakPanel({
   minutes?: Record<string, number>
   onClose: () => void
 }) {
+  const dialogRef = useRef<HTMLDivElement>(null)
+
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
       if (e.key === 'Escape') onClose()
@@ -30,11 +32,23 @@ export function StreakPanel({
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [onClose])
 
+  // Open: move focus into the dialog, onto its one focusable control ("Đóng") — a modal that opens
+  // with focus left behind on the trigger reads as inert to a screen-reader or keyboard user. Close
+  // (this component unmounts — `StreakWeek` only renders it while `open`): hand focus back to
+  // whatever had it before, which is always the `StreakWeek` trigger button that opened it.
+  useEffect(() => {
+    const previouslyFocused = document.activeElement as HTMLElement | null
+    dialogRef.current?.querySelector<HTMLButtonElement>('button')?.focus()
+    return () => { previouslyFocused?.focus?.() }
+  }, [])
+
   return (
     <>
       <div className="fixed inset-0 z-[54] bg-[rgba(74,59,51,.35)] ipad:hidden" onClick={onClose} />
       <div
+        ref={dialogRef}
         role="dialog"
+        aria-modal="true"
         aria-label="Tuần này của con 🔥"
         className="fixed inset-x-0 bottom-0 z-[55] rounded-t-r28 bg-white px-4 pb-11 pt-2.5 ipad:absolute ipad:inset-auto ipad:top-full ipad:left-0 ipad:mt-2 ipad:w-[360px] ipad:rounded-r22 ipad:shadow-dialog"
       >

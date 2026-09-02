@@ -9,7 +9,7 @@ export function SpeakError({ error, onAction, onDismiss }: { error: SpeakErrorVa
         <div className="font-display text-[15px] font-extrabold leading-tight text-fix-700">{c.title}</div>
         <div className="text-[12px] font-bold text-ink-500">{error.detail ? `${c.sub} · ${error.detail}` : c.sub}</div>
       </div>
-      <button type="button" onClick={() => { onAction(error.kind); onDismiss() }} className="h-10 shrink-0 rounded-r12 bg-white px-3.5 font-display text-[14px] font-extrabold text-fix-700">{c.action}</button>
+      <button type="button" onClick={() => { onAction(error.kind); onDismiss() }} className="relative flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-r12 bg-white px-3.5 font-display text-[14px] font-extrabold text-fix-700 after:absolute after:-inset-2.5 after:content-['']">{c.action}</button>
     </div>
   )
 }

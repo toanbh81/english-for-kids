@@ -56,8 +56,8 @@ export function ResultCard(p: ResultCardProps) {
       {p.hint && p.stars < 2 && <div data-row="hint"><HintCard hint={p.hint} /></div>}
       {listen && (
         <div data-row="listen" className="flex gap-2">
-          {p.canReplay && p.onReplay && <button type="button" onClick={p.onReplay} className="flex h-12 flex-1 items-center justify-center gap-1.5 rounded-r14 border-[3px] border-teal-line bg-white font-display text-[15px] font-extrabold text-teal-600">🎧 Nghe mình</button>}
-          {p.onSample && <button type="button" onClick={p.onSample} className="flex h-12 flex-1 items-center justify-center gap-1.5 rounded-r14 border-[3px] border-teal-line bg-white font-display text-[15px] font-extrabold text-teal-600">🔊 Nghe mẫu</button>}
+          {p.canReplay && p.onReplay && <button type="button" onClick={p.onReplay} className="relative flex h-12 flex-1 items-center justify-center gap-1.5 rounded-r14 border-[3px] border-teal-line bg-white font-display text-[15px] font-extrabold text-teal-600 after:absolute after:-inset-2 after:content-['']">🎧 Nghe mình</button>}
+          {p.onSample && <button type="button" onClick={p.onSample} className="relative flex h-12 flex-1 items-center justify-center gap-1.5 rounded-r14 border-[3px] border-teal-line bg-white font-display text-[15px] font-extrabold text-teal-600 after:absolute after:-inset-2 after:content-['']">🔊 Nghe mẫu</button>}
         </div>
       )}
       <div data-row="cta" className="flex gap-2.5">

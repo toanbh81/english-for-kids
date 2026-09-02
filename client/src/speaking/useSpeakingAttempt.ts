@@ -104,7 +104,11 @@ export function useSpeakingAttempt(opts: {
       adoptScorer(bundle)
       // Only the initial scorer for this card announces a fallback — the re-check inside
       // startRecording swaps engines silently, or it would nag the child every single attempt.
-      if (bundle.fallbackReason && !sessionStorage.getItem(FALLBACK_NOTICED_KEY)) {
+      // A throw (storage unavailable — private mode, quota) reads the same as "not noticed yet",
+      // matching `dismissError`'s own try/catch around the write.
+      let noticed = false
+      try { noticed = !!sessionStorage.getItem(FALLBACK_NOTICED_KEY) } catch { /* ignore: storage unavailable */ }
+      if (bundle.fallbackReason && !noticed) {
         setError({ kind: 'fallback', detail: bundle.fallbackReason })
       }
     })

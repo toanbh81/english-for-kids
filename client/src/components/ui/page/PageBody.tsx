@@ -8,8 +8,8 @@ export function PageBody({ center, split, className = '', children }: { center?:
   if (split) {
     return (
       <div data-testid="page-body" className={`mt-2.5 flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto md:mt-4 ipad:flex-row ipad:gap-6 ipad:overflow-visible ${className}`}>
-        <div className="flex min-h-0 flex-1 flex-col items-center justify-center">{split.teach}</div>
-        <div className="flex flex-col items-center justify-center md:h-[300px] md:shrink-0 ipad:h-auto ipad:w-[440px] ipad:shrink-0 ipad:gap-4">{split.act}</div>
+        <div className="flex min-h-0 flex-1 flex-col items-center justify-center ipad:min-h-0 ipad:overflow-y-auto">{split.teach}</div>
+        <div className="flex flex-col items-center justify-center md:h-[300px] md:shrink-0 ipad:h-auto ipad:max-h-full ipad:w-[440px] ipad:shrink-0 ipad:min-h-0 ipad:overflow-y-auto ipad:gap-4">{split.act}</div>
       </div>
     )
   }

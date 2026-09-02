@@ -133,6 +133,7 @@ describe('StreakWeek', () => {
     expect(trigger).toHaveAttribute('aria-expanded', 'true')
 
     const sheet = screen.getByRole('dialog', { name: 'Tuần này của con 🔥' })
+    expect(sheet).toHaveAttribute('aria-modal', 'true')
     expect(sheet).toHaveTextContent('4 ngày')
     expect(sheet).toHaveTextContent('9 ngày')
     expect(sheet).toHaveTextContent("57'")
@@ -149,6 +150,19 @@ describe('StreakWeek', () => {
     expect(screen.getByRole('dialog')).toBeInTheDocument()
     fireEvent.keyDown(window, { key: 'Escape' })
     expect(screen.queryByRole('dialog')).toBeNull()
+  })
+
+  it('moves focus to Đóng on open and restores it to the trigger on close', () => {
+    render(<MemoryRouter><StreakWeek dots={sevenDots} streak={4} longest={9} weekMinutes={57} stars={128} /></MemoryRouter>)
+    const trigger = screen.getByRole('button', { name: /Tuần này/ })
+    trigger.focus()
+    fireEvent.click(trigger)
+
+    const closeBtn = screen.getByRole('button', { name: 'Đóng' })
+    expect(document.activeElement).toBe(closeBtn)
+
+    fireEvent.click(closeBtn)
+    expect(document.activeElement).toBe(trigger)
   })
 
   it('says "bắt đầu hôm nay" instead of a streak number when the streak is 0', () => {

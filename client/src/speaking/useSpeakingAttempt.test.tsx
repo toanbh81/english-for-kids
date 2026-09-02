@@ -290,6 +290,14 @@ describe('typed errors, locked mic, fallback notice, not-ready timer', () => {
     expect(second.result.current.error).toBeNull()
   })
 
+  it('still reports the fallback when sessionStorage.getItem throws (private mode, quota) — a throw reads as "not noticed"', async () => {
+    vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => { throw new Error('blocked') })
+    scorerControl.queue.push({ engine: 'webspeech', scorer: webSpeechBundle().bundle.scorer, fallbackReason: 'token' })
+    const { result } = renderHook(() => useSpeakingAttempt({ targetText: 'cat' }))
+    await waitFor(() => expect(result.current.error).toEqual({ kind: 'fallback', detail: 'token' }))
+    vi.restoreAllMocks()
+  })
+
   it('locks the mic when today is over the daily limit', async () => {
     // Pinned: the seeded events below are all `now`-relative, so a real clock within 25 minutes
     // of local midnight walks some of them onto yesterday and the count comes up short. Faking
