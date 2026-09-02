@@ -738,42 +738,44 @@ export function ParentDashboard({ onLock }: Props) {
                 <EmptyState
                   adult
                   emoji="📈"
-                  title="Chưa có dữ liệu luyện tập"
-                  sub="Biểu đồ hiện ra sau khi bé bắt đầu luyện nói."
+                  title="Chưa có lịch sử luyện"
+                  sub="Biểu đồ sẽ hiện từ ngày học đầu tiên."
                 />
               ) : (
-                <div className="relative h-24 md:h-40">
-                  <div className="absolute inset-x-0 border-t-2 border-dashed border-ink-300" style={{ top: `${targetTopPct}%` }} />
-                  <div className="absolute inset-0 flex items-end gap-1">
+                <>
+                  <div className="relative h-24 md:h-40">
+                    <div className="absolute inset-x-0 border-t-2 border-dashed border-ink-300" style={{ top: `${targetTopPct}%` }} />
+                    <div className="absolute inset-0 flex items-end gap-1">
+                      {days.map((d, i) => (
+                        <div key={d.day} className={`h-full flex-1 items-end ${i < days.length - PHONE_DAYS ? 'hidden md:flex' : 'flex'}`}>
+                          <div
+                            data-testid="minute-bar"
+                            data-minutes={d.minutes}
+                            className={`w-full rounded-t ${d.day === todayKey ? 'bg-coral-500' : 'bg-teal-500'}`}
+                            style={{ height: `${Math.max(2, (d.minutes / scaleMax) * 100)}%` }}
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="mt-2 flex gap-1">
                     {days.map((d, i) => (
-                      <div key={d.day} className={`h-full flex-1 items-end ${i < days.length - PHONE_DAYS ? 'hidden md:flex' : 'flex'}`}>
-                        <div
-                          data-testid="minute-bar"
-                          data-minutes={d.minutes}
-                          className={`w-full rounded-t ${d.day === todayKey ? 'bg-coral-500' : 'bg-teal-500'}`}
-                          style={{ height: `${Math.max(2, (d.minutes / scaleMax) * 100)}%` }}
-                        />
-                      </div>
+                      <span
+                        key={d.day}
+                        className={`flex-1 text-center text-[10px] font-bold text-ink-300 ${i < days.length - PHONE_DAYS ? 'hidden md:block' : 'block'}`}
+                      >
+                        {formatDayLabel(d.day)}
+                      </span>
                     ))}
                   </div>
-                </div>
+                  {/* The total counts what the chart shows, so it follows the same seven/fourteen split.
+                      `weekMinutes` is the last seven days already — the summary line at the top of the
+                      screen is built from it. */}
+                  <p className="mt-2 text-xs font-semibold text-ink-500 md:mt-3 md:text-sm">
+                    Tổng: <span className="md:hidden">{weekMinutes}</span><span className="hidden md:inline">{totalMinutes}</span> phút
+                  </p>
+                </>
               )}
-              <div className="mt-2 flex gap-1">
-                {days.map((d, i) => (
-                  <span
-                    key={d.day}
-                    className={`flex-1 text-center text-[10px] font-bold text-ink-300 ${i < days.length - PHONE_DAYS ? 'hidden md:block' : 'block'}`}
-                  >
-                    {formatDayLabel(d.day)}
-                  </span>
-                ))}
-              </div>
-              {/* The total counts what the chart shows, so it follows the same seven/fourteen split.
-                  `weekMinutes` is the last seven days already — the summary line at the top of the
-                  screen is built from it. */}
-              <p className="mt-2 text-xs font-semibold text-ink-500 md:mt-3 md:text-sm">
-                Tổng: <span className="md:hidden">{weekMinutes}</span><span className="hidden md:inline">{totalMinutes}</span> phút
-              </p>
             </Card>
 
             <div>

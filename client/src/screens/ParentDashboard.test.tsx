@@ -483,6 +483,17 @@ describe('ParentDashboard', () => {
     expect(screen.getByText('(14 ngày)')).toHaveClass('hidden', 'md:inline')
   })
 
+  it('shows the empty state for the whole chart region — bars, date labels and total — when there is no activity at all', async () => {
+    renderWithRouter(<ParentDashboard />)
+    await flush()
+
+    expect(screen.getByText('Chưa có lịch sử luyện')).toBeInTheDocument()
+    expect(screen.queryByTestId('minute-bar')).not.toBeInTheDocument()
+    expect(screen.queryByText(/Tổng:/)).not.toBeInTheDocument()
+    // The card's own heading and target line are not part of the chart region, so they stay.
+    expect(screen.getByText('Mục tiêu 20 phút/ngày')).toBeInTheDocument()
+  })
+
   it('pressing a length chip persists the lesson length', async () => {
     renderWithRouter(<ParentDashboard />)
     await flush()
