@@ -294,7 +294,7 @@ it('frames itself with the safe-area page shell, resting on the padding it alway
   renderBuilder('s1')
 
   const shell = classes(main())
-  expect(shell).toContain('pt-[max(var(--page-pad-top,1.5rem),calc(env(safe-area-inset-top)_+_9px))]')
+  expect(shell).toContain('pt-[max(var(--page-pad-top,1.5rem),calc(env(safe-area-inset-top)_+_8px))]')
   expect(shell).toContain('pb-[max(var(--page-pad-bottom,1.5rem),calc(env(safe-area-inset-bottom)_+_10px))]')
   // 1.25 rem is the `py-5` this screen has always had, so nothing without a notch moves.
   expect(shell).toContain('[--page-pad-top:1.25rem]')

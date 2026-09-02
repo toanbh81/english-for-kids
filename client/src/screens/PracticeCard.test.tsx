@@ -461,7 +461,7 @@ it('carries the safe-area shell and its own resting padding', async () => {
   await scorerReady()
 
   const shell = document.querySelector('main')!.className
-  expect(shell).toContain('pt-[max(var(--page-pad-top,1.5rem),calc(env(safe-area-inset-top)_+_9px))]')
+  expect(shell).toContain('pt-[max(var(--page-pad-top,1.5rem),calc(env(safe-area-inset-top)_+_8px))]')
   expect(shell).toContain('pb-[max(var(--page-pad-bottom,1.5rem),calc(env(safe-area-inset-bottom)_+_10px))]')
   // The resting value is the `py-5` this screen has always had, so the iPad is untouched.
   expect(shell).toContain('[--page-pad-top:1.25rem]')

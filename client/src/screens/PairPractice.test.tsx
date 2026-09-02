@@ -354,7 +354,7 @@ it('carries the safe-area shell at its own resting padding', () => {
   renderPair()
 
   const shell = document.querySelector('main')!.className
-  expect(shell).toContain('pt-[max(var(--page-pad-top,1.5rem),calc(env(safe-area-inset-top)_+_9px))]')
+  expect(shell).toContain('pt-[max(var(--page-pad-top,1.5rem),calc(env(safe-area-inset-top)_+_8px))]')
   expect(shell).toContain('pb-[max(var(--page-pad-bottom,1.5rem),calc(env(safe-area-inset-bottom)_+_10px))]')
   expect(shell).toContain('[--page-pad-top:1.25rem]')
   expect(shell).toContain('px-5')

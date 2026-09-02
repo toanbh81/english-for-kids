@@ -4,6 +4,7 @@ import { dayKey, logActivity } from '../progress/activity'
 import { getLesson } from '../progress/lesson'
 import { saveLesson } from '../progress/lessonStore'
 import { LessonChip } from './LessonChip'
+import { registerHeader } from './ui/page/headerRegistry'
 
 const NOW = new Date('2026-08-23T10:00:00').getTime()
 
@@ -223,4 +224,38 @@ it('still shows on the same route reached without the mission flag', () => {
   renderAt(speak.route)
 
   expect(screen.getByRole('link')).toHaveAttribute('href', '/mission')
+})
+
+// --- Phase 12: the header variant and the registry hand-off -----------------------------------
+
+/** The header cell draws a smaller chip than the floating one — 56 px, not 64, and never
+ * `fixed`, since it sits inside the header's own grid cell rather than floating over the page. */
+it('renders the header-sized variant, unfixed, on a lesson item route', () => {
+  const lesson = lessonWith(2)
+
+  render(
+    <MemoryRouter initialEntries={[lesson.items[3].route]}>
+      <LessonChip variant="header" />
+    </MemoryRouter>,
+  )
+
+  const chip = screen.getByRole('link', { name: `🌞 Nhiệm vụ 2/${lesson.items.length}` })
+  const tokens = classes(chip)
+  expect(tokens).toEqual(expect.arrayContaining(['h-14', 'w-14', 'rounded-r18', 'md:h-12', 'md:px-4', 'md:rounded-r16']))
+  expect(tokens).not.toContain('fixed')
+})
+
+/** Once a screen has mounted its own `PageHeader` (which draws the header-variant chip itself),
+ * the floating global chip has to get out of the way rather than show a second one. */
+it('steps aside once a screen has registered its own header', () => {
+  const lesson = lessonWith(2)
+  const unregister = registerHeader()
+
+  try {
+    renderAt(lesson.items[3].route)
+
+    expect(screen.queryByRole('link')).not.toBeInTheDocument()
+  } finally {
+    unregister()
+  }
 })

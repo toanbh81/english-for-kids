@@ -4,6 +4,7 @@ import { getActivity } from '../progress/activity'
 import { lessonStatus } from '../progress/lesson'
 import type { LessonItem } from '../progress/lesson'
 import { isItemRoute } from '../progress/missionNav'
+import { useHeaderMounted } from './ui/page/headerRegistry'
 
 /**
  * Screens that must never carry the chip: the map and the mission itself are already the way back,
@@ -101,45 +102,77 @@ const CHIP_BOX
   + ' md:gap-2 md:px-6 md:text-xl'
 
 /**
+ * The header-cell chip Phase 12 screens draw themselves (via `PageHeader`'s `right` default),
+ * sized to sit inside the header's own 56/64 px cell rather than float over the page — so unlike
+ * `CHIP_BOX` this carries no `fixed`, no `z-40`, and no safe-area offset of its own; the header
+ * that hosts it already accounts for those.
+ */
+const HEADER_BOX
+  = 'inline-flex h-14 w-14 flex-col items-center justify-center rounded-r18 bg-sun-50'
+  + ' font-display font-extrabold leading-none text-sun-700 shadow-chunky-sun active:translate-y-[2px]'
+  + ' md:h-12 md:w-auto md:flex-row md:gap-2 md:rounded-r16 md:px-4 md:text-[16px]'
+
+/**
+ * Whether the lesson thread belongs on this screen, and its count when it does — the storage read
+ * and the hide rules `LessonChip` and `LessonChipInner` (both variants) share.
+ *
+ * Only the storage reads are frozen here (lazy `useState`). Whether the chip belongs on this
+ * screen is decided below, from that one snapshot — the redundancy rule needs today's items, which
+ * is exactly what this read already fetched.
+ */
+export function useLessonChipStatus(pathname: string, inMission: boolean) {
+  const [lesson] = useState(() => lessonStatus(Date.now(), getActivity()))
+  const hidden = lesson.done || isRedundant(pathname, inMission, lesson.items)
+    || !lesson.items.some(item => onItemRoute(pathname, item.route))
+  return hidden ? null : { doneCount: lesson.doneCount, total: lesson.total }
+}
+
+/**
  * The thread back to the lesson. A mission item drops the child onto an ordinary practice screen
  * whose own back button goes wherever that screen belongs — the story list, the word deck — so
  * without this, finishing a step left them off the lesson with no sign it was still running.
  *
  * It shows only while the child is standing on one of today's own item routes and the lesson is
  * unfinished, so it never nags during free practice.
+ *
+ * `variant="header"` is the smaller, unfixed chip `PageHeader` draws in its own right-hand cell;
+ * the default `"global"` is the floating corner pill. A screen that has mounted a `PageHeader` —
+ * `useHeaderMounted` — has already drawn its own header-cell chip, so the floating global one steps
+ * aside rather than show the lesson twice. A screen not yet migrated onto `PageShell` has no header
+ * to register, so the global chip keeps floating for it exactly as before.
  */
-export function LessonChip() {
+export function LessonChip({ variant = 'global' }: { variant?: 'global' | 'header' } = {}) {
   const { pathname, state } = useLocation()
+  const headerMounted = useHeaderMounted()
   const inMission = (state as { mission?: unknown } | null)?.mission === true
   if (isExcluded(pathname)) return null
+  // Phase 12 transition: a screen that mounts PageHeader draws its own chip in the header cell,
+  // so the global one steps aside; screens not yet migrated still get the floating chip.
+  if (variant === 'global' && headerMounted) return null
   // Keyed on the path so the inner component remounts on every navigation: its lazy state reads
   // the lesson and the event log exactly once per screen the child lands on, never per render.
-  return <LessonChipInner key={pathname} pathname={pathname} inMission={inMission} />
+  return <LessonChipInner key={pathname} pathname={pathname} inMission={inMission} variant={variant} />
 }
 
-function LessonChipInner({ pathname, inMission }: { pathname: string; inMission: boolean }) {
-  // Only the storage reads are frozen here. Whether the chip belongs on this screen is decided
-  // below, from that one snapshot — the redundancy rule needs today's items, which is exactly what
-  // this read already fetched.
-  const [lesson] = useState(() => lessonStatus(Date.now(), getActivity()))
-
-  const status = lesson.done || isRedundant(pathname, inMission, lesson.items)
-    || !lesson.items.some(item => onItemRoute(pathname, item.route))
-    ? null
-    : lesson
+function LessonChipInner({ pathname, inMission, variant }: { pathname: string; inMission: boolean; variant: 'global' | 'header' }) {
+  const status = useLessonChipStatus(pathname, inMission)
 
   if (!status) return null
 
+  const box = variant === 'header' ? HEADER_BOX : CHIP_BOX
+  const emojiSize = variant === 'header' ? 'text-[18px]' : 'text-[22px]'
+
   return (
-    // `z-40` clears the screens' own content but stays under a full-screen overlay.
-    <Link to="/mission" className={CHIP_BOX}>
+    // `z-40` (global only, carried in CHIP_BOX) clears the screens' own content but stays under a
+    // full-screen overlay.
+    <Link to="/mission" className={box}>
       {/* Three spans, and from `md` up exactly one of them is rendered: the middle one, carrying
           the whole line as a single text run. That is deliberate. Splitting the label and the
           count into two visible spans made them two flex items, and the pill's own `gap-2` then
           stood where the space between the words used to — 4 px wider on the iPad, which this
           phase may not move. The phone's two lines are the outer pair; the middle span stays in
           the accessibility tree at both widths, so the name a screen reader reads never changes. */}
-      <span aria-hidden="true" className="text-[22px] leading-none md:hidden">🌞</span>
+      <span aria-hidden="true" className={`${emojiSize} leading-none md:hidden`}>🌞</span>
       <span className="sr-only md:not-sr-only">🌞 Nhiệm vụ {status.doneCount}/{status.total}</span>
       <span aria-hidden="true" className="text-[13px] leading-none md:hidden">{status.doneCount}/{status.total}</span>
     </Link>
