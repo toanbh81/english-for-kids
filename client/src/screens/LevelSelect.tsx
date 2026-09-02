@@ -26,15 +26,16 @@ export function LevelSelect() {
   }
   return (
     <PageShell>
-      {/* Back goes to the map — Home is the topic map now, not a list of levels. The stairs at
-          `/levels` are how the child gets from one level to the next, hence the chip beside it. */}
-      <PageHeader
-        back={<BackButton to="/" label="Về trang chủ" mdLabel="Về bản đồ" />}
-        right={<Link to="/levels" className={STAIRS_LINK}>🗣️ Xem các bậc</Link>}
-      >
+      {/* Back goes to the map — Home is the topic map now, not a list of levels. */}
+      <PageHeader back={<BackButton to="/" label="Về trang chủ" mdLabel="Về bản đồ" />}>
         <h1 className="font-display text-[22px] font-extrabold leading-tight text-ink-900 md:text-[32px]">{level.title}</h1>
       </PageHeader>
       <PageBody>
+        {/* The stairs at `/levels` are how the child gets from one level to the next; a body row
+            (not the header's 56px-wide right cell, which it overflowed and covered the subtitle)
+            keeps it reachable at every width. */}
+        <Link to="/levels" className={`${STAIRS_LINK} self-end`}>🗣️ Xem các bậc</Link>
+
         <p className="text-center text-[15px] font-bold text-ink-500 md:text-lg">Chạm vào một thẻ để luyện nói nhé!</p>
 
         <div className="grid grid-cols-2 gap-5 md:grid-cols-3 lg:grid-cols-4">

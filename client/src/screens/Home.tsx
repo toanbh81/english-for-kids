@@ -274,8 +274,12 @@ export function Home() {
     <PageShell className="relative">
       {/* Soft background blobs of the handoff frame. They hang off every edge, so they are clipped
           by their own container rather than by the page: otherwise the bottom-right blob stretched
-          the scroll height and the child could scroll down into empty cream. */}
-      <div aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-hidden">
+          the scroll height and the child could scroll down into empty cream. `-z-10`: this wrapper
+          is `position: absolute`, but `PageHeader`/`PageBody` are plain static-flow siblings —
+          without an explicit negative z-index the blob paints ABOVE them (a positioned element
+          always paints above static in-flow content, DOM order or not) and covered the header's
+          greeting text. */}
+      <div aria-hidden="true" className="pointer-events-none absolute inset-0 -z-10 overflow-hidden">
         <div className="absolute -left-24 -top-28 h-[300px] w-[300px] rounded-full bg-[#FFEDD6]" />
         <div className="absolute -bottom-32 -right-20 h-[340px] w-[340px] rounded-full bg-teal-50" />
       </div>
@@ -283,21 +287,46 @@ export function Home() {
       {/* Home has no destination to walk back to. */}
       <PageHeader back={null} right={parentButton}>
         <h1 className="sr-only">Speak Up!</h1>
-        <Foxy mood={mood} size="md" className="animate-bob" />
-        {/* M1b prints the greeting as plain text: the bubble is M1a's, and on a 390 px screen
-          * its white panel, its padding and its shadow cost ~26 px of height for decoration the
-          * grid below needs more. Only the chrome goes — the two lines themselves are the same
-          * element at every width, so the greeting is never in the page twice. `max-md:` because
-          * every one of these classes is `SpeechBubble`'s own, and an unprefixed override of
-          * ours would be a coin toss on Tailwind's utility order. */}
-        <SpeechBubble
-          title={<span className="text-coral-text">Chào bé! 👋</span>}
-          subtitle={say}
-          className="flex-1 max-md:rounded-none max-md:bg-transparent max-md:px-0 max-md:py-0 max-md:shadow-none"
-        />
+        {/* The header's centre column sits between two fixed 56/64 px side columns — no room
+          * there for Foxy and the full speech bubble below `md`, so the phone header shows a
+          * single truncated greeting line instead; Foxy and the full bubble move to the body's
+          * first row (see below), which is not squeezed by the header's side columns. */}
+        {/* `block max-w-[190px]`: `PageHeader`'s centre cell is `justify-self-center` — a
+          * shrink-to-fit box, not stretched to the grid track — so `truncate` alone on a bare
+          * `<span>` has no bounded width to clip against and just overflows past the column. A
+          * fixed cap (comfortably inside the ~260 px a 390 px phone's `1fr` column leaves after
+          * the two 56 px side columns) gives it one regardless of ancestor sizing. */}
+        <span className="block max-w-[190px] truncate font-display text-[17px] font-extrabold text-coral-text md:hidden md:text-[20px]">
+          {say}
+        </span>
+        <div className="hidden items-center gap-3 md:flex">
+          <Foxy mood={mood} size="md" className="animate-bob" />
+          <SpeechBubble
+            title={<span className="text-coral-text">Chào bé! 👋</span>}
+            subtitle={say}
+            className="flex-1"
+          />
+        </div>
       </PageHeader>
 
       <PageBody className="relative gap-2.5 ipad:gap-3">
+        {/* Foxy and the full greeting, phone only — restored here because the header has no room
+          * for them below `md` (see above). M1b prints the greeting as plain text: the bubble is
+          * M1a's, and on a 390 px screen its white panel, its padding and its shadow cost ~26 px
+          * of height for decoration the grid below needs more. Only the chrome goes — the two
+          * lines themselves are the same element at every width, so the greeting is never in the
+          * page twice below `md`. `max-md:` because every one of these classes is `SpeechBubble`'s
+          * own, and an unprefixed override of ours would be a coin toss on Tailwind's utility
+          * order — harmless here since the block is already `md:hidden`, but kept for safety. */}
+        <div className="flex items-center gap-3 md:hidden">
+          <Foxy mood={mood} size="md" className="animate-bob" />
+          <SpeechBubble
+            title={<span className="text-coral-text">Chào bé! 👋</span>}
+            subtitle={say}
+            className="flex-1 max-md:rounded-none max-md:bg-transparent max-md:px-0 max-md:py-0 max-md:shadow-none"
+          />
+        </div>
+
         {/* `data-today` is on the seven day circles, and only there. `StreakWeek` draws them at
           * the map's 30 px, which with their labels and the streak count is wider than a 320 px
           * phone — so the phone shrinks them in place to 24 px until the design's compact
@@ -379,7 +408,7 @@ export function Home() {
           * effect. The frame keeps the handoff's 1194×834 proportions but never grows past the
           * viewport, so on a short landscape iPad the whole map — mission card included — stays
           * on screen. */}
-        <div className="relative grid grid-cols-2 gap-2.5 md:gap-4 ipad:block ipad:aspect-[1194/834] ipad:max-h-[calc(100vh-180px)]">
+        <div className="relative grid grid-cols-2 gap-2.5 md:gap-4 ipad:block ipad:aspect-[1194/834] ipad:max-h-[calc(100vh-260px)]">
           {/* First in the grid, and so first under the greeting: on a phone the one thing the child
             * is here to do must not sit below the fold. It used to be last, which put "Bắt đầu" at
             * y≈1221 on an 844 px screen (design M1b). From `ipad` up it goes back to the bottom-left

@@ -106,8 +106,10 @@ it('shows how much of today lesson is done and a happy Foxy', () => {
   renderHome()
 
   expect(screen.getByText(`2/${lesson.items.length}`)).toBeInTheDocument()
-  expect(screen.getByTestId('foxy')).toHaveAttribute('data-mood', 'happy')
-  expect(screen.getByText('Giỏi lắm, tiếp tục nhé!')).toBeInTheDocument()
+  // Foxy and the greeting each render twice now — once for the `md:hidden` phone header line /
+  // body row, once for the `hidden md:flex` header row from `md` up — always in sync.
+  for (const foxy of screen.getAllByTestId('foxy')) expect(foxy).toHaveAttribute('data-mood', 'happy')
+  expect(screen.getAllByText('Giỏi lắm, tiếp tục nhé!').length).toBeGreaterThan(0)
   // Two items in: the card carries on rather than starting over (spec §2).
   expect(screen.getByRole('link', { name: 'Tiếp tục ▸' })).toHaveAttribute('href', '/mission')
 })
@@ -128,17 +130,19 @@ it('generates today lesson on mount so earlier practice still counts', () => {
 it('shows an idle Foxy greeting with no activity yet', () => {
   renderHome()
 
-  expect(screen.getByTestId('foxy')).toHaveAttribute('data-mood', 'idle')
-  expect(screen.getByText('Chào bé! 👋')).toBeInTheDocument()
-  expect(screen.getByText('Hôm nay mình luyện nói nhé!')).toBeInTheDocument()
+  for (const foxy of screen.getAllByTestId('foxy')) expect(foxy).toHaveAttribute('data-mood', 'idle')
+  expect(screen.getAllByText('Chào bé! 👋').length).toBeGreaterThan(0)
+  expect(screen.getAllByText('Hôm nay mình luyện nói nhé!').length).toBeGreaterThan(0)
 })
 
 // Design §3: M1b prints the greeting as plain text — the speech bubble is M1a's. Only the chrome
 // is dropped, so both lines are still one element at every width; the panel comes back at `md`.
+// The header carries its own full-chrome copy from `md` up (`hidden md:flex`); this checks the
+// body's phone-only row, the one the stripped chrome actually applies to.
 it('drops the speech-bubble chrome from the greeting on a phone', () => {
   renderHome()
 
-  const bubble = screen.getByText('Chào bé! 👋').closest('div')!.parentElement!
+  const bubble = within(screen.getByTestId('page-body')).getByText('Chào bé! 👋').closest('div')!.parentElement!
   expect(bubble).toHaveClass('max-md:bg-transparent', 'max-md:shadow-none', 'max-md:px-0', 'max-md:py-0')
   // The panel itself is untouched from `md` up — every override above is invisible there.
   expect(bubble).toHaveClass('rounded-[22px]', 'bg-white', 'shadow-card-sm')
@@ -150,8 +154,8 @@ it('offers a replay CTA once the lesson is done and already celebrated', () => {
 
   renderHome()
 
-  expect(screen.getByTestId('foxy')).toHaveAttribute('data-mood', 'cheer')
-  expect(screen.getByText('Hoàn thành nhiệm vụ rồi! 🎉')).toBeInTheDocument()
+  for (const foxy of screen.getAllByTestId('foxy')) expect(foxy).toHaveAttribute('data-mood', 'cheer')
+  expect(screen.getAllByText('Hoàn thành nhiệm vụ rồi! 🎉').length).toBeGreaterThan(0)
   expect(screen.getByRole('link', { name: 'Hoàn thành rồi! 🎉 Chơi lại?' })).toHaveAttribute('href', '/mission')
 })
 
@@ -443,8 +447,8 @@ describe('Phase 11: "Đã dùng Speak Up rồi?"', () => {
 
     // Yesterday's work is history, not this morning's greeting: the mood question and the
     // restore-door question are different questions and no longer share an answer.
-    expect(screen.getByTestId('foxy')).toHaveAttribute('data-mood', 'idle')
-    expect(screen.getByText('Hôm nay mình luyện nói nhé!')).toBeInTheDocument()
+    for (const foxy of screen.getAllByTestId('foxy')) expect(foxy).toHaveAttribute('data-mood', 'idle')
+    expect(screen.getAllByText('Hôm nay mình luyện nói nhé!').length).toBeGreaterThan(0)
   })
 })
 
