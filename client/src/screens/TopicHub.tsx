@@ -8,7 +8,8 @@ import { findTopic as findWordDeck } from '../content/words'
 import { lessonStatus } from '../progress/lesson'
 import { getStars } from '../progress/store'
 import { topicStars, topicUnlocked, unlockedWords } from '../progress/topicProgress'
-import { BackButton, Chip, PAGE_SHELL, StarRow } from '../components/ui'
+import { BackButton, Chip, StarRow } from '../components/ui'
+import { PageShell, PageHeader, PageBody } from '../components/ui/page'
 
 /**
  * Phone styles sit at the default breakpoint and `md:` (768) puts the tablet/iPad value back — the
@@ -58,14 +59,15 @@ function TodayChip() {
 
 function LockedTopic() {
   return (
-    <main className={`h-full overflow-y-auto bg-cream-50 px-6 ${PAGE_SHELL}`}>
-      <div className="mx-auto flex w-full max-w-2xl flex-col items-center gap-6 pt-10 text-center">
+    <PageShell>
+      <PageHeader back={<BackButton to="/" label="Về nhà" />}>
+        <h1 className="font-display text-[22px] font-extrabold leading-tight text-ink-900 md:text-[32px]">Chưa mở khóa</h1>
+      </PageHeader>
+      <PageBody center className="items-center gap-6 text-center">
         <span aria-hidden="true" className="text-[96px] leading-none">🔒</span>
-        <h1 className="font-display text-[40px] font-extrabold leading-tight text-ink-900">Chưa mở khóa</h1>
         <p className={SECTION_NOTE}>Con học thêm ở đảo trước để mở đảo này nhé!</p>
-        <BackButton to="/" label="Về nhà" />
-      </div>
-    </main>
+      </PageBody>
+    </PageShell>
   )
 }
 
@@ -92,47 +94,40 @@ function TopicHubInner({ topic }: { topic: Topic }) {
   const islandNo = TOPICS.findIndex(t => t.id === topic.id) + 1
 
   return (
-    // 20 px of side frame on a phone (design §1, the M8 family), the 24 px this screen has always
-    // had from the tablet breakpoint up.
-    <main className={`relative h-full overflow-y-auto bg-cream-50 px-5 md:px-6 ${PAGE_SHELL}`}>
-      {/* The island header (§12 M8): one of the two background colours the design allows, behind the back
-          row and the title block, with the rounded foot the frame draws. Its height is the design's
-          236 px measured the way the design measures it — 180 px of content below the frame's own
-          top padding — so it tracks the safe-area shell instead of fixing a number that is only
-          right on a notched phone: 236 px on an iPhone, 204 px in a browser with no inset to clear.
-          Decorative and absolute, so it scrolls with the content it sits behind and never enters
-          the flow the sections are laid out in. */}
-      <div
-        aria-hidden="true"
-        data-testid="island-header"
-        className="pointer-events-none absolute inset-x-0 top-0 h-[calc(180px_+_max(1.5rem,calc(env(safe-area-inset-top)_+_9px)))] rounded-b-[40px] bg-teal-500 md:hidden"
-      />
-
-      <div className="relative mx-auto flex w-full max-w-3xl flex-col gap-3 md:gap-5">
-        {/* The back arrow is teal-on-white against the island header on a phone, the 66 px
-            ink-on-white circle of the cream page from 768 up. 64 px, not the design's 56: the
-            spec's binding rules put the tap-target floor at 64 with no exception. */}
-        <BackButton
-          to="/"
-          label="Về nhà"
-          className="self-start max-md:text-teal-600"
+    <PageShell>
+      {/* The back arrow sits on the plain cream header now — the teal island band is decorative
+          body content (phase 13 decides its final shape). */}
+      <PageHeader back={<BackButton to="/" label="Về nhà" />}>
+        <h1 className="font-display text-[22px] font-extrabold leading-tight text-ink-900 md:text-[32px]">{topic.name}</h1>
+      </PageHeader>
+      <PageBody className="relative">
+        {/* The island header (§12 M8): one of the two background colours the design allows, behind
+            the title block, with the rounded foot the frame draws. Its height is the design's
+            236 px measured the way the design measures it — 180 px of content below the frame's own
+            top padding — so it tracks the safe-area shell instead of fixing a number that is only
+            right on a notched phone: 236 px on an iPhone, 204 px in a browser with no inset to clear.
+            Decorative and absolute, so it scrolls with the content it sits behind and never enters
+            the flow the sections are laid out in. */}
+        <div
+          aria-hidden="true"
+          data-testid="island-header"
+          className="pointer-events-none absolute inset-x-0 top-0 h-[calc(180px_+_max(1.5rem,calc(env(safe-area-inset-top)_+_9px)))] rounded-b-[40px] bg-teal-500 md:hidden"
         />
 
-        {/* Design M8's title block: a 92 px white disc, the island's name in white on the teal, and
-            the stars beside a line that says which island this is. The two `md:contents` wrappers
-            are what let one DOM be both layouts — below 768 they are the text column, and from 768
-            up they leave the box tree entirely, so the emoji, the heading and the stars are the
-            same three flex items of the same wrapping row they have always been. */}
-        <header className="flex flex-wrap items-center gap-3.5 pb-3 md:gap-4 md:pb-0">
-          <span
-            aria-hidden="true"
-            className="flex h-[92px] w-[92px] shrink-0 items-center justify-center rounded-full bg-white text-[46px] leading-none shadow-[0_6px_0_#1FA396] md:h-auto md:w-auto md:rounded-none md:bg-transparent md:text-[64px] md:shadow-none"
-          >
-            {topic.emoji}
-          </span>
-          <div className="flex flex-1 flex-col gap-1 md:contents">
-            <h1 className="font-display text-[30px] font-extrabold leading-tight text-white md:text-[40px] md:text-ink-900">{topic.name}</h1>
-            <div className="flex items-center gap-2 md:contents">
+        <div className="relative flex flex-col gap-3 md:gap-5">
+          {/* Design M8's title block: a 92 px white disc, and the stars beside a line that says
+              which island this is. The `md:contents` wrapper is what lets one DOM be both layouts —
+              below 768 it is the text column, and from 768 up it leaves the box tree entirely, so
+              the emoji and the stars are the same flex items of the same wrapping row they have
+              always been. */}
+          <div className="flex flex-wrap items-center gap-3.5 pb-3 md:gap-4 md:pb-0">
+            <span
+              aria-hidden="true"
+              className="flex h-[92px] w-[92px] shrink-0 items-center justify-center rounded-full bg-white text-[46px] leading-none shadow-[0_6px_0_#1FA396] md:h-auto md:w-auto md:rounded-none md:bg-transparent md:text-[64px] md:shadow-none"
+            >
+              {topic.emoji}
+            </span>
+            <div className="flex flex-1 items-center gap-2 md:contents">
               {/* One star row, restyled — never a second copy of the same count. */}
               <StarRow value={topicStars(topic.id)} size="sm" className="md:gap-1 md:text-3xl" />
               <span className="font-display text-sm font-extrabold text-teal-50 md:hidden">
@@ -140,65 +135,65 @@ function TopicHubInner({ topic }: { topic: Topic }) {
               </span>
             </div>
           </div>
-        </header>
 
-        <Link to={`/words/${topic.id}`} className={`${SECTION} ${wordsToday ? TODAY_OUTLINE : ''}`}>
-          <span aria-hidden="true" className={SECTION_EMOJI}>🧩</span>
-          <span className="flex flex-col">
-            <span className={SECTION_TITLE}>Từ mới</span>
-            <span className={SECTION_NOTE}>{words}/{deckSize} từ</span>
-          </span>
-          <span className={SECTION_TAIL}>
-            {wordsToday && <TodayChip />}
-            <Chevron />
-          </span>
-        </Link>
+          <Link to={`/words/${topic.id}`} className={`${SECTION} ${wordsToday ? TODAY_OUTLINE : ''}`}>
+            <span aria-hidden="true" className={SECTION_EMOJI}>🧩</span>
+            <span className="flex flex-col">
+              <span className={SECTION_TITLE}>Từ mới</span>
+              <span className={SECTION_NOTE}>{words}/{deckSize} từ</span>
+            </span>
+            <span className={SECTION_TAIL}>
+              {wordsToday && <TodayChip />}
+              <Chevron />
+            </span>
+          </Link>
 
-        <Link to={`/sentences?topic=${topic.id}`} className={`${SECTION} ${sentencesToday ? TODAY_OUTLINE : ''}`}>
-          <span aria-hidden="true" className={SECTION_EMOJI}>🧱</span>
-          <span className="flex flex-col">
-            <span className={SECTION_TITLE}>Ghép câu</span>
-            <span className={SECTION_NOTE}>{starred}/{sentences.length} câu có sao</span>
-          </span>
-          <span className={SECTION_TAIL}>
-            {sentencesToday && <TodayChip />}
-            <Chevron />
-          </span>
-        </Link>
+          <Link to={`/sentences?topic=${topic.id}`} className={`${SECTION} ${sentencesToday ? TODAY_OUTLINE : ''}`}>
+            <span aria-hidden="true" className={SECTION_EMOJI}>🧱</span>
+            <span className="flex flex-col">
+              <span className={SECTION_TITLE}>Ghép câu</span>
+              <span className={SECTION_NOTE}>{starred}/{sentences.length} câu có sao</span>
+            </span>
+            <span className={SECTION_TAIL}>
+              {sentencesToday && <TodayChip />}
+              <Chevron />
+            </span>
+          </Link>
 
-        <section className="flex flex-col gap-3 md:gap-4">
-          {stories.length === 0 ? (
-            // No story for this topic yet: a muted card, never a link, so a tap cannot dead-end.
-            <div className={SECTION_MUTED}>
-              <span aria-hidden="true" className={SECTION_EMOJI}>🎧</span>
-              <span className="flex flex-col">
-                <span className={SECTION_TITLE}>Truyện</span>
-                <Chip tone="neutral" size="sm">Sắp có 📖</Chip>
-              </span>
-            </div>
-          ) : (
-            stories.map(story => (
-              <Link
-                key={story.id}
-                to={`/story/${story.id}`}
-                className={`${SECTION} ${todayRoutes.has(`/story/${story.id}`) ? TODAY_OUTLINE : ''}`}
-              >
+          <section className="flex flex-col gap-3 md:gap-4">
+            {stories.length === 0 ? (
+              // No story for this topic yet: a muted card, never a link, so a tap cannot dead-end.
+              <div className={SECTION_MUTED}>
                 <span aria-hidden="true" className={SECTION_EMOJI}>🎧</span>
                 <span className="flex flex-col">
-                  <span className={SECTION_TITLE}>{story.titleVi}</span>
-                  <span className={SECTION_NOTE}>{story.title}</span>
+                  <span className={SECTION_TITLE}>Truyện</span>
+                  <Chip tone="neutral" size="sm">Sắp có 📖</Chip>
                 </span>
-                <span className={SECTION_TAIL}>
-                  {todayRoutes.has(`/story/${story.id}`) && <TodayChip />}
-                  <StarRow value={getStars(`story:${story.id}`)} size="sm" className="md:gap-1 md:text-3xl" />
-                  <Chevron />
-                </span>
-              </Link>
-            ))
-          )}
-        </section>
-      </div>
-    </main>
+              </div>
+            ) : (
+              stories.map(story => (
+                <Link
+                  key={story.id}
+                  to={`/story/${story.id}`}
+                  className={`${SECTION} ${todayRoutes.has(`/story/${story.id}`) ? TODAY_OUTLINE : ''}`}
+                >
+                  <span aria-hidden="true" className={SECTION_EMOJI}>🎧</span>
+                  <span className="flex flex-col">
+                    <span className={SECTION_TITLE}>{story.titleVi}</span>
+                    <span className={SECTION_NOTE}>{story.title}</span>
+                  </span>
+                  <span className={SECTION_TAIL}>
+                    {todayRoutes.has(`/story/${story.id}`) && <TodayChip />}
+                    <StarRow value={getStars(`story:${story.id}`)} size="sm" className="md:gap-1 md:text-3xl" />
+                    <Chevron />
+                  </span>
+                </Link>
+              ))
+            )}
+          </section>
+        </div>
+      </PageBody>
+    </PageShell>
   )
 }
 

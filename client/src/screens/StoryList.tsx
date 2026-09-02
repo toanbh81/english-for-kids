@@ -1,15 +1,17 @@
 import { Link } from 'react-router-dom'
 import { STORIES } from '../content/stories'
 import { getStars } from '../progress/store'
-import { BackButton, CARD_LINK, PAGE_SHELL, StarRow } from '../components/ui'
+import { BackButton, CARD_LINK, StarRow } from '../components/ui'
+import { PageShell, PageHeader, PageBody } from '../components/ui/page'
 
 export function StoryList() {
   return (
-    <main className={`h-full overflow-y-auto bg-cream-50 px-6 ${PAGE_SHELL}`}>
-      <div className="mx-auto flex w-full max-w-5xl flex-col gap-5">
-        <BackButton to="/" label="Về nhà" className="self-start" />
-        <h1 className="font-display text-[40px] font-extrabold leading-tight text-ink-900">🎧 Nghe kể chuyện</h1>
-        <div className="grid grid-cols-3 gap-6">
+    <PageShell>
+      <PageHeader back={<BackButton to="/" label="Về nhà" />}>
+        <h1 className="font-display text-[22px] font-extrabold leading-tight text-ink-900 md:text-[32px]">🎧 Nghe kể chuyện</h1>
+      </PageHeader>
+      <PageBody>
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-3 md:gap-5">
           {STORIES.map(s => (
             <Link key={s.id} to={`/story/${s.id}`} className={CARD_LINK}>
               <span aria-hidden="true" className="text-[72px] leading-none">{s.emoji}</span>
@@ -19,7 +21,7 @@ export function StoryList() {
             </Link>
           ))}
         </div>
-      </div>
-    </main>
+      </PageBody>
+    </PageShell>
   )
 }

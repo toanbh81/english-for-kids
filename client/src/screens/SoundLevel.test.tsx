@@ -9,6 +9,13 @@ function renderLevel() {
 
 beforeEach(() => localStorage.clear())
 
+it('sits in the shared page frame', () => {
+  renderLevel()
+  expect(screen.getByRole('main')).toHaveClass('overflow-hidden')
+  expect(screen.getByRole('banner')).toHaveClass('grid')
+  expect(screen.getByTestId('page-body')).toHaveClass('overflow-y-auto')
+})
+
 it('shows one tile per sound, with its IPA symbol and an example word', () => {
   renderLevel()
 

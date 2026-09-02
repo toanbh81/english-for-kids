@@ -6,8 +6,9 @@ import type { LessonItemKind } from '../progress/lesson'
 import { MISSION_STATE, groupItems } from '../progress/missionNav'
 import { storageKey } from '../progress/storageKeys'
 import { Foxy } from '../components/Foxy'
-import { BackButton, Button, Chip, HomeLabel, PAGE_SHELL } from '../components/ui'
+import { BackButton, Button, Chip, HomeLabel } from '../components/ui'
 import type { ChipTone } from '../components/ui'
+import { PageShell, PageHeader, PageBody, PageFooter } from '../components/ui/page'
 
 // Per child, like every other stored value — see progress/storageKeys.ts.
 const celebratedKey = () => storageKey('celebrated')
@@ -73,18 +74,6 @@ const GROUP_CARD = [
   'md:h-auto md:flex-col md:justify-center md:gap-2 md:rounded-xl3 md:p-5 md:text-center md:shadow-card',
 ].join(' ')
 
-/** The CTA has to carry router state, which `Button` (an anchor-props passthrough) cannot take —
- * so it is a `Link` wearing the `Button size="lg" pulse` classes. On a phone it is the design's
- * 64 px bar filling the row next to Foxy; from the tablet breakpoint up it is `size="lg"` again. */
-const CTA_BUTTON = [
-  'inline-flex flex-1 items-center justify-center gap-2 font-display font-extrabold',
-  'transition-transform active:translate-y-[2px]',
-  'min-h-[64px] px-5 text-xl rounded-xl2',
-  'md:min-h-[72px] md:flex-none md:px-10 md:text-[26px] md:rounded-xl4',
-  'bg-coral-500 text-white shadow-chunky-coral active:shadow-[0_3px_0_#E05A3A]',
-  'animate-pulse-soft',
-].join(' ')
-
 /** Today's lesson as a handful of steps rather than a flat list: one card per kind ("Nghe 1
  * truyện", "4 thẻ phát âm", …) with its own progress, and a teal ring on the first group still
  * open so the child never has to decide where to start. The single CTA goes to the same place. */
@@ -119,32 +108,23 @@ export function DailyMission() {
   }, [celebrating, day, navigate])
 
   return (
-    // 16 px of side padding on a phone (design M2), the 24 px the iPad cards are laid out on above.
-    // A phone also fills the viewport — the steps sit in the middle of what is left over and the
-    // CTA rests on the bottom edge — while the tablet and the iPad keep the plain block flow they
-    // were laid out in, where the content is shorter than the screen anyway.
-    <main className={`relative flex h-full flex-col overflow-y-auto bg-cream-50 px-4 md:block ipad:px-6 ${PAGE_SHELL}`}>
-      <div className="mx-auto flex w-full max-w-6xl grow flex-col gap-2.5 ipad:gap-5">
-        {/* One header row on a phone — back button, title, subtitle — and the stacked, centred
-          * header the iPad has always had from `ipad` up, where the back button takes its own line
-          * again (`ipad:flex` keeps it block-level without giving up the centred glyph). */}
-        <header className="flex flex-wrap items-center gap-2.5 ipad:block ipad:text-center">
-          <BackButton to="/" label="Về trang chủ" mdLabel="Về bản đồ" className="ipad:mb-4 ipad:flex" />
-          <div className="min-w-0 flex-1">
-            <h1 className="font-display text-[22px] font-extrabold leading-tight text-ink-900 ipad:text-[40px]">
-              Nhiệm vụ hôm nay 🌞
-            </h1>
-            <p className="font-display text-[13px] font-extrabold text-ink-500 ipad:hidden">
-              5 bước nhỏ — 15 phút thôi!
-            </p>
-          </div>
-          <div className="flex w-full items-center gap-2 ipad:mt-2 ipad:w-auto ipad:justify-center ipad:gap-3">
-            <Chip tone="sun" className="text-sm ipad:text-lg">Bậc ⭐ {band}</Chip>
-            <Chip tone="teal" className="text-sm ipad:text-lg">{status.doneCount}/{status.total}</Chip>
-          </div>
-        </header>
+    <PageShell>
+      <PageHeader back={<BackButton to="/" label="Về trang chủ" mdLabel="Về bản đồ" />}>
+        <h1 className="font-display text-[22px] font-extrabold leading-tight text-ink-900 md:text-[32px]">
+          Nhiệm vụ hôm nay 🌞
+        </h1>
+      </PageHeader>
+      <PageBody>
+        <p className="text-center text-[15px] font-bold text-ink-500 md:text-lg">
+          5 bước nhỏ — 15 phút thôi!
+        </p>
 
-        <div className={`grid grow content-center gap-2.5 md:grow-0 ipad:gap-3 ${COLUMNS[Math.min(groups.length, MAX_GROUPS)]}`}>
+        <div className="mt-2.5 flex w-full items-center justify-center gap-2 ipad:gap-3">
+          <Chip tone="sun" className="text-sm ipad:text-lg">Bậc ⭐ {band}</Chip>
+          <Chip tone="teal" className="text-sm ipad:text-lg">{status.doneCount}/{status.total}</Chip>
+        </div>
+
+        <div className={`mt-2.5 grid grow content-center gap-2.5 md:mt-4 md:grow-0 ipad:gap-3 ${COLUMNS[Math.min(groups.length, MAX_GROUPS)]}`}>
           {groups.map((group, i) => {
             const kind = KIND[group.kind]
             const isCurrent = i === currentIndex
@@ -188,32 +168,27 @@ export function DailyMission() {
             )
           })}
         </div>
-
-        {/* Sticky, so a long lesson can never push the one thing the child came here to tap below
-          * the fold. The cream gradient fades the cards out underneath it rather than cutting them
-          * off, and the negative margin lets that fade reach the screen edges through the page
-          * padding — 16 px of it on a phone, 24 from `ipad` up. */}
-        <div className="sticky bottom-0 -mx-4 mt-1 flex flex-wrap items-end justify-between gap-3 bg-gradient-to-t from-cream-50 from-60% to-transparent px-4 pb-3 pt-6 md:gap-4 md:pt-8 ipad:-mx-6 ipad:px-6">
-          {/* 66 px beside the CTA on a phone (design M2), the 96 px mascot from the tablet
-            * breakpoint up: the SVG carries its size as an attribute, which only CSS can bend. */}
-          <Foxy
-            mood="cheer"
-            size="md"
-            className="shrink-0 [&_svg]:h-[63px] [&_svg]:w-[66px] md:[&_svg]:h-[93px] md:[&_svg]:w-[96px]"
-          />
-          {status.done
-            ? <Button to="/" size="lg" variant="secondary"><HomeLabel /></Button>
-            : currentIndex !== -1
-              ? (
-                <Link to={groups[currentIndex].route} state={MISSION_STATE} className={CTA_BUTTON}>
-                  {status.doneCount === 0 ? 'Bắt đầu ▸' : 'Tiếp tục ▸'}
-                </Link>
-              )
-              // An empty lesson (nothing generated yet) has no step to point at and nothing to
-              // celebrate either — the grid above renders empty and there is simply no CTA.
-              : null}
-        </div>
-      </div>
-    </main>
+      </PageBody>
+      <PageFooter>
+        {/* 66 px beside the CTA on a phone (design M2), the 96 px mascot from the tablet
+          * breakpoint up: the SVG carries its size as an attribute, which only CSS can bend. */}
+        <Foxy
+          mood="cheer"
+          size="md"
+          className="shrink-0 [&_svg]:h-[63px] [&_svg]:w-[66px] md:[&_svg]:h-[93px] md:[&_svg]:w-[96px]"
+        />
+        {status.done
+          ? <Button to="/" size="lg" variant="secondary" className="flex-[1.35]"><HomeLabel /></Button>
+          : currentIndex !== -1
+            ? (
+              <Button to={groups[currentIndex].route} state={MISSION_STATE} size="lg" className="flex-[1.35]">
+                {status.doneCount === 0 ? 'Bắt đầu ▸' : 'Tiếp tục ▸'}
+              </Button>
+            )
+            // An empty lesson (nothing generated yet) has no step to point at and nothing to
+            // celebrate either — the grid above renders empty and there is simply no CTA.
+            : null}
+      </PageFooter>
+    </PageShell>
   )
 }

@@ -31,6 +31,13 @@ beforeEach(() => {
   playerControl.playUrl.mockReset().mockResolvedValue(undefined)
 })
 
+it('sits in the shared page frame', () => {
+  renderList()
+  expect(screen.getByRole('main')).toHaveClass('overflow-hidden')
+  expect(screen.getByRole('banner')).toHaveClass('grid')
+  expect(screen.getByTestId('page-body')).toHaveClass('overflow-y-auto')
+})
+
 it('heads the list with the sound itself and its mouth tip', () => {
   renderList()
   expect(screen.getByText('/θ/')).toBeInTheDocument()

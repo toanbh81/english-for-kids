@@ -22,6 +22,13 @@ function openDeck(id: string) {
 
 beforeEach(() => localStorage.clear())
 
+it('sits in the shared page frame', () => {
+  renderTopics()
+  expect(screen.getByRole('main')).toHaveClass('overflow-hidden')
+  expect(screen.getByRole('banner')).toHaveClass('grid')
+  expect(screen.getByTestId('page-body')).toHaveClass('overflow-y-auto')
+})
+
 it('lists only the topics the map has unlocked, plus the review card', () => {
   renderTopics()
 

@@ -3,7 +3,8 @@ import { SENTENCES } from '../content'
 import { TOPICS, findTopic } from '../content/topics'
 import { getStars } from '../progress/store'
 import { topicUnlocked } from '../progress/topicProgress'
-import { BackButton, PAGE_SHELL, StarRow } from '../components/ui'
+import { BackButton, StarRow } from '../components/ui'
+import { PageShell, PageHeader, PageBody } from '../components/ui/page'
 
 const ROW =
   'flex min-h-[80px] items-center justify-between gap-4 rounded-xl3 bg-white px-6 py-3 shadow-card transition-transform active:scale-95'
@@ -19,16 +20,19 @@ export function SentenceList() {
   const shown = topic ? [topic] : TOPICS.filter(t => topicUnlocked(t.id))
 
   return (
-    <main className={`h-full overflow-y-auto bg-cream-50 px-6 ${PAGE_SHELL}`}>
-      <div className="mx-auto flex w-full max-w-4xl flex-col gap-5">
+    <PageShell>
+      <PageHeader back={(
         <BackButton
           to={topic ? `/topic/${topic.id}` : '/'}
           label={topic ? 'Quay lại' : 'Về nhà'}
-          className="self-start"
         />
-        <h1 className="font-display text-[40px] font-extrabold leading-tight text-ink-900">
+      )}
+      >
+        <h1 className="font-display text-[22px] font-extrabold leading-tight text-ink-900 md:text-[32px]">
           {topic ? `🧱 Ghép câu — ${topic.name}` : '🧱 Ghép câu'}
         </h1>
+      </PageHeader>
+      <PageBody>
         <div className="flex flex-col gap-7">
           {shown.map(t => (
             <section key={t.id}>
@@ -51,7 +55,7 @@ export function SentenceList() {
             </section>
           ))}
         </div>
-      </div>
-    </main>
+      </PageBody>
+    </PageShell>
   )
 }

@@ -59,6 +59,14 @@ afterEach(() => {
   vi.useRealTimers()
 })
 
+it('sits in the shared page frame', () => {
+  unlockWords('animals', 6)
+  renderHub('animals')
+  expect(screen.getByRole('main')).toHaveClass('overflow-hidden')
+  expect(screen.getByRole('banner')).toHaveClass('grid')
+  expect(screen.getByTestId('page-body')).toHaveClass('overflow-y-auto')
+})
+
 it('shows the topic header, its stars and the three sections', () => {
   unlockWords('animals', 6)
   setStars('sentence:s13', 2)
@@ -165,12 +173,12 @@ it('draws the island header behind the top of the phone layout, and nowhere else
   // design's 236 px — which is only the right number on a phone with a notch to clear.
   expect(Array.from(band.classList).some(c => c.startsWith('h-[calc(180px'))).toBe(true)
 
-  // The header itself is white-on-teal on a phone and the cream page's ink from `md` up.
-  expect(screen.getByRole('heading', { name: 'Động vật' })).toHaveClass('text-white', 'md:text-ink-900')
+  // The heading now sits in the shared page header, on the plain cream background.
+  expect(screen.getByRole('heading', { name: 'Động vật' })).toHaveClass('text-ink-900')
   expect(screen.getByText(/Đảo số 1/)).toHaveClass('md:hidden')
   // `BackButton`'s own `child` variant already meets the 64 px tap-target floor on a phone (a 56
-  // px circle with an invisible 64 px hit band), so this call site only overrides the colour.
-  expect(screen.getByRole('link', { name: /Về nhà/ })).toHaveClass('h-14', 'w-14', 'md:h-16', 'md:w-16', 'max-md:text-teal-600')
+  // px circle with an invisible 64 px hit band).
+  expect(screen.getByRole('link', { name: /Về nhà/ })).toHaveClass('h-14', 'w-14', 'md:h-16', 'md:w-16')
 })
 
 it('sizes the section rows for a phone and restores the landscape card from md up', () => {

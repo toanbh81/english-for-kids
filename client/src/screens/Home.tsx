@@ -15,7 +15,8 @@ import { Foxy } from '../components/Foxy'
 import type { FoxyMood } from '../components/Foxy'
 import { MissionCard } from '../components/MissionCard'
 import { StreakWeek } from '../components/StreakWeek'
-import { Chip, PAGE_SHELL, SpeechBubble, StarRow } from '../components/ui'
+import { Chip, SpeechBubble, StarRow } from '../components/ui'
+import { PageShell, PageHeader, PageBody } from '../components/ui/page'
 
 // Per child, like every other stored value — see progress/storageKeys.ts.
 const celebratedKey = () => storageKey('celebrated')
@@ -249,15 +250,28 @@ export function Home() {
     setA2hsDismissed(true)
   }
 
-  return (
-    // `min-h-full`, never `h-full`: the stacked portrait layout is taller than the viewport, and a
-    // fixed-height root would leave the mission CTA and the parent link below an unscrollable fold.
-    // The root grows with its content and the page scrolls; only the `ipad` map frame is clipped.
-    // 16 px of side frame on the phone (design §1) — the vertical padding is the safe-area shell,
-    // resting at the 1 rem this screen has always used where there is no notch to clear.
-    <main className={`relative min-h-full overflow-y-auto overflow-x-hidden bg-cream-50 px-4 [--page-pad-bottom:1rem] [--page-pad-top:1rem] md:px-7 md:[--page-pad-bottom:1.75rem] md:[--page-pad-top:1.75rem] ${PAGE_SHELL}`}>
-      <h1 className="sr-only">Speak Up!</h1>
+  // The parent-dashboard corner button, moved verbatim into the header's right cell — Home is
+  // excluded from the mission chip by route (`headerRegistry`'s `isExcluded`), so the default
+  // `right` (the chip) would just render nothing here; this is Home's own control for that cell.
+  const parentButton = (
+    <Link
+      to="/parent"
+      aria-label="Phụ huynh"
+      className="flex min-h-[64px] w-16 items-center justify-center rounded-xl2 bg-white font-display text-lg font-extrabold text-ink-500 shadow-card-sm active:translate-y-[2px] ipad:w-auto ipad:min-w-[64px] ipad:px-5"
+    >
+      {/* The label is the accessible name at every size (it is on the link); on a phone
+        * the square keeps just the emoji, which is the only thing the design's 64×64
+        * button has room for. Two whole spellings, `HomeLabel`-style, rather than one
+        * emoji plus an `ipad:`-revealed word next to it: a flex `gap` between two items
+        * is 8 px where the map's single text run had a 4-ish px space, and the button
+        * came out 157 px wide instead of the 153 the corner has always been. */}
+      <span aria-hidden="true" className="ipad:hidden">👨‍👩‍👧</span>
+      <span aria-hidden="true" className="hidden ipad:inline">👨‍👩‍👧 Phụ huynh</span>
+    </Link>
+  )
 
+  return (
+    <PageShell className="relative">
       {/* Soft background blobs of the handoff frame. They hang off every edge, so they are clipped
           by their own container rather than by the page: otherwise the bottom-right blob stretched
           the scroll height and the child could scroll down into empty cream. */}
@@ -266,43 +280,42 @@ export function Home() {
         <div className="absolute -bottom-32 -right-20 h-[340px] w-[340px] rounded-full bg-teal-50" />
       </div>
 
-      <div className="relative mx-auto flex w-full max-w-[1194px] flex-col gap-2.5 ipad:gap-3">
-        {/* Greeting over streak on a phone, one wide row from `ipad` up: at 390 px the week pill
-          * and the star count have nowhere to sit beside Foxy's bubble. */}
-        <header className="flex flex-col gap-2 ipad:flex-row ipad:flex-wrap ipad:items-center ipad:justify-between ipad:gap-3">
-          <div className="flex items-center gap-3">
-            <Foxy mood={mood} size="md" className="animate-bob" />
-            {/* M1b prints the greeting as plain text: the bubble is M1a's, and on a 390 px screen
-              * its white panel, its padding and its shadow cost ~26 px of height for decoration the
-              * grid below needs more. Only the chrome goes — the two lines themselves are the same
-              * element at every width, so the greeting is never in the page twice. `max-md:` because
-              * every one of these classes is `SpeechBubble`'s own, and an unprefixed override of
-              * ours would be a coin toss on Tailwind's utility order. */}
-            <SpeechBubble
-              title={<span className="text-coral-text">Chào bé! 👋</span>}
-              subtitle={say}
-              className="flex-1 max-md:rounded-none max-md:bg-transparent max-md:px-0 max-md:py-0 max-md:shadow-none"
-            />
+      {/* Home has no destination to walk back to. */}
+      <PageHeader back={null} right={parentButton}>
+        <h1 className="sr-only">Speak Up!</h1>
+        <Foxy mood={mood} size="md" className="animate-bob" />
+        {/* M1b prints the greeting as plain text: the bubble is M1a's, and on a 390 px screen
+          * its white panel, its padding and its shadow cost ~26 px of height for decoration the
+          * grid below needs more. Only the chrome goes — the two lines themselves are the same
+          * element at every width, so the greeting is never in the page twice. `max-md:` because
+          * every one of these classes is `SpeechBubble`'s own, and an unprefixed override of
+          * ours would be a coin toss on Tailwind's utility order. */}
+        <SpeechBubble
+          title={<span className="text-coral-text">Chào bé! 👋</span>}
+          subtitle={say}
+          className="flex-1 max-md:rounded-none max-md:bg-transparent max-md:px-0 max-md:py-0 max-md:shadow-none"
+        />
+      </PageHeader>
+
+      <PageBody className="relative gap-2.5 ipad:gap-3">
+        {/* `data-today` is on the seven day circles, and only there. `StreakWeek` draws them at
+          * the map's 30 px, which with their labels and the streak count is wider than a 320 px
+          * phone — so the phone shrinks them in place to 24 px until the design's compact
+          * seven-dot variant exists (brief §16). Back to 30 px from `ipad` up, untouched. */}
+        <div className="flex flex-wrap items-center gap-2 [&_[data-today]]:h-6 [&_[data-today]]:w-6 [&_[data-today]]:text-sm ipad:gap-3 ipad:[&_[data-today]]:h-[30px] ipad:[&_[data-today]]:w-[30px] ipad:[&_[data-today]]:text-base">
+          <StreakWeek dots={weekDots(now, events)} streak={streak(now, events)} />
+          {/* The star total is the design's 13 px line under the greeting on a phone and the
+            * chunky sun pill of the map from `ipad` up — one element, restyled, so the number
+            * is never in the page twice. */}
+          {/* `ipad:leading-normal` is not decoration. `text-lg` sets a 28 px line-height as well
+            * as an 18 px size, and `ipad:text-[22px]` restores only the size — so the pill came
+            * out 52 px tall instead of the map's 57 and dragged the row 3 px down with it. Any
+            * arbitrary-size restore has to restate the leading it is stepping on (1.5 is the
+            * inherited value the 22 px pill has always resolved against). */}
+          <div className="inline-flex items-center gap-2 rounded-[18px] font-display text-lg font-extrabold text-sun-700 ipad:bg-sun-50 ipad:px-5 ipad:py-3 ipad:text-[22px] ipad:leading-normal ipad:shadow-chunky-sun">
+            ⭐ {totalStars()}
           </div>
-          {/* `data-today` is on the seven day circles, and only there. `StreakWeek` draws them at
-            * the map's 30 px, which with their labels and the streak count is wider than a 320 px
-            * phone — so the phone shrinks them in place to 24 px until the design's compact
-            * seven-dot variant exists (brief §16). Back to 30 px from `ipad` up, untouched. */}
-          <div className="flex flex-wrap items-center gap-2 [&_[data-today]]:h-6 [&_[data-today]]:w-6 [&_[data-today]]:text-sm ipad:gap-3 ipad:[&_[data-today]]:h-[30px] ipad:[&_[data-today]]:w-[30px] ipad:[&_[data-today]]:text-base">
-            <StreakWeek dots={weekDots(now, events)} streak={streak(now, events)} />
-            {/* The star total is the design's 13 px line under the greeting on a phone and the
-              * chunky sun pill of the map from `ipad` up — one element, restyled, so the number
-              * is never in the page twice. */}
-            {/* `ipad:leading-normal` is not decoration. `text-lg` sets a 28 px line-height as well
-              * as an 18 px size, and `ipad:text-[22px]` restores only the size — so the pill came
-              * out 52 px tall instead of the map's 57 and dragged the row 3 px down with it. Any
-              * arbitrary-size restore has to restate the leading it is stepping on (1.5 is the
-              * inherited value the 22 px pill has always resolved against). */}
-            <div className="inline-flex items-center gap-2 rounded-[18px] font-display text-lg font-extrabold text-sun-700 ipad:bg-sun-50 ipad:px-5 ipad:py-3 ipad:text-[22px] ipad:leading-normal ipad:shadow-chunky-sun">
-              ⭐ {totalStars()}
-            </div>
-          </div>
-        </header>
+        </div>
 
         {overLimit && (
           <div
@@ -496,26 +509,9 @@ export function Home() {
                 </Link>
               </div>
             )}
-
-            <div className="flex justify-end ipad:absolute ipad:bottom-2 ipad:right-2">
-              <Link
-                to="/parent"
-                aria-label="Phụ huynh"
-                className="flex min-h-[64px] w-16 items-center justify-center rounded-xl2 bg-white font-display text-lg font-extrabold text-ink-500 shadow-card-sm active:translate-y-[2px] ipad:w-auto ipad:min-w-[64px] ipad:px-5"
-              >
-                {/* The label is the accessible name at every size (it is on the link); on a phone
-                  * the square keeps just the emoji, which is the only thing the design's 64×64
-                  * button has room for. Two whole spellings, `HomeLabel`-style, rather than one
-                  * emoji plus an `ipad:`-revealed word next to it: a flex `gap` between two items
-                  * is 8 px where the map's single text run had a 4-ish px space, and the button
-                  * came out 157 px wide instead of the 153 the corner has always been. */}
-                <span aria-hidden="true" className="ipad:hidden">👨‍👩‍👧</span>
-                <span aria-hidden="true" className="hidden ipad:inline">👨‍👩‍👧 Phụ huynh</span>
-              </Link>
-            </div>
           </div>
         </div>
-      </div>
-    </main>
+      </PageBody>
+    </PageShell>
   )
 }

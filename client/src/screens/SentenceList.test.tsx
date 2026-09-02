@@ -20,6 +20,13 @@ const rowLinks = () =>
 
 beforeEach(() => localStorage.clear())
 
+it('sits in the shared page frame', () => {
+  renderList()
+  expect(screen.getByRole('main')).toHaveClass('overflow-hidden')
+  expect(screen.getByRole('banner')).toHaveClass('grid')
+  expect(screen.getByTestId('page-body')).toHaveClass('overflow-y-auto')
+})
+
 it('renders a row for every sentence, grouped by topic, linking to /sentence/<id> with Stars', () => {
   openEveryTopic()
   setStars('sentence:s1', 2)

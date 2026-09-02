@@ -14,6 +14,13 @@ function stepLink(key: string, name: RegExp) {
   return within(screen.getByTestId(`step-${key}`)).getByRole('link', { name })
 }
 
+it('sits in the shared page frame', () => {
+  renderStairs()
+  expect(screen.getByRole('main')).toHaveClass('overflow-hidden')
+  expect(screen.getByRole('banner')).toHaveClass('grid')
+  expect(screen.getByTestId('page-body')).toHaveClass('overflow-y-auto')
+})
+
 it('links all five levels of the Speak Lab staircase', () => {
   renderStairs()
   expect(stepLink('sound-zoo', /Tập âm/)).toHaveAttribute('href', '/level/sound-zoo')
@@ -139,21 +146,23 @@ it('draws a dotted trail behind the zigzag and nowhere else', () => {
   // Five corners, bottom-left up, alternating x — the same shape as the five rows above it.
   expect(svg.querySelector('path')).toHaveAttribute('d', 'M118 504 L232 392 L118 280 L232 168 L118 56')
   // The teal blob the design drops from M7 is gone below the tablet breakpoint.
-  expect(container.querySelector('main > div[aria-hidden="true"]')).toHaveClass('hidden', 'md:block')
+  expect(container.querySelector('.bg-teal-50')).toHaveClass('hidden', 'md:block')
 })
 
 it('pins a CTA for the step Foxy is standing on, phone only, as a sibling of the scroll area', () => {
   localStorage.setItem('speakup.stars', JSON.stringify({ 'sound:th': 3 }))
-  const { container } = renderStairs()
+  renderStairs()
   // Tập âm is finished, so Foxy — and the CTA — are on Đọc từ, bậc 2.
   const cta = screen.getByRole('link', { name: /Luyện bậc 2/ })
   expect(cta).toHaveAttribute('href', '/level/word-pop')
   expect(cta).toHaveTextContent('Luyện bậc 2: Đọc từ 🎈')
-  expect(cta).toHaveClass('md:hidden', 'max-md:min-h-[64px]', 'max-md:w-full')
-  // Not a sticky overlay: it is the last child of the column, after the scrolling step region.
+  expect(cta).toHaveClass('min-h-[64px]', 'w-full')
+  // Not a sticky overlay, and no longer clipped off by the old root: it is a sibling of the
+  // scrolling body, inside the shared page footer.
   expect(cta).not.toHaveClass('sticky', 'fixed', 'absolute')
-  expect(cta.parentElement!.lastElementChild).toBe(cta)
-  expect(container.querySelector('main')).toHaveClass('max-md:overflow-hidden', 'md:block')
+  expect(screen.getByRole('contentinfo')).toContainElement(cta)
+  expect(screen.getByRole('contentinfo')).toHaveClass('md:hidden')
+  expect(screen.getByRole('main').className).not.toContain('max-md:overflow-hidden')
 })
 
 it('tags the current step and the finished ones on a phone, and keeps Foxy beside it', () => {

@@ -79,6 +79,17 @@ afterEach(() => {
   vi.useRealTimers()
 })
 
+it('sits in the shared page frame', () => {
+  renderMission()
+  expect(screen.getByRole('main')).toHaveClass('overflow-hidden')
+  expect(screen.getByRole('banner')).toHaveClass('grid')
+  expect(screen.getByTestId('page-body')).toHaveClass('overflow-y-auto')
+
+  const cta = screen.getByRole('link', { name: 'Bắt đầu ▸' })
+  expect(screen.getByRole('contentinfo')).toContainElement(cta)
+  expect(document.querySelector('.sticky')).toBeNull()
+})
+
 it('shows one card per kind of step, in lesson order, titled with its real count', () => {
   const groups = groupsOf(getLesson(NOW))
 
@@ -300,13 +311,14 @@ it('shows the band the lesson was built at, not a parent override made since', (
 })
 
 // A long lesson is taller than an iPad screen, so a CTA that scrolled with the cards sat below the
-// fold on load — the one thing the child came here to tap.
-it('keeps the CTA in a block stuck to the bottom of the scroller', () => {
+// fold on load — the one thing the child came here to tap. It now lives in the shared page footer,
+// a sibling of the scrolling body, rather than a `sticky` overlay.
+it('keeps the CTA in the page footer, never a sticky overlay', () => {
   renderMission()
 
   const cta = screen.getByRole('link', { name: 'Bắt đầu ▸' })
-  expect(cta.parentElement?.className).toContain('sticky')
-  expect(cta.parentElement?.className).toContain('bottom-0')
+  expect(screen.getByRole('contentinfo')).toContainElement(cta)
+  expect(cta.className).not.toContain('sticky')
 })
 
 it('shows the finish state on a revisit once every step is done', () => {

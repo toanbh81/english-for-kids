@@ -15,6 +15,13 @@ function renderList(topic: string) {
 
 beforeEach(() => localStorage.clear())
 
+it('sits in the shared page frame', () => {
+  renderList('food')
+  expect(screen.getByRole('main')).toHaveClass('overflow-hidden')
+  expect(screen.getByRole('banner')).toHaveClass('grid')
+  expect(screen.getByTestId('page-body')).toHaveClass('overflow-y-auto')
+})
+
 it('shows a not-found message for an unknown topic', () => {
   renderList('nope')
   expect(screen.getByText('Không tìm thấy chủ đề')).toBeInTheDocument()

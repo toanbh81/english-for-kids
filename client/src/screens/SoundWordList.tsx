@@ -6,7 +6,8 @@ import { playUrl } from '../audio/player'
 import { PHONEME_TIPS } from '../scoring/feedback'
 import { getStars } from '../progress/store'
 import { MISSION_STATE } from '../progress/missionNav'
-import { BackButton, Button, CARD_LINK, PAGE_SHELL, StarRow } from '../components/ui'
+import { BackButton, Button, CARD_LINK, StarRow } from '../components/ui'
+import { PageShell, PageHeader, PageBody } from '../components/ui/page'
 
 /**
  * The sound's own sub-level (Phase 9 §1): the sound at the top, then one card per word of it.
@@ -19,7 +20,16 @@ export function SoundWordList() {
   const { ph = '' } = useParams()
   const sound = findSound(ph)
   // The hooks live in the inner component so an unknown phoneme never renders half of them.
-  if (!sound || sound.cards.length === 0) return <p>Không tìm thấy âm</p>
+  if (!sound || sound.cards.length === 0) {
+    return (
+      <PageShell>
+        <PageHeader back={<BackButton to="/levels" label="Các bậc" />} />
+        <PageBody>
+          <p>Không tìm thấy âm</p>
+        </PageBody>
+      </PageShell>
+    )
+  }
   return <WordList key={sound.ph} sound={sound} />
 }
 
@@ -44,19 +54,19 @@ function WordList({ sound }: { sound: SoundGroup }) {
   }
 
   // The design draws no frame for this screen (brief §14 Q19), so it follows the speak family it
-  // belongs to: 20 px of side frame on a phone, and everything the drill next door does — the
-  // sound tier's warm card, its 40 px symbol, its round speaker button — so the two screens read
-  // as one place. From 768 up every one of those is handed back to what it was.
+  // belongs to: everything the drill next door does — the sound tier's warm card, its 40 px
+  // symbol, its round speaker button — so the two screens read as one place. From 768 up every
+  // one of those is handed back to what it was.
   return (
-    <main className={`h-full overflow-y-auto bg-cream-50 px-5 md:px-6 ${PAGE_SHELL}`}>
-      <div className="mx-auto flex w-full max-w-5xl flex-col gap-3 md:gap-5">
-        {/* One sound is a sub-level of the bậc Tập âm, and Tập âm hangs off the stairs — unless
-            the child got here from a stale mission step, which has its own way home. */}
-        {mission
-          ? <BackButton to="/mission" label="Nhiệm vụ" className="self-start" />
-          : <BackButton to="/levels" label="Các bậc" className="self-start" />}
-
-        <header className="flex w-full flex-col items-start gap-2 rounded-[24px] bg-[#FFF1E6] px-4 py-3.5 text-left shadow-[0_6px_0_#F2DFC9] md:items-center md:rounded-none md:bg-transparent md:p-0 md:text-center md:shadow-none">
+    <PageShell>
+      {/* One sound is a sub-level of the bậc Tập âm, and Tập âm hangs off the stairs — unless
+          the child got here from a stale mission step, which has its own way home. */}
+      <PageHeader back={mission
+        ? <BackButton to="/mission" label="Nhiệm vụ" />
+        : <BackButton to="/levels" label="Các bậc" />}
+      />
+      <PageBody>
+        <div className="flex w-full flex-col items-start gap-2 rounded-[24px] bg-[#FFF1E6] px-4 py-3.5 text-left shadow-[0_6px_0_#F2DFC9] md:items-center md:rounded-none md:bg-transparent md:p-0 md:text-center md:shadow-none">
           {/* The symbol and its speaker share a line on a phone, with the tip under them. From 768
               up the wrapper stops being a box at all (`md:contents`) and all four go back to being
               children of the header — in the header's own order, which puts the tip between the
@@ -76,14 +86,14 @@ function WordList({ sound }: { sound: SoundGroup }) {
             {soundMissing && <p className="w-full text-sm font-bold text-ink-300 md:order-4 md:w-auto md:text-lg">Chưa có audio âm này</p>}
           </div>
           {tip && <p className="max-w-xl text-sm font-bold leading-relaxed text-sun-700 md:order-2 md:text-lg md:leading-7 md:text-ink-500">{tip}</p>}
-        </header>
+        </div>
 
-        <p className="text-base font-bold text-ink-500 md:text-center md:text-lg">Chọn một từ để luyện nhé!</p>
+        <p className="mt-3 text-base font-bold text-ink-500 md:mt-5 md:text-center md:text-lg">Chọn một từ để luyện nhé!</p>
 
         {/* A row per word on a phone — the emoji, the word and its stars read across in 96 px
             instead of down in 184, which is what puts all three cards plus the sound above the
             fold on an 844 px screen. The three-column deck of tiles is untouched from 768 up. */}
-        <div className="grid grid-cols-1 gap-2.5 md:gap-5 md:grid-cols-3">
+        <div className="mt-2.5 grid grid-cols-1 gap-2.5 md:mt-5 md:grid-cols-3 md:gap-5">
           {cards.map(c => (
             <Link
               key={c.id}
@@ -105,7 +115,7 @@ function WordList({ sound }: { sound: SoundGroup }) {
             </Link>
           ))}
         </div>
-      </div>
-    </main>
+      </PageBody>
+    </PageShell>
   )
 }

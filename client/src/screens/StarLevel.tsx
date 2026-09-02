@@ -1,20 +1,19 @@
 import { Link } from 'react-router-dom'
 import { SENTENCE_STARS } from '../content'
 import { getStars } from '../progress/store'
-import { BackButton, CARD_LINK, PAGE_SHELL, StarRow } from '../components/ui'
+import { BackButton, CARD_LINK, StarRow } from '../components/ui'
+import { PageShell, PageHeader, PageBody } from '../components/ui/page'
 
 /** Sentence Stars is the whole-sentence bậc of the Speak Lab stairs: every card is one sentence,
  * shown in English with its Vietnamese meaning underneath. Stars live on `sstar:<id>`. */
 export function StarLevel() {
   return (
-    <main className={`h-full overflow-y-auto bg-cream-50 px-6 ${PAGE_SHELL}`}>
-      <div className="mx-auto flex w-full max-w-5xl flex-col gap-5">
-        <BackButton to="/levels" label="Các bậc" className="self-start" />
-
-        <header className="text-center">
-          <h1 className="font-display text-[40px] font-extrabold leading-tight text-ink-900">Sentence Stars ⭐</h1>
-          <p className="mt-1 text-lg font-bold text-ink-500">Nói cả câu — nhấn đúng chỗ, nối âm mượt!</p>
-        </header>
+    <PageShell>
+      <PageHeader back={<BackButton to="/levels" label="Các bậc" />}>
+        <h1 className="font-display text-[22px] font-extrabold leading-tight text-ink-900 md:text-[32px]">Sentence Stars ⭐</h1>
+      </PageHeader>
+      <PageBody>
+        <p className="text-center text-[15px] font-bold text-ink-500 md:text-lg">Nói cả câu — nhấn đúng chỗ, nối âm mượt!</p>
 
         <div className="grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-3">
           {SENTENCE_STARS.map((s, i) => (
@@ -30,7 +29,7 @@ export function StarLevel() {
             </Link>
           ))}
         </div>
-      </div>
-    </main>
+      </PageBody>
+    </PageShell>
   )
 }

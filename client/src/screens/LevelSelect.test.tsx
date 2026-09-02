@@ -14,6 +14,13 @@ function renderLevel(levelId = 'word-pop') {
 
 beforeEach(() => localStorage.clear())
 
+it('sits in the shared page frame', () => {
+  renderLevel()
+  expect(screen.getByRole('main')).toHaveClass('overflow-hidden')
+  expect(screen.getByRole('banner')).toHaveClass('grid')
+  expect(screen.getByTestId('page-body')).toHaveClass('overflow-y-auto')
+})
+
 it('shows the level title and one card per practice card', () => {
   renderLevel()
   expect(screen.getByRole('heading', { name: /Word Pop/ })).toBeInTheDocument()

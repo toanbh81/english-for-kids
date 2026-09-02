@@ -26,6 +26,13 @@ afterEach(() => {
   vi.useRealTimers()
 })
 
+it('sits in the shared page frame', () => {
+  renderDone()
+  expect(screen.getByRole('main')).toHaveClass('overflow-hidden')
+  expect(screen.getByTestId('page-body')).toHaveClass('overflow-y-auto')
+  expect(screen.getByRole('contentinfo')).not.toHaveClass('sticky', 'fixed')
+})
+
 it('celebrates with confetti, a cheering Foxy and a way back to the map', () => {
   seedDoneDay(NOW - 1000)
 

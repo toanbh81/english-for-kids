@@ -89,6 +89,17 @@ afterEach(() => {
   vi.useRealTimers()
 })
 
+it('sits in the shared page frame, with the parent button in the header right cell', () => {
+  renderHome()
+  expect(screen.getByRole('main')).toHaveClass('overflow-hidden')
+  expect(screen.getByRole('banner')).toHaveClass('grid')
+  expect(screen.getByTestId('page-body')).toHaveClass('overflow-y-auto')
+
+  // Home is excluded from the mission chip by route, so it supplies its own header-right control.
+  const headerRight = screen.getByTestId('header-right')
+  expect(within(headerRight).getByRole('link', { name: 'Phụ huynh' })).toHaveAttribute('href', '/parent')
+})
+
 it('shows how much of today lesson is done and a happy Foxy', () => {
   const lesson = completeLesson(NOW, 2)
 
@@ -462,14 +473,11 @@ describe('Phase 11: the banners meet the child tap floor', () => {
 it('keeps the stacked layout scrollable so the mission CTA is never trapped below the fold', () => {
   renderHome()
 
-  const root = screen.getByRole('main')
-  // A fixed-height, clipped root is what hid the mission CTA and the parent link in portrait:
-  // the stacked layout is taller than the viewport, so the root has to grow and the page scroll.
-  expect(root).toHaveClass('min-h-full', 'overflow-y-auto')
-  expect(root.classList.contains('h-full')).toBe(false)
-  expect(root.classList.contains('overflow-hidden')).toBe(false)
-  // Only the landscape map frame may clip, and only from `ipad` up.
-  expect(Array.from(root.classList).filter(c => c.includes('overflow-hidden'))).toEqual([])
+  // The shared page frame fixes the shell to the viewport and scrolls only the body — a fixed-
+  // height, clipped root is no longer what would hide the mission CTA and the parent link, since
+  // it is the body's own scroller that grows to fit the stacked portrait layout.
+  const body = screen.getByTestId('page-body')
+  expect(body).toHaveClass('overflow-y-auto')
 })
 
 /**
@@ -492,18 +500,18 @@ it('lays the islands out as a grid on a phone, with nothing positioned until the
 })
 
 /**
- * The same rule for the other three blocks of the M1b column. Everything the phone lays out has to
+ * The same rule for the other two blocks of the M1b column. Everything the phone lays out has to
  * stay in flow: an `absolute` that escaped its `ipad:` prefix would take a block out of the column
- * and drop it on top of the grid, and — unlike the islands — the mission card, the stairs link and
- * the parent link have no `data-testid` of their own, so nothing else here would notice.
+ * and drop it on top of the grid, and — unlike the islands — the mission card and the stairs link
+ * have no `data-testid` of their own, so nothing else here would notice. The parent link now lives
+ * in the shared page header instead of this flow (see the frame test above).
  */
-it('keeps the mission card, the stairs link and the parent link in flow on a phone', () => {
+it('keeps the mission card and the stairs link in flow on a phone', () => {
   renderHome()
 
   const wrappers = {
     mission: screen.getByRole('link', { name: 'Bắt đầu ▸' }).closest('div.col-span-2')!,
     stairs: screen.getByRole('link', { name: /Các bậc luyện nói/ }).parentElement!,
-    parent: screen.getByRole('link', { name: 'Phụ huynh' }).parentElement!,
   }
 
   for (const [name, wrapper] of Object.entries(wrappers)) {

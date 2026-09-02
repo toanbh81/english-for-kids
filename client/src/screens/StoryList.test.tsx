@@ -6,6 +6,13 @@ import { StoryList } from './StoryList'
 
 beforeEach(() => localStorage.clear())
 
+it('sits in the shared page frame', () => {
+  render(<MemoryRouter><StoryList /></MemoryRouter>)
+  expect(screen.getByRole('main')).toHaveClass('overflow-hidden')
+  expect(screen.getByRole('banner')).toHaveClass('grid')
+  expect(screen.getByTestId('page-body')).toHaveClass('overflow-y-auto')
+})
+
 it('renders a card for every story linking to /story/<id> with Stars', () => {
   setStars('story:little-fox', 2)
   render(<MemoryRouter><StoryList /></MemoryRouter>)

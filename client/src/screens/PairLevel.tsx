@@ -1,22 +1,21 @@
 import { Link } from 'react-router-dom'
 import { PAIRS } from '../content'
 import { getStars } from '../progress/store'
-import { BackButton, CARD_LINK, Chip, PAGE_SHELL, StarRow } from '../components/ui'
+import { BackButton, CARD_LINK, Chip, StarRow } from '../components/ui'
+import { PageShell, PageHeader, PageBody } from '../components/ui/page'
 
 /** "Nghe & chọn" is the listening bậc: every tile is a *pair* of near-identical words, so the
  * card shows both of them side by side — the child should see the choice they are about to make
  * before they open it. Stars live on the pair's own key (`pair:<id>`), never on a single word. */
 export function PairLevel() {
   return (
-    <main className={`h-full overflow-y-auto bg-cream-50 px-6 ${PAGE_SHELL}`}>
-      <div className="mx-auto flex w-full max-w-5xl flex-col gap-5">
-        {/* Minimal Pairs is a bậc of the Speak Lab stairs, so back goes to the stairs. */}
-        <BackButton to="/levels" label="Các bậc" className="self-start" />
-
-        <header className="text-center">
-          <h1 className="font-display text-[40px] font-extrabold leading-tight text-ink-900">Nghe &amp; chọn 👯</h1>
-          <p className="mt-1 text-lg font-bold text-ink-500">Nghe rồi chọn từ đúng — tai tinh, miệng chuẩn!</p>
-        </header>
+    <PageShell>
+      {/* Minimal Pairs is a bậc of the Speak Lab stairs, so back goes to the stairs. */}
+      <PageHeader back={<BackButton to="/levels" label="Các bậc" />}>
+        <h1 className="font-display text-[22px] font-extrabold leading-tight text-ink-900 md:text-[32px]">Nghe &amp; chọn 👯</h1>
+      </PageHeader>
+      <PageBody>
+        <p className="text-center text-[15px] font-bold text-ink-500 md:text-lg">Nghe rồi chọn từ đúng — tai tinh, miệng chuẩn!</p>
 
         <div className="grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-4">
           {PAIRS.map(p => (
@@ -40,7 +39,7 @@ export function PairLevel() {
             </Link>
           ))}
         </div>
-      </div>
-    </main>
+      </PageBody>
+    </PageShell>
   )
 }

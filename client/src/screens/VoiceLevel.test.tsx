@@ -9,6 +9,13 @@ function renderLevel() {
 
 beforeEach(() => localStorage.clear())
 
+it('sits in the shared page frame', () => {
+  renderLevel()
+  expect(screen.getByRole('main')).toHaveClass('overflow-hidden')
+  expect(screen.getByRole('banner')).toHaveClass('grid')
+  expect(screen.getByTestId('page-body')).toHaveClass('overflow-y-auto')
+})
+
 it('shows one card per passage, with its mood and opening line', () => {
   renderLevel()
 

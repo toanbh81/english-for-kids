@@ -2,7 +2,8 @@ import { Link } from 'react-router-dom'
 import { LEVELS, PAIRS, SENTENCE_STARS, SOUNDS, STORY_VOICE } from '../content'
 import { getStars, soundStars as starsForSound } from '../progress/store'
 import { Foxy } from '../components/Foxy'
-import { BackButton, Button, Chip, PAGE_SHELL, StarRow } from '../components/ui'
+import { BackButton, Button, Chip, StarRow } from '../components/ui'
+import { PageShell, PageHeader, PageBody, PageFooter } from '../components/ui/page'
 
 type Stars = 0 | 1 | 2 | 3
 
@@ -107,42 +108,28 @@ export function LevelStairs() {
   const currentIndex = STEPS.indexOf(current) + 1
 
   return (
-    // The phone frame is a column that does not scroll: header, the zigzag (which takes what is
-    // left) and the CTA on the bottom edge. The CTA is a *sibling* of the scrolling region, never
-    // a `sticky` overlay — a pinned block with an opaque background covers the content under it on
-    // the first paint of a screen that is already too tall. From 768 up `md:block` hands the
-    // screen straight back to the plain scrolling block it has always been.
-    <main className={`relative flex h-full flex-col overflow-y-auto bg-cream-50 px-5 max-md:overflow-hidden md:block md:px-6 ${PAGE_SHELL}`}>
-      {/* M7 has no blob (design §11). It is also what puts 80 px of horizontal overflow inside
-          `main` at 390 px, since `overflow-y-auto` makes the x axis scrollable too. */}
-      <div aria-hidden="true" className="pointer-events-none absolute -right-20 -top-24 hidden h-[320px] w-[320px] rounded-full bg-teal-50 md:block" />
+    <PageShell>
+      {/* One header row on a phone — back button, title and subtitle side by side (§11). */}
+      <PageHeader back={<BackButton to="/" label="Về trang chủ" mdLabel="Về bản đồ" />}>
+        {/* The design titles this screen in Vietnamese, which is also what the way in from
+            Home is called ("🗣️ Các bậc luyện nói"). Only the phone gets the new wording: the
+            landscape frame is unchanged this phase. */}
+        <h1 className="font-display text-[22px] font-extrabold leading-tight text-ink-900 md:text-[32px]">
+          <span className="md:hidden">Các bậc luyện nói 🗣️</span>
+          <span className="hidden md:inline">Speak Lab 🗣️</span>
+        </h1>
+      </PageHeader>
+      <PageBody className="relative">
+        {/* M7 has no blob (design §11). */}
+        <div aria-hidden="true" className="pointer-events-none absolute -right-20 -top-24 hidden h-[320px] w-[320px] rounded-full bg-teal-50 md:block" />
 
-      <div className="relative flex flex-col gap-3 max-md:min-h-0 max-md:flex-1 md:gap-6">
-        {/* One header row on a phone — back button, title and subtitle side by side (§11). The
-            wrapper is `contents` from 768 up, so both children go back to being direct children of
-            the column exactly where they were. */}
-        <div className="flex items-center gap-3 md:contents">
-          {/* 64 px, not the design's 56: the spec's binding rules put the tap-target floor at 64
-              with no exception, and a back arrow is the control a child hits most often. */}
-          <BackButton to="/" label="Về trang chủ" mdLabel="Về bản đồ" className="md:self-start" />
-
-          <header className="text-left max-md:flex-1 md:text-center">
-            {/* The design titles this screen in Vietnamese, which is also what the way in from
-                Home is called ("🗣️ Các bậc luyện nói"). Only the phone gets the new wording: the
-                landscape frame is unchanged this phase. */}
-            <h1 className="font-display text-[22px] font-extrabold leading-tight text-ink-900 md:text-[40px]">
-              <span className="md:hidden">Các bậc luyện nói 🗣️</span>
-              <span className="hidden md:inline">Speak Lab 🗣️</span>
-            </h1>
-            <p className="mt-0.5 text-[13px] font-bold text-ink-500 md:mt-1 md:text-lg">Leo từng bậc — mỗi bậc một trò mới!</p>
-          </header>
-        </div>
+        <p className="text-center text-[15px] font-bold text-ink-500 md:text-lg">Leo từng bậc — mỗi bậc một trò mới!</p>
 
         {/* `justify-around`, not the design's `space-between`: it puts each row's centre at
             exactly (2i+1)/10 of the column, which is where the trail below draws its corners at
             every viewport height. `space-between` would leave the dotted line ~24 px off the top
             and bottom stairs at 844 and further out at 667. */}
-        <div className="relative flex flex-col-reverse justify-around gap-2 overflow-y-auto py-1.5 max-md:min-h-0 max-md:flex-1 md:grid md:grid-cols-2 md:items-end md:justify-items-center md:gap-5 md:overflow-visible md:py-0 ipad:grid-cols-5 ipad:items-start">
+        <div className="relative mt-3 flex flex-col-reverse justify-around gap-2 py-1.5 md:mt-6 md:grid md:grid-cols-2 md:items-end md:justify-items-center md:gap-5 md:py-0 ipad:grid-cols-5 ipad:items-start">
           <svg
             aria-hidden="true"
             viewBox="0 0 350 560"
@@ -189,18 +176,19 @@ export function LevelStairs() {
             </div>
           ))}
         </div>
-
-        {/* The design's pinned CTA (§11), phone only. It is the last child of the non-scrolling
-            column above, so it always sits on the bottom edge without covering anything. */}
-        {current.to && (
+      </PageBody>
+      {/* The design's pinned CTA (§11), phone only — a sibling of the scrolling body now, never a
+          `sticky` overlay covering the content under it. */}
+      {current.to && (
+        <PageFooter className="md:hidden">
           <Button
             to={current.to}
-            className="max-md:min-h-[64px] max-md:w-full max-md:shrink-0 max-md:rounded-[20px] max-md:px-4 max-md:text-xl md:hidden"
+            className="min-h-[64px] w-full shrink-0 rounded-[20px] px-4 text-xl"
           >
             Luyện bậc {currentIndex}: {current.name} {current.emoji}
           </Button>
-        )}
-      </div>
-    </main>
+        </PageFooter>
+      )}
+    </PageShell>
   )
 }
