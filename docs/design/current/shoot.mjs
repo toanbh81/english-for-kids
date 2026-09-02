@@ -13,8 +13,11 @@ const VIEWPORTS = {
   ipad: { viewport: { width: 1194, height: 834 }, deviceScaleFactor: 2, hasTouch: true },
   ipadp: { viewport: { width: 834, height: 1194 }, deviceScaleFactor: 2, hasTouch: true },
 }
-// iPad portrait only for the screens where its layout is a real question.
+// iPad portrait only for the screens where its layout is a real question. Opt-in
+// (SHOTS_DIR=... IPADP_SUBSET=1) for a quick spot-check; the default is the full set, so a plain
+// run of this script is a real sweep of every screen at all three viewports, not just these eight.
 const IPADP_ONLY = new Set(['home', 'mission', 'levels', 'topic-animals', 'parent-dashboard', 'voice-idle', 'story-player', 'words-animals'])
+const IPADP_SUBSET = process.env.IPADP_SUBSET === '1'
 
 const sleep = ms => new Promise(r => setTimeout(r, ms))
 const log = (...a) => console.log(new Date().toISOString().slice(11, 19), ...a)
@@ -111,7 +114,7 @@ async function run(vpName, vp) {
   const ctx = await browser.newContext({ ...vp, reducedMotion: 'reduce', locale: 'vi-VN', ignoreHTTPSErrors: true })
   const page = await ctx.newPage()
   page.on('dialog', d => d.accept())
-  const only = name => vpName !== 'ipadp' || IPADP_ONLY.has(name)
+  const only = name => vpName !== 'ipadp' || !IPADP_SUBSET || IPADP_ONLY.has(name)
   const S = async (name, route, after, quick = false) => {
     if (!only(name)) return
     if (WANT && !WANT.includes(name)) return

@@ -11,10 +11,13 @@ icon-only below `md` instead of carrying a visible label at every width; on a ph
 shows a single greeting line instead of the full Foxy + speech-bubble chrome, which moves to the first
 body row (the header cell has no room for it at 390 px) — accepted until Phase 13 redraws Home;
 LevelSelect's "Xem các bậc" stairs pill moved into the body's first row (`self-end`) at every width
-instead of the header, so the header keeps its default `LessonChip` slot; and loading skeletons *are*
-the row/card while they're up, not a skeleton nested inside an already-styled frame. The before/after
-screenshots and the checklist rows this phase adds are in `README.md`'s "Phase 12 — Nền tảng redesign"
-section.
+instead of the header, so the header keeps its default `LessonChip` slot; loading skeletons *are*
+the row/card while they're up, not a skeleton nested inside an already-styled frame; `createScorer`'s
+`fallbackReason` implements two of this spec's four planned values (`'offline' | 'token'` — `timeout`
+folds into `token`, `unsupported` became its own `SpeakError` kind instead of a fallback reason); and
+the "+N thông báo" `NoticeStack` overflow line, listed below under "Không làm (Phase 13–15)", shipped
+in this phase instead. The before/after screenshots and the checklist rows this phase adds are in
+`README.md`'s "Phase 12 — Nền tảng redesign" section.
 
 Phase đầu tiên của đợt redesign toàn bộ giao diện (2026-09). Nó **không vẽ lại màn nào**; nó dựng bộ khung và component mà vòng 2–4 (Phase 13–15) sẽ lắp vào từng màn, và **chuyển mọi màn hiện có sang khung đó** để LessonChip, Back, footer, toast và các trạng thái lỗi/rỗng/tải cư xử giống nhau ở 33 màn.
 
@@ -71,7 +74,7 @@ Phase đầu tiên của đợt redesign toàn bộ giao diện (2026-09). Nó *
 - `components/speak/` — `MicButton`, `LevelBars`, `Countdown`, `ResultCard`, `WordChip`, `SpeakError`. `ResultCard` nhận `{stars, praise, score, sub, prosody, words, bars, hint, canReplay, onReplay, onSample, onRetry, primary}`; màn chỉ lắp dữ liệu.
 - `components/ui/` — `Notice`, `NoticeStack`, `Dialog` + `useDialog()` (Promise-based `confirm/destructive/prompt`), `EmptyState`, `NotFound`, `Skeleton`, `SyncPill`, `StreakPanel`, `WeekDots`, `Stars`, `LinkText`.
 - `LessonChip` đọc `PageHeaderContext`: có header → render trong slot; không → fallback global (tạm, xoá ở Phase 15).
-- Dữ liệu: `activity.longestStreak`, `profileState.shortName` + clamp 40, `createScorer` trả `fallbackReason`, `useSpeakingAttempt` thêm `locked` + timer 3s + lỗi có `kind` (5 loại) thay chuỗi.
+- Dữ liệu: `activity.longestStreak`, `profileState.shortName` + clamp 40, `createScorer` trả `fallbackReason`, `useSpeakingAttempt` thêm `locked` + timer 3s + lỗi có `kind` (6 loại) thay chuỗi.
 
 ## Kiểm chứng
 

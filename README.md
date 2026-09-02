@@ -1199,13 +1199,13 @@ behave identically everywhere. The full decision record is
   `Countdown`, `ResultCard` and `WordChip` (`client/src/components/speak/`) are now the one
   implementation behind all 9 speaking/word/sentence screens, replacing each screen's own markup.
   Errors became a typed `SpeakError = { kind, detail? }` (`client/src/speaking/speakError.ts`) with
-  five kinds — `mic` 🎤, `noSpeech` 👂, `unsupported` 🌐, `fallback` 📡, `limit` 🌙, `notReady` 👂 — each
+  six kinds — `mic` 🎤, `noSpeech` 👂, `unsupported` 🌐, `fallback` 📡, `limit` 🌙, `notReady` 👂 — each
   with its own copy and action, replacing five near-duplicate error strings; a shared
   `useSpeakErrorAction` hook wires the action button (retry / open settings / dismiss / go home) once
   instead of once per screen. `useSpeakingAttempt` now locks the mic (`micState='locked'`, 🌙) once
   today's minute limit is reached, and `createScorer` reports *why* it fell back to Web Speech
-  (`fallbackReason: 'offline' | 'token' | 'timeout' | 'unsupported'`), surfaced once per session via
-  the 📡 notice rather than silently.
+  (`fallbackReason: 'offline' | 'token'`), surfaced once per session via the 📡 notice rather than
+  silently.
 - **State components.** `Notice`/`NoticeStack`, `Dialog` + `useDialog()` (a Promise-based
   `confirm`/`destructive`/`prompt` that replaces all four `window.confirm`/`window.prompt` calls in
   the app), `EmptyState`, `NotFound`, `Skeleton`, `SyncPill`, `StreakPanel` + `WeekDots` are all one
@@ -1281,10 +1281,15 @@ phone, Home's header shows a single greeting line (Foxy and the full speech bubb
 body row) because the design's own header cell has no room for a mascot at 390 px — accepted until
 Phase 13 redraws Home; LevelSelect's "Xem các bậc" stairs pill moved out of the header and into the
 body's first row (`self-end`) at every width, rather than staying a header-right override, so the
-header can keep its default `LessonChip` slot — the cost is one extra row on iPad until Phase 13; and
+header can keep its default `LessonChip` slot — the cost is one extra row on iPad until Phase 13;
 loading skeletons *are* the row/card while they're up (a `<li>` carries no border/padding of its own,
 the skeleton drops its own background/padding inside `Card`) instead of the plan's sketch of a
-skeleton nested inside an already-styled frame.
+skeleton nested inside an already-styled frame; `createScorer`'s `fallbackReason` implements two of
+the spec's four planned values (`'offline' | 'token'`) — `timeout` folds into `token` (both are Azure
+token round-trip failures from the caller's point of view) and `unsupported` is its own `SpeakError`
+kind instead, since it names a browser capability gap, not a fallback reason; and the "+N thông báo"
+`NoticeStack` overflow line the spec's scope section listed under "Không làm (Phase 13–15)" shipped in
+this phase instead, alongside the rest of `NoticeStack`.
 
 ### iPad checklist rows for this phase
 
@@ -1294,7 +1299,7 @@ tap into the Dashboard's reset dialog.
 | # | Step | Expected result | Result |
 |---|------|------------------|--------|
 | 77 (mic halo) | Any speaking screen → tap the mic on an iPhone | Mic grows from **124 px idle to 150 px recording**, with the halo rings reaching the frame edge | ⏳ pending |
-| 78 (streak sheet) | Home → tap the streak strip | Opens a sheet showing 3 numbers (current streak, longest streak, this week); swiping it down closes it | ⏳ pending |
+| 78 (streak sheet) | Home → tap the streak strip | Opens a sheet showing 3 numbers (current streak, longest streak, this week); chạm nền mờ, phím Escape hoặc nút Đóng đều đóng lại | ⏳ pending |
 | 79 (reset dialog) | Parent Dashboard → "Đặt lại tiến trình" | Opens the confirm `Dialog`; tapping cancel closes it with nothing reset, reopening and tapping confirm resets and closes | ⏳ pending |
 | 80 (limit lock) | Practice a card after the daily minute limit is reached | 🌙 "Hôm nay bé học đủ rồi!" error, mic shows locked (not disabled-grey, not recording), CTA reads "Về nhà" | ⏳ pending |
 | 81 (offline notice) | Turn on airplane mode, then use a speaking screen | 📡 fallback notice appears once for the session, "Tiếp tục" dismisses it; using another speaking screen afterward shows only the "chế độ đơn giản" engine badge, no repeat notice | ⏳ pending |
