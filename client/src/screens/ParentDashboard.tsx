@@ -35,13 +35,13 @@ import {
   shortName,
   switchProfile,
 } from '../cloud/profileState'
-import { hasPendingReset, resetRemoteProgress, subscribeSyncStatus, syncStatus } from '../cloud/sync'
+import { flush, hasPendingReset, resetRemoteProgress, subscribeSyncStatus, syncStatus } from '../cloud/sync'
 import type { SyncStatus } from '../cloud/sync'
 import { fetchRemoteStats } from '../cloud/remote'
 import type { RemoteStats } from '../cloud/remote'
 import { isCloudConfigured } from '../cloud/supabase'
 import { ProfilePicker } from '../components/ProfilePicker'
-import { Button, Card, EmptyState, Notice, PAGE_SHELL } from '../components/ui'
+import { AccountCardSkeleton, Button, Card, EmptyState, Notice, PAGE_SHELL, RemoteRowSkeleton, SyncPill } from '../components/ui'
 import { useDialog } from '../components/ui/useDialog'
 
 /**
@@ -552,17 +552,11 @@ export function ParentDashboard({ onLock }: Props) {
           <Card data-testid="account-card" className="px-4 py-3.5 md:p-6">
             <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
               <h2 className="font-display text-base font-extrabold text-ink-900 md:text-xl">Tài khoản</h2>
-              {sync.state !== 'off' && (
-                <span data-testid="sync-status" className="text-xs font-semibold text-ink-500 md:text-sm">
-                  {sync.state === 'offline' && 'Ngoại tuyến'}
-                  {sync.state === 'pending' && `Chưa đồng bộ ${sync.pending} mục`}
-                  {sync.state === 'synced' && 'Đã đồng bộ ✓'}
-                </span>
-              )}
+              <SyncPill status={sync} onRetry={() => void flush()} />
             </div>
 
             {!authReady ? (
-              <p className="text-sm text-ink-500">Đang tải…</p>
+              <AccountCardSkeleton />
             ) : !linked ? (
               <div className="flex flex-col gap-3">
                 {/* No session at all — offline since install, or just signed out. The account this
@@ -746,7 +740,7 @@ export function ParentDashboard({ onLock }: Props) {
                       {p.id === activeId && <span className="font-normal text-ink-500"> · đang dùng trên máy này</span>}
                     </p>
                     {!loaded ? (
-                      <p className="mt-1 text-xs font-semibold text-ink-500">Đang tải…</p>
+                      <RemoteRowSkeleton />
                     ) : entry === null ? (
                       <p className="mt-1 text-xs font-semibold text-fix-700">Không tải được tiến độ của bé lúc này.</p>
                     ) : (

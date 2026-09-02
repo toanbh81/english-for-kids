@@ -11,9 +11,12 @@ import { NoticeStack } from './NoticeStack'
 import { PAGE_SHELL } from './pageShell'
 import { ProgressBar } from './ProgressBar'
 import { SceneDots } from './SceneDots'
+import { AccountCardSkeleton } from './Skeleton'
 import { SpeechBubble } from './SpeechBubble'
 import { Stars } from './Stars'
 import { StarRow } from './StarRow'
+import { SyncPill } from './SyncPill'
+import type { SyncStatus } from '../../cloud/sync'
 import { Toast } from './Toast'
 import { Toggle } from './Toggle'
 import { useToast } from './useToast'
@@ -377,5 +380,45 @@ describe('PAGE_SHELL', () => {
 
   it('leaves horizontal padding to the screen, whose frame width differs per design family', () => {
     expect(PAGE_SHELL).not.toMatch(/(^|\s)p[xlr]?-/)
+  })
+})
+
+describe('SyncPill', () => {
+  const base = { state: 'synced', pending: 0, syncing: false, lastError: null, lastSyncedAt: null } as const
+
+  it('maps the seven states to copy and colour', () => {
+    const { rerender } = render(<SyncPill status={{ ...base } as SyncStatus} onRetry={() => {}} />)
+    expect(screen.getByTestId('sync-status')).toHaveTextContent('✓ Đã đồng bộ')
+
+    rerender(<SyncPill status={{ ...base, state: 'pending', pending: 500 } as SyncStatus} onRetry={() => {}} />)
+    expect(screen.getByTestId('sync-status')).toHaveTextContent('● Chưa đồng bộ 500 mục')
+
+    rerender(<SyncPill status={{ ...base, syncing: true } as SyncStatus} onRetry={() => {}} />)
+    expect(screen.getByTestId('sync-status')).toHaveTextContent('Đang đồng bộ…')
+
+    rerender(<SyncPill status={{ ...base, lastError: 'x' } as SyncStatus} onRetry={() => {}} />)
+    expect(screen.getByTestId('sync-status')).toHaveTextContent('Không đồng bộ được')
+    expect(screen.getByRole('button', { name: 'Thử lại' })).toBeInTheDocument()
+
+    rerender(<SyncPill status={{ ...base, lastSyncedAt: new Date(2026, 8, 2, 9, 41).getTime() } as SyncStatus} onRetry={() => {}} />)
+    expect(screen.getByTestId('sync-status')).toHaveTextContent('Đồng bộ lúc 09:41')
+
+    rerender(<SyncPill status={{ ...base, state: 'off' } as SyncStatus} onRetry={() => {}} />)
+    expect(screen.queryByTestId('sync-status')).toBeNull()
+  })
+
+  it('the retry button calls onRetry', () => {
+    const onRetry = vi.fn()
+    render(<SyncPill status={{ ...base, lastError: 'x' } as SyncStatus} onRetry={onRetry} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Thử lại' }))
+    expect(onRetry).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('Skeleton', () => {
+  it('account skeleton keeps the card height', () => {
+    render(<AccountCardSkeleton />)
+    expect(screen.getByTestId('skeleton-account')).toHaveClass('h-[168px]')
+    expect(screen.getAllByTestId('skeleton')[0]).toHaveClass('animate-shimmer')
   })
 })

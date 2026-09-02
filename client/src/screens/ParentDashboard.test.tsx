@@ -81,6 +81,7 @@ const syncMock = vi.hoisted(() => ({
   subscribeSyncStatus: vi.fn<(fn: (s: MockSyncStatus) => void) => () => void>(() => () => undefined),
   resetRemoteProgress: vi.fn<() => Promise<boolean>>(async () => true),
   hasPendingReset: vi.fn<(id: string) => boolean>(() => false),
+  flush: vi.fn<() => Promise<void>>(async () => undefined),
 }))
 vi.mock('../cloud/sync', () => syncMock)
 
@@ -145,6 +146,7 @@ beforeEach(() => {
   syncMock.subscribeSyncStatus.mockReset().mockReturnValue(() => undefined)
   syncMock.resetRemoteProgress.mockReset().mockResolvedValue(true)
   syncMock.hasPendingReset.mockReset().mockReturnValue(false)
+  syncMock.flush.mockReset().mockResolvedValue(undefined)
 })
 
 afterEach(() => {
@@ -600,7 +602,7 @@ describe('Phase 11: "Tài khoản"', () => {
     renderWithDialogs(<ParentDashboard />)
     await flush()
 
-    expect(screen.getByTestId('sync-status')).toHaveTextContent('Chưa đồng bộ 3 mục')
+    expect(screen.getByTestId('sync-status')).toHaveTextContent(/Chưa đồng bộ 3 mục/)
   })
 
   it('subscribes to sync status only on this screen, and unsubscribes on unmount', async () => {
@@ -1170,7 +1172,8 @@ describe('Phase 11 task 5: remote progress view', () => {
     // the one profile differing from the active device profile — is shown at all).
     let cards = await screen.findAllByTestId('remote-profile')
     expect(cards).toHaveLength(1)
-    expect(cards[0]).toHaveTextContent('Đang tải…')
+    // The skeleton (Task 13) replaced the "Đang tải…" text — its presence is the loading signal now.
+    expect(within(cards[0]).getAllByTestId('skeleton').length).toBeGreaterThan(0)
 
     // The parent presses "Xem từ xa" WHILE the sibling's fetch is still unresolved. This changes
     // `remoteShowKey` (now includes the active device profile too) and re-runs the stats effect —
@@ -1189,9 +1192,9 @@ describe('Phase 11 task 5: remote progress view', () => {
     cards = screen.getAllByTestId('remote-profile')
     const siblingCard = cards.find(c => c.textContent?.includes('Sóc'))
     expect(siblingCard).toBeDefined()
-    // The positive assertion this bug made impossible: the card resolves out of "Đang tải…" on its
+    // The positive assertion this bug made impossible: the card resolves out of the skeleton on its
     // own, with no remount and no page reload.
-    expect(siblingCard).not.toHaveTextContent('Đang tải…')
+    expect(within(siblingCard!).queryAllByTestId('skeleton')).toHaveLength(0)
     expect(siblingCard).toHaveTextContent('Chuỗi ngày: 3')
   })
 
