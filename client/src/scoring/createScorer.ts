@@ -12,14 +12,17 @@ const ATTEMPTS = 2
 
 const wait = (ms: number) => new Promise<void>(resolve => { setTimeout(resolve, ms) })
 
-export async function createScorer(): Promise<{ scorer: PronunciationScorer; engine: 'azure' | 'webspeech' }> {
+export async function createScorer(): Promise<{
+  scorer: PronunciationScorer
+  engine: 'azure' | 'webspeech'
+  fallbackReason?: 'offline' | 'token'
+}> {
   // Offline is not a cold start: there is nothing to retry, and a backoff would only delay the mic.
-  if (navigator.onLine) {
-    for (let attempt = 0; attempt < ATTEMPTS; attempt++) {
-      if (attempt > 0) await wait(RETRY_MS)
-      try { const { token, region } = await fetchToken(); return { scorer: new AzureScorer(token, region), engine: 'azure' } }
-      catch { /* try again, then fall through */ }
-    }
+  if (!navigator.onLine) return { scorer: new WebSpeechScorer(), engine: 'webspeech', fallbackReason: 'offline' }
+  for (let attempt = 0; attempt < ATTEMPTS; attempt++) {
+    if (attempt > 0) await wait(RETRY_MS)
+    try { const { token, region } = await fetchToken(); return { scorer: new AzureScorer(token, region), engine: 'azure' } }
+    catch { /* try again, then fall through */ }
   }
-  return { scorer: new WebSpeechScorer(), engine: 'webspeech' }
+  return { scorer: new WebSpeechScorer(), engine: 'webspeech', fallbackReason: 'token' }
 }

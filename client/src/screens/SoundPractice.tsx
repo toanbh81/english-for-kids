@@ -15,6 +15,7 @@ import { Confetti } from '../components/Confetti'
 import { Foxy } from '../components/Foxy'
 import { BackButton, Button, Chip, PAGE_SHELL } from '../components/ui'
 import { useSpeakingAttempt } from '../speaking/useSpeakingAttempt'
+import { SPEAK_ERROR_COPY } from '../speaking/speakError'
 
 /** The hook stops the recording itself after this long; the countdown just mirrors it. */
 const AUTO_STOP_MS = 6000
@@ -457,7 +458,7 @@ function SoundWord({ sound, idx }: { sound: SoundGroup; idx: number }) {
               </section>
             )}
 
-            {attempt.error && <p className="font-display text-xl font-extrabold text-fix-700 md:text-2xl">{attempt.error}</p>}
+            {attempt.error && <p className="font-display text-xl font-extrabold text-fix-700 md:text-2xl">{SPEAK_ERROR_COPY[attempt.error.kind].title}</p>}
 
             {/* `mt-auto`: with the big mouth tile gone there is no stretching block left on a phone, so
                 the mic would otherwise float directly under the word card. It takes the free space

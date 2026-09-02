@@ -272,7 +272,7 @@ describe('Web Speech engine', () => {
     renderCard() // no window.webkitSpeechRecognition installed
     await waitFor(() => expect(screen.getByRole('button', { name: /bấm để nói/i })).toBeEnabled())
     fireEvent.click(screen.getByRole('button', { name: /bấm để nói/i }))
-    await screen.findByText('Trình duyệt này chưa hỗ trợ nhận dạng giọng nói')
+    await screen.findByText('Trình duyệt này chưa nghe được')
     expect(screen.queryByText(/cho phép dùng mic/)).not.toBeInTheDocument()
   })
 })

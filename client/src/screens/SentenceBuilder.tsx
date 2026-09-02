@@ -10,6 +10,7 @@ import { saveRecording } from '../progress/recordings'
 import { playUrl } from '../audio/player'
 import { toFeedback } from '../scoring/feedback'
 import { useSpeakingAttempt } from '../speaking/useSpeakingAttempt'
+import { SPEAK_ERROR_COPY } from '../speaking/speakError'
 import { MicButton } from '../components/MicButton'
 import { Foxy } from '../components/Foxy'
 import type { FoxyMood } from '../components/Foxy'
@@ -274,7 +275,7 @@ function SentenceBuilderInner({ sentence }: { sentence: Sentence }) {
           <>
             {audioMissing && <p className="text-sm font-bold text-ink-300 md:text-lg">Chưa có audio mẫu</p>}
 
-            {attempt.error && <p className="font-display text-lg font-extrabold text-fix-700 md:text-2xl">{attempt.error}</p>}
+            {attempt.error && <p className="font-display text-lg font-extrabold text-fix-700 md:text-2xl">{SPEAK_ERROR_COPY[attempt.error.kind].title}</p>}
 
             {feedback && (
               /* `flex-1` below 768 only: the section takes the free height so its CTA row can sit

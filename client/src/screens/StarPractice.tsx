@@ -20,6 +20,7 @@ import { Foxy } from '../components/Foxy'
 import { StressedSentence } from '../components/StressedSentence'
 import { BackButton, Button, Card, Chip, PAGE_SHELL } from '../components/ui'
 import { useSpeakingAttempt } from '../speaking/useSpeakingAttempt'
+import { SPEAK_ERROR_COPY } from '../speaking/speakError'
 
 /**
  * Phone layout follows `SoundPractice`'s idiom to the letter (see the comment block at the top of
@@ -320,7 +321,7 @@ function StarRun({ star }: { star: SentenceStar }) {
               </section>
             )}
 
-            {attempt.error && <p className="font-display text-xl font-extrabold text-fix-700 md:text-2xl">{attempt.error}</p>}
+            {attempt.error && <p className="font-display text-xl font-extrabold text-fix-700 md:text-2xl">{SPEAK_ERROR_COPY[attempt.error.kind].title}</p>}
 
             {!result && (
               <div className="mt-auto flex flex-col items-center gap-2 pb-1 pt-1 [@media(max-width:767px)_and_(max-height:700px)]:pb-0 [@media(max-width:767px)_and_(max-height:700px)]:pt-0 md:mt-0 md:gap-3 md:pb-2">

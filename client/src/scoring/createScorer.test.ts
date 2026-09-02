@@ -98,3 +98,33 @@ it('falls back to Web Speech with no request and no backoff when the browser rep
   expect(fetchMock).not.toHaveBeenCalled()
   expect(vi.getTimerCount()).toBe(0)
 })
+
+// `./azureScorer` is scoped-mocked (vi.doMock, not the hoisted vi.mock) so the tests above keep
+// exercising the real fetchToken/AzureScorer through a mocked global fetch, while these two ask a
+// narrower question — does createScorer name the right reason — without caring how the token
+// request itself failed.
+describe('fallbackReason', () => {
+  afterEach(() => {
+    vi.doUnmock('./azureScorer')
+    vi.resetModules()
+  })
+
+  it('names the reason it fell back', async () => {
+    setOnLine(true)
+    vi.doMock('./azureScorer', () => ({ AzureScorer: class {}, fetchToken: vi.fn().mockRejectedValue(new Error('500')) }))
+    const { createScorer: createScorerFresh } = await import('./createScorer')
+    const b = await createScorerFresh()
+    expect(b.engine).toBe('webspeech')
+    expect(b.fallbackReason).toBe('token')
+  })
+
+  it('reports offline without retrying', async () => {
+    setOnLine(false)
+    const fetchTokenMock = vi.fn()
+    vi.doMock('./azureScorer', () => ({ AzureScorer: class {}, fetchToken: fetchTokenMock }))
+    const { createScorer: createScorerFresh } = await import('./createScorer')
+    const b = await createScorerFresh()
+    expect(b.fallbackReason).toBe('offline')
+    expect(fetchTokenMock).not.toHaveBeenCalled()
+  })
+})

@@ -13,6 +13,7 @@ import { playUrl } from '../audio/player'
 import { speakText } from '../story/speak'
 import { toFeedback } from '../scoring/feedback'
 import { useSpeakingAttempt } from '../speaking/useSpeakingAttempt'
+import { SPEAK_ERROR_COPY } from '../speaking/speakError'
 import { MicButton } from '../components/MicButton'
 import { Foxy } from '../components/Foxy'
 import type { FoxyMood } from '../components/Foxy'
@@ -417,7 +418,7 @@ function WordCardInner({ word, topic, isReview, list }: { word: Word; topic: str
               </section>
             )}
 
-            {attempt.error && <p className="font-display text-2xl font-extrabold text-fix-700">{attempt.error}</p>}
+            {attempt.error && <p className="font-display text-2xl font-extrabold text-fix-700">{SPEAK_ERROR_COPY[attempt.error.kind].title}</p>}
 
             {outcome === 'retry' && feedback?.hint && <HintCard hint={feedback.hint} />}
 

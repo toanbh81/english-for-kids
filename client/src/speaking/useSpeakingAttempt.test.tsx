@@ -4,7 +4,10 @@ import { useState } from 'react'
 const recorderControl = vi.hoisted(() => ({ shouldFailStart: false, start: vi.fn(), opts: undefined as { maxMs?: number } | undefined }))
 /** `queue` feeds successive createScorer() calls; `gate`, when set, holds the next one open so a
  * test can look at the hook while the token round trip is still in flight. */
-const scorerControl = vi.hoisted(() => ({ queue: [] as { engine: string; scorer: unknown }[], gate: null as Promise<void> | null }))
+const scorerControl = vi.hoisted(() => ({
+  queue: [] as { engine: string; scorer: unknown; fallbackReason?: 'offline' | 'token' }[],
+  gate: null as Promise<void> | null,
+}))
 
 vi.mock('../audio/recorder', () => ({
   useRecorder: (opts: { maxMs?: number } = {}) => {
@@ -41,6 +44,8 @@ vi.mock('../scoring/createScorer', () => ({
 }))
 
 import { useSpeakingAttempt } from './useSpeakingAttempt'
+import { setLimitMinutes } from '../progress/limit'
+import { logActivity } from '../progress/activity'
 
 const origOnLine = Object.getOwnPropertyDescriptor(Navigator.prototype, 'onLine')
 function setOnLine(value: boolean) {
@@ -230,7 +235,7 @@ it('shows a friendly error when mic permission is denied', async () => {
   await waitFor(() => expect(result.current.micState).toBe('idle'))
 
   act(() => { result.current.onMic() })
-  await waitFor(() => expect(result.current.error).toMatch(/cho phép dùng mic/))
+  await waitFor(() => expect(result.current.error).toEqual({ kind: 'mic' }))
 })
 
 it('calls onResult exactly once per scored attempt, with the result and recorded blob', async () => {
@@ -259,4 +264,40 @@ it('calls onResult exactly once per scored attempt, with the result and recorded
   act(() => { result.current.reset() })
   expect(onResult).toHaveBeenCalledTimes(1)
   expect(onResult2).not.toHaveBeenCalled()
+})
+
+describe('typed errors, locked mic, fallback notice, not-ready timer', () => {
+  beforeEach(() => { localStorage.clear(); sessionStorage.clear() })
+
+  it('reports notReady when the scorer takes longer than 3 s', async () => {
+    vi.useFakeTimers()
+    // Never resolves: the same shape as a token round trip that hangs forever.
+    scorerControl.gate = new Promise(() => {})
+    const { result } = renderHook(() => useSpeakingAttempt({ targetText: 'cat' }))
+    act(() => { vi.advanceTimersByTime(3000) })
+    expect(result.current.error).toEqual({ kind: 'notReady' })
+  })
+
+  it('reports fallback once per session when Azure was not available', async () => {
+    scorerControl.queue.push({ engine: 'webspeech', scorer: webSpeechBundle().bundle.scorer, fallbackReason: 'token' })
+    const first = renderHook(() => useSpeakingAttempt({ targetText: 'cat' }))
+    await waitFor(() => expect(first.result.current.error).toEqual({ kind: 'fallback', detail: 'token' }))
+    act(() => first.result.current.dismissError())
+
+    scorerControl.queue.push({ engine: 'webspeech', scorer: webSpeechBundle().bundle.scorer, fallbackReason: 'token' })
+    const second = renderHook(() => useSpeakingAttempt({ targetText: 'dog' }))
+    await waitFor(() => expect(second.result.current.engine).toBe('webspeech'))
+    expect(second.result.current.error).toBeNull()
+  })
+
+  it('locks the mic when today is over the daily limit', async () => {
+    const now = Date.now()
+    setLimitMinutes(20)
+    for (let i = 0; i < 25; i++) {
+      logActivity({ ts: now - 25 * 60e3 + i * 60e3, kind: 'speak', id: `x${i}`, score: 80 })
+    }
+    const { result } = renderHook(() => useSpeakingAttempt({ targetText: 'cat' }))
+    await waitFor(() => expect(result.current.micState).toBe('locked'))
+    expect(result.current.error).toEqual({ kind: 'limit' })
+  })
 })

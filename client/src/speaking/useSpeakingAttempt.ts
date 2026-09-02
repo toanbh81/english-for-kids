@@ -3,20 +3,29 @@ import { useRecorder } from '../audio/recorder'
 import { createScorer } from '../scoring/createScorer'
 import type { PronunciationResult, PronunciationScorer } from '../scoring/types'
 import { WebSpeechScorer } from '../scoring/webSpeechScorer'
+import { getActivity, minutesToday } from '../progress/activity'
+import { getLimitMinutes } from '../progress/limit'
+import type { SpeakError } from './speakError'
 
 /** The Web Speech engine listens on its own stream, so it needs an explicit start(). */
 type LiveScorer = PronunciationScorer & { start(): void }
-type ScorerBundle = { scorer: PronunciationScorer; engine: string }
+type ScorerBundle = { scorer: PronunciationScorer; engine: string; fallbackReason?: 'offline' | 'token' }
+
+/** Once the fallback notice has been shown this session, a fresh card must not repeat it. */
+const FALLBACK_NOTICED_KEY = 'speakup.fallbackNoticed'
+/** How long the child waits for a first scorer before being told it is taking too long. */
+const NOT_READY_MS = 3000
 
 export type SpeakingAttempt = {
-  micState: 'idle' | 'recording' | 'processing' | 'disabled'
+  micState: 'idle' | 'recording' | 'processing' | 'disabled' | 'locked'
   level: number
   engine: 'azure' | 'webspeech' | null
   result: PronunciationResult | null
-  error: string | null
+  error: SpeakError | null
   lastBlob: Blob | null
   onMic(): void
   reset(): void
+  dismissError(): void
 }
 
 export function useSpeakingAttempt(opts: {
@@ -39,7 +48,7 @@ export function useSpeakingAttempt(opts: {
   const scorerRef = useRef<ScorerBundle | null>(null)
   const [result, setResult] = useState<PronunciationResult | null>(null)
   const [lastBlob, setLastBlob] = useState<Blob | null>(null)
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<SpeakError | null>(null)
   const [scoring, setScoring] = useState(false)
   const [wsRecording, setWsRecording] = useState(false)
   // Opening the mic is not instant — the Azure re-check can spend a round trip and a backoff
@@ -49,6 +58,13 @@ export function useSpeakingAttempt(opts: {
   const [starting, setStarting] = useState(false)
   const startingRef = useRef(false)
   const timerRef = useRef<number | null>(null)
+  // Whether today's daily limit is already spent — decided once per card, in the reset effect
+  // below, so a child who crosses the limit mid-attempt is locked out on the NEXT card, not
+  // mid-recording.
+  const [locked, setLocked] = useState(false)
+  // The "the scorer is taking a while" notice — 3 s from the reset effect, cleared the moment a
+  // scorer is adopted (or the effect re-runs for a new card).
+  const notReadyTimerRef = useRef<number | null>(null)
   const stoppedRef = useRef(true)
 
   /** Every scorer swap goes through here, so the ref and the badge can never disagree. */
@@ -58,19 +74,44 @@ export function useSpeakingAttempt(opts: {
   }
 
   useEffect(() => {
-    setResult(null); setError(null); setScoring(false)
+    const isLocked = minutesToday(Date.now(), getActivity()) >= getLimitMinutes()
+    setLocked(isLocked)
+    setResult(null); setScoring(false)
     setWsRecording(false)
     stoppedRef.current = true
     if (timerRef.current) { clearTimeout(timerRef.current); timerRef.current = null }
+    if (notReadyTimerRef.current) { clearTimeout(notReadyTimerRef.current); notReadyTimerRef.current = null }
+
+    if (isLocked) {
+      setError({ kind: 'limit' })
+      return
+    }
+    setError(null)
+
     // A token round trip outlives the card that asked for it — a child tapping through a deck
     // starts one per word — and the answers can come back out of order. Without this the slow
     // first lookup lands last and overwrites the fresh card's scorer with the previous card's,
     // which on a bad token means the new card is quietly demoted to the simple engine.
     let cancelled = false
-    createScorer().then(bundle => { if (!cancelled) adoptScorer(bundle) })
+    notReadyTimerRef.current = window.setTimeout(() => {
+      // Only a report that the FIRST scorer is slow — once one has been adopted this timer has
+      // already been cleared below, so it never fires for an attempt that made it in time.
+      if (!scorerRef.current) setError({ kind: 'notReady' })
+    }, NOT_READY_MS)
+    createScorer().then(bundle => {
+      if (cancelled) return
+      if (notReadyTimerRef.current) { clearTimeout(notReadyTimerRef.current); notReadyTimerRef.current = null }
+      adoptScorer(bundle)
+      // Only the initial scorer for this card announces a fallback — the re-check inside
+      // startRecording swaps engines silently, or it would nag the child every single attempt.
+      if (bundle.fallbackReason && !sessionStorage.getItem(FALLBACK_NOTICED_KEY)) {
+        setError({ kind: 'fallback', detail: bundle.fallbackReason })
+      }
+    })
     return () => {
       cancelled = true
       if (timerRef.current) { clearTimeout(timerRef.current); timerRef.current = null }
+      if (notReadyTimerRef.current) { clearTimeout(notReadyTimerRef.current); notReadyTimerRef.current = null }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [opts.resetKey])
@@ -113,7 +154,7 @@ export function useSpeakingAttempt(opts: {
       setResult(r)
       onResultRef.current?.(r, onWebSpeech ? null : blob)
     } catch (e) {
-      setError('Không nghe rõ, bé thử lại nhé!'); console.error(e)
+      setError({ kind: 'noSpeech', detail: String(e) }); console.error(e)
     } finally {
       setScoring(false)
     }
@@ -126,7 +167,7 @@ export function useSpeakingAttempt(opts: {
 
   async function startRecording() {
     // The Azure re-check below is awaited, so a second tap could otherwise open the mic twice.
-    if (!scorerRef.current || scoring || startingRef.current) return
+    if (locked || !scorerRef.current || scoring || startingRef.current) return
     startingRef.current = true
     setStarting(true)
     try {
@@ -135,18 +176,20 @@ export function useSpeakingAttempt(opts: {
       // The Web Speech fallback is never permanent. One failed token fetch used to pin the whole
       // card to an engine that cannot score a single sound; now every attempt asks again, and the
       // moment Azure answers the child gets phoneme detail back — before the mic even opens.
+      // This re-check never repeats the fallback notice — that fires once, for the initial
+      // scorer only (see the reset effect above).
       if (active.engine === 'webspeech' && navigator.onLine) {
         const fresh = await createScorer()
         if (fresh.engine === 'azure') { adoptScorer(fresh); active = fresh }
       }
       if (active.engine === 'webspeech') {
-        if (!WebSpeechScorer.isSupported()) { setError('Trình duyệt này chưa hỗ trợ nhận dạng giọng nói'); return }
+        if (!WebSpeechScorer.isSupported()) { setError({ kind: 'unsupported' }); return }
         try {
           (active.scorer as LiveScorer).start()
           setWsRecording(true)
           armAutoStop()
         } catch (e) {
-          setError('Bé cho phép dùng mic nhé! 🎤'); console.error(e)
+          setError({ kind: 'mic' }); console.error(e)
         }
         return
       }
@@ -154,7 +197,7 @@ export function useSpeakingAttempt(opts: {
         await rec.start()
         armAutoStop()
       } catch (e) {
-        setError('Bé cho phép dùng mic nhé! 🎤'); console.error(e)
+        setError({ kind: 'mic' }); console.error(e)
       }
     } finally {
       // By here the mic is open (the recorder is already 'recording', the recognizer already
@@ -171,9 +214,21 @@ export function useSpeakingAttempt(opts: {
 
   function reset() { setResult(null); setError(null) }
 
+  /** The fallback notice is dismissed once and stays dismissed for the rest of the session; every
+   * other error is just cleared. */
+  function dismissError() {
+    setError(prev => {
+      if (prev?.kind === 'fallback') {
+        try { sessionStorage.setItem(FALLBACK_NOTICED_KEY, '1') } catch { /* ignore: storage unavailable */ }
+      }
+      return null
+    })
+  }
+
   // `starting` reads as 'processing' on purpose: MicButton already draws that as a busy,
-  // unpressable mic, which is exactly what a tap being worked on looks like.
-  const micState = !scorer ? 'disabled' : scoring || starting ? 'processing' : recording ? 'recording' : rec.state
+  // unpressable mic, which is exactly what a tap being worked on looks like. `locked` wins over
+  // everything else — a child over today's limit sees a locked mic, not a "preparing" one.
+  const micState = locked ? 'locked' : !scorer ? 'disabled' : scoring || starting ? 'processing' : recording ? 'recording' : rec.state
 
   return {
     micState,
@@ -184,5 +239,6 @@ export function useSpeakingAttempt(opts: {
     lastBlob,
     onMic,
     reset,
+    dismissError,
   }
 }

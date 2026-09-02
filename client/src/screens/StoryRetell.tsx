@@ -9,6 +9,7 @@ import { MISSION_ROUTE, RETURN_LABEL, useMissionFlag, useMissionNext } from '../
 import { saveRecording } from '../progress/recordings'
 import { playUrl, playBlob } from '../audio/player'
 import { useSpeakingAttempt } from '../speaking/useSpeakingAttempt'
+import { SPEAK_ERROR_COPY } from '../speaking/speakError'
 import { MicButton } from '../components/MicButton'
 import { Stars } from '../components/Stars'
 import { Foxy } from '../components/Foxy'
@@ -117,7 +118,7 @@ function StoryRetellInner({ story, id, inMission }: { story: Story; id: string; 
           </button>
         </Card>
 
-        {a.error && <p className="font-display text-2xl font-extrabold text-fix-700">{a.error}</p>}
+        {a.error && <p className="font-display text-2xl font-extrabold text-fix-700">{SPEAK_ERROR_COPY[a.error.kind].title}</p>}
 
         {stars !== null && (
           <section className="flex flex-col items-center gap-4">

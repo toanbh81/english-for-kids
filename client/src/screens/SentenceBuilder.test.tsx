@@ -15,6 +15,7 @@ function baseAttempt(): SpeakingAttempt {
     lastBlob: null,
     onMic: vi.fn(),
     reset: vi.fn(),
+    dismissError: vi.fn(),
   }
 }
 
