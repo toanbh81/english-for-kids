@@ -148,3 +148,57 @@ it('Escape cancels a dialog when it is not busy, resolving false', async () => {
   expect(onDone).toHaveBeenCalledWith(false)
   expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
 })
+
+/**
+ * Fix round 2: a busy dialog used to be replaceable, because `open()` had no notion of "busy" at
+ * all — it would resolve the busy request's promise `false` and hand its DOM node's props to a
+ * brand-new request (no `key`, so React reused the component instance instead of remounting),
+ * which meant the new dialog inherited the old one's `busy=true` local state and rendered
+ * permanently stuck (both controls disabled, confirm frozen on "…", focus effect never re-run).
+ * Reachable because every control INSIDE a busy dialog is disabled, so Tab escapes it and can
+ * land on a background trigger the screen forgot to disable.
+ */
+it('refuses to replace a busy dialog: the new request resolves false immediately, the busy one stays put', async () => {
+  const onDone = vi.fn()
+  const work = deferred<void>()
+  render(<DialogProvider><Harness onDone={onDone} delOnConfirm={() => work.promise} /></DialogProvider>)
+  fireEvent.click(screen.getByText('del'))
+  fireEvent.click(screen.getByRole('button', { name: 'Xoá tiến trình' }))
+  await act(async () => {})
+
+  expect(screen.getByRole('button', { name: '…' })).toBeDisabled()
+
+  // A different trigger the screen left enabled — as if Tab had escaped the disabled dialog.
+  fireEvent.click(screen.getByText('out'))
+  await act(async () => {})
+
+  // Refused immediately: `false`, with no wait for the busy dialog's own work.
+  expect(onDone).toHaveBeenCalledTimes(1)
+  expect(onDone).toHaveBeenLastCalledWith(false)
+  // Still the ORIGINAL (destructive) dialog on screen, still busy — not replaced by a sign-out one.
+  expect(screen.getByText('Xoá toàn bộ tiến trình của bé?')).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: '…' })).toBeDisabled()
+
+  await act(async () => { work.resolve(); await Promise.resolve() })
+
+  expect(onDone).toHaveBeenCalledTimes(2)
+  expect(onDone).toHaveBeenLastCalledWith(true)
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+})
+
+/** Fix round 2: a genuinely replaced (non-busy) request must remount fresh — not disabled, and
+ * focused on its own confirm button — rather than inheriting whatever the PREVIOUS request's
+ * component instance last rendered. */
+it('a fresh dialog opened after the previous one closes is not disabled and is focused', async () => {
+  const onDone = vi.fn()
+  render(<DialogProvider><Harness onDone={onDone} /></DialogProvider>)
+  fireEvent.click(screen.getByText('del'))
+  fireEvent.click(screen.getByRole('button', { name: 'Huỷ' }))
+  await act(async () => {})
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+
+  fireEvent.click(screen.getByText('out'))
+  const confirmButton = screen.getByRole('button', { name: 'Đăng xuất' })
+  expect(confirmButton).not.toBeDisabled()
+  expect(confirmButton).toHaveFocus()
+})

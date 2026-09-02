@@ -5,27 +5,38 @@ import { useCallback, useEffect, useRef, useState } from 'react'
  * button colour — a plain "OK, are you sure" vs. an irreversible-and-red one — and `prompt` swaps
  * the body paragraph for a labelled input with its own maxLength/counter.
  *
+ * `id` is a per-request counter minted by `DialogProvider.open()` — it becomes this component's
+ * React `key`, so a request that replaces another always remounts (fresh `busy`, fresh `value`,
+ * the focus effect re-running) instead of the new request's props landing on the OLD instance.
+ *
  * `onConfirm`/`onSubmit` are optional: when the caller passes one, the confirm/save button keeps
  * this dialog open and `busy` (see below) until the callback settles, instead of resolving and
  * closing immediately.
  */
 export type DialogRequest =
-  | { kind: 'confirm' | 'destructive'; title: string; body: string; confirmLabel: string; cancelLabel?: string; onConfirm?: () => Promise<unknown>; resolve: (v: boolean) => void }
-  | { kind: 'prompt'; title: string; label: string; initial?: string; maxLength?: number; confirmLabel?: string; onSubmit?: (value: string) => Promise<unknown>; resolve: (v: string | null) => void }
+  | { id: number; kind: 'confirm' | 'destructive'; title: string; body: string; confirmLabel: string; cancelLabel?: string; onConfirm?: () => Promise<unknown>; resolve: (v: boolean) => void }
+  | { id: number; kind: 'prompt'; title: string; label: string; initial?: string; maxLength?: number; confirmLabel?: string; onSubmit?: (value: string) => Promise<unknown>; resolve: (v: string | null) => void }
 
 /**
  * Adult UI (brief §2.8): 44 px controls, 12–14 px text, no Foxy — the same register as the rest
  * of `ParentDashboard`, not the 64 px child screens.
  *
  * `busy` is local state, not a prop from `DialogProvider`: it belongs to the one action THIS
- * dialog's confirm/save button just triggered, and nothing outside this component needs to see it
- * mid-flight — the provider only ever learns the final answer, once, when `resolve` fires.
+ * dialog's confirm/save button just triggered. `onBusyChange` mirrors it up to the provider
+ * anyway — not because the provider renders anything from it, but because `open()` needs to know
+ * SYNCHRONOUSLY, before this dialog's next render, whether it may replace the current request (a
+ * busy dialog must never be torn down mid-action by some OTHER trigger the parent screen left
+ * enabled — see `DialogProvider`).
  */
-export function Dialog({ req }: { req: DialogRequest }) {
+export function Dialog({ req, onBusyChange }: { req: DialogRequest; onBusyChange?: (busy: boolean) => void }) {
   const [value, setValue] = useState(req.kind === 'prompt' ? (req.initial ?? '') : '')
   const [busy, setBusy] = useState(false)
+  useEffect(() => { onBusyChange?.(busy) }, [busy, onBusyChange])
+
   // The element that gets focus on open: the confirm/destructive button for those two kinds (so a
-  // keyboard/AT user lands on the one control that matters), the input for a prompt.
+  // keyboard/AT user lands on the one control that matters), the input for a prompt. Runs once on
+  // mount — which, now that a replaced request remounts this whole component (see `id` above), is
+  // once per REQUEST, not once ever.
   const first = useRef<HTMLElement>(null)
   useEffect(() => { first.current?.focus() }, [])
 

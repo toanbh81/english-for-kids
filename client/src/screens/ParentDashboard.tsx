@@ -145,11 +145,14 @@ type Props = {
 export function ParentDashboard({ onLock }: Props) {
   const dialog = useDialog()
   const [recordings, setRecordings] = useState<Recording[]>([])
-  // Disables the "Đặt lại tiến trình" trigger for the whole span the confirm dialog is open
-  // AND busy (see `Dialog`'s `onConfirm`) — a double-tap must not open a second dialog over an
-  // unfinished reset, which the dialog's own "one request at a time" replace-and-cancel would
-  // otherwise do (the second dialog would cancel the first mid-flight, not queue behind it).
+  // Disables the "Đặt lại tiến trình"/"Đăng xuất" triggers for the whole span their own
+  // confirm dialog is open AND busy (see `Dialog`'s `onConfirm`). `DialogProvider` itself now
+  // refuses to replace a busy dialog (fix round 2), so this is belt-and-braces rather than the
+  // only guard — but it is the one thing that keeps a BACKGROUND trigger from even reaching
+  // `open()` in the first place, e.g. Tab escaping the disabled dialog while its own action is
+  // still in flight.
   const [resetBusy, setResetBusy] = useState(false)
+  const [signOutBusy, setSignOutBusy] = useState(false)
   // One read of the activity log per mount (and per reset), shared by every query below; the
   // snapshot doubles as the reload key for the recordings list.
   const [snapshot, setSnapshot] = useState(() => ({ events: getActivity(), now: Date.now() }))
@@ -466,6 +469,8 @@ export function ParentDashboard({ onLock }: Props) {
   }
 
   async function handleSignOut() {
+    if (signOutBusy) return
+    setSignOutBusy(true)
     // Same shape as `handleReset`: the actual work is `onConfirm`, so the dialog stays open and
     // busy for exactly as long as `signOut()` takes, and closes itself once it settles.
     await dialog.confirm({
@@ -479,6 +484,7 @@ export function ParentDashboard({ onLock }: Props) {
         if (result.ok) { setEmail(null); setHasSession(false) }
       },
     })
+    setSignOutBusy(false)
   }
 
   async function handleAddProfile() {
@@ -638,7 +644,8 @@ export function ParentDashboard({ onLock }: Props) {
                 <button
                   type="button"
                   onClick={() => { void handleSignOut() }}
-                  className="min-h-[44px] rounded-xl2 border border-line-200 px-3 text-xs font-semibold text-ink-500"
+                  disabled={signOutBusy}
+                  className="min-h-[44px] rounded-xl2 border border-line-200 px-3 text-xs font-semibold text-ink-500 disabled:opacity-50"
                 >
                   Đăng xuất
                 </button>
