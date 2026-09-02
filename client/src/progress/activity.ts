@@ -175,6 +175,22 @@ export function weekDots(
   return dots
 }
 
+/** The longest run of consecutive completed days on record — unlike `streak()`, it does not need
+ * to end today, so a child's best-ever run stays visible even after a day off breaks it. */
+export function longestStreak(events = getActivity(), lessonLookup: LessonLookup = lessonForDay): number {
+  const days = [...completedDays(events, lessonLookup)].sort()
+  let best = 0
+  let run = 0
+  let prev: number | null = null
+  for (const d of days) {
+    const t = new Date(d + 'T00:00:00').getTime()
+    run = prev !== null && Math.round((t - prev) / DAY_MS) === 1 ? run + 1 : 1
+    best = Math.max(best, run)
+    prev = t
+  }
+  return best
+}
+
 function sessionMinutes(events: ActivityEvent[]): number {
   const sorted = events.slice().sort((a, b) => a.ts - b.ts)
   let total = 0

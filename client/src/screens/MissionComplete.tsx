@@ -1,8 +1,8 @@
 import { useState } from 'react'
-import { dayKey, getActivity, streak } from '../progress/activity'
+import { dayKey, getActivity, streak, weekDots } from '../progress/activity'
 import { Confetti } from '../components/Confetti'
 import { Foxy } from '../components/Foxy'
-import { Button, HomeLabel } from '../components/ui'
+import { Button, HomeLabel, WeekDots } from '../components/ui'
 import { PageShell, PageBody, PageFooter } from '../components/ui/page'
 
 // "Stars earned today" has no store of its own — stars are kept per card, not per day. So the
@@ -44,6 +44,10 @@ export function MissionComplete() {
             value the 30 px pill has always resolved against. */}
         <div className="inline-flex items-center gap-2 rounded-full bg-sun-50 px-8 py-3 font-display text-2xl font-extrabold text-sun-700 shadow-chunky-sun md:text-[30px] md:leading-normal">
           +{starsToday} ⭐
+        </div>
+
+        <div className="w-full max-w-[380px]">
+          <WeekDots dots={weekDots(now, events)} />
         </div>
 
         <p className="font-display text-base font-extrabold text-ink-500 md:text-2xl">

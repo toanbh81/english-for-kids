@@ -1,31 +1,45 @@
-const LABELS = ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN']
+import { useState } from 'react'
+import { StreakPanel } from './StreakPanel'
+import { WeekDots } from './ui/WeekDots'
 
-/** The week pill of the island-map header: seven 30 px day circles — a sun-yellow star for a day
- * whose mission was finished, a dashed empty ring for one that was not — and the streak count. */
-export function StreakWeek({ dots, streak }: { dots: { day: string; done: boolean; isToday: boolean }[]; streak: number }) {
+/** The week pill of the island-map header: a compact 24 px week trail plus the streak count,
+ * wrapped in a button — tapping it opens `StreakPanel` with the numbers the strip has no room for
+ * (the longest run and this week's minutes). */
+export function StreakWeek({
+  dots, streak, longest, weekMinutes, stars, minutes,
+}: {
+  dots: { day: string; done: boolean; isToday: boolean }[]
+  streak: number
+  longest: number
+  weekMinutes: number
+  stars: number
+  minutes?: number[]
+}) {
+  const [open, setOpen] = useState(false)
+
   return (
-    <div className="inline-flex items-center gap-3 rounded-[18px] bg-white px-4 py-2.5 shadow-card-sm">
-      <div className="flex gap-1.5">
-        {dots.map((dot, i) => (
-          <div key={dot.day} className="flex flex-col items-center gap-1">
-            <span className="text-[11px] font-extrabold text-ink-300">{LABELS[i]}</span>
-            <span
-              data-testid="streak-dot"
-              data-today={dot.isToday}
-              className={[
-                'flex h-[30px] w-[30px] items-center justify-center rounded-full text-base leading-none',
-                dot.done
-                  ? 'bg-sun-400 text-white'
-                  : 'border-2 border-dashed border-[#D9CBB4] bg-[#F3EADA] text-[#D9CBB4]',
-                dot.isToday ? 'ring-2 ring-coral-500 ring-offset-2 ring-offset-white' : '',
-              ].filter(Boolean).join(' ')}
-            >
-              {dot.done ? '★' : '○'}
-            </span>
-          </div>
-        ))}
-      </div>
-      <div className="font-display text-lg font-extrabold text-ink-900">🔥 {streak} ngày</div>
+    <div className="relative">
+      <button
+        type="button"
+        aria-label="Tuần này của con"
+        aria-expanded={open}
+        onClick={() => setOpen(o => !o)}
+        className="inline-flex min-h-[44px] min-w-[64px] items-center gap-3 rounded-[18px] bg-white px-4 py-2.5 shadow-card-sm"
+      >
+        <WeekDots dots={dots} size="sm" />
+        <div className="font-display text-lg font-extrabold text-ink-900">🔥 {streak} ngày</div>
+      </button>
+      {open && (
+        <StreakPanel
+          streak={streak}
+          longest={longest}
+          weekMinutes={weekMinutes}
+          stars={stars}
+          dots={dots}
+          minutes={minutes}
+          onClose={() => setOpen(false)}
+        />
+      )}
     </div>
   )
 }

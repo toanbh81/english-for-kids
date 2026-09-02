@@ -1,6 +1,6 @@
 import {
   logActivity, getActivity, dayKey, missionStatus, completedDays, streak, weekDots,
-  minutesPerDay, minutesToday, weakPhonemes, averageScoreByKind, clearActivity,
+  minutesPerDay, minutesToday, weakPhonemes, averageScoreByKind, clearActivity, longestStreak,
 } from './activity'
 import type { ActivityEvent } from './activity'
 import { getLesson, setLessonLength } from './lesson'
@@ -89,6 +89,22 @@ it('weekDots returns Mon..Sun with isToday marked exactly once', () => {
   expect(dots[6].day).toBe(dayKey(BASE)) // Sunday == today
   expect(dots[6].isToday).toBe(true)
   expect(dots[6].done).toBe(true)
+})
+
+it('longestStreak finds the longest run of completed days, not just the one ending today', () => {
+  // A 3-day run, a gap, then a 2-day run that ends today: streak() would answer 2, longestStreak
+  // must still find the earlier 3.
+  logMissionDay(BASE - 10 * DAY)
+  logMissionDay(BASE - 9 * DAY)
+  logMissionDay(BASE - 8 * DAY)
+  logMissionDay(BASE - DAY)
+  logMissionDay(BASE)
+  expect(longestStreak(getActivity())).toBe(3)
+  expect(streak(BASE)).toBe(2)
+})
+
+it('longestStreak is 0 with no completed days', () => {
+  expect(longestStreak(getActivity())).toBe(0)
 })
 
 it('minutesPerDay returns an entry per requested day, ending today', () => {

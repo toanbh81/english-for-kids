@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { TOPICS } from '../content/topics'
 import { totalStars } from '../progress/store'
-import { dayKey, getActivity, missionStatus, streak, weekDots, minutesToday } from '../progress/activity'
+import { dayKey, getActivity, missionStatus, streak, weekDots, minutesToday, longestStreak, minutesPerDay } from '../progress/activity'
 import { lessonStatus } from '../progress/lesson'
 import { hasAnyHistory, sumHistory } from '../progress/history'
 import { getLimitMinutes } from '../progress/limit'
@@ -177,6 +177,9 @@ export function Home() {
     return { events, now, lesson: lessonStatus(now, events) }
   })
   const counters = missionStatus(now, events)
+  // Shared by the streak strip's compact "🔥 N ngày" and its panel's per-day minute labels and
+  // "Tuần này" tile — the same seven days ParentDashboard sums for its own "Tuần này" line.
+  const weekMinutesDays = minutesPerDay(7, now, events)
   // TODAY's work, and only today's: `missionStatus` and `lessonStatus` both filter the log to the
   // current day. It is the right question for Foxy's mood and greeting ("Giỏi lắm, tiếp tục nhé!"
   // is about this morning) and the wrong one for anything about the child's history — see
@@ -372,12 +375,15 @@ export function Home() {
           />
         </div>
 
-        {/* `data-today` is on the seven day circles, and only there. `StreakWeek` draws them at
-          * the map's 30 px, which with their labels and the streak count is wider than a 320 px
-          * phone — so the phone shrinks them in place to 24 px until the design's compact
-          * seven-dot variant exists (brief §16). Back to 30 px from `ipad` up, untouched. */}
-        <div className="flex flex-wrap items-center gap-2 [&_[data-today]]:h-6 [&_[data-today]]:w-6 [&_[data-today]]:text-sm ipad:gap-3 ipad:[&_[data-today]]:h-[30px] ipad:[&_[data-today]]:w-[30px] ipad:[&_[data-today]]:text-base">
-          <StreakWeek dots={weekDots(now, events)} streak={streak(now, events)} />
+        <div className="flex flex-wrap items-center gap-2 ipad:gap-3">
+          <StreakWeek
+            dots={weekDots(now, events)}
+            streak={streak(now, events)}
+            longest={longestStreak(events)}
+            weekMinutes={weekMinutesDays.reduce((sum, d) => sum + d.minutes, 0)}
+            stars={totalStars()}
+            minutes={weekMinutesDays.map(d => d.minutes)}
+          />
           {/* The star total is the design's 13 px line under the greeting on a phone and the
             * chunky sun pill of the map from `ipad` up — one element, restyled, so the number
             * is never in the page twice. */}

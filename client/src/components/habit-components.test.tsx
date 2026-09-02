@@ -1,9 +1,10 @@
-import { act, render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { Confetti } from './Confetti'
 import { Foxy } from './Foxy'
 import { MissionCard } from './MissionCard'
 import { StreakWeek } from './StreakWeek'
+import { WeekDots } from './ui/WeekDots'
 
 describe('Foxy', () => {
   it('draws the mascot and reports its mood', () => {
@@ -73,25 +74,80 @@ describe('MissionCard', () => {
   })
 })
 
-describe('StreakWeek', () => {
-  it('shows 7 dots labeled Mon..Sun with today marked and the streak count', () => {
-    const dots = [
-      { day: '2026-08-17', done: true, isToday: false },
-      { day: '2026-08-18', done: true, isToday: false },
-      { day: '2026-08-19', done: false, isToday: false },
-      { day: '2026-08-20', done: false, isToday: false },
-      { day: '2026-08-21', done: false, isToday: false },
-      { day: '2026-08-22', done: false, isToday: false },
-      { day: '2026-08-23', done: false, isToday: true },
-    ]
-    render(<StreakWeek dots={dots} streak={2} />)
+// Monday..Sunday, index 4 (Friday) is today; 5 and 6 (Sat/Sun) are still to come.
+const sevenDots = [
+  { day: '2026-08-01', done: true, isToday: false },
+  { day: '2026-08-02', done: true, isToday: false },
+  { day: '2026-08-03', done: false, isToday: false },
+  { day: '2026-08-04', done: false, isToday: false },
+  { day: '2026-08-05', done: false, isToday: true },
+  { day: '2026-08-06', done: false, isToday: false },
+  { day: '2026-08-07', done: false, isToday: false },
+]
+
+describe('WeekDots', () => {
+  it('draws seven 34px dots, marks today and dims the future', () => {
+    render(<WeekDots dots={sevenDots} minutes={[14, 18, 9, 16, 0, 0, 0]} />)
 
     for (const label of ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN']) {
       expect(screen.getByText(label)).toBeInTheDocument()
     }
-    expect(screen.getAllByText('★')).toHaveLength(2)
-    expect(screen.getAllByText('○')).toHaveLength(5)
+    const dots = screen.getAllByTestId('streak-dot')
+    expect(dots).toHaveLength(7)
+    expect(dots[0]).toHaveClass('h-[34px]', 'bg-sun-400')
+    expect(dots[4]).toHaveAttribute('data-today', 'true')
+    expect(dots[4]).toHaveClass('ring-[4px]', 'ring-today')
+    expect(dots[6]).toHaveClass('opacity-45')
+    expect(dots[0]).not.toHaveClass('opacity-45')
+    expect(screen.getByText("14'")).toBeInTheDocument()
+  })
+
+  it('shrinks to 24px with size="sm" and skips per-day minutes without a minutes prop', () => {
+    render(<WeekDots dots={sevenDots} size="sm" />)
+    const dots = screen.getAllByTestId('streak-dot')
+    expect(dots[0]).toHaveClass('h-6', 'w-6')
+    expect(screen.queryByText("14'")).not.toBeInTheDocument()
+  })
+})
+
+describe('StreakWeek', () => {
+  it('shows the compact strip with today marked and the streak count', () => {
+    render(<MemoryRouter><StreakWeek dots={sevenDots} streak={2} longest={5} weekMinutes={30} stars={10} /></MemoryRouter>)
+    expect(screen.getAllByTestId('streak-dot')).toHaveLength(7)
     expect(screen.getByText('🔥 2 ngày')).toBeInTheDocument()
+    expect(screen.queryByRole('dialog')).toBeNull()
+  })
+
+  it('tapping the streak strip opens the panel with the three numbers, and Đóng or Escape closes it', () => {
+    render(<MemoryRouter><StreakWeek dots={sevenDots} streak={4} longest={9} weekMinutes={57} stars={128} /></MemoryRouter>)
+    const trigger = screen.getByRole('button', { name: /Tuần này/ })
+    expect(trigger).toHaveAttribute('aria-expanded', 'false')
+    fireEvent.click(trigger)
+    expect(trigger).toHaveAttribute('aria-expanded', 'true')
+
+    const sheet = screen.getByRole('dialog', { name: 'Tuần này của con 🔥' })
+    expect(sheet).toHaveTextContent('4 ngày')
+    expect(sheet).toHaveTextContent('9 ngày')
+    expect(sheet).toHaveTextContent("57'")
+    expect(sheet).toHaveTextContent('⭐ 128')
+    expect(sheet).toHaveClass('rounded-t-r28', 'ipad:rounded-r22')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Đóng' }))
+    expect(screen.queryByRole('dialog')).toBeNull()
+  })
+
+  it('closes on Escape', () => {
+    render(<MemoryRouter><StreakWeek dots={sevenDots} streak={1} longest={1} weekMinutes={5} stars={2} /></MemoryRouter>)
+    fireEvent.click(screen.getByRole('button', { name: /Tuần này/ }))
+    expect(screen.getByRole('dialog')).toBeInTheDocument()
+    fireEvent.keyDown(window, { key: 'Escape' })
+    expect(screen.queryByRole('dialog')).toBeNull()
+  })
+
+  it('says "bắt đầu hôm nay" instead of a streak number when the streak is 0', () => {
+    render(<MemoryRouter><StreakWeek dots={sevenDots} streak={0} longest={3} weekMinutes={0} stars={0} /></MemoryRouter>)
+    fireEvent.click(screen.getByRole('button', { name: /Tuần này/ }))
+    expect(screen.getByRole('dialog')).toHaveTextContent('0 ngày · bắt đầu hôm nay nhé!')
   })
 })
 

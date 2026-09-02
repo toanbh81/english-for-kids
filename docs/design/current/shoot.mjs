@@ -136,6 +136,7 @@ async function run(vpName, vp) {
   // ---------- seeded child ----------
   await seed(page)
   await S('home', '/')
+  await S('home-streak-panel', null, async () => { await page.getByRole('button', { name: /Tuần này/ }).click(); await sleep(300) })
   await S('mission', '/mission')
   await S('mission-done', '/mission/done')
   await S('topic-animals', '/topic/animals')
