@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <meta name="design_doc_mode" content="canvas">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&family=Nunito:wght@600;700;800&display=swap" rel="stylesheet">
+  <style>
+    html,body{margin:0;padding:0;background:#EFE5D6;}
+    *{box-sizing:border-box;-webkit-font-smoothing:antialiased;}
+    a{color:#F2603D;} a:hover{color:#C94E30;}
+    @keyframes spin{to{transform:rotate(360deg)}}
+    @keyframes shimmer{0%{background-position:-200px 0}100%{background-position:200px 0}}
+  </style>
+</helmet>
+<div style="font-family:'Nunito',sans-serif;color:#4A3B33;padding:48px 56px 120px;display:flex;flex-direction:column;gap:64px;">
+
+  <div style="max-width:1300px;display:flex;flex-direction:column;gap:14px;">
+    <div style="font-family:'Baloo 2',sans-serif;font-size:40px;font-weight:800;">👨‍👩‍👧 Speak Up! — Vòng 4: Khu người lớn</div>
+    <div style="font-size:17px;font-weight:700;color:#8A7A6D;max-width:1100px;line-height:1.6;">Giao diện <b>người lớn</b>: chữ 13–14px, phụ 12px, vùng chạm <b>44px</b> duy nhất (không 36/48/64 lẫn lộn), nút người lớn từ <a href="Speak Up Foundation.dc.html">Vòng 1</a>, dialog thật thay window.confirm/prompt, notice 6 loại, sync 7 trạng thái. Dữ liệu xấu nhất: tên "Nguyễn Hoàng Bảo Ngọc Anh Thư", email 61 ký tự, 8 hồ sơ trùng tên "Bé", 20 bản ghi, giá trị giới hạn tuỳ chỉnh 25'.</div>
+    <div style="display:flex;gap:16px;flex-wrap:wrap;">
+      <div style="flex:1;min-width:360px;background:#FFFFFF;border-radius:20px;padding:18px 22px;box-shadow:0 6px 0 #E2D5C0;font-size:14px;line-height:1.7;">
+        <div style="font-family:'Baloo 2',sans-serif;font-size:18px;font-weight:800;margin-bottom:6px;">Một ngôn ngữ cho 3 cổng</div>
+        <b>Thẻ cổng</b>: trắng, radius 20, padding 20, width <b>min(420, 100% − 32)</b>, căn giữa dọc cả 3 frame (iPad không cần 2 cột — nội dung ngắn; nền có blob mờ để không trống). Back người lớn 44 có nhãn ở góc trên trái, ngoài thẻ.<br>
+        <b>Trong thẻ</b>: tiêu đề 18px Baloo · phụ 13px · thân · hàng nút 44 (hành động phải) · link chữ 13px min-h 44. <b>Dải lỗi nằm dưới ô nhập</b> (không đẩy form), 1 dòng 12px đỏ + icon; lỗi dài → tối đa 2 dòng.<br>
+        <b>Không dùng nút trẻ em</b> (56/64) ở bất kỳ màn nào trong nhóm này.
+      </div>
+      <div style="flex:1;min-width:360px;background:#FFFFFF;border-radius:20px;padding:18px 22px;box-shadow:0 6px 0 #E2D5C0;font-size:14px;line-height:1.7;">
+        <div style="font-family:'Baloo 2',sans-serif;font-size:18px;font-weight:800;margin-bottom:6px;">Dashboard — 10 panel, 3 frame</div>
+        Panel = thẻ trắng radius 16, padding 14, tiêu đề 14px 800, thân 13px. <b>Lưới</b>: phone 1 cột · iPad dọc 2 cột (Tài khoản full-width có 2 cột trong) · iPad ngang 3 cột. Tiến độ từ xa full-width cuối; <b>"Đặt lại tiến trình"</b> = nút outline 44 đỏ nhạt, riêng một hàng cuối cùng, cách panel trên 24px, kèm mô tả 12px.<br>
+        Mọi chuỗi động <b>truncate</b> (email `break-all` 1 dòng + tooltip, tên hồ sơ ellipsis, câu bản ghi 1 dòng). Không có `<p>` trần: empty state theo Vòng 1.
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= 1. CỔNG NGƯỜI LỚN ================= -->
+  <div style="display:flex;flex-direction:column;gap:22px;">
+    <div style="display:flex;align-items:center;gap:12px;"><span style="background:#4A3B33;color:#FFF7EA;font-family:'Baloo 2',sans-serif;font-size:15px;font-weight:800;padding:6px 14px;border-radius:12px;">1</span><span style="font-family:'Baloo 2',sans-serif;font-size:26px;font-weight:800;">Ba cổng: ParentGate (P1) · ProfileGate (A1) · CloudStart (A2)</span></div>
+
+    <div style="display:flex;gap:28px;flex-wrap:wrap;align-items:flex-start;">
+      <!-- ParentGate phone -->
+      <div style="display:flex;flex-direction:column;gap:10px;">
+        <div style="font-size:13px;font-weight:800;color:#8A7A6D;">P1 ParentGate · phone · trạng thái sai</div>
+        <div data-screen-label="P1 ParentGate phone" style="width:390px;height:844px;background:#FFF7EA;border-radius:44px;position:relative;overflow:hidden;box-shadow:0 18px 50px rgba(74,59,51,.18);">
+          <div style="position:absolute;left:50%;top:12px;transform:translateX(-50%);width:118px;height:32px;border-radius:18px;background:#2B2320;z-index:20;"></div>
+          <div style="position:absolute;left:-90px;bottom:-110px;width:280px;height:280px;border-radius:50%;background:#F3EADA;"></div>
+          <div style="position:absolute;inset:0;padding:55px 16px 44px;display:flex;flex-direction:column;">
+            <div style="height:56px;display:flex;align-items:center;"><div style="height:44px;padding:0 14px 0 10px;border-radius:14px;background:#FFFFFF;box-shadow:0 3px 0 #EFE2CC;display:flex;align-items:center;gap:6px;font-size:14px;font-weight:800;color:#8A7A6D;"><span style="font-size:18px;">←</span>Về nhà</div></div>
+            <div style="flex:1;display:flex;align-items:center;justify-content:center;">
+              <div style="width:100%;background:#FFFFFF;border-radius:20px;padding:20px;box-shadow:0 6px 0 #EFE2CC;display:flex;flex-direction:column;gap:12px;">
+                <div><div style="font-family:'Baloo 2',sans-serif;font-size:18px;font-weight:800;">Dành cho phụ huynh</div><div style="font-size:13px;font-weight:700;color:#8A7A6D;">Trả lời phép tính để vào Góc phụ huynh.</div></div>
+                <div style="display:flex;align-items:center;justify-content:center;gap:12px;padding:8px 0;"><span style="font-family:'Baloo 2',sans-serif;font-size:32px;font-weight:800;">7 × 4 =</span><div style="width:96px;height:44px;border:2px solid #C2354B;border-radius:12px;display:flex;align-items:center;justify-content:center;font-family:'Baloo 2',sans-serif;font-size:20px;font-weight:800;background:#FFFFFF;"></div></div>
+                <div style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:800;color:#C2354B;min-height:18px;"><span>⛔</span>Chưa đúng — câu hỏi đã đổi, thử lại nhé.</div>
+                <div style="display:flex;justify-content:flex-end;gap:10px;"><div style="height:44px;padding:0 18px;border-radius:12px;background:#FF7A59;color:#FFFFFF;display:flex;align-items:center;font-size:14px;font-weight:800;box-shadow:0 3px 0 #E05A3A;">Vào</div></div>
+              </div>
+            </div>
+          </div>
+          <div style="position:absolute;left:50%;bottom:8px;transform:translateX(-50%);width:130px;height:5px;border-radius:3px;background:#D9CBB4;"></div>
+        </div>
+        <div style="width:390px;background:#FFFDF7;border:2px dashed #E2D5C0;border-radius:16px;padding:13px 16px;font-size:13px;line-height:1.6;color:#6B5B4D;">Phép tính 32px (không 44), ô nhập 96×44, nút Vào 44 phải. Dòng lỗi 12px giữ chỗ 18px sẵn (không nhảy), <b>tự tắt khi bắt đầu gõ</b>. Gửi rỗng → "Nhập kết quả trước nhé" (không đổi câu hỏi). Rung ô nhập 300ms khi sai.</div>
+      </div>
+
+      <!-- ParentGate iPad -->
+      <div style="display:flex;flex-direction:column;gap:10px;">
+        <div style="font-size:13px;font-weight:800;color:#8A7A6D;">P1 ParentGate · iPad ngang · thẻ 420 giữa, blob lấp nền</div>
+        <div data-screen-label="P1 ParentGate iPad ngang" style="width:1194px;height:834px;background:#FFF7EA;border-radius:28px;position:relative;overflow:hidden;box-shadow:0 18px 50px rgba(74,59,51,.18);">
+          <div style="position:absolute;left:-120px;bottom:-160px;width:420px;height:420px;border-radius:50%;background:#F3EADA;"></div>
+          <div style="position:absolute;right:-100px;top:-120px;width:360px;height:360px;border-radius:50%;background:#E2F6F1;"></div>
+          <div style="position:absolute;inset:0;padding:20px 24px 24px;display:flex;flex-direction:column;">
+            <div style="height:64px;display:flex;align-items:center;"><div style="height:44px;padding:0 14px 0 10px;border-radius:14px;background:#FFFFFF;box-shadow:0 3px 0 #EFE2CC;display:flex;align-items:center;gap:6px;font-size:14px;font-weight:800;color:#8A7A6D;"><span style="font-size:18px;">←</span>Về bản đồ</div></div>
+            <div style="flex:1;display:flex;align-items:center;justify-content:center;">
+              <div style="width:420px;background:#FFFFFF;border-radius:20px;padding:20px;box-shadow:0 6px 0 #EFE2CC;display:flex;flex-direction:column;gap:12px;">
+                <div><div style="font-family:'Baloo 2',sans-serif;font-size:18px;font-weight:800;">Dành cho phụ huynh</div><div style="font-size:13px;font-weight:700;color:#8A7A6D;">Trả lời phép tính để vào Góc phụ huynh.</div></div>
+                <div style="display:flex;align-items:center;justify-content:center;gap:12px;padding:8px 0;"><span style="font-family:'Baloo 2',sans-serif;font-size:32px;font-weight:800;">8 × 8 =</span><div style="width:96px;height:44px;border:2px solid #E2D5C0;border-radius:12px;background:#FFFFFF;"></div></div>
+                <div style="min-height:18px;"></div>
+                <div style="display:flex;justify-content:flex-end;gap:10px;"><div style="height:44px;padding:0 18px;border-radius:12px;background:#FF7A59;color:#FFFFFF;display:flex;align-items:center;font-size:14px;font-weight:800;box-shadow:0 3px 0 #E05A3A;">Vào</div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ProfileGate -->
+    <div style="display:flex;gap:28px;flex-wrap:wrap;align-items:flex-start;">
+      <div style="display:flex;flex-direction:column;gap:10px;">
+        <div style="font-size:13px;font-weight:800;color:#8A7A6D;">A1 ProfileGate · overlay sau 5 phút (đè app mờ) · 8 hồ sơ, tên dài, trùng tên</div>
+        <div data-screen-label="A1 ProfileGate overlay phone" style="width:390px;height:844px;background:#FFF7EA;border-radius:44px;position:relative;overflow:hidden;box-shadow:0 18px 50px rgba(74,59,51,.18);">
+          <div style="position:absolute;left:50%;top:12px;transform:translateX(-50%);width:118px;height:32px;border-radius:18px;background:#2B2320;z-index:20;"></div>
+          <div style="position:absolute;inset:0;padding:56px 16px 44px;display:flex;flex-direction:column;gap:10px;filter:blur(2px);opacity:.6;">
+            <div style="height:52px;display:flex;align-items:center;gap:8px;"><div style="width:54px;height:52px;">{{ foxIdle }}</div><div style="font-family:'Baloo 2',sans-serif;font-size:19px;font-weight:800;color:#F2603D;">Chào con! 👋</div></div>
+            <div style="height:128px;background:#FFFFFF;border-radius:22px;box-shadow:0 6px 0 #EFE2CC;"></div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;"><div style="height:110px;background:#FFFFFF;border-radius:22px;"></div><div style="height:110px;background:#FFFFFF;border-radius:22px;"></div><div style="height:110px;background:#FFFFFF;border-radius:22px;"></div><div style="height:110px;background:#FFFFFF;border-radius:22px;"></div></div>
+          </div>
+          <div style="position:absolute;inset:0;background:rgba(74,59,51,.45);display:flex;align-items:center;justify-content:center;padding:16px;">
+            <div style="width:100%;background:#FFFFFF;border-radius:20px;padding:20px;box-shadow:0 16px 40px rgba(43,35,32,.3);display:flex;flex-direction:column;gap:12px;">
+              <div style="display:flex;align-items:center;gap:10px;"><div style="width:44px;height:42px;">{{ foxIdle }}</div><div><div style="font-family:'Baloo 2',sans-serif;font-size:18px;font-weight:800;">Ai đang học nào? 👋</div><div style="font-size:13px;font-weight:700;color:#8A7A6D;">Chạm vào tên của con nhé.</div></div></div>
+              <div style="max-height:380px;overflow:hidden;position:relative;">
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+                  <sc-for list="{{ profiles8 }}" as="p" hint-placeholder-count="8"><div style="{{ p.st }}"><span style="font-size:26px;line-height:1;">🦊</span><span style="font-size:14px;font-weight:800;line-height:1.2;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;">{{ p.n }}</span><span style="font-size:11px;font-weight:700;color:#B0A18E;">{{ p.sub }}</span></div></sc-for>
+                </div>
+                <div style="position:absolute;left:0;right:0;bottom:0;height:36px;background:linear-gradient(180deg,rgba(255,255,255,0),#FFFFFF);"></div>
+              </div>
+              <div style="font-size:12px;font-weight:700;color:#B0A18E;text-align:center;">8 hồ sơ · cuộn xem thêm</div>
+            </div>
+          </div>
+          <div style="position:absolute;left:50%;bottom:8px;transform:translateX(-50%);width:130px;height:5px;border-radius:3px;background:#D9CBB4;"></div>
+        </div>
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:14px;width:520px;">
+        <div style="background:#FFFFFF;border-radius:20px;padding:16px 18px;box-shadow:0 6px 0 #E2D5C0;display:flex;flex-direction:column;gap:10px;">
+          <div style="font-family:'Baloo 2',sans-serif;font-size:17px;font-weight:800;">ProfilePicker — 1 component, 3 mật độ</div>
+          <div style="font-size:12px;color:#6B5B4D;line-height:1.55;"><b>2–3 hồ sơ</b>: 1 hàng, ô flex:1 cao 96 (avatar 30 + tên 15 + phân biệt 11). <b>4–8</b>: lưới 2 cột (phone) / 4 cột (iPad), ô 88, vùng cuộn max 380 + fade. <b>1 hồ sơ</b>: không hiện cổng. Ô active viền teal 2px + ✓ góc; <b>busy</b> = mờ .5 + spinner ở ô đang chọn. Tên tối đa 2 dòng ellipsis; dòng phân biệt chỉ hiện khi trùng tên ("Tạo 25/08/2026" → "Tạo 25/08 14:02" → "Mã a1b2c3d4").</div>
+          <div style="display:flex;gap:8px;"><sc-for list="{{ profiles3 }}" as="p" hint-placeholder-count="3"><div style="{{ p.st }}"><span style="font-size:30px;line-height:1;">🦊</span><span style="font-size:14px;font-weight:800;line-height:1.2;text-align:center;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;">{{ p.n }}</span><span style="font-size:11px;font-weight:700;color:#B0A18E;">{{ p.sub }}</span></div></sc-for></div>
+        </div>
+        <div style="background:#FFFDF7;border:2px dashed #E2D5C0;border-radius:16px;padding:13px 16px;font-size:13px;line-height:1.65;color:#6B5B4D;">
+          <b>ProfileGate 6 trạng thái</b>: ① 0–1 hồ sơ → không hiện · ② mở lạnh ≥2 → <b>màn toàn màn hình</b> (thẻ giữa, nền cream + blob, không app phía sau) · ③ đã chọn &lt;5 phút → bỏ qua · ④ quay lại ≥5 phút → <b>overlay</b> (trái) app mờ blur 2px, z <b>dưới Toast</b> · ⑤ chạm hồ sơ active → đóng ngay; hồ sơ khác → ô busy spinner rồi reload · ⑥ storage lỗi → thêm dòng info 12px "Không nhớ được lựa chọn — sẽ hỏi lại lần sau".
+        </div>
+      </div>
+    </div>
+
+    <!-- CloudStart 8 stages -->
+    <div style="background:#FFFFFF;border-radius:24px;padding:22px 26px;box-shadow:0 6px 0 #E2D5C0;display:flex;flex-direction:column;gap:16px;">
+      <div style="display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;"><div style="font-family:'Baloo 2',sans-serif;font-size:21px;font-weight:800;">A2 CloudStart — 8 stage (thẻ 358, cỡ phone; iPad thẻ 420 cùng nội dung)</div><div style="font-size:13px;color:#8A7A6D;font-weight:700;">Mọi stage: tiêu đề "Đã dùng Speak Up rồi?" + phụ "Khôi phục tiến độ của bé lên máy này." · link "← Chọn cách khác" 44 dưới cùng.</div></div>
+      <div style="display:flex;gap:16px;flex-wrap:wrap;align-items:flex-start;">
+        <sc-for list="{{ stages }}" as="s" hint-placeholder-count="8">
+          <div style="display:flex;flex-direction:column;gap:8px;">
+            <div style="font-size:12px;font-weight:800;color:#B0A18E;">{{ s.k }}</div>
+            <div style="width:358px;background:#FFF7EA;border-radius:18px;padding:14px;">
+              <div style="background:#FFFFFF;border-radius:20px;padding:18px;box-shadow:0 6px 0 #EFE2CC;display:flex;flex-direction:column;gap:12px;">
+                <div><div style="font-family:'Baloo 2',sans-serif;font-size:18px;font-weight:800;">{{ s.title }}</div><div style="font-size:13px;font-weight:700;color:#8A7A6D;line-height:1.4;">{{ s.sub }}</div></div>
+                <sc-if value="{{ s.notice }}" hint-placeholder-val="{{ false }}"><div style="{{ s.noticeSt }}"><span>{{ s.noticeIc }}</span><span style="flex:1;font-size:12px;font-weight:800;line-height:1.4;overflow-wrap:anywhere;">{{ s.notice }}</span></div></sc-if>
+                <sc-if value="{{ s.field }}" hint-placeholder-val="{{ false }}"><div style="display:flex;flex-direction:column;gap:5px;"><div style="font-size:12px;font-weight:800;color:#8A7A6D;">{{ s.field }}</div><div style="{{ s.inputSt }}">{{ s.value }}</div><div style="{{ s.errSt }}">{{ s.err }}</div><div style="font-size:11px;font-weight:700;color:#B0A18E;line-height:1.4;">{{ s.help }}</div></div></sc-if>
+                <sc-if value="{{ s.picker }}" hint-placeholder-val="{{ false }}"><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;opacity:.55;"><sc-for list="{{ profiles3 }}" as="p" hint-placeholder-count="3"><div style="{{ p.stSm }}"><span style="font-size:22px;line-height:1;">🦊</span><span style="font-size:13px;font-weight:800;line-height:1.2;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;">{{ p.n }}</span></div></sc-for><div style="{{ s.spinnerSt }}"><div style="width:22px;height:22px;border-radius:50%;border:3px solid #C4E8E1;border-top-color:#2EC4B6;animation:spin 1s linear infinite;"></div></div></div></sc-if>
+                <sc-if value="{{ s.copies }}" hint-placeholder-val="{{ false }}"><div style="display:flex;flex-direction:column;gap:6px;"><sc-for list="{{ s.copies }}" as="c" hint-placeholder-count="4"><div style="font-size:12px;font-weight:700;color:#6B5B4D;line-height:1.45;background:#FFF1C9;border-radius:10px;padding:8px 10px;"><b style="color:#9A6B00;">{{ c.k }}</b> {{ c.t }}</div></sc-for></div></sc-if>
+                <div style="display:flex;flex-direction:column;gap:8px;">
+                  <sc-for list="{{ s.btns }}" as="b" hint-placeholder-count="2"><div style="{{ b.st }}">{{ b.t }}</div></sc-for>
+                </div>
+                <sc-if value="{{ s.links }}" hint-placeholder-val="{{ false }}"><div style="display:flex;flex-direction:column;"><sc-for list="{{ s.links }}" as="l" hint-placeholder-count="2"><div style="min-height:44px;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:800;color:#8A7A6D;text-decoration:underline;">{{ l }}</div></sc-for></div></sc-if>
+              </div>
+            </div>
+          </div>
+        </sc-for>
+      </div>
+      <div style="display:flex;gap:16px;flex-wrap:wrap;">
+        <div style="flex:1;min-width:420px;background:#FFFDF7;border:2px dashed #E2D5C0;border-radius:16px;padding:13px 16px;font-size:12px;line-height:1.6;color:#6B5B4D;">
+          <div style="font-family:'Baloo 2',sans-serif;font-size:15px;font-weight:800;color:#4A3B33;margin-bottom:6px;">7 câu lỗi email/OTP — dòng 12px đỏ dưới ô nhập</div>
+          <sc-for list="{{ authErrs }}" as="e" hint-placeholder-count="7"><div style="display:flex;gap:8px;padding:3px 0;border-bottom:1px solid #F1E7D4;"><span style="width:110px;color:#B0A18E;font-weight:800;flex:none;">{{ e.k }}</span><span style="color:#C2354B;font-weight:800;">⛔ {{ e.t }}</span></div></sc-for>
+        </div>
+        <div style="flex:1;min-width:420px;background:#FFFDF7;border:2px dashed #E2D5C0;border-radius:16px;padding:13px 16px;font-size:12px;line-height:1.6;color:#6B5B4D;">
+          <div style="font-family:'Baloo 2',sans-serif;font-size:15px;font-weight:800;color:#4A3B33;margin-bottom:6px;">7 câu lỗi mã khôi phục — cùng vị trí, kèm gợi ý hành động</div>
+          <sc-for list="{{ codeErrs }}" as="e" hint-placeholder-count="7"><div style="display:flex;gap:8px;padding:3px 0;border-bottom:1px solid #F1E7D4;"><span style="width:110px;color:#B0A18E;font-weight:800;flex:none;">{{ e.k }}</span><span style="color:#C2354B;font-weight:800;">⛔ {{ e.t }}</span></div></sc-for>
+          <div style="margin-top:8px;">Lỗi hệ thống (chưa có token, roster hỏng, network throw, fetch null, adopt null) → 1 câu chung "Không kết nối được máy chủ — thử lại sau" + nút "Thử lại" 44 trong dải lỗi; mã <b>không bị tiêu</b>.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= 2. PARENT DASHBOARD ================= -->
+  <div style="display:flex;flex-direction:column;gap:22px;">
+    <div style="display:flex;align-items:center;gap:12px;"><span style="background:#4A3B33;color:#FFF7EA;font-family:'Baloo 2',sans-serif;font-size:15px;font-weight:800;padding:6px 14px;border-radius:12px;">2</span><span style="font-family:'Baloo 2',sans-serif;font-size:26px;font-weight:800;">ParentDashboard (P2) — 10 panel · 3 frame</span></div>
+
+    <div style="display:flex;gap:28px;flex-wrap:wrap;align-items:flex-start;">
+      <!-- iPad portrait -->
+      <div style="display:flex;flex-direction:column;gap:10px;">
+        <div style="font-size:13px;font-weight:800;color:#8A7A6D;">iPad dọc 834×1194 · lưới 2 cột cân · toàn bộ vừa 1 màn (cũ >4000px)</div>
+        <div data-screen-label="P2 Dashboard iPad dọc" style="width:834px;height:1194px;background:#FFF7EA;border-radius:28px;position:relative;overflow:hidden;box-shadow:0 18px 50px rgba(74,59,51,.18);">
+          <div style="position:absolute;inset:0;padding:24px;display:flex;flex-direction:column;gap:14px;">
+            <div style="display:flex;align-items:center;gap:14px;"><div style="height:44px;padding:0 14px 0 10px;border-radius:14px;background:#FFFFFF;box-shadow:0 3px 0 #EFE2CC;display:flex;align-items:center;gap:6px;font-size:14px;font-weight:800;color:#8A7A6D;"><span style="font-size:18px;">←</span>Về nhà</div><div style="flex:1;"><div style="font-family:'Baloo 2',sans-serif;font-size:24px;font-weight:800;line-height:1.1;">Góc phụ huynh</div><div style="font-size:13px;font-weight:700;color:#8A7A6D;">Tuần này: 58 phút · điểm TB 75/100</div></div><div style="height:44px;padding:0 14px;border-radius:12px;background:#F3EADA;display:flex;align-items:center;gap:6px;font-size:13px;font-weight:800;color:#A79781;">🔐 Khoá lại</div></div>
+
+            <!-- Account full width, 2 inner cols -->
+            <div style="background:#FFFFFF;border-radius:16px;padding:14px 16px;box-shadow:0 4px 0 #EFE2CC;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px;">
+              <div style="display:flex;flex-direction:column;gap:8px;min-width:0;">
+                <div style="display:flex;align-items:center;justify-content:space-between;"><div style="font-size:14px;font-weight:800;">Tài khoản</div><div style="height:32px;padding:0 10px;border-radius:10px;background:#E3F6E8;color:#2E8B4A;font-size:12px;font-weight:800;display:flex;align-items:center;gap:6px;">✓ Đã đồng bộ · 09:41</div></div>
+                <div style="font-size:12px;font-weight:700;color:#8A7A6D;">Đã liên kết với</div>
+                <div style="height:44px;border:2px solid #F1E7D4;border-radius:12px;padding:0 12px;display:flex;align-items:center;font-size:13px;font-weight:700;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;">nguyenhoangbaongocanhthu.phuhuynh.speakup2026@examplemail.com</div>
+                <div style="display:flex;justify-content:flex-end;"><div style="height:44px;padding:0 14px;border-radius:12px;border:2px solid #E2D5C0;display:flex;align-items:center;font-size:13px;font-weight:800;color:#8A7A6D;">Đăng xuất</div></div>
+              </div>
+              <div style="display:flex;flex-direction:column;gap:8px;border-left:2px solid #F1E7D4;padding-left:16px;min-width:0;">
+                <div style="display:flex;align-items:center;justify-content:space-between;"><div style="font-size:14px;font-weight:800;">Hồ sơ · 3</div><div style="height:32px;padding:0 10px;border-radius:10px;background:#E2F6F1;color:#1FA396;font-size:12px;font-weight:800;display:flex;align-items:center;">+ Thêm hồ sơ</div></div>
+                <sc-for list="{{ dashProfiles }}" as="p" hint-placeholder-count="3"><div style="{{ p.st }}"><span style="font-size:20px;line-height:1;">🦊</span><span style="flex:1;min-width:0;font-size:13px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ p.n }}</span><span style="font-size:11px;font-weight:700;color:#B0A18E;flex:none;">{{ p.sub }}</span><span style="height:32px;padding:0 8px;display:flex;align-items:center;font-size:12px;font-weight:800;color:#8A7A6D;text-decoration:underline;flex:none;">Đổi tên</span></div></sc-for>
+              </div>
+            </div>
+
+            <div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:14px;flex:1;min-height:0;">
+              <!-- left col -->
+              <div style="display:flex;flex-direction:column;gap:14px;min-width:0;">
+                <div style="background:#FFFFFF;border-radius:16px;padding:14px 16px;box-shadow:0 4px 0 #EFE2CC;display:flex;flex-direction:column;gap:10px;">
+                  <div style="display:flex;align-items:center;justify-content:space-between;"><div style="font-size:14px;font-weight:800;">Phút luyện mỗi ngày</div><div style="display:flex;background:#F3EADA;border-radius:10px;padding:3px;"><div style="height:26px;padding:0 10px;border-radius:8px;display:flex;align-items:center;font-size:12px;font-weight:800;color:#A79781;">7 ngày</div><div style="height:26px;padding:0 10px;border-radius:8px;background:#FFFFFF;display:flex;align-items:center;font-size:12px;font-weight:800;color:#4A3B33;box-shadow:0 2px 0 #E2D5C0;">14 ngày</div></div></div>
+                  <div style="position:relative;height:120px;display:flex;align-items:flex-end;gap:6px;"><div style="position:absolute;left:0;right:0;top:20%;border-top:2px dashed #FFC533;"></div><span style="position:absolute;right:0;top:calc(20% - 16px);font-size:10px;font-weight:800;color:#9A6B00;">mục tiêu 20'</span><sc-for list="{{ chart14 }}" as="c" hint-placeholder-count="14"><div style="{{ c.st }}"></div></sc-for></div>
+                  <div style="display:flex;justify-content:space-between;font-size:10px;font-weight:800;color:#B0A18E;"><span>20/08</span><span>27/08</span><span style="color:#F2603D;">hôm nay</span></div>
+                  <div style="font-size:12px;font-weight:700;color:#8A7A6D;">14 ngày: 148 phút · TB 10,6'/ngày</div>
+                </div>
+                <div style="background:#FFFFFF;border-radius:16px;padding:14px 16px;box-shadow:0 4px 0 #EFE2CC;display:flex;flex-direction:column;gap:10px;">
+                  <div style="font-size:14px;font-weight:800;">Điểm trung bình</div>
+                  <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;"><sc-for list="{{ avgs }}" as="a" hint-placeholder-count="4"><div style="background:#FFF7EA;border-radius:12px;padding:10px 8px;text-align:center;"><div style="font-size:11px;font-weight:800;color:#B0A18E;">{{ a.k }}</div><div style="font-family:'Baloo 2',sans-serif;font-size:24px;font-weight:800;color:{{ a.c }};">{{ a.v }}</div></div></sc-for></div>
+                </div>
+                <div style="background:#FFFFFF;border-radius:16px;padding:14px 16px;box-shadow:0 4px 0 #EFE2CC;display:flex;flex-direction:column;gap:10px;flex:1;">
+                  <div style="display:flex;align-items:center;justify-content:space-between;"><div style="font-size:14px;font-weight:800;">Bản ghi gần đây · 20</div><div style="font-size:12px;font-weight:800;color:#1FA396;text-decoration:underline;min-height:32px;display:flex;align-items:center;">Xem tất cả</div></div>
+                  <sc-for list="{{ recs5 }}" as="r" hint-placeholder-count="5"><div style="display:flex;align-items:center;gap:10px;height:44px;border-bottom:1px solid #F1E7D4;"><div style="width:36px;height:36px;border-radius:50%;background:#2EC4B6;display:flex;align-items:center;justify-content:center;color:#FFFFFF;font-size:14px;flex:none;">▶</div><span style="font-size:11px;font-weight:800;color:#B0A18E;flex:none;">{{ r.d }}</span><span style="flex:1;min-width:0;font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ r.t }}</span><span style="font-size:11px;font-weight:800;color:{{ r.c }};flex:none;">{{ r.s }}</span></div></sc-for>
+                </div>
+              </div>
+              <!-- right col -->
+              <div style="display:flex;flex-direction:column;gap:14px;min-width:0;">
+                <div style="background:#FFFFFF;border-radius:16px;padding:14px 16px;box-shadow:0 4px 0 #EFE2CC;display:flex;flex-direction:column;gap:10px;">
+                  <div style="font-size:14px;font-weight:800;">Âm hay sai</div>
+                  <div style="display:flex;flex-wrap:wrap;gap:6px;"><sc-for list="{{ weakSounds }}" as="w" hint-placeholder-count="3"><div style="{{ w.st }}">{{ w.t }}</div></sc-for></div>
+                  <div style="font-size:12px;font-weight:700;color:#9A6B00;background:#FFF6E0;border-radius:10px;padding:8px 10px;line-height:1.45;">👅 /θ/: đặt đầu lưỡi giữa hai hàm răng rồi thổi nhẹ — tập cùng bé với "three, thank, think".</div>
+                </div>
+                <div style="background:#FFFFFF;border-radius:16px;padding:14px 16px;box-shadow:0 4px 0 #EFE2CC;display:flex;flex-direction:column;gap:10px;">
+                  <div style="display:flex;align-items:center;justify-content:space-between;"><div style="font-size:14px;font-weight:800;">⏰ Giới hạn mỗi ngày</div><div style="font-size:12px;font-weight:800;color:#2EA79B;">Hôm nay: 12/25'</div></div>
+                  <div style="display:flex;gap:6px;"><sc-for list="{{ limits }}" as="l" hint-placeholder-count="4"><div style="{{ l.st }}">{{ l.t }}</div></sc-for></div>
+                  <div style="display:flex;align-items:center;gap:8px;"><span style="font-size:12px;font-weight:700;color:#8A7A6D;">Tuỳ chỉnh</span><div style="width:36px;height:36px;border-radius:10px;background:#F3EADA;display:flex;align-items:center;justify-content:center;font-weight:800;color:#A79781;">−</div><div style="width:64px;height:36px;border:2px solid #2EC4B6;border-radius:10px;display:flex;align-items:center;justify-content:center;font-family:'Baloo 2',sans-serif;font-size:16px;font-weight:800;color:#2EA79B;">25'</div><div style="width:36px;height:36px;border-radius:10px;background:#F3EADA;display:flex;align-items:center;justify-content:center;font-weight:800;color:#A79781;">+</div><span style="font-size:11px;font-weight:700;color:#B0A18E;">5–60, bước 5</span></div>
+                </div>
+                <div style="background:#FFFFFF;border-radius:16px;padding:14px 16px;box-shadow:0 4px 0 #EFE2CC;display:flex;flex-direction:column;gap:10px;">
+                  <div style="font-size:14px;font-weight:800;">Bài học</div>
+                  <div style="font-size:12px;font-weight:800;color:#8A7A6D;">Độ khó</div>
+                  <div style="display:flex;gap:6px;"><sc-for list="{{ bands }}" as="b" hint-placeholder-count="6"><div style="{{ b.st }}">{{ b.t }}</div></sc-for></div>
+                  <div style="font-size:11px;font-weight:700;color:#B0A18E;">Tự động đang chọn → bậc hiện tại ⭐ 2 (mờ, không sáng cùng)</div>
+                  <div style="font-size:12px;font-weight:800;color:#8A7A6D;">Độ dài nhiệm vụ</div>
+                  <div style="display:flex;gap:6px;"><sc-for list="{{ lengths }}" as="b" hint-placeholder-count="3"><div style="{{ b.st }}">{{ b.t }}</div></sc-for></div>
+                  <div style="font-size:11px;font-weight:700;color:#B0A18E;">Áp dụng từ bài học ngày mai.</div>
+                </div>
+                <div style="background:#FFFFFF;border-radius:16px;padding:14px 16px;box-shadow:0 4px 0 #EFE2CC;display:flex;flex-direction:column;gap:8px;flex:1;">
+                  <div style="display:flex;align-items:center;justify-content:space-between;"><div style="font-size:14px;font-weight:800;">Tiến độ từ xa</div><div style="height:32px;padding:0 10px;border-radius:10px;background:#E2F6F1;color:#1FA396;font-size:12px;font-weight:800;display:flex;align-items:center;gap:6px;">👁 Đang xem</div></div>
+                  <sc-for list="{{ remoteRows2 }}" as="r" hint-placeholder-count="2"><div style="display:flex;align-items:center;gap:10px;min-height:44px;border-bottom:1px solid #F1E7D4;"><span style="font-size:18px;">🦊</span><div style="flex:1;min-width:0;"><div style="font-size:13px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ r.n }}</div><div style="font-size:11px;font-weight:700;color:#8A7A6D;">{{ r.s }}</div></div></div></sc-for>
+                </div>
+              </div>
+            </div>
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding-top:6px;"><div style="font-size:12px;font-weight:700;color:#B0A18E;">Xoá sao, chuỗi ngày và bản ghi trên máy này (và trên tài khoản nếu đã liên kết).</div><div style="height:44px;padding:0 14px;border-radius:12px;border:2px solid #F8A3AE;display:flex;align-items:center;font-size:13px;font-weight:800;color:#C2354B;flex:none;">↺ Đặt lại tiến trình…</div></div>
+          </div>
+        </div>
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:24px;">
+        <!-- Phone dashboard -->
+        <div style="display:flex;gap:20px;align-items:flex-start;">
+          <div style="display:flex;flex-direction:column;gap:10px;">
+            <div style="font-size:13px;font-weight:800;color:#8A7A6D;">Phone · 1 cột · thẻ Tài khoản gập thành 1 dòng · biểu đồ 7 ngày</div>
+            <div data-screen-label="P2 Dashboard phone" style="width:390px;height:844px;background:#FFF7EA;border-radius:44px;position:relative;overflow:hidden;box-shadow:0 18px 50px rgba(74,59,51,.18);">
+              <div style="position:absolute;left:50%;top:12px;transform:translateX(-50%);width:118px;height:32px;border-radius:18px;background:#2B2320;z-index:20;"></div>
+              <div style="position:absolute;inset:0;padding:55px 16px 34px;display:flex;flex-direction:column;gap:10px;">
+                <div style="display:flex;align-items:center;gap:10px;"><div style="height:44px;padding:0 12px 0 8px;border-radius:14px;background:#FFFFFF;box-shadow:0 3px 0 #EFE2CC;display:flex;align-items:center;gap:6px;font-size:13px;font-weight:800;color:#8A7A6D;"><span style="font-size:18px;">←</span>Về nhà</div><div style="flex:1;min-width:0;"><div style="font-family:'Baloo 2',sans-serif;font-size:20px;font-weight:800;line-height:1.1;">Góc phụ huynh</div><div style="font-size:12px;font-weight:700;color:#8A7A6D;">Tuần: 58' · TB 75/100</div></div><div style="width:44px;height:44px;border-radius:12px;background:#F3EADA;display:flex;align-items:center;justify-content:center;font-size:18px;">🔐</div></div>
+                <div style="flex:1;min-height:0;overflow:hidden;position:relative;display:flex;flex-direction:column;gap:10px;">
+                  <div style="background:#FFFFFF;border-radius:16px;padding:12px 14px;box-shadow:0 4px 0 #EFE2CC;display:flex;align-items:center;gap:10px;min-height:56px;"><span style="font-size:18px;">✓</span><div style="flex:1;min-width:0;"><div style="font-size:13px;font-weight:800;">Tài khoản · Đã đồng bộ 09:41</div><div style="font-size:11px;font-weight:700;color:#8A7A6D;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">nguyenhoangbaongocanhthu.phuhuynh.speakup2026@examplemail.com</div></div><span style="font-size:14px;color:#B0A18E;">▾</span></div>
+                  <div style="background:#FFFFFF;border-radius:16px;padding:12px 14px;box-shadow:0 4px 0 #EFE2CC;display:flex;flex-direction:column;gap:8px;">
+                    <div style="display:flex;align-items:center;justify-content:space-between;"><div style="font-size:13px;font-weight:800;">Phút luyện · 7 ngày</div><div style="font-size:11px;font-weight:800;color:#2EA79B;">TB 8,3'/ngày</div></div>
+                    <div style="position:relative;height:86px;display:flex;align-items:flex-end;gap:9px;"><div style="position:absolute;left:0;right:0;top:15%;border-top:2px dashed #FFC533;"></div><sc-for list="{{ chart7 }}" as="c" hint-placeholder-count="7"><div style="{{ c.st }}"></div></sc-for></div>
+                    <div style="display:flex;justify-content:space-between;font-size:10px;font-weight:800;color:#B0A18E;"><sc-for list="{{ days7 }}" as="d" hint-placeholder-count="7"><span>{{ d }}</span></sc-for></div>
+                  </div>
+                  <div style="background:#FFFFFF;border-radius:16px;padding:12px 14px;box-shadow:0 4px 0 #EFE2CC;display:flex;flex-direction:column;gap:8px;"><div style="font-size:13px;font-weight:800;">Điểm trung bình</div><div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;"><sc-for list="{{ avgs }}" as="a" hint-placeholder-count="4"><div style="background:#FFF7EA;border-radius:10px;padding:8px 4px;text-align:center;"><div style="font-size:10px;font-weight:800;color:#B0A18E;">{{ a.k }}</div><div style="font-family:'Baloo 2',sans-serif;font-size:20px;font-weight:800;color:{{ a.c }};">{{ a.v }}</div></div></sc-for></div></div>
+                  <div style="background:#FFFFFF;border-radius:16px;padding:12px 14px;box-shadow:0 4px 0 #EFE2CC;display:flex;flex-direction:column;gap:8px;"><div style="font-size:13px;font-weight:800;">Âm hay sai</div><div style="display:flex;flex-wrap:wrap;gap:6px;"><sc-for list="{{ weakSounds }}" as="w" hint-placeholder-count="3"><div style="{{ w.st }}">{{ w.t }}</div></sc-for></div></div>
+                  <div style="background:#FFFFFF;border-radius:16px;padding:12px 14px;box-shadow:0 4px 0 #EFE2CC;display:flex;align-items:center;justify-content:space-between;min-height:56px;"><div style="font-size:13px;font-weight:800;">⏰ Giới hạn mỗi ngày</div><div style="display:flex;align-items:center;gap:6px;"><div style="width:36px;height:36px;border-radius:10px;background:#F3EADA;display:flex;align-items:center;justify-content:center;font-weight:800;color:#A79781;">−</div><div style="width:56px;height:36px;border:2px solid #2EC4B6;border-radius:10px;display:flex;align-items:center;justify-content:center;font-family:'Baloo 2',sans-serif;font-size:15px;font-weight:800;color:#2EA79B;">25'</div><div style="width:36px;height:36px;border-radius:10px;background:#F3EADA;display:flex;align-items:center;justify-content:center;font-weight:800;color:#A79781;">+</div></div></div>
+                  <div style="background:#FFFFFF;border-radius:16px;padding:12px 14px;box-shadow:0 4px 0 #EFE2CC;display:flex;align-items:center;justify-content:space-between;min-height:56px;"><div style="font-size:13px;font-weight:800;">Bài học · Tự động · Vừa ~12'</div><span style="font-size:14px;color:#B0A18E;">▸</span></div>
+                  <div style="background:#FFFFFF;border-radius:16px;padding:12px 14px;box-shadow:0 4px 0 #EFE2CC;display:flex;align-items:center;justify-content:space-between;min-height:56px;"><div style="font-size:13px;font-weight:800;">Bản ghi gần đây · 20</div><span style="font-size:14px;color:#B0A18E;">▸</span></div>
+                  <div style="position:absolute;left:0;right:0;bottom:0;height:40px;background:linear-gradient(180deg,rgba(255,247,234,0),#FFF7EA);"></div>
+                </div>
+              </div>
+              <div style="position:absolute;left:50%;bottom:8px;transform:translateX(-50%);width:130px;height:5px;border-radius:3px;background:#D9CBB4;"></div>
+            </div>
+          </div>
+          <div style="width:400px;background:#FFFDF7;border:2px dashed #E2D5C0;border-radius:16px;padding:14px 16px;font-size:13px;line-height:1.65;color:#6B5B4D;display:flex;flex-direction:column;gap:8px;">
+            <div><b>Phone</b>: thứ tự Tài khoản (gập 1 dòng, chạm ▾ mở đủ) → Biểu đồ 7 ngày (nút đổi 14 ẩn) → Điểm TB → Âm hay sai (tip ẩn, chạm chip mở) → Giới hạn (hàng 56, −/+ 36 nằm trong hit 44) → Bài học (gập, tóm tắt) → Bản ghi (gập) → Tiến độ từ xa (gập) → Đặt lại (cuối). Tổng ≈ 1100 cuộn.</div>
+            <div><b>iPad ngang 1194</b>: 3 cột 1080 — cột 1 Tài khoản + Hồ sơ + Tiến độ từ xa · cột 2 Biểu đồ 14 ngày + Điểm TB + Âm hay sai · cột 3 Giới hạn + Bài học + Bản ghi (8 hàng + Xem tất cả). Đặt lại ở hàng cuối phải. Vừa 834 không cuộn với dữ liệu mẫu.</div>
+            <div><b>Header</b>: nút "🔐 Khoá lại" 44 (phone chỉ icon) thay nhãn dài "Đã mở khoá bằng câu hỏi · Khoá lại".</div>
+          </div>
+        </div>
+
+        <!-- Account 11 states -->
+        <div style="background:#FFFFFF;border-radius:24px;padding:20px 24px;box-shadow:0 6px 0 #E2D5C0;display:flex;flex-direction:column;gap:12px;max-width:1000px;">
+          <div style="font-family:'Baloo 2',sans-serif;font-size:19px;font-weight:800;">Thẻ Tài khoản — 11 trạng thái (cột trái của thẻ, rộng 360)</div>
+          <div style="display:flex;gap:12px;flex-wrap:wrap;">
+            <sc-for list="{{ acctStates }}" as="a" hint-placeholder-count="11">
+              <div style="width:300px;display:flex;flex-direction:column;gap:6px;">
+                <div style="font-size:11px;font-weight:800;color:#B0A18E;">{{ a.k }}</div>
+                <div style="background:#FFF7EA;border-radius:14px;padding:12px;display:flex;flex-direction:column;gap:8px;min-height:150px;">
+                  <div style="display:flex;align-items:center;justify-content:space-between;"><div style="font-size:13px;font-weight:800;">Tài khoản</div><div style="{{ a.syncSt }}">{{ a.sync }}</div></div>
+                  <sc-if value="{{ a.skel }}" hint-placeholder-val="{{ false }}"><div style="{{ sk.full }}"></div><div style="{{ sk.w70 }}"></div><div style="display:flex;gap:8px;margin-top:auto;"><div style="{{ sk.input }}"></div><div style="{{ sk.btn }}"></div></div></sc-if>
+                  <sc-if value="{{ a.notice }}" hint-placeholder-val="{{ false }}"><div style="{{ a.noticeSt }}"><span>{{ a.noticeIc }}</span><span style="flex:1;font-size:12px;font-weight:800;line-height:1.4;overflow-wrap:anywhere;">{{ a.notice }}</span></div></sc-if>
+                  <sc-if value="{{ a.text }}" hint-placeholder-val="{{ false }}"><div style="font-size:12px;font-weight:700;color:#8A7A6D;line-height:1.45;overflow-wrap:anywhere;">{{ a.text }}</div></sc-if>
+                  <sc-if value="{{ a.input }}" hint-placeholder-val="{{ false }}"><div style="{{ a.inputSt }}">{{ a.input }}</div></sc-if>
+                  <sc-if value="{{ a.err }}" hint-placeholder-val="{{ false }}"><div style="font-size:12px;font-weight:800;color:#C2354B;line-height:1.4;">⛔ {{ a.err }}</div></sc-if>
+                  <sc-if value="{{ a.code }}" hint-placeholder-val="{{ false }}"><div style="display:flex;align-items:center;gap:8px;"><div style="font-family:'Baloo 2',sans-serif;font-size:22px;font-weight:800;letter-spacing:4px;background:#FFFFFF;border-radius:10px;padding:6px 12px;border:2px solid #2EC4B6;">{{ a.code }}</div><div style="height:36px;padding:0 12px;border-radius:10px;background:#2EC4B6;color:#FFFFFF;display:flex;align-items:center;font-size:12px;font-weight:800;">Chép</div></div></sc-if>
+                  <sc-if value="{{ a.btn }}" hint-placeholder-val="{{ false }}"><div style="display:flex;justify-content:flex-end;gap:8px;margin-top:auto;align-items:center;"><sc-if value="{{ a.link }}" hint-placeholder-val="{{ false }}"><span style="font-size:12px;font-weight:800;color:#8A7A6D;text-decoration:underline;min-height:44px;display:flex;align-items:center;flex:1;">{{ a.link }}</span></sc-if><div style="{{ a.btnSt }}"><sc-if value="{{ a.busy }}" hint-placeholder-val="{{ false }}"><div style="width:16px;height:16px;border-radius:50%;border:3px solid rgba(255,255,255,.4);border-top-color:#FFFFFF;animation:spin 1s linear infinite;"></div></sc-if>{{ a.btn }}</div></div></sc-if>
+                </div>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Remote progress 7 states + chart empty + recordings 20 -->
+    <div style="display:flex;gap:24px;flex-wrap:wrap;align-items:flex-start;">
+      <div style="background:#FFFFFF;border-radius:24px;padding:20px 24px;box-shadow:0 6px 0 #E2D5C0;display:flex;flex-direction:column;gap:10px;width:560px;">
+        <div style="font-family:'Baloo 2',sans-serif;font-size:19px;font-weight:800;">Tiến độ từ xa — 7 trạng thái / hàng (hàng 56–72)</div>
+        <sc-for list="{{ remoteRows }}" as="r" hint-placeholder-count="7">
+          <div style="display:flex;align-items:center;gap:10px;min-height:56px;border-bottom:1px solid #F1E7D4;padding:6px 0;">
+            <span style="width:70px;font-size:11px;font-weight:800;color:#B0A18E;flex:none;">{{ r.k }}</span>
+            <span style="font-size:20px;">🦊</span>
+            <div style="flex:1;min-width:0;"><div style="font-size:13px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ r.n }}<span style="font-weight:700;color:#B0A18E;"> {{ r.here }}</span></div>
+              <sc-if value="{{ r.skel }}" hint-placeholder-val="{{ false }}"><div style="{{ sk.w70 }}"></div></sc-if>
+              <sc-if value="{{ r.s }}" hint-placeholder-val="{{ true }}"><div style="font-size:11px;font-weight:700;color:{{ r.c }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ r.s }}</div></sc-if>
+            </div>
+            <sc-if value="{{ r.btn }}" hint-placeholder-val="{{ false }}"><div style="height:36px;padding:0 10px;border-radius:10px;border:2px solid #E2D5C0;display:flex;align-items:center;font-size:12px;font-weight:800;color:#8A7A6D;flex:none;">{{ r.btn }}</div></sc-if>
+          </div>
+        </sc-for>
+        <div style="font-size:12px;color:#6B5B4D;line-height:1.55;">Chú thích "bản ghi không đồng bộ" ghi <b>1 lần</b> dưới panel, không lặp mỗi hàng. Hàng có dữ liệu chạm → mở chi tiết (không còn "không có tap target").</div>
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:20px;width:440px;">
+        <div style="background:#FFFFFF;border-radius:24px;padding:20px 24px;box-shadow:0 6px 0 #E2D5C0;display:flex;flex-direction:column;gap:10px;">
+          <div style="font-family:'Baloo 2',sans-serif;font-size:19px;font-weight:800;">Biểu đồ — empty state</div>
+          <div style="background:#FFF7EA;border-radius:14px;padding:12px;display:flex;flex-direction:column;gap:8px;">
+            <div style="display:flex;align-items:center;justify-content:space-between;"><div style="font-size:13px;font-weight:800;">Phút luyện mỗi ngày</div></div>
+            <div style="height:120px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;text-align:center;border:2px dashed #E2D5C0;border-radius:12px;"><div style="font-size:24px;">📈</div><div style="font-size:13px;font-weight:800;">Chưa có lịch sử luyện</div><div style="font-size:11px;font-weight:700;color:#8A7A6D;">Biểu đồ hiện từ ngày học đầu tiên.</div></div>
+          </div>
+          <div style="font-size:12px;color:#6B5B4D;line-height:1.55;">Không vẽ 14 cột 2%. Cột hôm nay coral, cột đủ mục tiêu teal, thiếu = sun, 0 = #F1E7D4 cao 4. Đường mục tiêu nét đứt sun theo giá trị giới hạn.</div>
+        </div>
+        <div style="background:#FFFFFF;border-radius:24px;padding:20px 24px;box-shadow:0 6px 0 #E2D5C0;display:flex;flex-direction:column;gap:10px;">
+          <div style="font-family:'Baloo 2',sans-serif;font-size:19px;font-weight:800;">Bản ghi gần đây — 20 hàng</div>
+          <div style="font-size:12px;color:#6B5B4D;line-height:1.55;">Hàng 44: nút ▶ 36 (hit 44) · ngày giờ 11px · câu 1 dòng ellipsis · điểm 11px màu theo băng. Mặc định 5 hàng + "Xem tất cả 20" → mở rộng tại chỗ (không dialog). Đang phát: ▶ → ❚❚ + thanh 3px dưới hàng. Phát lỗi: hàng đỏ nhạt + "Không phát được". 0 bản ghi → empty state 🎙️ (Vòng 1).</div>
+          <div style="display:flex;flex-direction:column;"><sc-for list="{{ recs5 }}" as="r" hint-placeholder-count="5"><div style="display:flex;align-items:center;gap:10px;height:44px;border-bottom:1px solid #F1E7D4;"><div style="width:36px;height:36px;border-radius:50%;background:#2EC4B6;display:flex;align-items:center;justify-content:center;color:#FFFFFF;font-size:14px;flex:none;">▶</div><span style="font-size:11px;font-weight:800;color:#B0A18E;flex:none;">{{ r.d }}</span><span style="flex:1;min-width:0;font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ r.t }}</span><span style="font-size:11px;font-weight:800;color:{{ r.c }};flex:none;">{{ r.s }}</span></div></sc-for><div style="height:44px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;color:#1FA396;text-decoration:underline;">Xem tất cả 20 bản ghi ▾</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= 3. DIALOG + Q ================= -->
+  <div style="display:flex;flex-direction:column;gap:18px;">
+    <div style="display:flex;align-items:center;gap:12px;"><span style="background:#4A3B33;color:#FFF7EA;font-family:'Baloo 2',sans-serif;font-size:15px;font-weight:800;padding:6px 14px;border-radius:12px;">3</span><span style="font-family:'Baloo 2',sans-serif;font-size:26px;font-weight:800;">Dialog thật · Q17 · Q18</span></div>
+    <div style="display:flex;gap:20px;flex-wrap:wrap;align-items:flex-start;">
+      <sc-for list="{{ dialogs }}" as="d" hint-placeholder-count="4">
+        <div style="width:360px;height:300px;background:rgba(74,59,51,.45);border-radius:18px;display:flex;align-items:center;justify-content:center;padding:16px;">
+          <div style="width:100%;background:#FFFFFF;border-radius:20px;padding:20px;display:flex;flex-direction:column;gap:12px;box-shadow:0 16px 40px rgba(43,35,32,.3);">
+            <div style="font-family:'Baloo 2',sans-serif;font-size:18px;font-weight:800;line-height:1.2;">{{ d.t }}</div>
+            <sc-if value="{{ d.body }}" hint-placeholder-val="{{ true }}"><div style="font-size:13px;font-weight:700;color:#8A7A6D;line-height:1.5;">{{ d.body }}</div></sc-if>
+            <sc-if value="{{ d.input }}" hint-placeholder-val="{{ false }}"><div style="display:flex;flex-direction:column;gap:6px;"><div style="font-size:12px;font-weight:800;color:#8A7A6D;">Tên của bé</div><div style="height:44px;border:2px solid #2EC4B6;border-radius:12px;padding:0 12px;display:flex;align-items:center;font-size:15px;font-weight:700;color:#B0A18E;">{{ d.input }}</div><div style="display:flex;justify-content:space-between;font-size:11px;font-weight:700;color:#B0A18E;"><span>Tối đa 40 ký tự</span><span>0/40</span></div></div></sc-if>
+            <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:4px;"><div style="height:44px;padding:0 16px;border-radius:12px;border:2px solid #E2D5C0;display:flex;align-items:center;font-size:14px;font-weight:800;color:#8A7A6D;">Huỷ</div><div style="{{ d.btnSt }}">{{ d.btn }}</div></div>
+          </div>
+        </div>
+      </sc-for>
+    </div>
+    <div style="display:flex;gap:20px;flex-wrap:wrap;align-items:stretch;">
+      <div style="width:480px;background:#FFFDF7;border:2px dashed #E2D5C0;border-radius:20px;padding:18px 20px;display:flex;flex-direction:column;gap:10px;">
+        <div style="display:flex;align-items:center;gap:10px;"><span style="background:#FF7A59;color:#FFFFFF;font-family:'Baloo 2',sans-serif;font-size:14px;font-weight:800;padding:4px 12px;border-radius:10px;">Q17</span><span style="font-family:'Baloo 2',sans-serif;font-size:18px;font-weight:800;">Biểu đồ 7 hay 14 ngày?</span></div>
+        <div style="font-size:13px;color:#6B5B4D;line-height:1.65;"><b>Trả lời: 14 ngày trên iPad (mặc định), 7 ngày trên phone</b> — cùng dữ liệu, nút đổi "7 · 14" trong tiêu đề panel (iPad). Giữ đường mục tiêu nét đứt (theo giới hạn ngày đang đặt) vì đó là thứ phụ huynh so sánh. Cột maxWidth 26, radius 7, gap 6 (14 cột trong 340 vừa). Nhãn ngày chỉ 3 mốc (đầu · giữa · "hôm nay") thay 14 nhãn 10px.</div>
+      </div>
+      <div style="width:480px;background:#FFFDF7;border:2px dashed #E2D5C0;border-radius:20px;padding:18px 20px;display:flex;flex-direction:column;gap:10px;">
+        <div style="display:flex;align-items:center;gap:10px;"><span style="background:#FF7A59;color:#FFFFFF;font-family:'Baloo 2',sans-serif;font-size:14px;font-weight:800;padding:4px 12px;border-radius:10px;">Q18</span><span style="font-family:'Baloo 2',sans-serif;font-size:18px;font-weight:800;">Giữ "Bản ghi gần đây"</span></div>
+        <div style="font-size:13px;color:#6B5B4D;line-height:1.65;"><b>Đã chốt: giữ</b>, cả phone. Phone: panel gập (hàng 56 "Bản ghi gần đây · 20 ▸") mở tại chỗ thành 5 hàng + "Xem tất cả". iPad: 5–8 hàng hiện sẵn. Cũng giữ "Điểm trung bình" (thêm cột Truyện — 4 ô), ô nhập phút tuỳ chỉnh (−/+ 36 trong hit 44), dòng "Áp dụng từ bài học ngày mai".</div>
+      </div>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  fox(x){
+    const E=React.createElement,C='#FF8A5C',D='#5B4038',IN='#FFD6BE',M='#FFF6EA';
+    const k=[
+      E('path',{key:'a',d:'M24 44 L12 6 L48 26 Z',fill:C}),E('path',{key:'b',d:'M96 44 L108 6 L72 26 Z',fill:C}),
+      E('path',{key:'a2',d:'M27 36 L21 16 L38 26 Z',fill:IN}),E('path',{key:'b2',d:'M93 36 L99 16 L82 26 Z',fill:IN}),
+      E('circle',{key:'h',cx:60,cy:68,r:44,fill:C}),E('ellipse',{key:'mz',cx:60,cy:84,rx:27,ry:19,fill:M}),
+      E('circle',{key:'n',cx:60,cy:78,r:5.5,fill:D}),
+      E('circle',{key:'e1',cx:44,cy:61,r:5,fill:D}),E('circle',{key:'e2',cx:76,cy:61,r:5,fill:D}),
+      E('path',{key:'m',d:'M52 90 Q60 97 68 90',stroke:D,strokeWidth:3.5,fill:'none',strokeLinecap:'round'})
+    ];
+    return E('svg',{viewBox:'0 0 120 116',style:{width:'100%',height:'100%',display:'block'}},k);
+  }
+  renderVals(){
+    const FD="'Baloo 2',sans-serif";
+    const foxIdle=this.fox('idle');
+    const LONG='Nguyễn Hoàng Bảo Ngọc Anh Thư';
+    const EMAIL='nguyenhoangbaongocanhthu.phuhuynh.speakup2026@examplemail.com';
+    const pTile=(active,h)=>({minHeight:h+'px',background:'#FFFFFF',border:active?'2px solid #2EC4B6':'2px solid #F1E7D4',borderRadius:'14px',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:'4px',padding:'8px 6px',textAlign:'center',flex:1,minWidth:0,position:'relative'});
+    const names8=[['Bé','Tạo 25/08/2026'],[LONG,''],['Bé','Tạo 25/08 14:02'],['Bé','Mã a1b2c3d4'],['Minh',''],['Bé','Tạo 30/08/2026'],['An',''],['Bé','Mã f9e8d7c6']];
+    const profiles8=names8.map(([n,sub],i)=>({n,sub,st:pTile(i===1,88)}));
+    const profiles3=[['Bé','Tạo 25/08/2026'],[LONG,''],['Bé','Tạo 25/08 14:02']].map(([n,sub],i)=>({n,sub,st:pTile(i===1,96),stSm:pTile(false,72)}));
+    const dashProfiles=[['Bé · đang dùng máy này','Tạo 25/08'],[LONG,''],['Bé','Mã a1b2c3d4']].map(([n,sub])=>({n,sub,st:{display:'flex',alignItems:'center',gap:'8px',minHeight:'40px',borderBottom:'1px solid #F1E7D4'}}));
+    const input=(err,focus)=>({height:'44px',border:'2px solid '+(err?'#C2354B':(focus?'#2EC4B6':'#E2D5C0')),borderRadius:'12px',padding:'0 12px',display:'flex',alignItems:'center',fontSize:'14px',fontWeight:700,background:'#FFFFFF',overflow:'hidden',whiteSpace:'nowrap',textOverflow:'ellipsis',color:'#4A3B33'});
+    const errSt=(on)=>({fontSize:'12px',fontWeight:800,color:'#C2354B',minHeight:'18px',lineHeight:1.4,display:on?'block':'none'});
+    const bP=(t,o={})=>({t,st:{height:'44px',borderRadius:'12px',background:'#FF7A59',color:'#FFFFFF',boxShadow:'0 3px 0 #E05A3A',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'14px',fontWeight:800,opacity:o.busy?.6:1,padding:'0 14px',overflow:'hidden',whiteSpace:'nowrap',textOverflow:'ellipsis'}});
+    const bO=(t)=>({t,st:{height:'44px',borderRadius:'12px',background:'#FFFFFF',color:'#1FA396',border:'2px solid #C4E8E1',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'14px',fontWeight:800}});
+    const bG=(t)=>({t,st:{height:'44px',borderRadius:'12px',border:'2px solid #E2D5C0',color:'#8A7A6D',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'14px',fontWeight:800}});
+    const nt=(bg,bd,c)=>({display:'flex',alignItems:'flex-start',gap:'8px',background:bg,border:'2px solid '+bd,color:c,borderRadius:'12px',padding:'8px 10px'});
+    const T='Đã dùng Speak Up rồi?',S='Khôi phục tiến độ của bé lên máy này.';
+    const stages=[
+      {k:'① menu',title:T,sub:S,btns:[bP('Tôi có email đã liên kết'),bO('Tôi có mã khôi phục')],links:['Bắt đầu mới cho bé']},
+      {k:'② gate (câu hỏi phụ huynh)',title:T,sub:'Câu hỏi dành cho bố mẹ trước khi khôi phục.',field:'6 × 5 = ?',value:'',inputSt:input(false,true),err:'',errSt:errSt(false),help:'',btns:[bP('Vào')],links:['← Chọn cách khác']},
+      {k:'③ email',title:T,sub:S,field:'Email của bố mẹ',value:EMAIL,inputSt:input(false,true),err:'',errSt:errSt(false),help:'Chỉ dùng để gửi mã xác nhận và giữ tiến độ. Không gửi quảng cáo.',btns:[bP('Gửi mã xác nhận')],links:['← Chọn cách khác']},
+      {k:'④ email-otp · lỗi mã sai',title:T,sub:'Nhập mã 6 số vừa gửi tới '+EMAIL,field:'Mã 6 số',value:'4 8 2 1 _ _',inputSt:Object.assign(input(true,false),{fontFamily:FD,fontSize:'22px',letterSpacing:'6px',justifyContent:'center'}),err:'⛔ Mã sai hoặc đã hết hạn — gửi lại mã mới nhé.',errSt:errSt(true),help:'Mã hết hạn sau 10 phút.',btns:[bP('Xác nhận')],links:['Sửa lại email','Gửi lại mã (0:42)']},
+      {k:'⑤ mã khôi phục',title:T,sub:S,field:'Mã khôi phục (8 ký tự)',value:'QZQJ7MFC',inputSt:Object.assign(input(false,true),{fontFamily:FD,fontSize:'22px',letterSpacing:'6px',justifyContent:'center',textTransform:'uppercase'}),err:'',errSt:errSt(false),help:'Mã do máy trước tạo ra trong Góc phụ huynh (chụp màn hình).',btns:[bP('Khôi phục')],links:['← Chọn cách khác']},
+      {k:'⑥ abandon · máy đang có hồ sơ ẩn danh (4 copy)',title:'Máy này đang có dữ liệu',sub:'Khôi phục sẽ thay bằng tài khoản của bố mẹ. Dữ liệu hiện tại:',copies:[{k:'Có số:',t:'2 hồ sơ, 128 sao và 340 lượt luyện trên máy này sẽ bị thay.'},{k:'Có số + đã lưu:',t:'… — một phần đã lưu lên máy chủ, có thể lấy lại sau.'},{k:'0 sao / 0 lượt:',t:'Máy này có 1 hồ sơ nhưng chưa học gì — thay được ngay.'},{k:'Chưa kiểm tra được:',t:'Không đọc được dữ liệu trên máy này. Vẫn tiếp tục?'}],btns:[bP('Vẫn tiếp tục với email này'),bG('Huỷ')],links:['Sao lưu trước ở Góc phụ huynh']},
+      {k:'⑦ chọn hồ sơ · busy',title:'Chọn hồ sơ của bé',sub:'Tài khoản này có 3 hồ sơ. Chạm để tải về máy.',picker:true,spinnerSt:{height:'72px',display:'flex',alignItems:'center',justifyContent:'center',border:'2px dashed #C4E8E1',borderRadius:'14px'},btns:[],links:['← Chọn cách khác']},
+      {k:'⑧ kết quả · 0 hồ sơ / pull lỗi',title:T,sub:S,notice:'Tài khoản này chưa có hồ sơ nào để khôi phục. Bắt đầu mới cho bé hoặc thử email khác.',noticeIc:'⚠️',noticeSt:nt('#FFF1C9','#FFDF9E','#9A6B00'),btns:[bO('Thử tải lại'),bP('Bắt đầu mới cho bé')],links:['← Về menu']}
+    ];
+    const authErrs=[['email sai','Email chưa đúng định dạng.'],['chưa cấu hình','Tính năng tài khoản chưa bật trên bản này.'],['máy có hồ sơ khác','Máy này đang có hồ sơ của tài khoản khác — đăng xuất ở Góc phụ huynh trước.'],['chưa liên kết','Email này chưa liên kết với Speak Up — thử mã khôi phục.'],['mã sai/hết hạn','Mã sai hoặc đã hết hạn — gửi lại mã mới nhé.'],['mất mạng','Mất kết nối — kiểm tra mạng rồi thử lại.'],['chung','Có lỗi xảy ra — thử lại sau ít phút.']].map(([k,t])=>({k,t}));
+    const codeErrs=[['400','Mã phải đủ 8 chữ và số.'],['401','Mã không đúng — kiểm tra lại chữ O và số 0.'],['403','Mã này thuộc tài khoản khác đang dùng máy này.'],['404','Không tìm thấy mã — có thể đã được thay mã mới.'],['409','Mã đã dùng trên máy khác — tạo mã mới ở máy đó.'],['429','Thử quá nhiều lần — đợi 5 phút rồi thử lại.'],['chung','Không kết nối được máy chủ — thử lại sau.']].map(([k,t])=>({k,t}));
+    const bar=(v,i,n,max)=>({st:{flex:1,maxWidth:'26px',height:Math.max(4,v/max*100)+'%',borderRadius:'7px',background:i===n-1?'#FF7A59':(v>=20?'#2EC4B6':(v>0?'#FFC533':'#F1E7D4'))}});
+    const v14=[14,18,9,16,0,0,22,25,12,0,8,20,4,12];
+    const chart14=v14.map((v,i)=>bar(v,i,14,25));
+    const chart7=v14.slice(7).map((v,i)=>bar(v,i,7,25));
+    const days7=['T4','T5','T6','T7','CN','T2','T3'];
+    const avgs=[['Nói','79','#2EA79B'],['Từ vựng','77','#2EA79B'],['Ghép câu','70','#9A6B00'],['Truyện','—','#B0A18E']].map(([k,v,c])=>({k,v,c}));
+    const weakSounds=[['/θ/ · 46 (10 lần)','#FFE3E6','#C2354B'],['/r/ · 62 (10 lần)','#FFF3D6','#9A6B00'],['/ʃ/ · 68 (6 lần)','#FFF3D6','#9A6B00']].map(([t,bg,c])=>({t,st:{height:'36px',padding:'0 12px',borderRadius:'12px',background:bg,color:c,fontSize:'13px',fontWeight:800,display:'inline-flex',alignItems:'center',whiteSpace:'nowrap'}}));
+    const seg=(t,on,dim)=>({t,st:{flex:1,height:'44px',borderRadius:'12px',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'13px',fontWeight:800,background:on?'#2EC4B6':(dim?'#EFE2CC':'#F3EADA'),color:on?'#FFFFFF':(dim?'#8A7A6D':'#A79781'),boxShadow:on?'0 3px 0 #1FA396':'none',border:dim?'2px dashed #D9CBB4':'none',whiteSpace:'nowrap'}});
+    const limits=[seg("15'",false),seg("20'",false),seg("30'",false),seg("Tuỳ chỉnh 25'",true)];
+    const bands=[seg('Tự động',true),seg('1',false),seg('2',false,true),seg('3',false),seg('4',false),seg('5',false)];
+    const lengths=[seg('Ngắn ~8\'',false),seg('Vừa ~12\'',true),seg('Dài ~18\'',false)];
+    const recs5=[['02/09 09:41','I love my dog! He is my best friend and we play every day.','86','#2E8B4A'],['02/09 09:38','Chị của con có một con búp bê em bé. → My sister has a baby doll.','72','#9A6B00'],['01/09 17:02','three','48','#C2354B'],['01/09 16:58','ship · sheep','91','#2E8B4A'],['31/08 10:12','He wants an apple.','80','#2E8B4A']].map(([d,t,s,c])=>({d,t,s,c}));
+    const skBase={borderRadius:'8px',background:'linear-gradient(90deg,#F3EADA 25%,#FFF7EA 50%,#F3EADA 75%)',backgroundSize:'400px 100%',animation:'shimmer 1.4s linear infinite'};
+    const sk={full:Object.assign({},skBase,{width:'100%',height:'12px'}),w70:Object.assign({},skBase,{width:'70%',height:'12px',marginTop:'4px'}),input:Object.assign({},skBase,{flex:1,height:'44px',borderRadius:'12px'}),btn:Object.assign({},skBase,{width:'80px',height:'44px',borderRadius:'12px'})};
+    const pill=(bg,c)=>({height:'28px',padding:'0 8px',borderRadius:'8px',background:bg,color:c,fontSize:'11px',fontWeight:800,display:'inline-flex',alignItems:'center',gap:'4px',whiteSpace:'nowrap'});
+    const btnP=(busy)=>({height:'44px',padding:'0 14px',borderRadius:'12px',background:'#FF7A59',color:'#FFFFFF',boxShadow:'0 3px 0 #E05A3A',display:'flex',alignItems:'center',gap:'8px',fontSize:'13px',fontWeight:800,opacity:busy?.7:1});
+    const btnO={height:'44px',padding:'0 14px',borderRadius:'12px',border:'2px solid #E2D5C0',color:'#8A7A6D',display:'flex',alignItems:'center',fontSize:'13px',fontWeight:800};
+    const A=(k,o)=>Object.assign({k,sync:'',syncSt:pill('transparent','#B0A18E'),skel:false,notice:false,text:false,input:false,err:false,code:false,btn:false,link:false,busy:false},o);
+    const acctStates=[
+      A('① đang tải · skeleton giữ cao 150',{skel:true,sync:'…',syncSt:pill('#F3EADA','#A79781')}),
+      A('② không session · online',{sync:'⚡ Chưa kết nối',syncSt:pill('#F3EADA','#8A7A6D'),notice:'Chưa kết nối được tài khoản. Bé vẫn học bình thường, tiến độ lưu trên máy.',noticeIc:'ℹ️',noticeSt:nt('#E2F6F1','#C4E8E1','#1FA396'),btn:'Thử kết nối',btnSt:btnO}),
+      A('③ không session · offline',{sync:'⚡ Ngoại tuyến',syncSt:pill('#F3EADA','#8A7A6D'),notice:'Đang ngoại tuyến — sẽ tự kết nối khi có mạng.',noticeIc:'📡',noticeSt:nt('#FFF1C9','#FFDF9E','#9A6B00')}),
+      A('④ ẩn danh · form email',{sync:'● Chưa đồng bộ 12 mục',syncSt:pill('#FFF1C9','#9A6B00'),text:'Liên kết email để giữ tiến độ và xem trên máy khác.',input:'email@vidu.com',inputSt:Object.assign(input(false,false),{color:'#B0A18E'}),btn:'Liên kết',btnSt:btnP(false)}),
+      A('⑤ busy · spinner trong nút',{sync:'● Chưa đồng bộ 12 mục',syncSt:pill('#FFF1C9','#9A6B00'),input:EMAIL,inputSt:input(false,false),btn:'Đang gửi…',btnSt:btnP(true),busy:true}),
+      A('⑥ OTP',{sync:'● Chưa đồng bộ 12 mục',syncSt:pill('#FFF1C9','#9A6B00'),text:'Nhập mã 6 số vừa gửi tới '+EMAIL,input:'4 8 2 1 _ _',inputSt:Object.assign(input(false,true),{fontFamily:FD,fontSize:'20px',letterSpacing:'6px',justifyContent:'center'}),btn:'Xác nhận',btnSt:btnP(false),link:'Sửa lại email'}),
+      A('⑦ lỗi (1 trong 6 câu) · dưới ô nhập',{sync:'● Chưa đồng bộ 12 mục',syncSt:pill('#FFF1C9','#9A6B00'),input:'4 8 2 1 9 9',inputSt:Object.assign(input(true,false),{fontFamily:FD,fontSize:'20px',letterSpacing:'6px',justifyContent:'center'}),err:'Mã sai hoặc đã hết hạn — gửi lại mã mới nhé.',btn:'Gửi lại mã',btnSt:btnO}),
+      A('⑧ mã khôi phục (notice credential)',{sync:'✓ Đã đồng bộ',syncSt:pill('#E3F6E8','#2E8B4A'),text:'Mã khôi phục — chụp màn hình lại. Chỉ hiện 1 lần.',code:'QZQJ7MFC'}),
+      A('⑨ đã liên kết · email 61 ký tự',{sync:'✓ Đã đồng bộ · 09:41',syncSt:pill('#E3F6E8','#2E8B4A'),text:'Đã liên kết với',input:EMAIL,inputSt:Object.assign(input(false,false),{border:'2px solid #F1E7D4'}),btn:'Đăng xuất',btnSt:btnO}),
+      A('⑩ sync lỗi',{sync:'⚠ Không đồng bộ được',syncSt:pill('#FFE3E6','#C2354B'),input:EMAIL,inputSt:Object.assign(input(false,false),{border:'2px solid #F1E7D4'}),err:'3 mục chưa lên máy chủ. Sẽ thử lại khi có mạng.',btn:'Thử lại',btnSt:btnO}),
+      A('⑪ đang đăng xuất',{sync:'◌ Đang đồng bộ…',syncSt:pill('#E2F6F1','#1FA396'),text:'Đang lưu 3 mục còn lại trước khi đăng xuất…',btn:'Đăng xuất',btnSt:Object.assign({},btnO,{opacity:.5})})
+    ];
+    const remoteRows=[
+      {k:'đang tải',n:LONG,here:'',skel:true,s:false},
+      {k:'lỗi tải',n:'Bé',here:'· máy này',s:'Không tải được — kiểm tra mạng.',c:'#C2354B',btn:'Thử lại'},
+      {k:'chưa có',n:'Bé',here:'',s:'Chưa có dữ liệu trên máy chủ.',c:'#B0A18E'},
+      {k:'có dữ liệu',n:LONG,here:'',s:'🔥 4 ngày · 58\'/tuần · Nói 79 · Từ 77 · Câu 70 · Âm sai /θ/ 46, /r/ 62',c:'#8A7A6D',btn:'Chi tiết'},
+      {k:'máy này',n:'Bé',here:'· máy này',s:'🔥 2 ngày · 20\'/tuần · Nói 81 · Từ — · Câu —',c:'#8A7A6D',btn:'Chi tiết'},
+      {k:'cũ (>7 ngày)',n:'Minh',here:'',s:'Cập nhật 12 ngày trước · 🔥 0 · 0\'/tuần',c:'#B0A18E',btn:'Chi tiết'},
+      {k:'không sync bản ghi',n:'An',here:'',s:'🔥 1 ngày · 12\'/tuần · Nói 65 — bản ghi giọng không đồng bộ',c:'#8A7A6D',btn:'Chi tiết'}
+    ];
+    const remoteRows2=[{n:LONG,s:'🔥 4 ngày · 58\'/tuần · Nói 79 · Từ 77 · Câu 70'},{n:'Minh',s:'Cập nhật 12 ngày trước · 0\'/tuần'}];
+    const red={height:'44px',padding:'0 16px',borderRadius:'12px',background:'#C2354B',color:'#FFFFFF',display:'flex',alignItems:'center',fontSize:'14px',fontWeight:800};
+    const coral={height:'44px',padding:'0 16px',borderRadius:'12px',background:'#FF7A59',color:'#FFFFFF',display:'flex',alignItems:'center',fontSize:'14px',fontWeight:800,boxShadow:'0 3px 0 #E05A3A'};
+    const teal={height:'44px',padding:'0 16px',borderRadius:'12px',background:'#2EC4B6',color:'#FFFFFF',display:'flex',alignItems:'center',fontSize:'14px',fontWeight:800,boxShadow:'0 3px 0 #1FA396'};
+    const dialogs=[
+      {t:'Xoá tiến trình trên máy này?',body:'Sao, chuỗi ngày và bản ghi trên máy này sẽ mất. Tài khoản chưa liên kết nên không có bản lưu nào khác.',btn:'Xoá trên máy này',btnSt:red},
+      {t:'Xoá toàn bộ tiến trình của bé?',body:'Xoá trên máy này VÀ trên tài khoản đã liên kết. Không khôi phục được — kể cả bằng mã khôi phục.',btn:'Xoá tất cả',btnSt:red},
+      {t:'Đăng xuất tài khoản?',body:'Bé vẫn học được. Tiến độ mới sẽ chỉ lưu trên máy này cho tới khi liên kết lại. 3 mục chưa đồng bộ sẽ được gửi trước.',btn:'Đăng xuất',btnSt:coral},
+      {t:'Thêm hồ sơ mới',body:false,input:'Ví dụ: Bé Su',btn:'Thêm',btnSt:teal}
+    ];
+    return{foxIdle,profiles8,profiles3,dashProfiles,stages,authErrs,codeErrs,chart14,chart7,days7,avgs,weakSounds,limits,bands,lengths,recs5,sk,acctStates,remoteRows,remoteRows2,dialogs};
+  }
+}
+</script>
+</body>
+</html>

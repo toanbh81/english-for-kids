@@ -5,9 +5,9 @@ Project: `claude.ai/design/p/9c792842-beb0-4158-a5d7-a3ac91730d3c` ("Speak Up", 
 | Vòng | File | Artboard | Trạng thái |
 |---|---|---|---|
 | 1 Nền tảng | `Speak Up Foundation.dc.html` (70 KB) | Khung phone / iPad ngang / iPad dọc + component sheet (Button, MicButton, đếm ngược, badge, LessonChip, ResultCard, 5 lỗi, not-found, 5 empty, 6 notice, dialog, skeleton, sync 7, Stars gộp, BackButton 3 cỡ) + trả lời Q3/Q4/Q6 | ✅ đủ |
-| 2 Khung luyện nói | `Speak Up Practice Frame.dc.html` (80 KB) | B6 phone idle / recording / result · B6 iPad ngang · B6 iPad dọc | ⚠ chỉ có carrier B6; 8 biến thể B1/B3/B4/B5/C4/C7/C9 chưa vẽ |
+| 2 Khung luyện nói | `Speak Up Practice Frame.dc.html` (115 KB, cập nhật 2026-09-03) | B6 phone idle / recording / result · B6 iPad ngang · B6 iPad dọc · **8 biến thể còn lại** (B1 B3 B4 B5 C4 C7 C9 + SoundWordList) idle ở phone + iPad ngang · trả lời Q7–Q10 | ✅ đủ |
 | 3 Danh sách & điều hướng | `Speak Up Lists & Nav.dc.html` (85 KB) | C6 review ×3 frame · C1 · C8 · A3 Home iPad dọc + phone 3 banner · A6 rỗng + iPad ngang · A7 0 sao · A8 · A9 phone + iPad · C2 · C3 ×2 | ✅ (khung danh sách chung dùng C6 làm carrier) |
-| 4 Khu người lớn | `Speak Up Parent Zone.dc.html` | — | ❌ page rỗng, chưa làm |
+| 4 Khu người lớn | `Speak Up Parent Zone.dc.html` (68 KB, 2026-09-03) | P1 ParentGate phone + iPad ngang · A1 ProfileGate overlay phone · A2 CloudStart 8 stage · P2 Dashboard iPad dọc + phone (10 panel, 3 frame) · dialog thật · Q17/Q18 | ✅ đủ |
 
 `tokens/` — 4 file CSS token của design system trong project (colors, effects, spacing, typography). Project còn có `components/*.jsx|.d.ts|.prompt.md` (Button, Chip, Stars, GameCard, SpeechBubble, Foxy, MicButton) và `guidelines/*.card.html` — chưa kéo, kéo khi viết brief vòng 1.
 
