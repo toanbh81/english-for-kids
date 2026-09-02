@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
 import App from './App'
 import { AppErrorBoundary } from './components/AppErrorBoundary'
+import { DialogProvider } from './components/ui/DialogProvider'
 import { bootstrapProfiles } from './cloud/profileState'
 import { startSync } from './cloud/sync'
 import { ProfileGate } from './screens/ProfileGate'
@@ -28,7 +29,12 @@ createRoot(document.getElementById('root')!).render(
         * else — no picker, no flash, no extra tap. */}
       <ProfileGate>
         <BrowserRouter>
-          <App />
+          {/* Real `<Dialog>`s replace the browser's native confirm/prompt globals app-wide (Phase
+            * 12 task 12) — inside the router because `useDialog` has no need to survive a route
+            * change, and outside `App` so every screen can reach it via `useDialog()`. */}
+          <DialogProvider>
+            <App />
+          </DialogProvider>
         </BrowserRouter>
       </ProfileGate>
     </AppErrorBoundary>

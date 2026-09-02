@@ -37,6 +37,17 @@ export type Profile = { id: string; name: string; avatar: string; created: numbe
 export const DEFAULT_PROFILE_NAME = 'Bé'
 export const DEFAULT_PROFILE_AVATAR = '🦊'
 
+/** A name this long still fits the roster, the dashboard row and every dialog it is typed into. */
+export const NAME_MAX = 40
+
+/**
+ * The short form shown wherever space is tight (profile tiles, the dashboard's active-profile
+ * row) — the last one or two whitespace-separated words, which for a Vietnamese full name is the
+ * given name, the part a child answers to. The full name still appears in `title=` and in the
+ * dialogs that edit it.
+ */
+export const shortName = (name: string): string => name.trim().split(/\s+/).slice(-2).join(' ')
+
 // ---------------------------------------------------------------------------
 // Ids
 // ---------------------------------------------------------------------------
@@ -220,7 +231,7 @@ export { activeProfileId }
 export function addProfile(name?: string, avatar?: string): Profile | null {
   const profile: Profile = {
     id: newProfileId(),
-    name: name?.trim() || DEFAULT_PROFILE_NAME,
+    name: (name ?? '').trim().slice(0, NAME_MAX) || DEFAULT_PROFILE_NAME,
     avatar: avatar || DEFAULT_PROFILE_AVATAR,
     created: Date.now(),
   }
@@ -327,7 +338,7 @@ export function adoptProfiles(remote: Profile[]): Profile[] | null {
  * lives under (the id never changes). See `renameRemoteProfile` for the other half.
  */
 export function renameProfile(id: string, name: string): Profile[] {
-  const trimmed = name.trim()
+  const trimmed = name.trim().slice(0, NAME_MAX)
   if (!trimmed) return listProfiles()
   const { profiles: roster, damaged } = readRoster()
   // Explicit, not incidental. A damaged roster finds no match and would return before writing

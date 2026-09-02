@@ -24,6 +24,7 @@ import {
 } from '../cloud/auth'
 import type { Profile } from '../cloud/profileState'
 import {
+  NAME_MAX,
   activeProfileId,
   addProfile,
   ensureRemoteProfiles,
@@ -31,6 +32,7 @@ import {
   listProfiles,
   renameProfile,
   renameRemoteProfile,
+  shortName,
   switchProfile,
 } from '../cloud/profileState'
 import { hasPendingReset, resetRemoteProgress, subscribeSyncStatus, syncStatus } from '../cloud/sync'
@@ -40,6 +42,7 @@ import type { RemoteStats } from '../cloud/remote'
 import { isCloudConfigured } from '../cloud/supabase'
 import { ProfilePicker } from '../components/ProfilePicker'
 import { Button, Card, EmptyState, Notice, PAGE_SHELL } from '../components/ui'
+import { useDialog } from '../components/ui/useDialog'
 
 /**
  * Phone styles sit at the default breakpoint and `md:` (768) puts the tablet/iPad value back — the
@@ -140,6 +143,7 @@ type Props = {
 }
 
 export function ParentDashboard({ onLock }: Props) {
+  const dialog = useDialog()
   const [recordings, setRecordings] = useState<Recording[]>([])
   // One read of the activity log per mount (and per reset), shared by every query below; the
   // snapshot doubles as the reload key for the recordings list.
@@ -365,10 +369,15 @@ export function ParentDashboard({ onLock }: Props) {
     // The old wording was from the local-only era and stopped being true the moment this button
     // also emptied the mirror: the cloud copy of this child goes with it, and no device gets it
     // back. A parent may not find that out afterwards.
-    const question = cloudAvailable && activeId
-      ? 'Xoá toàn bộ sao, lịch sử và bản ghi của bé trên máy này, và xoá luôn bản đã lưu trên tài khoản? Máy khác sẽ không tải lại được nữa.'
-      : 'Xoá toàn bộ sao, lịch sử và bản ghi?'
-    if (!window.confirm(question)) return
+    const body = cloudAvailable && activeId
+      ? 'Sao, chuỗi ngày và bản ghi trên máy này sẽ mất. Bản lưu trên tài khoản cũng bị xoá. Không khôi phục được.'
+      : 'Sao, chuỗi ngày và bản ghi trên máy này sẽ mất. Không khôi phục được.'
+    const ok = await dialog.destructive({
+      title: 'Xoá toàn bộ tiến trình của bé?',
+      body,
+      confirmLabel: 'Xoá tiến trình',
+    })
+    if (!ok) return
     setResetNotice(null)
     clearStars()
     clearActivity()
@@ -377,6 +386,9 @@ export function ParentDashboard({ onLock }: Props) {
     // old band and still tick items off against an event log that no longer exists.
     clearLessons()
     clearBand()
+    // Busy from here to the end: the confirm dialog is already gone, but a parent double-tapping
+    // "Đặt lại tiến trình" mid-reset would otherwise re-open it over an unfinished wipe.
+    dialog.setBusy(true)
     await clearRecordings()
     setLimit(String(getLimitMinutes()))
     // Written out rather than re-read: `getBand()` and the lesson store both persist on first read,
@@ -387,12 +399,13 @@ export function ParentDashboard({ onLock }: Props) {
     setSnapshot({ events: getActivity(), now: Date.now() })
     // Constraint #3: reset is two halves, and this is the mirror's — called from here, the visible
     // foreground screen, so it can never race the hidden-tab flush trigger.
-    if (!cloudAvailable || !activeId) return
+    if (!cloudAvailable || !activeId) { dialog.setBusy(false); return }
     // …and the answer is not thrown away. Offline, or on any DELETE error, the server still holds
     // every row: the sync engine has written down that the reset is owed and will finish it before
     // it pulls anything, but the parent is told plainly rather than left to discover it — either
     // now (nothing looks wrong) or, worse, in a week when it does not.
     if (!(await resetRemoteProgress(activeId))) setResetNotice(PENDING_RESET_NOTICE)
+    dialog.setBusy(false)
   }
 
   /** The reset-notice's "Thử xoá lại" action: the same mirror-side call `handleReset` makes,
@@ -441,15 +454,22 @@ export function ParentDashboard({ onLock }: Props) {
   }
 
   async function handleSignOut() {
-    if (!window.confirm('Đăng xuất khỏi tài khoản này?')) return
+    const ok = await dialog.confirm({
+      title: 'Đăng xuất khỏi tài khoản này?',
+      body: 'Bé vẫn học được, tiến độ sẽ không đồng bộ.',
+      confirmLabel: 'Đăng xuất',
+    })
+    if (!ok) return
+    dialog.setBusy(true)
     const result = await signOut()
+    dialog.setBusy(false)
     // Signing out leaves this device with NO session, which is the third state above — not an
     // anonymous one. Saying otherwise is what drew a link form that could not work.
     if (result.ok) { setEmail(null); setHasSession(false) }
   }
 
-  function handleAddProfile() {
-    const name = window.prompt('Tên của bé:')
+  async function handleAddProfile() {
+    const name = await dialog.prompt({ title: 'Thêm hồ sơ', label: 'Tên của bé', maxLength: NAME_MAX })
     if (name === null) return
     setProfileNotice(null)
     // `null` means the child is not on disk — an unreadable roster this must not write over, or a
@@ -465,10 +485,10 @@ export function ParentDashboard({ onLock }: Props) {
     if (cloudAvailable) void ensureRemoteProfiles()
   }
 
-  function handleRenameActiveProfile() {
+  async function handleRenameActiveProfile() {
     const current = profiles.find(p => p.id === activeId)
     if (!current) return
-    const name = window.prompt('Đổi tên hồ sơ:', current.name)
+    const name = await dialog.prompt({ title: 'Đổi tên hồ sơ', label: 'Tên của bé', initial: current.name, maxLength: NAME_MAX })
     if (name === null || !name.trim()) return
     setProfiles(renameProfile(current.id, name))
     if (cloudAvailable) void renameRemoteProfile(current.id, name)
@@ -604,7 +624,7 @@ export function ParentDashboard({ onLock }: Props) {
                 <p className="text-sm font-semibold text-ink-900">{email}</p>
                 <button
                   type="button"
-                  onClick={handleSignOut}
+                  onClick={() => { void handleSignOut() }}
                   className="min-h-[44px] rounded-xl2 border border-line-200 px-3 text-xs font-semibold text-ink-500"
                 >
                   Đăng xuất
@@ -617,7 +637,7 @@ export function ParentDashboard({ onLock }: Props) {
                 <h3 className="text-xs font-bold text-ink-500 md:text-sm">Hồ sơ</h3>
                 <button
                   type="button"
-                  onClick={handleAddProfile}
+                  onClick={() => { void handleAddProfile() }}
                   className="min-h-[36px] rounded-xl2 bg-teal-50 px-3 text-xs font-bold text-teal-700"
                 >
                   + Thêm hồ sơ
@@ -630,10 +650,10 @@ export function ParentDashboard({ onLock }: Props) {
                 * name taps the button, and that button is the one that writes the roster. */}
               {activeProfileEntry ? (
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <p className="text-sm font-semibold text-ink-900">
-                    {activeProfileEntry.avatar} {activeProfileEntry.name}
+                  <p className="text-sm font-semibold text-ink-900" title={activeProfileEntry.name}>
+                    {activeProfileEntry.avatar} {shortName(activeProfileEntry.name)}
                   </p>
-                  <button type="button" onClick={handleRenameActiveProfile} className="min-h-[36px] text-xs font-bold text-ink-500 underline">
+                  <button type="button" onClick={() => { void handleRenameActiveProfile() }} className="min-h-[36px] text-xs font-bold text-ink-500 underline">
                     Đổi tên
                   </button>
                 </div>
@@ -986,7 +1006,7 @@ export function ParentDashboard({ onLock }: Props) {
 
         <div className="flex flex-col items-start gap-2">
           {/* `max-md:`, because `min-h-[64px] px-8 text-[22px]` are `Button`'s own classes. */}
-          <Button variant="outline" onClick={handleReset} className="self-start max-md:min-h-[48px] max-md:px-4 max-md:text-base">
+          <Button variant="outline" onClick={() => { void handleReset() }} className="self-start max-md:min-h-[48px] max-md:px-4 max-md:text-base">
             Đặt lại tiến trình
           </Button>
           {resetNotice && (

@@ -22,6 +22,7 @@ vi.mock('./auth', () => auth)
 import {
   DEFAULT_PROFILE_AVATAR,
   DEFAULT_PROFILE_NAME,
+  NAME_MAX,
   addProfile,
   adoptProfiles,
   bootstrapProfiles,
@@ -34,6 +35,7 @@ import {
   activeProfile,
   renameProfile,
   renameRemoteProfile,
+  shortName,
   switchProfile,
 } from './profileState'
 
@@ -594,5 +596,18 @@ describe('renaming a profile locally', () => {
     expect(renameProfile('11111111-2222-4333-8444-555555555555', 'Ai đó')).toEqual(listProfiles())
     expect(renameProfile(profile.id, '   ')).toEqual(listProfiles())
     expect(listProfiles().find(p => p.id === profile.id)?.name).toBe('Bé')
+  })
+
+  it('clamps a profile name to 40 characters and shortens to the last two words', () => {
+    expect(shortName('Nguyễn Hoàng Bảo Ngọc Anh Thư')).toBe('Anh Thư')
+    expect(shortName('Bé')).toBe('Bé')
+    const p = addProfile('x'.repeat(50))
+    expect(p?.name).toHaveLength(40)
+  })
+
+  it('clamps a renamed profile to 40 characters too', () => {
+    const profile = addProfile('Bé')!
+    const roster = renameProfile(profile.id, 'y'.repeat(50))
+    expect(roster.find(p => p.id === profile.id)?.name).toHaveLength(NAME_MAX)
   })
 })

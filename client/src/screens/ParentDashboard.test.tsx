@@ -1,7 +1,8 @@
 import 'fake-indexeddb/auto'
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import type { ReactElement } from 'react'
+import { DialogProvider } from '../components/ui/DialogProvider'
 import type { ActivityEvent } from '../progress/activity'
 import { getBand } from '../progress/band'
 import { getLessonLength } from '../progress/lesson'
@@ -43,6 +44,8 @@ vi.mock('../cloud/auth', () => authMock)
 type MockProfile = { id: string; name: string; avatar: string; created: number }
 const ACTIVE_PROFILE: MockProfile = { id: 'p1', name: 'Bé', avatar: '🦊', created: 0 }
 const profileStateMock = vi.hoisted(() => ({
+  NAME_MAX: 40,
+  shortName: (name: string) => name.trim().split(/\s+/).slice(-2).join(' '),
   listProfiles: vi.fn<() => MockProfile[]>(),
   activeProfileId: vi.fn<() => string | null>(),
   addProfile: vi.fn<(name?: string) => MockProfile | null>(),
@@ -86,8 +89,12 @@ import { ParentDashboard } from './ParentDashboard'
 
 const FLAG_KEY = 'speakup.parent'
 
-function renderWithRouter(ui: ReactElement) {
-  return render(<MemoryRouter>{ui}</MemoryRouter>)
+/** Every screen that renders `ParentDashboard` now reaches `useDialog()` — real `<Dialog>`s
+ * replaced the browser's native confirm/prompt globals (Phase 12 task 12) — so this wraps every
+ * render in a `DialogProvider`, once, rather than editing each of this file's many `render` calls
+ * by hand. */
+function renderWithDialogs(ui: ReactElement) {
+  return render(<MemoryRouter><DialogProvider>{ui}</DialogProvider></MemoryRouter>)
 }
 
 /** Flush the microtask queue (e.g. the mocked listRecordings promise) inside act so the
@@ -139,7 +146,7 @@ afterEach(() => {
 describe('ParentGate', () => {
   it('rejects a wrong product and accepts the right one', async () => {
     vi.spyOn(Math, 'random').mockReturnValue(0) // a = 3, b = 3 -> product 9
-    renderWithRouter(<ParentGate />)
+    renderWithDialogs(<ParentGate />)
 
     expect(screen.getByText('3 × 3 = ?')).toBeInTheDocument()
 
@@ -156,7 +163,7 @@ describe('ParentGate', () => {
 
   it('submits and opens the dashboard when Enter is pressed with the right answer', async () => {
     vi.spyOn(Math, 'random').mockReturnValue(0) // a = 3, b = 3 -> product 9
-    renderWithRouter(<ParentGate />)
+    renderWithDialogs(<ParentGate />)
 
     const input = screen.getByLabelText('Đáp án')
     fireEvent.change(input, { target: { value: '9' } })
@@ -168,7 +175,7 @@ describe('ParentGate', () => {
 
   it('skips the gate and shows the dashboard when the session flag is fresh', async () => {
     sessionStorage.setItem(FLAG_KEY, String(Date.now()))
-    renderWithRouter(<ParentGate />)
+    renderWithDialogs(<ParentGate />)
 
     await screen.findByText(/Phút luyện mỗi ngày/)
     expect(screen.queryByLabelText('Đáp án')).not.toBeInTheDocument()
@@ -176,7 +183,7 @@ describe('ParentGate', () => {
 
   it('asks the question again when the session flag is older than 10 minutes', () => {
     sessionStorage.setItem(FLAG_KEY, String(Date.now() - 10 * 60 * 1000 - 1))
-    renderWithRouter(<ParentGate />)
+    renderWithDialogs(<ParentGate />)
 
     expect(screen.getByLabelText('Đáp án')).toBeInTheDocument()
     expect(screen.queryByText(/Phút luyện mỗi ngày/)).not.toBeInTheDocument()
@@ -184,14 +191,14 @@ describe('ParentGate', () => {
 
   it('asks the question again when the session flag is not a timestamp', () => {
     sessionStorage.setItem(FLAG_KEY, '1')
-    renderWithRouter(<ParentGate />)
+    renderWithDialogs(<ParentGate />)
 
     expect(screen.getByLabelText('Đáp án')).toBeInTheDocument()
   })
 
   it('clears the session flag on unmount so leaving /parent re-locks the gate', async () => {
     sessionStorage.setItem(FLAG_KEY, String(Date.now()))
-    const { unmount } = renderWithRouter(<ParentGate />)
+    const { unmount } = renderWithDialogs(<ParentGate />)
     await screen.findByText(/Phút luyện mỗi ngày/)
 
     unmount()
@@ -201,7 +208,7 @@ describe('ParentGate', () => {
 
   it('returns to the gate when "Khoá lại" is clicked', async () => {
     vi.spyOn(Math, 'random').mockReturnValue(0) // a = 3, b = 3 -> product 9
-    renderWithRouter(<ParentGate />)
+    renderWithDialogs(<ParentGate />)
 
     fireEvent.change(screen.getByLabelText('Đáp án'), { target: { value: '9' } })
     fireEvent.click(screen.getByRole('button', { name: 'Vào' }))
@@ -231,7 +238,7 @@ describe('ParentDashboard', () => {
       { ts: NOW, kind: 'speak', id: 'w4', score: 80, phonemes: [{ phoneme: 'r', score: 80 }] },
     ])
 
-    renderWithRouter(<ParentDashboard />)
+    renderWithDialogs(<ParentDashboard />)
     await flush()
 
     expect(screen.getAllByTestId('minute-bar')).toHaveLength(14)
@@ -242,7 +249,7 @@ describe('ParentDashboard', () => {
   })
 
   it('shows the "chưa đủ dữ liệu" empty state when there is no phoneme data', async () => {
-    renderWithRouter(<ParentDashboard />)
+    renderWithDialogs(<ParentDashboard />)
     await flush()
 
     expect(screen.getByText('Chưa đủ dữ liệu')).toBeInTheDocument()
@@ -252,28 +259,28 @@ describe('ParentDashboard', () => {
     vi.useFakeTimers({ now: NOW })
     seedActivity([{ ts: NOW, kind: 'speak', id: 'w1', score: 80 }])
 
-    renderWithRouter(<ParentDashboard />)
+    renderWithDialogs(<ParentDashboard />)
     await flush()
 
     expect(screen.getByText('Tuần này: 1 phút luyện · điểm phát âm trung bình 80/100')).toBeInTheDocument()
   })
 
   it('shows a dash for the average score in the summary line when there is no data', async () => {
-    renderWithRouter(<ParentDashboard />)
+    renderWithDialogs(<ParentDashboard />)
     await flush()
 
     expect(screen.getByText('Tuần này: 0 phút luyện · điểm phát âm trung bình —/100')).toBeInTheDocument()
   })
 
   it('shows the target line label at the current daily limit', async () => {
-    renderWithRouter(<ParentDashboard />)
+    renderWithDialogs(<ParentDashboard />)
     await flush()
 
     expect(screen.getByText('Mục tiêu 20 phút/ngày')).toBeInTheDocument()
   })
 
   it('persists a limit chip click', async () => {
-    renderWithRouter(<ParentDashboard />)
+    renderWithDialogs(<ParentDashboard />)
     await flush()
 
     fireEvent.click(screen.getByRole('button', { name: '30 phút' }))
@@ -288,7 +295,7 @@ describe('ParentDashboard', () => {
       { id: 'r1', ts: new Date('2026-08-20T09:05:00').getTime(), text: 'apple', blob },
     ])
 
-    renderWithRouter(<ParentDashboard />)
+    renderWithDialogs(<ParentDashboard />)
 
     const playButton = await screen.findByRole('button', { name: 'Phát' })
     fireEvent.click(playButton)
@@ -297,7 +304,7 @@ describe('ParentDashboard', () => {
   })
 
   it('persists a daily limit change to localStorage, clamped to the 5-60 range', async () => {
-    renderWithRouter(<ParentDashboard />)
+    renderWithDialogs(<ParentDashboard />)
     await flush()
 
     const input = screen.getByRole('spinbutton')
@@ -307,7 +314,7 @@ describe('ParentDashboard', () => {
   })
 
   it('re-syncs the displayed limit to the clamped stored value on blur', async () => {
-    renderWithRouter(<ParentDashboard />)
+    renderWithDialogs(<ParentDashboard />)
     await flush()
 
     const input = screen.getByRole('spinbutton')
@@ -321,12 +328,12 @@ describe('ParentDashboard', () => {
   it('resets progress and clears speakup.stars after the confirm dialog is accepted', async () => {
     localStorage.setItem('speakup.stars', JSON.stringify({ a: 3 }))
     localStorage.setItem('speakup.activity', JSON.stringify([{ ts: NOW, kind: 'speak', id: 'w1', score: 80 }]))
-    vi.spyOn(window, 'confirm').mockReturnValue(true)
 
-    renderWithRouter(<ParentDashboard />)
+    renderWithDialogs(<ParentDashboard />)
     await flush()
 
     fireEvent.click(screen.getByRole('button', { name: 'Đặt lại tiến trình' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Xoá tiến trình' }))
 
     await waitFor(() => expect(localStorage.getItem('speakup.stars')).toBeNull())
     expect(localStorage.getItem('speakup.activity')).toBeNull()
@@ -337,12 +344,12 @@ describe('ParentDashboard', () => {
     localStorage.setItem('speakup.lesson.2026-08-23', JSON.stringify({ v: 1, day: '2026-08-23', created: NOW, band: 4, items: [] }))
     localStorage.setItem('speakup.lesson.length', 'long')
     localStorage.setItem('speakup.band', JSON.stringify({ value: 4, mode: 'manual' }))
-    vi.spyOn(window, 'confirm').mockReturnValue(true)
 
-    renderWithRouter(<ParentDashboard />)
+    renderWithDialogs(<ParentDashboard />)
     await flush()
 
     fireEvent.click(screen.getByRole('button', { name: 'Đặt lại tiến trình' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Xoá tiến trình' }))
 
     // `handleReset` clears `speakup.band` synchronously, before its `await clearRecordings()` —
     // so a waitFor keyed on that key resolves on its very first (immediate) poll, before the
@@ -363,12 +370,13 @@ describe('ParentDashboard', () => {
 
   it('does not reset progress when the confirm dialog is dismissed', async () => {
     localStorage.setItem('speakup.stars', JSON.stringify({ a: 3 }))
-    vi.spyOn(window, 'confirm').mockReturnValue(false)
 
-    renderWithRouter(<ParentDashboard />)
+    renderWithDialogs(<ParentDashboard />)
     await flush()
 
     fireEvent.click(screen.getByRole('button', { name: 'Đặt lại tiến trình' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Huỷ' }))
+    await flush()
 
     expect(localStorage.getItem('speakup.stars')).not.toBeNull()
     expect(recordingsMock.clearRecordings).not.toHaveBeenCalled()
@@ -378,7 +386,7 @@ describe('ParentDashboard', () => {
     localStorage.setItem('speakup.band', JSON.stringify({ value: 3, mode: 'manual' }))
     localStorage.setItem('speakup.lesson.length', 'long')
 
-    renderWithRouter(<ParentDashboard />)
+    renderWithDialogs(<ParentDashboard />)
     await flush()
 
     expect(screen.getByRole('button', { name: 'Bậc 3' })).toHaveAttribute('aria-pressed', 'true')
@@ -389,7 +397,7 @@ describe('ParentDashboard', () => {
   })
 
   it('pressing a band button persists the value and switches to manual mode', async () => {
-    renderWithRouter(<ParentDashboard />)
+    renderWithDialogs(<ParentDashboard />)
     await flush()
 
     fireEvent.click(screen.getByRole('button', { name: 'Bậc 4' }))
@@ -402,7 +410,7 @@ describe('ParentDashboard', () => {
   it('toggling "Tự động" back on resumes auto mode from the current band value', async () => {
     localStorage.setItem('speakup.band', JSON.stringify({ value: 2, mode: 'manual' }))
 
-    renderWithRouter(<ParentDashboard />)
+    renderWithDialogs(<ParentDashboard />)
     await flush()
 
     fireEvent.click(screen.getByRole('button', { name: 'Tự động' }))
@@ -413,7 +421,7 @@ describe('ParentDashboard', () => {
   })
 
   it('says when a difficulty or length change takes effect', async () => {
-    renderWithRouter(<ParentDashboard />)
+    renderWithDialogs(<ParentDashboard />)
     await flush()
 
     expect(screen.getByText('Áp dụng từ bài học ngày mai.')).toBeInTheDocument()
@@ -432,7 +440,7 @@ describe('ParentDashboard', () => {
       { id: 'r1', ts: NOW, text: 'apple', blob: new Blob(['x']) },
     ])
 
-    renderWithRouter(<ParentDashboard />)
+    renderWithDialogs(<ParentDashboard />)
     const heading = await screen.findByText('Bản ghi gần đây')
 
     const summary = heading.closest('summary')!
@@ -452,7 +460,7 @@ describe('ParentDashboard', () => {
    * 64 px is restored at `md`, which is what these class pairs pin.
    */
   it('uses adult 44 px controls on a phone and the 64 px ones from md up', async () => {
-    renderWithRouter(<ParentDashboard />)
+    renderWithDialogs(<ParentDashboard />)
     await flush()
 
     for (const name of ['Bậc 3', 'Tự động', '30 phút', 'Vừa ~12 phút']) {
@@ -470,7 +478,7 @@ describe('ParentDashboard', () => {
     // The chart shows an empty state in place of the bars with no activity at all — seed one
     // event so this test exercises the bars, which is what it is actually about.
     seedActivity([{ ts: Date.now(), kind: 'speak', id: 'w1', score: 80 }])
-    renderWithRouter(<ParentDashboard />)
+    renderWithDialogs(<ParentDashboard />)
     await flush()
 
     const cells = screen.getAllByTestId('minute-bar').map(bar => bar.parentElement!)
@@ -484,7 +492,7 @@ describe('ParentDashboard', () => {
   })
 
   it('shows the empty state for the whole chart region — bars, date labels and total — when there is no activity at all', async () => {
-    renderWithRouter(<ParentDashboard />)
+    renderWithDialogs(<ParentDashboard />)
     await flush()
 
     expect(screen.getByText('Chưa có lịch sử luyện')).toBeInTheDocument()
@@ -495,7 +503,7 @@ describe('ParentDashboard', () => {
   })
 
   it('pressing a length chip persists the lesson length', async () => {
-    renderWithRouter(<ParentDashboard />)
+    renderWithDialogs(<ParentDashboard />)
     await flush()
 
     fireEvent.click(screen.getByRole('button', { name: 'Ngắn ~8 phút' }))
@@ -508,7 +516,7 @@ describe('ParentDashboard', () => {
 describe('Phase 11: "Tài khoản"', () => {
   it('is entirely absent with no cloud configured', async () => {
     cloud.configured = false
-    renderWithRouter(<ParentDashboard />)
+    renderWithDialogs(<ParentDashboard />)
     await flush()
 
     expect(screen.queryByTestId('account-card')).not.toBeInTheDocument()
@@ -518,7 +526,7 @@ describe('Phase 11: "Tài khoản"', () => {
     cloud.configured = true
     authMock.ensureRecoveryCode.mockResolvedValue('ABC23XYZ')
 
-    renderWithRouter(<ParentDashboard />)
+    renderWithDialogs(<ParentDashboard />)
     await flush()
 
     // The positive twin of the "is entirely absent with no cloud configured" test below, which only
@@ -536,7 +544,7 @@ describe('Phase 11: "Tài khoản"', () => {
     authMock.isAnonymous.mockResolvedValue(false)
     authMock.currentEmail.mockResolvedValue('bome@example.com')
 
-    renderWithRouter(<ParentDashboard />)
+    renderWithDialogs(<ParentDashboard />)
     await flush()
 
     expect(authMock.ensureRecoveryCode).not.toHaveBeenCalled()
@@ -548,7 +556,7 @@ describe('Phase 11: "Tài khoản"', () => {
     cloud.configured = true
     syncMock.syncStatus.mockReturnValue({ state: 'pending', pending: 3, lastSyncedAt: null, lastError: null, syncing: false })
 
-    renderWithRouter(<ParentDashboard />)
+    renderWithDialogs(<ParentDashboard />)
     await flush()
 
     expect(screen.getByTestId('sync-status')).toHaveTextContent('Chưa đồng bộ 3 mục')
@@ -559,7 +567,7 @@ describe('Phase 11: "Tài khoản"', () => {
     const unsubscribe = vi.fn()
     syncMock.subscribeSyncStatus.mockReturnValue(unsubscribe)
 
-    const { unmount } = renderWithRouter(<ParentDashboard />)
+    const { unmount } = renderWithDialogs(<ParentDashboard />)
     await flush()
     expect(syncMock.subscribeSyncStatus).toHaveBeenCalledTimes(1)
 
@@ -569,7 +577,7 @@ describe('Phase 11: "Tài khoản"', () => {
 
   it('links an email end to end: OTP sent, verified, then shows the signed-in state', async () => {
     cloud.configured = true
-    renderWithRouter(<ParentDashboard />)
+    renderWithDialogs(<ParentDashboard />)
     await flush()
 
     fireEvent.change(screen.getByLabelText('Email của bố/mẹ'), { target: { value: 'bome@example.com' } })
@@ -594,7 +602,7 @@ describe('Phase 11: "Tài khoản"', () => {
     cloud.configured = true
     authMock.verifyEmailOtp.mockResolvedValue({ ok: false, error: 'Token has expired or is invalid' })
 
-    renderWithRouter(<ParentDashboard />)
+    renderWithDialogs(<ParentDashboard />)
     await flush()
     fireEvent.change(screen.getByLabelText('Email của bố/mẹ'), { target: { value: 'bome@example.com' } })
     await act(async () => { fireEvent.submit(screen.getByLabelText('Email của bố/mẹ').closest('form')!) })
@@ -610,7 +618,7 @@ describe('Phase 11: "Tài khoản"', () => {
     cloud.configured = true
     authMock.linkEmail.mockResolvedValue({ ok: false, error: 'Failed to fetch' })
 
-    renderWithRouter(<ParentDashboard />)
+    renderWithDialogs(<ParentDashboard />)
     await flush()
     fireEvent.change(screen.getByLabelText('Email của bố/mẹ'), { target: { value: 'bome@example.com' } })
     await act(async () => { fireEvent.submit(screen.getByLabelText('Email của bố/mẹ').closest('form')!) })
@@ -621,7 +629,7 @@ describe('Phase 11: "Tài khoản"', () => {
 
   it('lets the parent correct a typo\'d email before it is verified', async () => {
     cloud.configured = true
-    renderWithRouter(<ParentDashboard />)
+    renderWithDialogs(<ParentDashboard />)
     await flush()
     fireEvent.change(screen.getByLabelText('Email của bố/mẹ'), { target: { value: 'typo@example.com' } })
     await act(async () => { fireEvent.submit(screen.getByLabelText('Email của bố/mẹ').closest('form')!) })
@@ -639,12 +647,14 @@ describe('Phase 11: "Tài khoản"', () => {
     cloud.configured = true
     authMock.isAnonymous.mockResolvedValue(false)
     authMock.currentEmail.mockResolvedValue('bome@example.com')
-    vi.spyOn(window, 'confirm').mockReturnValue(true)
 
-    renderWithRouter(<ParentDashboard />)
+    renderWithDialogs(<ParentDashboard />)
     await flush()
 
     fireEvent.click(screen.getByRole('button', { name: 'Đăng xuất' }))
+    // The trigger button underneath and the dialog's own confirm button share the same label, so
+    // the click has to be scoped to the dialog.
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Đăng xuất' }))
     await flush()
 
     expect(authMock.signOut).toHaveBeenCalled()
@@ -657,13 +667,15 @@ describe('Phase 11: "Tài khoản"', () => {
 
   it('adds a profile and registers it with the server', async () => {
     cloud.configured = true
-    vi.spyOn(window, 'prompt').mockReturnValue('Bé 2')
     profileStateMock.listProfiles.mockReturnValueOnce([ACTIVE_PROFILE]).mockReturnValue([ACTIVE_PROFILE, { id: 'p2', name: 'Bé 2', avatar: '🦊', created: 1 }])
 
-    renderWithRouter(<ParentDashboard />)
+    renderWithDialogs(<ParentDashboard />)
     await flush()
 
     fireEvent.click(screen.getByRole('button', { name: '+ Thêm hồ sơ' }))
+    fireEvent.change(screen.getByLabelText('Tên của bé'), { target: { value: 'Bé 2' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Lưu' }))
+    await flush()
 
     expect(profileStateMock.addProfile).toHaveBeenCalledWith('Bé 2')
     expect(profileStateMock.ensureRemoteProfiles).toHaveBeenCalled()
@@ -676,13 +688,15 @@ describe('Phase 11: "Tài khoản"', () => {
    */
   it('says so when the new child could not be saved', async () => {
     cloud.configured = true
-    vi.spyOn(window, 'prompt').mockReturnValue('Bé 2')
     profileStateMock.addProfile.mockReturnValue(null)
 
-    renderWithRouter(<ParentDashboard />)
+    renderWithDialogs(<ParentDashboard />)
     await flush()
 
     fireEvent.click(screen.getByRole('button', { name: '+ Thêm hồ sơ' }))
+    fireEvent.change(screen.getByLabelText('Tên của bé'), { target: { value: 'Bé 2' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Lưu' }))
+    await flush()
 
     expect(screen.getByTestId('profile-notice')).toHaveTextContent('Chưa lưu được hồ sơ mới')
     // The child is not announced to the server either — there is no child.
@@ -700,7 +714,7 @@ describe('Phase 11: "Tài khoản"', () => {
     profileStateMock.listProfiles.mockReturnValue([])
     profileStateMock.activeProfileId.mockReturnValue('p1')
 
-    renderWithRouter(<ParentDashboard />)
+    renderWithDialogs(<ParentDashboard />)
     await flush()
 
     expect(screen.getByTestId('profile-unreadable')).toHaveTextContent('Chưa đọc được danh sách hồ sơ')
@@ -714,7 +728,7 @@ describe('Phase 11: "Tài khoản"', () => {
     profileStateMock.listProfiles.mockReturnValue([ACTIVE_PROFILE])
     profileStateMock.activeProfileId.mockReturnValue(null)
 
-    renderWithRouter(<ParentDashboard />)
+    renderWithDialogs(<ParentDashboard />)
     await flush()
 
     expect(screen.getByTestId('profile-unreadable')).toBeInTheDocument()
@@ -723,7 +737,7 @@ describe('Phase 11: "Tài khoản"', () => {
   it('shows the name normally when the roster reads fine', async () => {
     cloud.configured = true
 
-    renderWithRouter(<ParentDashboard />)
+    renderWithDialogs(<ParentDashboard />)
     await flush()
 
     expect(screen.queryByTestId('profile-unreadable')).not.toBeInTheDocument()
@@ -732,24 +746,27 @@ describe('Phase 11: "Tài khoản"', () => {
 
   it('does not add a profile when the prompt is dismissed', async () => {
     cloud.configured = true
-    vi.spyOn(window, 'prompt').mockReturnValue(null)
 
-    renderWithRouter(<ParentDashboard />)
+    renderWithDialogs(<ParentDashboard />)
     await flush()
 
     fireEvent.click(screen.getByRole('button', { name: '+ Thêm hồ sơ' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Huỷ' }))
+    await flush()
 
     expect(profileStateMock.addProfile).not.toHaveBeenCalled()
   })
 
   it('renames the active profile locally and on the server with .update, never an upsert', async () => {
     cloud.configured = true
-    vi.spyOn(window, 'prompt').mockReturnValue('Sóc con')
 
-    renderWithRouter(<ParentDashboard />)
+    renderWithDialogs(<ParentDashboard />)
     await flush()
 
     fireEvent.click(screen.getByRole('button', { name: 'Đổi tên' }))
+    fireEvent.change(screen.getByLabelText('Tên của bé'), { target: { value: 'Sóc con' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Lưu' }))
+    await flush()
 
     expect(profileStateMock.renameProfile).toHaveBeenCalledWith('p1', 'Sóc con')
     expect(profileStateMock.renameRemoteProfile).toHaveBeenCalledWith('p1', 'Sóc con')
@@ -759,7 +776,7 @@ describe('Phase 11: "Tài khoản"', () => {
     cloud.configured = true
     profileStateMock.listProfiles.mockReturnValue([ACTIVE_PROFILE])
 
-    renderWithRouter(<ParentDashboard />)
+    renderWithDialogs(<ParentDashboard />)
     await flush()
     expect(screen.queryByRole('button', { name: 'Sóc' })).not.toBeInTheDocument()
   })
@@ -768,7 +785,7 @@ describe('Phase 11: "Tài khoản"', () => {
     cloud.configured = true
     profileStateMock.listProfiles.mockReturnValue([ACTIVE_PROFILE, { id: 'p2', name: 'Sóc', avatar: '🐿️', created: 1 }])
 
-    renderWithRouter(<ParentDashboard />)
+    renderWithDialogs(<ParentDashboard />)
     await flush()
 
     fireEvent.click(screen.getByRole('button', { name: /Sóc/ }))
@@ -777,12 +794,12 @@ describe('Phase 11: "Tài khoản"', () => {
 
   it('resets the mirror from this screen when resetting progress, never a hidden-tab flush', async () => {
     cloud.configured = true
-    vi.spyOn(window, 'confirm').mockReturnValue(true)
 
-    renderWithRouter(<ParentDashboard />)
+    renderWithDialogs(<ParentDashboard />)
     await flush()
 
     fireEvent.click(screen.getByRole('button', { name: 'Đặt lại tiến trình' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Xoá tiến trình' }))
     await waitFor(() => expect(syncMock.resetRemoteProgress).toHaveBeenCalledWith('p1'))
   })
 
@@ -800,7 +817,7 @@ describe('Phase 11: "Tài khoản"', () => {
       authMock.currentEmail.mockResolvedValue('bome@example.com')
       authMock.currentUserId.mockResolvedValue('u1')
 
-      renderWithRouter(<ParentDashboard />)
+      renderWithDialogs(<ParentDashboard />)
       await flush()
 
       expect(screen.getByText('bome@example.com')).toBeInTheDocument()
@@ -816,7 +833,7 @@ describe('Phase 11: "Tài khoản"', () => {
       authMock.currentUserId.mockResolvedValue('u1')
       authMock.ensureRecoveryCode.mockResolvedValue('ABC23XYZ')
 
-      renderWithRouter(<ParentDashboard />)
+      renderWithDialogs(<ParentDashboard />)
       await flush()
 
       expect(screen.getByLabelText('Email của bố/mẹ')).toBeInTheDocument()
@@ -832,7 +849,7 @@ describe('Phase 11: "Tài khoản"', () => {
       authMock.currentEmail.mockResolvedValue(null)
       authMock.currentUserId.mockResolvedValue(null)
 
-      renderWithRouter(<ParentDashboard />)
+      renderWithDialogs(<ParentDashboard />)
       await flush()
 
       expect(screen.queryByRole('button', { name: 'Đăng xuất' })).not.toBeInTheDocument()
@@ -848,7 +865,7 @@ describe('Phase 11: "Tài khoản"', () => {
       authMock.currentUserId.mockResolvedValue(null)
       vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false)
 
-      renderWithRouter(<ParentDashboard />)
+      renderWithDialogs(<ParentDashboard />)
       await flush()
 
       expect(screen.getByTestId('no-session')).toHaveTextContent('Đang ngoại tuyến')
@@ -864,12 +881,12 @@ describe('Phase 11: "Tài khoản"', () => {
   it('says so, in Vietnamese, when the mirror half of a reset did not go through', async () => {
     cloud.configured = true
     syncMock.resetRemoteProgress.mockResolvedValue(false)
-    vi.spyOn(window, 'confirm').mockReturnValue(true)
 
-    renderWithRouter(<ParentDashboard />)
+    renderWithDialogs(<ParentDashboard />)
     await flush()
 
     fireEvent.click(screen.getByRole('button', { name: 'Đặt lại tiến trình' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Xoá tiến trình' }))
 
     const notice = await screen.findByTestId('reset-notice')
     expect(notice).toHaveTextContent('Đã xoá xong trên máy này')
@@ -880,7 +897,7 @@ describe('Phase 11: "Tài khoản"', () => {
     cloud.configured = true
     syncMock.hasPendingReset.mockReturnValue(true)
 
-    renderWithRouter(<ParentDashboard />)
+    renderWithDialogs(<ParentDashboard />)
     await flush()
 
     // The parent left the screen and came back: a reset the engine has not carried out yet is
@@ -892,12 +909,12 @@ describe('Phase 11: "Tài khoản"', () => {
   it('stays quiet when the mirror half of a reset succeeded', async () => {
     cloud.configured = true
     syncMock.resetRemoteProgress.mockResolvedValue(true)
-    vi.spyOn(window, 'confirm').mockReturnValue(true)
 
-    renderWithRouter(<ParentDashboard />)
+    renderWithDialogs(<ParentDashboard />)
     await flush()
 
     fireEvent.click(screen.getByRole('button', { name: 'Đặt lại tiến trình' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Xoá tiến trình' }))
     await waitFor(() => expect(syncMock.resetRemoteProgress).toHaveBeenCalled())
     await flush()
 
@@ -915,7 +932,7 @@ describe('Phase 11: "Tài khoản"', () => {
     syncMock.hasPendingReset.mockReturnValue(true)
     syncMock.resetRemoteProgress.mockResolvedValue(true)
 
-    renderWithRouter(<ParentDashboard />)
+    renderWithDialogs(<ParentDashboard />)
     await flush()
 
     expect(screen.getByTestId('reset-notice')).toBeInTheDocument()
@@ -931,7 +948,7 @@ describe('Phase 11: "Tài khoản"', () => {
     syncMock.hasPendingReset.mockReturnValue(true)
     syncMock.resetRemoteProgress.mockResolvedValue(false)
 
-    renderWithRouter(<ParentDashboard />)
+    renderWithDialogs(<ParentDashboard />)
     await flush()
 
     fireEvent.click(screen.getByRole('button', { name: 'Thử xoá lại' }))
@@ -945,20 +962,20 @@ describe('Phase 11: "Tài khoản"', () => {
    * child's cloud copy as well. It has to say so before the parent taps OK. */
   it('warns that the reset deletes the cloud copy too, and only when there is one', async () => {
     cloud.configured = true
-    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false)
 
-    const { unmount } = renderWithRouter(<ParentDashboard />)
+    const { unmount } = renderWithDialogs(<ParentDashboard />)
     await flush()
     fireEvent.click(screen.getByRole('button', { name: 'Đặt lại tiến trình' }))
-    expect(confirm.mock.calls[0][0]).toMatch(/trên tài khoản/)
+    expect(screen.getByRole('dialog')).toHaveTextContent(/trên tài khoản/)
+    fireEvent.click(screen.getByRole('button', { name: 'Huỷ' }))
+    await flush()
     unmount()
 
     cloud.configured = false
-    confirm.mockClear()
-    renderWithRouter(<ParentDashboard />)
+    renderWithDialogs(<ParentDashboard />)
     await flush()
     fireEvent.click(screen.getByRole('button', { name: 'Đặt lại tiến trình' }))
-    expect(confirm.mock.calls[0][0]).not.toMatch(/tài khoản/)
+    expect(screen.getByRole('dialog')).not.toHaveTextContent(/tài khoản/)
   })
 
   /** F7: "an toàn trên mọi thiết bị" sat on the same screen as "Bản ghi gần đây", and recordings
@@ -966,7 +983,7 @@ describe('Phase 11: "Tài khoản"', () => {
   it('promises only what actually travels', async () => {
     cloud.configured = true
 
-    renderWithRouter(<ParentDashboard />)
+    renderWithDialogs(<ParentDashboard />)
     await flush()
 
     expect(screen.queryByText(/trên mọi thiết bị/)).not.toBeInTheDocument()
@@ -976,12 +993,12 @@ describe('Phase 11: "Tài khoản"', () => {
 
   it('does not touch the mirror on reset with no cloud configured', async () => {
     cloud.configured = false
-    vi.spyOn(window, 'confirm').mockReturnValue(true)
 
-    renderWithRouter(<ParentDashboard />)
+    renderWithDialogs(<ParentDashboard />)
     await flush()
 
     fireEvent.click(screen.getByRole('button', { name: 'Đặt lại tiến trình' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Xoá tiến trình' }))
     await flush()
     expect(syncMock.resetRemoteProgress).not.toHaveBeenCalled()
   })
@@ -1010,7 +1027,7 @@ describe('Phase 11 task 5: remote progress view', () => {
     cloud.configured = false
     profileStateMock.fetchRemoteProfiles.mockResolvedValue([ACTIVE_PROFILE, SIBLING])
 
-    renderWithRouter(<ParentDashboard />)
+    renderWithDialogs(<ParentDashboard />)
     await flush()
 
     expect(profileStateMock.fetchRemoteProfiles).not.toHaveBeenCalled()
@@ -1024,7 +1041,7 @@ describe('Phase 11 task 5: remote progress view', () => {
     authMock.isAnonymous.mockResolvedValue(false)
     authMock.currentEmail.mockResolvedValue(null)
 
-    renderWithRouter(<ParentDashboard />)
+    renderWithDialogs(<ParentDashboard />)
     await flush()
 
     expect(profileStateMock.fetchRemoteProfiles).not.toHaveBeenCalled()
@@ -1036,7 +1053,7 @@ describe('Phase 11 task 5: remote progress view', () => {
     cloud.configured = true
     profileStateMock.fetchRemoteProfiles.mockResolvedValue(null)
 
-    renderWithRouter(<ParentDashboard />)
+    renderWithDialogs(<ParentDashboard />)
     await flush()
 
     expect(await screen.findByTestId('remote-progress-unknown')).toHaveTextContent('máy chủ chưa trả lời')
@@ -1049,7 +1066,7 @@ describe('Phase 11 task 5: remote progress view', () => {
     profileStateMock.fetchRemoteProfiles.mockResolvedValue([ACTIVE_PROFILE, SIBLING])
     remoteMock.fetchRemoteStats.mockResolvedValue(REMOTE_STATS)
 
-    renderWithRouter(<ParentDashboard />)
+    renderWithDialogs(<ParentDashboard />)
     await flush()
 
     const cards = await screen.findAllByTestId('remote-profile')
@@ -1076,7 +1093,7 @@ describe('Phase 11 task 5: remote progress view', () => {
     const siblingPromise = new Promise<MockRemoteStats | null>(resolve => { resolveSibling = resolve })
     remoteMock.fetchRemoteStats.mockImplementation(async (id: string) => (id === 'p2' ? siblingPromise : REMOTE_STATS))
 
-    renderWithRouter(<ParentDashboard />)
+    renderWithDialogs(<ParentDashboard />)
     await flush()
 
     // The sibling's card is up and its fetch is in flight (the toggle is off, so only the sibling —
@@ -1112,7 +1129,7 @@ describe('Phase 11 task 5: remote progress view', () => {
     cloud.configured = true
     profileStateMock.fetchRemoteProfiles.mockResolvedValue([ACTIVE_PROFILE])
 
-    renderWithRouter(<ParentDashboard />)
+    renderWithDialogs(<ParentDashboard />)
     await flush()
 
     // Negative, anchored by the positive assertion right after it: the toggle IS there to be pressed.
@@ -1135,7 +1152,7 @@ describe('Phase 11 task 5: remote progress view', () => {
     profileStateMock.fetchRemoteProfiles.mockResolvedValue([ACTIVE_PROFILE, SIBLING])
     remoteMock.fetchRemoteStats.mockResolvedValue(REMOTE_STATS)
 
-    renderWithRouter(<ParentDashboard />)
+    renderWithDialogs(<ParentDashboard />)
     await flush()
 
     const card = (await screen.findAllByTestId('remote-profile'))[0]
@@ -1152,7 +1169,7 @@ describe('Phase 11 task 5: remote progress view', () => {
     profileStateMock.fetchRemoteProfiles.mockResolvedValue([ACTIVE_PROFILE, SIBLING])
     remoteMock.fetchRemoteStats.mockResolvedValue(null)
 
-    renderWithRouter(<ParentDashboard />)
+    renderWithDialogs(<ParentDashboard />)
     await flush()
 
     const card = (await screen.findAllByTestId('remote-profile'))[0]
@@ -1177,7 +1194,7 @@ describe('Phase 11 task 5: remote progress view', () => {
       streak: 0, weekMinutes: 0, averages: { story: null, speak: null, word: null, sentence: null }, weak: [], eventCount: 0,
     })
 
-    renderWithRouter(<ParentDashboard />)
+    renderWithDialogs(<ParentDashboard />)
     await flush()
 
     const card = (await screen.findAllByTestId('remote-profile'))[0]
@@ -1196,7 +1213,7 @@ describe('Phase 11 task 5: remote progress view', () => {
       streak: 3, weekMinutes: 21, averages: { story: null, speak: 80, word: null, sentence: null }, weak: [], eventCount: 12,
     })
 
-    renderWithRouter(<ParentDashboard />)
+    renderWithDialogs(<ParentDashboard />)
     await flush()
 
     const card = (await screen.findAllByTestId('remote-profile'))[0]
