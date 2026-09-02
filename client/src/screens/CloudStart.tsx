@@ -365,7 +365,7 @@ export function CloudStart() {
           <p className="text-sm font-semibold text-ink-500">Tài khoản này có {candidates.length} hồ sơ. Chọn một để khôi phục lên máy này.</p>
           {/* A failed pull says so HERE too, next to the picker that is still up — tapping the same
             * face again is the retry. */}
-          {error && <Notice kind="error" role="alert" title={error} />}
+          {error && <Notice kind="error" adult role="alert" title={error} />}
           <ProfilePicker profiles={candidates} onSelect={finishRestore} busy={busy} />
         </Card>
       </main>
@@ -387,8 +387,8 @@ export function CloudStart() {
           <p className="mt-1 text-sm font-semibold text-ink-500">Khôi phục tiến độ của bé trên máy này.</p>
         </div>
 
-        {info && <Notice kind="info" title={info} />}
-        {error && <Notice kind="error" role="alert" title={error} />}
+        {info && <Notice kind="info" adult title={info} />}
+        {error && <Notice kind="error" adult role="alert" title={error} />}
         {/* A pull that failed leaves the parent one tap from trying again, on the same child —
           * rather than back at a menu with no idea which door to take twice. */}
         {retryId && (

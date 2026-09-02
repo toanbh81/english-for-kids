@@ -530,7 +530,7 @@ export function ParentDashboard({ onLock }: Props) {
                   * screen would talk about does not exist yet, so it says so instead of offering a
                   * form that cannot possibly reach anyone. */}
                 {!hasSession && (
-                  <Notice kind="warn" testId="no-session" {...noSessionNotice()} />
+                  <Notice kind="warn" testId="no-session" adult {...noSessionNotice()} />
                 )}
                 {/* With no session there is nothing to link an email TO — `linkEmail` calls
                   * `updateUser` on a user that does not exist — so neither form is drawn. */}
@@ -592,6 +592,7 @@ export function ParentDashboard({ onLock }: Props) {
                 {recoveryCode && (
                   <Notice
                     kind="credential"
+                    adult
                     title="Mã khôi phục — chụp màn hình lại nhé"
                     sub="Dùng mã này để lấy lại tiến độ trên máy khác."
                     code={recoveryCode}
@@ -639,13 +640,14 @@ export function ParentDashboard({ onLock }: Props) {
               ) : (
                 <Notice
                   kind="warn"
+                  adult
                   testId="profile-unreadable"
                   title="Chưa đọc được danh sách hồ sơ trên máy này. Tiến độ của bé vẫn đang được lưu bình thường — mở lại ứng dụng để kiểm tra, và tạm thời đừng thêm hồ sơ mới."
                 />
               )}
               {profileNotice && (
                 <div className="mt-2">
-                  <Notice kind="error" testId="profile-notice" title={profileNotice} />
+                  <Notice kind="error" adult testId="profile-notice" title={profileNotice} />
                 </div>
               )}
               {profiles.length > 1 && (
@@ -990,6 +992,7 @@ export function ParentDashboard({ onLock }: Props) {
           {resetNotice && (
             <Notice
               kind="pending"
+              adult
               testId="reset-notice"
               title={resetNotice}
               action={{ label: 'Thử xoá lại', onClick: () => { void handleRetryReset() } }}

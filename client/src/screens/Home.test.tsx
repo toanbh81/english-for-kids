@@ -480,15 +480,13 @@ describe('Phase 11: "Đã dùng Speak Up rồi?"', () => {
 })
 
 /**
- * §Rules puts the tap floor at 64 px on every child-reachable screen, and Home used to give both
- * banner close buttons that (albeit via a -my-3 hit-area trick over a small glyph). Phase 12 task
- * 11 replaces both with the shared `Notice` primitive, whose close/action buttons are a fixed
- * 40 px (`h-10 w-10`) at every kind and on every screen it renders on — the brief's own verbatim
- * component, not a choice made here. That is smaller than the 64 px floor on this child-facing
- * screen; flagged in the task-11 report rather than silently followed or silently "fixed".
+ * §Rules puts the tap floor at 64 px on every child-reachable screen. `Notice` on a child screen
+ * (Home, the `adult` prop's default `false`) is visually a 44 px box, but gets an invisible
+ * `after:-inset-2.5` hit band around it — a 10 px inset on every side, 44 + 10 + 10 = 64 — the same
+ * trick `Button` uses for its own 56→64 px band. Fix round 1 of the task-11 review.
  */
-describe('Phase 12: the milestone/A2HS notices share one close control', () => {
-  it('gives both dismiss buttons the same accessible name and size', async () => {
+describe('Phase 12: the milestone/A2HS notices meet the 64 px child tap floor', () => {
+  it('gives both dismiss buttons the same accessible name, a 44px box and the 64px hit band', async () => {
     cloud.configured = true
     auth.isAnonymous.mockResolvedValue(true)
     seedDoneDay(NOW - 2 * DAY_MS)
@@ -504,7 +502,10 @@ describe('Phase 12: the milestone/A2HS notices share one close control', () => {
 
     const closeButtons = screen.getAllByRole('button', { name: 'Đóng' })
     expect(closeButtons).toHaveLength(2)
-    for (const button of closeButtons) expect(button).toHaveClass('h-10', 'w-10')
+    for (const button of closeButtons) {
+      expect(button).toHaveClass('min-h-[44px]', 'min-w-[44px]')
+      expect(button.className).toMatch(/after:-inset-2\.5/)
+    }
   })
 })
 

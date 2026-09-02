@@ -904,6 +904,43 @@ describe('Phase 11: "Tài khoản"', () => {
     expect(screen.queryByTestId('reset-notice')).not.toBeInTheDocument()
   })
 
+  /**
+   * Fix round 1 (task 11 review, finding 2): `handleRetryReset` — the reset-notice's own "Thử xoá
+   * lại" action — had zero coverage. It calls the same `resetRemoteProgress(activeId)` the reset
+   * button itself calls, without repeating the local wipe, and only clears the notice once that
+   * actually succeeds.
+   */
+  it('clears the reset notice when "Thử xoá lại" succeeds', async () => {
+    cloud.configured = true
+    syncMock.hasPendingReset.mockReturnValue(true)
+    syncMock.resetRemoteProgress.mockResolvedValue(true)
+
+    renderWithRouter(<ParentDashboard />)
+    await flush()
+
+    expect(screen.getByTestId('reset-notice')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Thử xoá lại' }))
+    await waitFor(() => expect(syncMock.resetRemoteProgress).toHaveBeenCalledWith('p1'))
+    await flush()
+
+    expect(screen.queryByTestId('reset-notice')).not.toBeInTheDocument()
+  })
+
+  it('keeps the reset notice up when "Thử xoá lại" fails again', async () => {
+    cloud.configured = true
+    syncMock.hasPendingReset.mockReturnValue(true)
+    syncMock.resetRemoteProgress.mockResolvedValue(false)
+
+    renderWithRouter(<ParentDashboard />)
+    await flush()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Thử xoá lại' }))
+    await waitFor(() => expect(syncMock.resetRemoteProgress).toHaveBeenCalledWith('p1'))
+    await flush()
+
+    expect(screen.getByTestId('reset-notice')).toHaveTextContent('chưa xoá được')
+  })
+
   /** F7: the confirm dialog was unchanged from the local-only era, and this button now deletes the
    * child's cloud copy as well. It has to say so before the parent taps OK. */
   it('warns that the reset deletes the cloud copy too, and only when there is one', async () => {

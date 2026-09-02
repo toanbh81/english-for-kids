@@ -324,6 +324,26 @@ describe('Notice', () => {
     expect(screen.getByText('QZQJ7MFC')).toHaveClass('tracking-[4px]', 'text-[24px]')
     expect(screen.getByRole('button', { name: 'Chép mã' })).toBeInTheDocument()
   })
+
+  it('on a child screen (the default), close and action buttons are 44px with an invisible hit band to 64px', () => {
+    render(<Notice kind="info" title="A" action={{ label: 'Đi', onClick: () => {} }} onClose={() => {}} />)
+    const close = screen.getByRole('button', { name: 'Đóng' })
+    const action = screen.getByRole('button', { name: 'Đi' })
+    for (const btn of [close, action]) {
+      expect(btn).toHaveClass('min-h-[44px]', 'min-w-[44px]')
+      expect(btn.className).toMatch(/after:-inset-2\.5/)
+    }
+  })
+
+  it('adult notices are 44px with no hit band', () => {
+    render(<Notice kind="info" adult title="A" action={{ label: 'Đi', onClick: () => {} }} onClose={() => {}} />)
+    const close = screen.getByRole('button', { name: 'Đóng' })
+    const action = screen.getByRole('button', { name: 'Đi' })
+    for (const btn of [close, action]) {
+      expect(btn).toHaveClass('min-h-[44px]', 'min-w-[44px]')
+      expect(btn.className).not.toMatch(/after:/)
+    }
+  })
 })
 
 describe('NoticeStack', () => {
