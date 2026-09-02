@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { act, fireEvent, render, screen } from '@testing-library/react'
+import { act, fireEvent, render, renderHook, screen } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { BackButton } from './BackButton'
 import { Button } from './Button'
@@ -238,7 +238,7 @@ describe('Toast', () => {
     )
   }
 
-  it('shows nothing until a message arrives, then hides itself after 1.4 s', () => {
+  it('shows nothing until a message arrives, then hides itself after 2.4 s', () => {
     vi.useFakeTimers()
     render(<Harness />)
 
@@ -247,7 +247,7 @@ describe('Toast', () => {
     act(() => { screen.getByText('show').click() })
     expect(screen.getByTestId('toast')).toHaveTextContent('Đã lưu!')
 
-    act(() => { vi.advanceTimersByTime(1399) })
+    act(() => { vi.advanceTimersByTime(2399) })
     expect(screen.getByTestId('toast')).toBeInTheDocument()
 
     act(() => { vi.advanceTimersByTime(1) })
@@ -261,7 +261,26 @@ describe('Toast', () => {
     act(() => { screen.getByText('show').click() })
     unmount()
 
-    expect(() => act(() => { vi.advanceTimersByTime(2000) })).not.toThrow()
+    expect(() => act(() => { vi.advanceTimersByTime(2500) })).not.toThrow()
+  })
+
+  it('sits under the safe-area top, capped at 360 and two lines', () => {
+    render(<Toast message="Đã lưu câu: Chị của con có một con búp bê em bé." />)
+    const t = screen.getByTestId('toast')
+    expect(t).toHaveClass('w-[min(360px,calc(100%-32px))]', 'line-clamp-2', 'rounded-r16', 'shadow-toast')
+    expect(t.className).toMatch(/top-\[max\(1rem,calc\(env\(safe-area-inset-top\)/)
+    expect(t).not.toHaveClass('top-6', 'rounded-full')
+  })
+
+  it('hides after 2.4 s', () => {
+    vi.useFakeTimers()
+    const { result } = renderHook(() => useToast())
+    act(() => result.current.show('x'))
+    act(() => { vi.advanceTimersByTime(2399) })
+    expect(result.current.message).toBe('x')
+    act(() => { vi.advanceTimersByTime(1) })
+    expect(result.current.message).toBeNull()
+    vi.useRealTimers()
   })
 })
 

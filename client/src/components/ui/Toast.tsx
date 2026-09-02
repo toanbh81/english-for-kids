@@ -6,7 +6,7 @@ export function Toast({ message }: { message: string | null }) {
     <div
       role="status"
       data-testid="toast"
-      className="fixed left-1/2 top-6 z-50 -translate-x-1/2 rounded-full bg-ink-900 px-6 py-3 font-display text-lg font-extrabold text-cream-50 shadow-card-sm"
+      className="fixed left-1/2 top-[max(1rem,calc(env(safe-area-inset-top)_+_8px))] z-50 w-[min(360px,calc(100%-32px))] -translate-x-1/2 rounded-r16 bg-[#2B2320] px-[18px] py-3 text-center font-sans text-[15px] font-extrabold leading-[1.35] text-cream-50 shadow-toast line-clamp-2 md:top-4"
     >
       {message}
     </div>
