@@ -327,7 +327,9 @@ it('keeps the result on one row and the CTAs beside the mic', () => {
 
   const mic = screen.getByRole('button', { name: 'Bấm để nói' })
   const cta = screen.getByRole('button', { name: /Tiếp theo/ })
-  expect(mic.closest('div')?.parentElement).toBe(cta.closest('div')?.parentElement)
+  // MicButton (Task 6) wraps the mic in its own reserved-box + outer div, so the local wrapper
+  // WordCard renders around it is two levels further up than the button's nearest div.
+  expect(mic.closest('div')?.parentElement?.parentElement?.parentElement).toBe(cta.closest('div')?.parentElement)
 })
 
 it('shows the stars but no score chip when the engine returned no usable number', () => {
@@ -510,7 +512,9 @@ it('hides the mic on a phone once a result lands, leaving the landscape row unto
   promote('food-apple')
   renderCard('food', 'food-apple')
 
-  const micBlock = screen.getByRole('button', { name: 'Bấm để nói' }).closest('div')!
+  // MicButton (Task 6) wraps the mic in its own reserved-box + outer div, so WordCard's local
+  // wrapper (which carries the conditional `max-md:hidden`) is two levels further up.
+  const micBlock = screen.getByRole('button', { name: 'Bấm để nói' }).closest('div')!.parentElement!.parentElement!
   expect(micBlock.className).not.toContain('max-md:hidden')
 
   act(() => { attemptControl.onResult?.(resultHigh, null) })

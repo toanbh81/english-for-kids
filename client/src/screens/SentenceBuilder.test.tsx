@@ -352,7 +352,9 @@ it('pins the speaking row to the bottom edge with layout, and gives the landscap
   renderBuilder('s1')
   await tapInCorrectOrder('s1')
 
-  const row = classes(screen.getByRole('button', { name: 'Bấm để nói' }).parentElement!)
+  // MicButton (Task 6) wraps the mic in its own reserved-box + outer div, so the screen's row
+  // is three levels up from the button, not the button's direct parent.
+  const row = classes(screen.getByRole('button', { name: 'Bấm để nói' }).parentElement!.parentElement!.parentElement!)
   expect(row).toContain('mt-auto')
   expect(row).toContain('md:mt-0')
   expect(row).toContain('md:gap-6')
@@ -369,7 +371,7 @@ it('drops the speaking row on a phone once a score is in, and only on a phone', 
   await tapInCorrectOrder('s1')
   act(() => { attemptControl.onResult?.(result85, null) })
 
-  expect(classes(screen.getByRole('button', { name: 'Bấm để nói' }).parentElement!)).toContain('max-md:hidden')
+  expect(classes(screen.getByRole('button', { name: 'Bấm để nói' }).parentElement!.parentElement!.parentElement!)).toContain('max-md:hidden')
 })
 
 // --- as a step of today's lesson (spec §3) ---------------------------------------------------

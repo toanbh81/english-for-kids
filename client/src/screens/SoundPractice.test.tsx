@@ -208,7 +208,9 @@ it('keeps the result CTAs a phone-only size, and never touches the button primit
 it('pins the mic with layout, never with an overlay, and leaves the landscape column alone', () => {
   renderWord()
 
-  const micBlock = classes(screen.getByRole('button', { name: /bấm để nói/i }).parentElement!)
+  // MicButton (Task 6) wraps the mic in its own reserved-box + outer div, so the screen's row
+  // is three levels up from the button, not the button's direct parent.
+  const micBlock = classes(screen.getByRole('button', { name: /bấm để nói/i }).parentElement!.parentElement!.parentElement!)
   expect(micBlock).toContain('mt-auto')
   expect(micBlock).toContain('md:mt-0')
   // No panel floats over the deck at any width.
