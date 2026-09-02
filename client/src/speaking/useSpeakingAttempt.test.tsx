@@ -291,6 +291,11 @@ describe('typed errors, locked mic, fallback notice, not-ready timer', () => {
   })
 
   it('locks the mic when today is over the daily limit', async () => {
+    // Pinned: the seeded events below are all `now`-relative, so a real clock within 25 minutes
+    // of local midnight walks some of them onto yesterday and the count comes up short. Faking
+    // only `Date` (not the timers) keeps `waitFor`'s own real-timer polling working below.
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date(2026, 8, 2, 12, 0, 0))
     const now = Date.now()
     setLimitMinutes(20)
     for (let i = 0; i < 25; i++) {

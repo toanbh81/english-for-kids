@@ -10,7 +10,7 @@ import { saveRecording } from '../progress/recordings'
 import { playUrl } from '../audio/player'
 import { toFeedback } from '../scoring/feedback'
 import { useSpeakingAttempt } from '../speaking/useSpeakingAttempt'
-import type { SpeakErrorKind } from '../speaking/speakError'
+import { useSpeakErrorAction } from '../speaking/useSpeakErrorAction'
 import { MicButton, ResultCard, SpeakError } from '../components/speak'
 import { Foxy } from '../components/Foxy'
 import type { FoxyMood } from '../components/Foxy'
@@ -159,10 +159,7 @@ function SentenceBuilderInner({ sentence }: { sentence: Sentence }) {
   // rendered until the sentence is built correctly.
   const say = correct ? 'Đúng rồi! 🎉' : wrong ? 'Thử lại nhé' : undefined
 
-  const onErrorAction = (kind: SpeakErrorKind) => {
-    if (kind === 'limit') nav('/')
-    else if (kind === 'noSpeech' || kind === 'notReady') attempt.reset()
-  }
+  const onErrorAction = useSpeakErrorAction(attempt)
 
   /** The building half of the screen — tray, legend, pool. Folded away on a phone once a score is
    * in, where `ScoredWords` is already printing the same sentence. */

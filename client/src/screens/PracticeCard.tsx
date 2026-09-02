@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useParams } from 'react-router-dom'
 import { findCard, LEVELS } from '../content'
 import type { PronunciationResult } from '../scoring/types'
 import { playBlob, playUrl } from '../audio/player'
@@ -13,7 +13,7 @@ import { BackButton, Button, Card } from '../components/ui'
 import { PageShell, PageHeader, PageBody } from '../components/ui/page'
 import { MicButton, ResultCard, SpeakError } from '../components/speak'
 import { useSpeakingAttempt } from '../speaking/useSpeakingAttempt'
-import type { SpeakErrorKind } from '../speaking/speakError'
+import { useSpeakErrorAction } from '../speaking/useSpeakErrorAction'
 
 /** The hook stops the recording itself after this long; the countdown just mirrors it. */
 const AUTO_STOP_MS = 6000
@@ -25,7 +25,6 @@ const DOT_LIMIT = 12
 
 export function PracticeCard() {
   const { cardId = '' } = useParams()
-  const nav = useNavigate()
   const card = findCard(cardId)
   // Computed above the `!card` early return rather than after it, because every hook below has to
   // run unconditionally and the result effect branches on `isWordPop`. It is computed exactly
@@ -43,6 +42,7 @@ export function PracticeCard() {
   }
 
   const attempt = useSpeakingAttempt({ targetText: card?.text ?? '', autoStopMs: AUTO_STOP_MS, resetKey: cardId, onResult: handleResult })
+  const onErrorAction = useSpeakErrorAction(attempt)
   const [attempts, setAttempts] = useState(0)
   const [audioMissing, setAudioMissing] = useState(false)
   const [secondsLeft, setSecondsLeft] = useState(COUNTDOWN_FROM)
@@ -101,11 +101,6 @@ export function PracticeCard() {
   /** Sample audio is generated locally and may simply not be there yet — say so, never throw. */
   function playSample() {
     playUrl(card!.audio).then(() => setAudioMissing(false), () => setAudioMissing(true))
-  }
-
-  const onErrorAction = (kind: SpeakErrorKind) => {
-    if (kind === 'limit') nav('/')
-    else if (kind === 'noSpeech' || kind === 'notReady') attempt.reset()
   }
 
   return (

@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useParams } from 'react-router-dom'
 import type { Story } from '../content/stories/types'
 import type { PronunciationResult } from '../scoring/types'
 import { findStory } from '../content/stories'
@@ -9,7 +9,7 @@ import { MISSION_ROUTE, RETURN_LABEL, useMissionFlag, useMissionNext } from '../
 import { saveRecording } from '../progress/recordings'
 import { playUrl, playBlob } from '../audio/player'
 import { useSpeakingAttempt } from '../speaking/useSpeakingAttempt'
-import type { SpeakErrorKind } from '../speaking/speakError'
+import { useSpeakErrorAction } from '../speaking/useSpeakErrorAction'
 import { MicButton, ResultCard, SpeakError } from '../components/speak'
 import { BackButton, Card, PAGE_SHELL } from '../components/ui'
 import { PageShell, PageHeader, PageBody } from '../components/ui/page'
@@ -69,7 +69,6 @@ function playSample(story: Story) {
  * route, and on a day whose lesson holds that step the hand-off *does* resolve.
  */
 function StoryRetellInner({ story, id, inMission }: { story: Story; id: string; inMission: boolean }) {
-  const nav = useNavigate()
   const mission = useMissionNext()
 
   function handleResult(result: PronunciationResult, blob: Blob | null) {
@@ -85,10 +84,7 @@ function StoryRetellInner({ story, id, inMission }: { story: Story; id: string; 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [a.result])
 
-  const onErrorAction = (kind: SpeakErrorKind) => {
-    if (kind === 'limit') nav('/')
-    else if (kind === 'noSpeech' || kind === 'notReady') a.reset()
-  }
+  const onErrorAction = useSpeakErrorAction(a)
 
   return (
     <PageShell gutter="20">

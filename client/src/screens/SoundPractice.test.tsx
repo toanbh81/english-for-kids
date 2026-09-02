@@ -5,7 +5,11 @@ import type { PronunciationResult } from '../scoring/types'
 
 /** The hook is mocked, not the recorder + scorer: these tests are about what SoundPractice does
  * with a result, and `useSpeakingAttempt` is covered by its own suite and PracticeCard.test. */
-const mic = vi.hoisted(() => ({ push: (_r: PronunciationResult) => {}, engine: 'azure' as 'azure' | 'webspeech' }))
+const mic = vi.hoisted(() => ({
+  push: (_r: PronunciationResult) => {},
+  engine: 'azure' as 'azure' | 'webspeech',
+  error: null as { kind: string; detail?: string } | null,
+}))
 vi.mock('../speaking/useSpeakingAttempt', () => ({
   useSpeakingAttempt(opts: { resetKey?: string; onResult?: (r: PronunciationResult, b: Blob | null) => void }) {
     const [result, setResult] = useState<PronunciationResult | null>(null)
@@ -14,7 +18,7 @@ vi.mock('../speaking/useSpeakingAttempt', () => ({
     mic.push = (r: PronunciationResult) => { setResult(r); opts.onResult?.(r, null) }
     return {
       micState: 'idle' as const, level: 0, engine: mic.engine,
-      result, error: null, lastBlob: null,
+      result, error: mic.error, lastBlob: null,
       onMic: () => {}, reset: () => setResult(null), dismissError: () => {},
     }
   },
@@ -88,6 +92,7 @@ const wordChip = () => screen.getByTestId('word-chip')
 beforeEach(() => {
   localStorage.clear()
   mic.engine = 'azure'
+  mic.error = null
   playerControl.playUrl.mockReset().mockResolvedValue(undefined)
 })
 
@@ -136,6 +141,19 @@ it('carries the PageShell frame, never a sticky panel', () => {
   expect(screen.getByRole('main')).toHaveClass('overflow-hidden')
   expect(screen.getByTestId('page-body')).toHaveClass('ipad:flex-row')
   expect(document.querySelector('main')!.innerHTML).not.toContain('sticky')
+})
+
+/** Regression: a hand-copied `onErrorAction` here used to drop the `'limit'` branch outright
+ * (`if (kind === 'limit') return`, no `useNavigate` in the file at all) — a child who hit the
+ * daily limit on a Sound Practice drill got a "Về nhà" button that did nothing. Now wired through
+ * the shared `useSpeakErrorAction`, same as every other speaking screen. */
+it('sends the child home when the daily limit error is dismissed', () => {
+  mic.error = { kind: 'limit' }
+  renderWord()
+
+  fireEvent.click(screen.getByRole('button', { name: 'Về nhà' }))
+
+  expect(screen.getByTestId('probe')).toHaveTextContent('/')
 })
 
 it('puts the teaching tiles on the left and the mic on the right, only from `ipad` up', () => {

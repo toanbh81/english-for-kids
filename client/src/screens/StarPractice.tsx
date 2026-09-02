@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useParams } from 'react-router-dom'
 import { SENTENCE_STARS, findSentenceStar } from '../content'
 import type { SentenceStar } from '../content/types'
 import type { PronunciationResult } from '../scoring/types'
@@ -16,7 +16,7 @@ import { BackButton, Button, Card, Chip } from '../components/ui'
 import { PageShell, PageHeader, PageBody } from '../components/ui/page'
 import { MicButton, ResultCard, SpeakError } from '../components/speak'
 import { useSpeakingAttempt } from '../speaking/useSpeakingAttempt'
-import type { SpeakErrorKind } from '../speaking/speakError'
+import { useSpeakErrorAction } from '../speaking/useSpeakErrorAction'
 
 /** The hook stops the recording itself after this long; the countdown just mirrors it. */
 const AUTO_STOP_MS = 6000
@@ -50,7 +50,6 @@ export function StarPractice() {
 }
 
 function StarRun({ star }: { star: SentenceStar }) {
-  const nav = useNavigate()
   // Null unless the child arrived from the mission: only then is this sentence step "Thẻ 2/4" of
   // today's lesson rather than sentence 2 of the bậc (spec §3).
   const mission = useMissionNext()
@@ -157,10 +156,7 @@ function StarRun({ star }: { star: SentenceStar }) {
 
   const message = stars === 3 ? 'Tuyệt vời!' : stars === 2 ? 'Hay lắm!' : 'Thử lại nhé'
 
-  const onErrorAction = (kind: SpeakErrorKind) => {
-    if (kind === 'limit') nav('/')
-    else if (kind === 'noSpeech' || kind === 'notReady') attempt.reset()
-  }
+  const onErrorAction = useSpeakErrorAction(attempt)
 
   return (
     <PageShell gutter="20">

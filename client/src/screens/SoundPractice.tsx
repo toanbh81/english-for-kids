@@ -14,7 +14,7 @@ import { BackButton, Button, Chip } from '../components/ui'
 import { PageShell, PageHeader, PageBody } from '../components/ui/page'
 import { MicButton, ResultCard, SpeakError, WordChip } from '../components/speak'
 import { useSpeakingAttempt } from '../speaking/useSpeakingAttempt'
-import type { SpeakErrorKind } from '../speaking/speakError'
+import { useSpeakErrorAction } from '../speaking/useSpeakErrorAction'
 
 /** The hook stops the recording itself after this long; the countdown just mirrors it. */
 const AUTO_STOP_MS = 6000
@@ -146,10 +146,7 @@ function SoundWord({ sound, idx }: { sound: SoundGroup; idx: number }) {
     playUrl(card.audio).then(() => setSampleMissing(false), () => setSampleMissing(true))
   }
 
-  const onErrorAction = (kind: SpeakErrorKind) => {
-    if (kind === 'limit') return
-    if (kind === 'noSpeech' || kind === 'notReady') attempt.reset()
-  }
+  const onErrorAction = useSpeakErrorAction(attempt)
 
   return (
     <PageShell gutter="20">

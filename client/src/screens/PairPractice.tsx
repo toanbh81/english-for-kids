@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useParams } from 'react-router-dom'
 import { PAIRS, findPair } from '../content'
 import { seededSide } from '../content/shuffle'
 import type { PairItem } from '../content/types'
@@ -16,7 +16,7 @@ import { BackButton, Button, Card, Chip } from '../components/ui'
 import { PageShell, PageHeader, PageBody } from '../components/ui/page'
 import { MicButton, ResultCard, SpeakError } from '../components/speak'
 import { useSpeakingAttempt } from '../speaking/useSpeakingAttempt'
-import type { SpeakErrorKind } from '../speaking/speakError'
+import { useSpeakErrorAction } from '../speaking/useSpeakErrorAction'
 
 /** The hook stops the recording itself after this long; the countdown just mirrors it. */
 const AUTO_STOP_MS = 6000
@@ -48,7 +48,6 @@ export function PairPractice() {
 }
 
 function PairRun({ pair }: { pair: PairItem }) {
-  const nav = useNavigate()
   // Null unless the child arrived from the mission: only then is this pair step "Thẻ 2/4" of
   // today's lesson rather than pair 2 of the bậc (spec §3).
   const mission = useMissionNext()
@@ -140,10 +139,7 @@ function PairRun({ pair }: { pair: PairItem }) {
     )
   }
 
-  const onErrorAction = (kind: SpeakErrorKind) => {
-    if (kind === 'limit') nav('/')
-    else if (kind === 'noSpeech' || kind === 'notReady') attempt.reset()
-  }
+  const onErrorAction = useSpeakErrorAction(attempt)
 
   return (
     <PageShell gutter="20">

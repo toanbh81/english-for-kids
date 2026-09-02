@@ -13,7 +13,7 @@ import { playUrl } from '../audio/player'
 import { speakText } from '../story/speak'
 import { toFeedback } from '../scoring/feedback'
 import { useSpeakingAttempt } from '../speaking/useSpeakingAttempt'
-import type { SpeakErrorKind } from '../speaking/speakError'
+import { useSpeakErrorAction } from '../speaking/useSpeakErrorAction'
 import { MicButton, ResultCard, SpeakError } from '../components/speak'
 import { Foxy } from '../components/Foxy'
 import { BackButton, Button, Chip, PAGE_SHELL } from '../components/ui'
@@ -188,10 +188,7 @@ function WordCardInner({ word, topic, isReview, list }: { word: Word; topic: str
 
   const score = attempt.result && Number.isFinite(attempt.result.overall) ? Math.round(attempt.result.overall) : undefined
 
-  const onErrorAction = (kind: SpeakErrorKind) => {
-    if (kind === 'limit') nav('/')
-    else if (kind === 'noSpeech' || kind === 'notReady') attempt.reset()
-  }
+  const onErrorAction = useSpeakErrorAction(attempt)
 
   return (
     <PageShell gutter="20">

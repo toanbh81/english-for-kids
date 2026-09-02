@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useParams } from 'react-router-dom'
 import { STORY_VOICE, findVoice } from '../content'
 import type { VoicePassage } from '../content/types'
 import type { PronunciationResult } from '../scoring/types'
@@ -15,7 +15,7 @@ import { BackButton, Button, Card, Chip } from '../components/ui'
 import { PageShell, PageHeader, PageBody } from '../components/ui/page'
 import { MicButton, ResultCard, SpeakError } from '../components/speak'
 import { useSpeakingAttempt } from '../speaking/useSpeakingAttempt'
-import type { SpeakErrorKind } from '../speaking/speakError'
+import { useSpeakErrorAction } from '../speaking/useSpeakErrorAction'
 
 /** Passages run 2–3 sentences read *slowly, with feeling*, so the mic stays open longer here than
  * anywhere else: at 10 s a careful reader was still mid-passage when it closed, and the unsaid
@@ -92,7 +92,6 @@ export function VoicePractice() {
 }
 
 function VoiceRun({ passage }: { passage: VoicePassage }) {
-  const nav = useNavigate()
   // Null unless the child arrived from the mission: only then is this passage step "Thẻ 2/4" of
   // today's lesson rather than passage 2 of the bậc (spec §3).
   const mission = useMissionNext()
@@ -147,10 +146,7 @@ function VoiceRun({ passage }: { passage: VoicePassage }) {
 
   const message = stars === 3 ? 'Đọc có hồn quá!' : stars === 2 ? 'Hay lắm!' : 'Thử lại nhé'
 
-  const onErrorAction = (kind: SpeakErrorKind) => {
-    if (kind === 'limit') nav('/')
-    else if (kind === 'noSpeech' || kind === 'notReady') a.reset()
-  }
+  const onErrorAction = useSpeakErrorAction(a)
 
   return (
     <PageShell gutter="20">
