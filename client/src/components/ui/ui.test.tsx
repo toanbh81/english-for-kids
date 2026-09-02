@@ -8,6 +8,7 @@ import { PAGE_SHELL } from './pageShell'
 import { ProgressBar } from './ProgressBar'
 import { SceneDots } from './SceneDots'
 import { SpeechBubble } from './SpeechBubble'
+import { Stars } from './Stars'
 import { StarRow } from './StarRow'
 import { Toast } from './Toast'
 import { Toggle } from './Toggle'
@@ -107,6 +108,25 @@ describe('BackButton', () => {
     router(<BackButton to="/" />)
     expect(screen.getByRole('link', { name: 'Quay lại' })).toBeInTheDocument()
   })
+
+  it('child variant is 56 with a 64 hit band on a phone and 64 from md', () => {
+    router(<BackButton to="/" label="Về nhà" />)
+    const a = screen.getByRole('link', { name: 'Về nhà' })
+    expect(a).toHaveClass('h-14', 'w-14', 'md:h-16', 'md:w-16', 'after:-inset-1')
+    expect(a.className).not.toMatch(/66px/)
+  })
+
+  it('adult variant is 44 with a visible label', () => {
+    router(<BackButton to="/" label="Về nhà" variant="adult" />)
+    const a = screen.getByRole('link', { name: 'Về nhà' })
+    expect(a).toHaveClass('h-11', 'rounded-r14')
+    expect(a).toHaveTextContent('Về nhà')
+  })
+
+  it('onArt variant is 48 on a translucent white disc', () => {
+    router(<BackButton to="/stories" label="Truyện" variant="onArt" />)
+    expect(screen.getByRole('link')).toHaveClass('h-12', 'w-12', 'bg-white/[.94]', 'after:-inset-2')
+  })
 })
 
 describe('Toggle', () => {
@@ -159,13 +179,27 @@ describe('ProgressBar', () => {
   })
 })
 
+describe('Stars', () => {
+  it('sizes sm/md/lg are 16/28/44 with the star token colours', () => {
+    const { rerender } = render(<Stars value={2} size="sm" />)
+    expect(screen.getAllByTestId('star-filled')).toHaveLength(2)
+    expect(screen.getAllByTestId('star-empty')).toHaveLength(1)
+    expect(screen.getByTestId('stars')).toHaveClass('text-[16px]', 'tracking-[2px]')
+    expect(screen.getAllByTestId('star-filled')[0]).toHaveClass('text-star')
+    expect(screen.getAllByTestId('star-empty')[0]).toHaveClass('text-star-empty')
+    rerender(<Stars value={3} size="lg" animate />)
+    expect(screen.getByTestId('stars')).toHaveClass('text-[44px]')
+    expect(screen.getAllByTestId('star-filled')[2]).toHaveStyle({ animationDelay: '0.36s' })
+  })
+})
+
 describe('StarRow', () => {
   it('fills as many of the three stars as the score', () => {
     render(<StarRow value={2} />)
 
     expect(screen.getAllByTestId('star-filled')).toHaveLength(2)
     expect(screen.getAllByTestId('star-empty')).toHaveLength(1)
-    expect(screen.getAllByTestId('star-filled')[0]).toHaveClass('text-sun-400')
+    expect(screen.getAllByTestId('star-filled')[0]).toHaveClass('text-star')
   })
 })
 

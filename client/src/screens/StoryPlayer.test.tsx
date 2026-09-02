@@ -240,8 +240,7 @@ it('holds the back arrow to the 64 px tap floor on a phone', () => {
   renderPlayer()
 
   const back = screen.getByRole('link', { name: 'Truyện' })
-  expect(back).toHaveClass('max-md:h-16', 'max-md:w-16')
-  expect(back).toHaveClass('h-[66px]', 'w-[66px]')
+  expect(back).toHaveClass('h-12', 'w-12', 'bg-white/[.94]')
 })
 
 // --- as a step of today's lesson (fix: the story chain keeps its thread back) ------------------
@@ -258,8 +257,8 @@ it('sends the back arrow to the mission, not to the story library, when the chil
   const back = screen.getByRole('link', { name: 'Nhiệm vụ' })
   expect(back).toHaveAttribute('href', '/mission')
   expect(screen.queryByRole('link', { name: 'Truyện' })).not.toBeInTheDocument()
-  // The arrow moved destination, not place: it is still the 64 px circle on the artwork.
-  expect(back).toHaveClass('max-md:h-16', 'max-md:w-16', 'h-[66px]', 'w-[66px]')
+  // The arrow moved destination, not place: it is still the 48 px on-art disc.
+  expect(back).toHaveClass('h-12', 'w-12', 'bg-white/[.94]')
 })
 
 it('carries the mission on to the quiz, before the story ends and after it', () => {

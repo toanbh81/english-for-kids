@@ -182,7 +182,7 @@ it('holds the back arrow to the 64 px tap floor on a phone', () => {
   renderStairs()
 
   const back = screen.getByRole('link', { name: /Về trang chủ|Về bản đồ/ })
-  expect(back).toHaveClass('max-md:h-16', 'max-md:w-16')
-  // …and the landscape 66 px circle is `BackButton`'s own, untouched at every width from `md` up.
-  expect(back).toHaveClass('h-[66px]', 'w-[66px]')
+  expect(back).toHaveClass('h-14', 'w-14')
+  // …and the landscape 64 px circle is `BackButton`'s own `child` variant, untouched from `md` up.
+  expect(back).toHaveClass('md:h-16', 'md:w-16')
 })

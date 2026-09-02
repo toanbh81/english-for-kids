@@ -69,12 +69,14 @@ function StoryPlayerInner({ story, id, mission }: { story: Story; id: string; mi
           means the artwork is the same shape on every phone rather than whatever is left over. */}
       <div className="relative flex aspect-[16/9] flex-none justify-center md:aspect-auto md:max-h-[52vh] md:min-h-0 md:flex-1">
         <SceneArt emoji={scene.emoji} bg={scene.bg} image={scene.image} />
-        {/* 64 px, not 48: the spec's binding rules put the tap-target floor at 64 with no
-            exception, and this arrow rides on the artwork where it is easiest to miss. */}
+        {/* `onArt`: a 48 px disc with an invisible 64 px hit band — the spec's binding rules put
+            the tap-target floor at 64 with no exception, and this arrow rides on the artwork
+            where it is easiest to miss. */}
         <BackButton
           to={mission ? MISSION_ROUTE : '/stories'}
           label={mission ? 'Nhiệm vụ' : 'Truyện'}
-          className="absolute left-2.5 top-2.5 max-md:h-16 max-md:w-16 max-md:text-2xl md:left-4 md:top-4"
+          variant="onArt"
+          className="absolute left-2.5 top-2.5 md:left-4 md:top-4"
         />
         <div className="absolute right-2.5 top-2.5 flex items-center gap-2 md:right-4 md:top-4">
           {/* The dots beside it are decorative, so the chip carries the position in words — and

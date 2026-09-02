@@ -115,7 +115,7 @@ function TopicHubInner({ topic }: { topic: Topic }) {
         <BackButton
           to="/"
           label="Về nhà"
-          className="self-start max-md:h-16 max-md:w-16 max-md:text-2xl max-md:text-teal-600"
+          className="self-start max-md:text-teal-600"
         />
 
         {/* Design M8's title block: a 92 px white disc, the island's name in white on the teal, and
