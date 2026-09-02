@@ -15,7 +15,8 @@ import { Foxy } from '../components/Foxy'
 import type { FoxyMood } from '../components/Foxy'
 import { MissionCard } from '../components/MissionCard'
 import { StreakWeek } from '../components/StreakWeek'
-import { Chip, SpeechBubble, StarRow } from '../components/ui'
+import { Chip, NoticeStack, SpeechBubble, StarRow } from '../components/ui'
+import type { NoticeProps } from '../components/ui'
 import { PageShell, PageHeader, PageBody } from '../components/ui/page'
 
 // Per child, like every other stored value — see progress/storageKeys.ts.
@@ -250,6 +251,45 @@ export function Home() {
     setA2hsDismissed(true)
   }
 
+  // The A2HS notice's "Cách làm" action has nothing of its own to navigate to — Safari's Add-to-
+  // Home-Screen is a share-sheet action, not a page — so it just expands the notice's own sub text
+  // in place, the fallback the brief calls for when an action has no existing screen to open.
+  const [a2hsHowToOpen, setA2hsHowToOpen] = useState(false)
+
+  // The three ad-hoc `bg-sun-50`/`bg-fix-50` banners this Home used to hand-roll, now built as
+  // `NoticeProps` and handed to one `NoticeStack` — see Phase 12 task 11. Order here is the order
+  // ties break in (the stack's own priority sort only reorders across different `kind`s).
+  const noticeItems: NoticeProps[] = []
+  if (overLimit) {
+    noticeItems.push({
+      kind: 'warn',
+      title: 'Hôm nay bé học đủ rồi 🦊 Mai gặp lại nhé!',
+      testId: 'limit-banner',
+    })
+  }
+  if (showMilestoneBanner) {
+    noticeItems.push({
+      kind: 'info',
+      title: 'Liên kết email để giữ tiến độ của bé',
+      sub: 'Tiến độ mới lưu trên máy này — nhờ bố mẹ liên kết email để giữ an toàn.',
+      action: { label: 'Góc phụ huynh', onClick: () => navigate('/parent') },
+      onClose: handleDismissBanner,
+      testId: 'milestone-banner',
+    })
+  }
+  if (showA2hs) {
+    noticeItems.push({
+      kind: 'info',
+      title: 'Thêm Speak Up vào Màn hình chính',
+      sub: a2hsHowToOpen
+        ? 'Nhấn nút Chia sẻ ⬆️ trên thanh Safari, rồi chọn "Thêm vào MH Chính".'
+        : 'Mở nhanh hơn, không cần trình duyệt.',
+      action: { label: 'Cách làm', onClick: () => setA2hsHowToOpen(v => !v) },
+      onClose: handleDismissA2hs,
+      testId: 'a2hs-banner',
+    })
+  }
+
   // The parent-dashboard corner button, moved verbatim into the header's right cell — Home is
   // excluded from the mission chip by route (`headerRegistry`'s `isExcluded`), so the default
   // `right` (the chip) would just render nothing here; this is Home's own control for that cell.
@@ -310,6 +350,11 @@ export function Home() {
       </PageHeader>
 
       <PageBody className="relative gap-2.5 ipad:gap-3">
+        {/* The over-limit / milestone / A2HS banners, as one `NoticeStack` — first row of the body,
+          * above Foxy, so whatever the child or parent most needs to see is the first thing under
+          * the header regardless of scroll position. */}
+        <NoticeStack items={noticeItems} />
+
         {/* Foxy and the full greeting, phone only — restored here because the header has no room
           * for them below `md` (see above). M1b prints the greeting as plain text: the bubble is
           * M1a's, and on a 390 px screen its white panel, its padding and its shadow cost ~26 px
@@ -345,63 +390,6 @@ export function Home() {
             ⭐ {totalStars()}
           </div>
         </div>
-
-        {overLimit && (
-          <div
-            data-testid="limit-banner"
-            className="rounded-xl2 bg-sun-50 px-5 py-4 text-center font-display text-xl font-extrabold text-sun-700 shadow-card-sm"
-          >
-            Hôm nay bé học đủ rồi 🦊 Mai gặp lại nhé!
-          </div>
-        )}
-
-        {/* Spec flow 1's milestone banner: three days in, on a device nobody has linked yet, this
-          * is the one place the app admits the safety net is thinner than it looks. Honest, not
-          * alarming — "mới lưu trên máy này", never "đã mất" or "sắp mất". */}
-        {showMilestoneBanner && (
-          <div data-testid="milestone-banner" className="flex items-center justify-between gap-3 rounded-xl2 bg-teal-50 px-4 py-3 shadow-card-sm">
-            <p className="flex-1 text-sm font-semibold text-teal-700">
-              Tiến độ mới lưu trên máy này — nhờ bố mẹ{' '}
-              <Link to="/parent" className="underline">liên kết email</Link> để giữ an toàn.
-            </p>
-            <button
-              type="button"
-              aria-label="Đóng thông báo liên kết email"
-              onClick={handleDismissBanner}
-              // §Rules' 64 px floor: this is the child's Home, not the adult dashboard, and the
-              // exemption the design grants is for that screen alone. The glyph stays small; the
-              // HIT AREA is what has to reach the floor, so the padding does the work. `-my-3`
-              // gives it back the height it borrows from the banner's own padding, so a 64 px
-              // target does not make the banner taller than it was.
-              className="-my-3 flex h-16 w-16 shrink-0 items-center justify-center rounded-full text-teal-700"
-            >
-              ✕
-            </button>
-          </div>
-        )}
-
-        {/* Non-negotiable principles §5: a non-installed Safari PWA loses all storage after seven
-          * idle days (WebKit ITP). Independent of the cloud — it fires whether or not a Supabase
-          * project exists, because it is about localStorage, not about the mirror. */}
-        {showA2hs && (
-          <div data-testid="a2hs-banner" className="flex items-center justify-between gap-3 rounded-xl2 bg-sun-50 px-4 py-3 shadow-card-sm">
-            {/* "ít bị xoá hơn", not "không mất": installing lifts the app out of the 7-day sweep,
-              * it does not make storage permanent — a full disk, a manual clear or a reinstall
-              * still take it. The banner may not promise what only a linked email can. */}
-            <p className="flex-1 text-sm font-semibold text-sun-700">
-              Thêm Speak Up! vào Màn hình chính để tiến độ ít bị xoá hơn khi lâu ngày không mở.
-            </p>
-            <button
-              type="button"
-              aria-label="Đóng thông báo cài vào Màn hình chính"
-              onClick={handleDismissA2hs}
-              // The 64 px floor again — same reasoning as the banner above.
-              className="-my-3 flex h-16 w-16 shrink-0 items-center justify-center rounded-full text-sun-700"
-            >
-              ✕
-            </button>
-          </div>
-        )}
 
         {/* One set of islands serves both layouts: a 2-column grid on a phone or portrait tablet,
           * and the absolutely positioned map from `ipad` up, where the percentage offsets take

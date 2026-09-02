@@ -9,7 +9,7 @@ import { isCloudConfigured } from '../cloud/supabase'
 import { hasAnyHistory, profileHistory, sumHistory } from '../progress/history'
 import { ProfilePicker } from '../components/ProfilePicker'
 import { ParentQuestion } from '../components/ParentQuestion'
-import { Button, Card, PAGE_SHELL } from '../components/ui'
+import { Button, Card, Notice, PAGE_SHELL } from '../components/ui'
 
 /**
  * The start screen's other door (spec flows 3 and 4): "Đã dùng Speak Up rồi?" — for a device whose
@@ -365,7 +365,7 @@ export function CloudStart() {
           <p className="text-sm font-semibold text-ink-500">Tài khoản này có {candidates.length} hồ sơ. Chọn một để khôi phục lên máy này.</p>
           {/* A failed pull says so HERE too, next to the picker that is still up — tapping the same
             * face again is the retry. */}
-          {error && <p role="alert" className="rounded-xl2 bg-fix-50 p-3 text-sm font-semibold text-fix-700">{error}</p>}
+          {error && <Notice kind="error" role="alert" title={error} />}
           <ProfilePicker profiles={candidates} onSelect={finishRestore} busy={busy} />
         </Card>
       </main>
@@ -387,8 +387,8 @@ export function CloudStart() {
           <p className="mt-1 text-sm font-semibold text-ink-500">Khôi phục tiến độ của bé trên máy này.</p>
         </div>
 
-        {info && <p className="rounded-xl2 bg-sun-50 p-3 text-sm font-semibold text-sun-700">{info}</p>}
-        {error && <p role="alert" className="rounded-xl2 bg-fix-50 p-3 text-sm font-semibold text-fix-700">{error}</p>}
+        {info && <Notice kind="info" title={info} />}
+        {error && <Notice kind="error" role="alert" title={error} />}
         {/* A pull that failed leaves the parent one tap from trying again, on the same child —
           * rather than back at a menu with no idea which door to take twice. */}
         {retryId && (

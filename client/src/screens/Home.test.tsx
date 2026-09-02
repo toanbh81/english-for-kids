@@ -248,10 +248,25 @@ describe('Phase 11: the milestone banner', () => {
 
     renderHome()
     await act(async () => { await Promise.resolve() })
+    expect(screen.getByTestId('milestone-banner')).toHaveTextContent('Liên kết email để giữ tiến độ của bé')
     expect(screen.getByTestId('milestone-banner')).toHaveTextContent('Tiến độ mới lưu trên máy này')
-    expect(screen.getByRole('link', { name: 'liên kết email' })).toHaveAttribute('href', '/parent')
+    expect(screen.getByRole('button', { name: 'Góc phụ huynh' })).toBeInTheDocument()
 
-    act(() => { screen.getByLabelText('Đóng thông báo liên kết email').click() })
+    act(() => { screen.getByRole('button', { name: 'Đóng' }).click() })
+    expect(screen.queryByTestId('milestone-banner')).not.toBeInTheDocument()
+  })
+
+  it('the "Góc phụ huynh" action sends the parent to the dashboard', async () => {
+    cloud.configured = true
+    auth.isAnonymous.mockResolvedValue(true)
+    seedThreeDayStreak()
+
+    renderHome()
+    await act(async () => { await Promise.resolve() })
+
+    // No `/parent` route is registered in this test harness, so a successful `navigate('/parent')`
+    // unmounts Home (and the banner with it) rather than leaving it on screen.
+    act(() => { screen.getByRole('button', { name: 'Góc phụ huynh' }).click() })
     expect(screen.queryByTestId('milestone-banner')).not.toBeInTheDocument()
   })
 
@@ -297,7 +312,7 @@ describe('Phase 11: the Add-to-Home-Screen nudge', () => {
 
     renderHome()
 
-    expect(screen.getByTestId('a2hs-banner')).toHaveTextContent('Thêm Speak Up! vào Màn hình chính')
+    expect(screen.getByTestId('a2hs-banner')).toHaveTextContent('Thêm Speak Up vào Màn hình chính')
   })
 
   it('stays quiet once the app is already installed', () => {
@@ -321,11 +336,23 @@ describe('Phase 11: the Add-to-Home-Screen nudge', () => {
     setUserAgent('Mozilla/5.0 (iPad; CPU OS 17_0 like Mac OS X) AppleWebKit/605.1.15 Safari/604.1')
 
     renderHome()
-    act(() => { screen.getByTestId('a2hs-banner').querySelector('button')!.click() })
+    // `Notice` also renders a "Cách làm" action button before its close button, so the close has
+    // to be found by its accessible name rather than "the first button in the banner".
+    act(() => { within(screen.getByTestId('a2hs-banner')).getByRole('button', { name: 'Đóng' }).click() })
     expect(screen.queryByTestId('a2hs-banner')).not.toBeInTheDocument()
 
     renderHome()
     expect(screen.queryByTestId('a2hs-banner')).not.toBeInTheDocument()
+  })
+
+  it('"Cách làm" expands the how-to text in place', () => {
+    setUserAgent('Mozilla/5.0 (iPad; CPU OS 17_0 like Mac OS X) AppleWebKit/605.1.15 Safari/604.1')
+
+    renderHome()
+    expect(screen.getByTestId('a2hs-banner')).toHaveTextContent('Mở nhanh hơn, không cần trình duyệt.')
+
+    act(() => { within(screen.getByTestId('a2hs-banner')).getByRole('button', { name: 'Cách làm' }).click() })
+    expect(screen.getByTestId('a2hs-banner')).toHaveTextContent('Chia sẻ')
   })
 })
 
@@ -452,10 +479,16 @@ describe('Phase 11: "Đã dùng Speak Up rồi?"', () => {
   })
 })
 
-/** §Rules puts the tap floor at 64 px on every child-reachable screen; the only exemption the
- * design grants is the adult dashboard behind the math gate. Both banner close buttons were 32. */
-describe('Phase 11: the banners meet the child tap floor', () => {
-  it('gives both dismiss buttons a 64 px hit area', async () => {
+/**
+ * §Rules puts the tap floor at 64 px on every child-reachable screen, and Home used to give both
+ * banner close buttons that (albeit via a -my-3 hit-area trick over a small glyph). Phase 12 task
+ * 11 replaces both with the shared `Notice` primitive, whose close/action buttons are a fixed
+ * 40 px (`h-10 w-10`) at every kind and on every screen it renders on — the brief's own verbatim
+ * component, not a choice made here. That is smaller than the 64 px floor on this child-facing
+ * screen; flagged in the task-11 report rather than silently followed or silently "fixed".
+ */
+describe('Phase 12: the milestone/A2HS notices share one close control', () => {
+  it('gives both dismiss buttons the same accessible name and size', async () => {
     cloud.configured = true
     auth.isAnonymous.mockResolvedValue(true)
     seedDoneDay(NOW - 2 * DAY_MS)
@@ -469,8 +502,9 @@ describe('Phase 11: the banners meet the child tap floor', () => {
     renderHome()
     await act(async () => { await Promise.resolve() })
 
-    expect(screen.getByLabelText('Đóng thông báo liên kết email')).toHaveClass('h-16', 'w-16')
-    expect(screen.getByLabelText('Đóng thông báo cài vào Màn hình chính')).toHaveClass('h-16', 'w-16')
+    const closeButtons = screen.getAllByRole('button', { name: 'Đóng' })
+    expect(closeButtons).toHaveLength(2)
+    for (const button of closeButtons) expect(button).toHaveClass('h-10', 'w-10')
   })
 })
 

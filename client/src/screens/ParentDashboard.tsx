@@ -39,7 +39,7 @@ import { fetchRemoteStats } from '../cloud/remote'
 import type { RemoteStats } from '../cloud/remote'
 import { isCloudConfigured } from '../cloud/supabase'
 import { ProfilePicker } from '../components/ProfilePicker'
-import { Button, Card, EmptyState, PAGE_SHELL } from '../components/ui'
+import { Button, Card, EmptyState, Notice, PAGE_SHELL } from '../components/ui'
 
 /**
  * Phone styles sit at the default breakpoint and `md:` (768) puts the tablet/iPad value back — the
@@ -102,6 +102,20 @@ function describeAuthError(code: string): string {
  * an offline device gets an explanation instead of a form that cannot work.
  */
 const online = (): boolean => typeof navigator === 'undefined' || navigator.onLine !== false
+
+/** The `no-session` notice's copy, split at its first sentence (title) from the rest (sub) per the
+ * Phase 12 task 11 ruling — same two Vietnamese messages as before, just no longer one run-on `<p>`. */
+function noSessionNotice(): { title: string; sub: string } {
+  return online()
+    ? {
+        title: 'Máy này chưa kết nối được với tài khoản nào.',
+        sub: 'Thử mở lại trang này sau một chút nhé. Tiến độ của bé vẫn đang được lưu trên máy này.',
+      }
+    : {
+        title: 'Đang ngoại tuyến nên chưa tạo được tài khoản cho máy này.',
+        sub: 'Có mạng trở lại, mở lại trang này để liên kết email nhé. Tiến độ của bé vẫn đang được lưu trên máy này.',
+      }
+}
 
 function formatDayLabel(day: string): string {
   const [, m, d] = day.split('-')
@@ -381,6 +395,14 @@ export function ParentDashboard({ onLock }: Props) {
     if (!(await resetRemoteProgress(activeId))) setResetNotice(PENDING_RESET_NOTICE)
   }
 
+  /** The reset-notice's "Thử xoá lại" action: the same mirror-side call `handleReset` makes,
+   * without repeating the local wipe (that half already succeeded — this notice only exists
+   * because the SERVER side did not). Clears the notice once the retry actually lands. */
+  async function handleRetryReset() {
+    if (!cloudAvailable || !activeId) return
+    if (await resetRemoteProgress(activeId)) setResetNotice(null)
+  }
+
   // ---------------------------------------------------------------------------------------------
   // Tài khoản: link email, sign out, recovery code, add/rename/switch profiles.
   // ---------------------------------------------------------------------------------------------
@@ -508,12 +530,7 @@ export function ParentDashboard({ onLock }: Props) {
                   * screen would talk about does not exist yet, so it says so instead of offering a
                   * form that cannot possibly reach anyone. */}
                 {!hasSession && (
-                  <p data-testid="no-session" className="rounded-xl2 bg-sun-50 p-3 text-xs font-semibold text-sun-700 md:text-sm">
-                    {online()
-                      ? 'Máy này chưa kết nối được với tài khoản nào. Thử mở lại trang này sau một chút nhé.'
-                      : 'Đang ngoại tuyến nên chưa tạo được tài khoản cho máy này. Có mạng trở lại, mở lại trang này để liên kết email nhé.'}
-                    {' '}Tiến độ của bé vẫn đang được lưu trên máy này.
-                  </p>
+                  <Notice kind="warn" testId="no-session" {...noSessionNotice()} />
                 )}
                 {/* With no session there is nothing to link an email TO — `linkEmail` calls
                   * `updateUser` on a user that does not exist — so neither form is drawn. */}
@@ -573,10 +590,12 @@ export function ParentDashboard({ onLock }: Props) {
                 {linkError && <p role="alert" className="text-xs font-semibold text-fix-700">{linkError}</p>}
 
                 {recoveryCode && (
-                  <div className="rounded-xl2 bg-sun-50 p-3">
-                    <p className="text-xs font-bold text-sun-700">Mã khôi phục — chụp màn hình lại nhé</p>
-                    <p className="mt-1 font-display text-lg font-extrabold tracking-widest text-sun-700">{recoveryCode}</p>
-                  </div>
+                  <Notice
+                    kind="credential"
+                    title="Mã khôi phục — chụp màn hình lại nhé"
+                    sub="Dùng mã này để lấy lại tiến độ trên máy khác."
+                    code={recoveryCode}
+                  />
                 )}
               </div>
             ) : (
@@ -618,15 +637,16 @@ export function ParentDashboard({ onLock }: Props) {
                   </button>
                 </div>
               ) : (
-                <p data-testid="profile-unreadable" className="rounded-xl2 bg-sun-50 p-3 text-xs font-semibold text-sun-700 md:text-sm">
-                  Chưa đọc được danh sách hồ sơ trên máy này. Tiến độ của bé vẫn đang được lưu bình thường —
-                  mở lại ứng dụng để kiểm tra, và tạm thời đừng thêm hồ sơ mới.
-                </p>
+                <Notice
+                  kind="warn"
+                  testId="profile-unreadable"
+                  title="Chưa đọc được danh sách hồ sơ trên máy này. Tiến độ của bé vẫn đang được lưu bình thường — mở lại ứng dụng để kiểm tra, và tạm thời đừng thêm hồ sơ mới."
+                />
               )}
               {profileNotice && (
-                <p role="status" data-testid="profile-notice" className="mt-2 rounded-xl2 bg-fix-50 p-3 text-xs font-semibold text-fix-700 md:text-sm">
-                  {profileNotice}
-                </p>
+                <div className="mt-2">
+                  <Notice kind="error" testId="profile-notice" title={profileNotice} />
+                </div>
               )}
               {profiles.length > 1 && (
                 <div className="mt-2">
@@ -968,9 +988,12 @@ export function ParentDashboard({ onLock }: Props) {
             Đặt lại tiến trình
           </Button>
           {resetNotice && (
-            <p role="status" data-testid="reset-notice" className="rounded-xl2 bg-sun-50 p-3 text-xs font-semibold text-sun-700 md:text-sm">
-              {resetNotice}
-            </p>
+            <Notice
+              kind="pending"
+              testId="reset-notice"
+              title={resetNotice}
+              action={{ label: 'Thử xoá lại', onClick: () => { void handleRetryReset() } }}
+            />
           )}
         </div>
       </div>

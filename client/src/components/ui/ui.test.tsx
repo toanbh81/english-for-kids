@@ -6,6 +6,8 @@ import { Button } from './Button'
 import { Chip } from './Chip'
 import { EmptyState } from './EmptyState'
 import { NotFound } from './NotFound'
+import { Notice } from './Notice'
+import { NoticeStack } from './NoticeStack'
 import { PAGE_SHELL } from './pageShell'
 import { ProgressBar } from './ProgressBar'
 import { SceneDots } from './SceneDots'
@@ -305,6 +307,31 @@ describe('EmptyState', () => {
   it('adult variant is smaller', () => {
     render(<EmptyState adult emoji="🎙️" title="Chưa có bản ghi nào" sub="Bản ghi xuất hiện sau khi bé luyện nói." />)
     expect(screen.getByText('Chưa có bản ghi nào')).toHaveClass('text-[14px]')
+  })
+})
+
+describe('Notice', () => {
+  it('colours by kind and shows action/close', () => {
+    const onClose = vi.fn()
+    render(<Notice kind="warn" title="Hôm nay bé học đủ rồi 🦊 Mai gặp lại nhé!" sub="Giới hạn 20 phút/ngày" onClose={onClose} />)
+    const n = screen.getByRole('status')
+    expect(n).toHaveClass('bg-sun-50', 'border-[#FFDF9E]', 'text-sun-700', 'rounded-r16', 'border-[3px]')
+    fireEvent.click(screen.getByRole('button', { name: 'Đóng' }))
+    expect(onClose).toHaveBeenCalled()
+  })
+  it('credential kind shows the code and a copy button', () => {
+    render(<Notice kind="credential" title="Mã khôi phục — chụp màn hình lại nhé" sub="Chỉ hiện 1 lần." code="QZQJ7MFC" />)
+    expect(screen.getByText('QZQJ7MFC')).toHaveClass('tracking-[4px]', 'text-[24px]')
+    expect(screen.getByRole('button', { name: 'Chép mã' })).toBeInTheDocument()
+  })
+})
+
+describe('NoticeStack', () => {
+  it('orders by priority and folds the third', () => {
+    render(<NoticeStack items={[{ kind: 'info', title: 'A' }, { kind: 'error', title: 'B' }, { kind: 'warn', title: 'C' }]} />)
+    const titles = screen.getAllByRole('status').map(n => n.textContent)
+    expect(titles[0]).toContain('B'); expect(titles[1]).toContain('C')
+    expect(screen.getByText('+1 thông báo')).toBeInTheDocument()
   })
 })
 
