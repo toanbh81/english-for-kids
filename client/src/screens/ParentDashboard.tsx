@@ -46,8 +46,7 @@ import { useDialog } from '../components/ui/useDialog'
 
 /**
  * Phone styles sit at the default breakpoint and `md:` (768) puts the tablet/iPad value back — the
- * phase-10 idiom written out in full in `screens/SoundPractice.tsx`. `max-md:` appears only where a
- * shared primitive (`Button`) writes the class being overridden for itself.
+ * phase-10 idiom written out in full in `screens/SoundPractice.tsx`.
  *
  * This screen is the one place the app's 64 px tap floor does not apply, and the design says so
  * outright (§12 M8c): it is an **adult** interface — "chữ 12–14px, vùng chạm 36–48px (không cần
@@ -522,9 +521,16 @@ export function ParentDashboard({ onLock }: Props) {
     <PageShell gutter="24">
       <PageHeader
         back={<BackButton to="/" label="Về nhà" variant="adult" />}
-        right={<Button size="adult" variant="outline" onClick={() => onLock?.()}>🔐 Khoá lại</Button>}
+        right={
+          // Icon-only below `md`: the full "🔐 Khoá lại" pill is what was stealing the width the
+          // title needs in PageHeader's fixed 56 px side column — see the H1 below.
+          <Button size="adult" variant="outline" onClick={() => onLock?.()} aria-label="Khoá lại">
+            <span aria-hidden="true">🔐</span>
+            <span className="hidden md:inline">Khoá lại</span>
+          </Button>
+        }
       >
-        <h1 className="block max-w-[118px] truncate font-display text-[21px] font-extrabold text-ink-900 md:max-w-none md:text-[28px]">Góc phụ huynh</h1>
+        <h1 className="font-display text-[20px] font-extrabold leading-tight text-ink-900 md:text-[28px] whitespace-nowrap">Góc phụ huynh</h1>
       </PageHeader>
       <PageBody className="text-sm text-ink-500 md:text-base">
       <div className="mx-auto flex w-full max-w-5xl flex-col gap-3 md:gap-6">
