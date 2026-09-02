@@ -1174,6 +1174,10 @@ describe('Phase 11 task 5: remote progress view', () => {
     expect(cards).toHaveLength(1)
     // The skeleton (Task 13) replaced the "Đang tải…" text — its presence is the loading signal now.
     expect(within(cards[0]).getAllByTestId('skeleton').length).toBeGreaterThan(0)
+    // Fix round 1: the skeleton IS the row while loading — no real name line drawn above it, and
+    // no second, separately-bordered `<li>` around it (the skeleton draws its own outline).
+    expect(cards[0]).not.toHaveTextContent(SIBLING.name)
+    expect(cards[0].className).not.toMatch(/border-line-200/)
 
     // The parent presses "Xem từ xa" WHILE the sibling's fetch is still unresolved. This changes
     // `remoteShowKey` (now includes the active device profile too) and re-runs the stats effect —

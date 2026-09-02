@@ -8,9 +8,13 @@ export function Skeleton({ className = '' }: { className?: string }) {
   )
 }
 
+/**
+ * No `bg-white`/padding of its own — this is placed inside the account `Card`, which already
+ * supplies both. Only the height is fixed here, so the card doesn't jump once real content lands.
+ */
 export function AccountCardSkeleton() {
   return (
-    <div data-testid="skeleton-account" className="flex h-[168px] flex-col gap-2.5 rounded-r16 bg-white p-3.5">
+    <div data-testid="skeleton-account" className="flex h-[168px] flex-col gap-2.5">
       <div className="flex justify-between">
         <Skeleton className="h-4 w-[120px]" />
         <Skeleton className="h-4 w-20" />
@@ -25,9 +29,14 @@ export function AccountCardSkeleton() {
   )
 }
 
+/**
+ * Carries its own `border-line-200` — while a row is loading it IS the whole `<li>` (see
+ * `ParentDashboard`), so it has to draw the same outline the loaded row's own `<li>` draws, or the
+ * row's edge would jump the moment its stats arrive.
+ */
 export function RemoteRowSkeleton() {
   return (
-    <div className="flex h-[72px] items-center gap-3 rounded-r16 bg-white p-3.5">
+    <div className="flex h-[72px] items-center gap-3 rounded-r16 border border-line-200 bg-white p-3.5">
       <Skeleton className="h-10 w-10 shrink-0 rounded-full" />
       <div className="flex flex-1 flex-col gap-2">
         <Skeleton className="h-3.5 w-[160px]" />

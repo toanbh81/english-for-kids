@@ -733,15 +733,23 @@ export function ParentDashboard({ onLock }: Props) {
               {remoteProfilesToShow.map(p => {
                 const loaded = p.id in remoteStats
                 const entry = remoteStats[p.id]
+                // While the stats haven't loaded, the skeleton IS the row — no bordered/padded
+                // `<li>` around a real name line sat above a second, separately-framed skeleton
+                // box (that read as two stacked cards, not one loading row).
+                if (!loaded) {
+                  return (
+                    <li key={p.id} data-testid="remote-profile" className="overflow-hidden rounded-r16">
+                      <RemoteRowSkeleton />
+                    </li>
+                  )
+                }
                 return (
                   <li key={p.id} data-testid="remote-profile" className="rounded-xl2 border border-line-200 p-3">
                     <p className="font-semibold text-ink-900">
                       {p.avatar} {p.name}
                       {p.id === activeId && <span className="font-normal text-ink-500"> · đang dùng trên máy này</span>}
                     </p>
-                    {!loaded ? (
-                      <RemoteRowSkeleton />
-                    ) : entry === null ? (
+                    {entry === null ? (
                       <p className="mt-1 text-xs font-semibold text-fix-700">Không tải được tiến độ của bé lúc này.</p>
                     ) : (
                       <div className="mt-1 flex flex-col gap-1 text-xs font-semibold text-ink-500 md:text-sm">
