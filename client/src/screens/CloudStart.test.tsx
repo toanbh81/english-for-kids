@@ -803,14 +803,17 @@ describe('the recovery-code door', () => {
   })
 })
 
-/** F6: this screen is reachable by a child, so §Rules' 64 px floor applies to every control on it —
- * including the quiet text buttons, which were 44. */
-it('holds every control to the 64 px tap floor', () => {
+/**
+ * Phase 12 task 15: this screen moved to the app's adult-door convention (behind the same
+ * `ParentQuestion` gate as the parent area) — its buttons are `size="adult"` (44 px) and its
+ * secondary text actions are `LinkText` (also a 44 px target), not the child 64 px floor.
+ */
+it('holds every control to the 44 px adult tap floor', () => {
   renderStart()
   openEmailDoor()
 
   for (const label of ['← Chọn cách khác']) {
-    expect(screen.getByText(label).className, label).toContain('min-h-[64px]')
+    expect(screen.getByText(label).className, label).toContain('min-h-[44px]')
   }
   expect(screen.getByLabelText('Email của bố/mẹ').className).toContain('min-h-[64px]')
 })

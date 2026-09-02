@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
 import type { ChangeEvent, FormEvent } from 'react'
-import { Link } from 'react-router-dom'
 import { getActivity, minutesPerDay, averageScoreByKind, weakPhonemes, clearActivity } from '../progress/activity'
 import { clearBand, getBand, setBandAuto, setBandValue } from '../progress/band'
 import type { Band } from '../progress/band'
@@ -41,7 +40,8 @@ import { fetchRemoteStats } from '../cloud/remote'
 import type { RemoteStats } from '../cloud/remote'
 import { isCloudConfigured } from '../cloud/supabase'
 import { ProfilePicker } from '../components/ProfilePicker'
-import { AccountCardSkeleton, Button, Card, EmptyState, Notice, PAGE_SHELL, RemoteRowSkeleton, SyncPill } from '../components/ui'
+import { AccountCardSkeleton, BackButton, Button, Card, EmptyState, Notice, RemoteRowSkeleton, SyncPill } from '../components/ui'
+import { PageShell, PageHeader, PageBody } from '../components/ui/page'
 import { useDialog } from '../components/ui/useDialog'
 
 /**
@@ -519,34 +519,18 @@ export function ParentDashboard({ onLock }: Props) {
   }
 
   return (
-    // 18 px of side frame on a phone — the densest of the design's five frame paddings (§1), for the
-    // one screen it draws for a grown-up — and the 24 px this screen has always had from 768 up.
-    <main className={`h-full overflow-y-auto bg-cream-50 px-[18px] ${PAGE_SHELL} text-sm text-ink-500 md:px-6 md:text-base`}>
+    <PageShell gutter="24">
+      <PageHeader
+        back={<BackButton to="/" label="Về nhà" variant="adult" />}
+        right={<Button size="adult" variant="outline" onClick={() => onLock?.()}>🔐 Khoá lại</Button>}
+      >
+        <h1 className="block max-w-[118px] truncate font-display text-[21px] font-extrabold text-ink-900 md:max-w-none md:text-[28px]">Góc phụ huynh</h1>
+      </PageHeader>
+      <PageBody className="text-sm text-ink-500 md:text-base">
       <div className="mx-auto flex w-full max-w-5xl flex-col gap-3 md:gap-6">
-        <Link
-          to="/"
-          className="inline-flex min-h-[48px] items-center gap-2 self-start rounded-full bg-white px-4 font-display text-base font-extrabold text-ink-900 shadow-card-sm active:translate-y-[2px] md:min-h-[64px] md:px-6 md:text-xl"
-        >
-          ← Về nhà
-        </Link>
-
-        <header className="flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <h1 className="font-display text-[21px] font-extrabold text-ink-900 md:text-[36px]">Góc phụ huynh</h1>
-            <p className="mt-1 text-xs font-semibold text-ink-500 md:text-base">
-              Tuần này: {weekMinutes} phút luyện · điểm phát âm trung bình {avgScoreLabel}/100
-            </p>
-          </div>
-
-          <button
-            type="button"
-            onClick={() => onLock?.()}
-            className="flex min-h-[44px] items-center gap-2 rounded-xl2 border border-line-200 bg-white px-3 text-xs font-semibold text-ink-500 active:translate-y-[2px] md:min-h-[64px] md:px-5 md:text-base"
-          >
-            <span>🔐 Đã mở khoá bằng câu hỏi ·</span>
-            <span className="font-display font-extrabold text-ink-900">Khoá lại</span>
-          </button>
-        </header>
+        <p className="text-xs font-semibold text-ink-500 md:text-base">
+          Tuần này: {weekMinutes} phút luyện · điểm phát âm trung bình {avgScoreLabel}/100
+        </p>
 
         {cloudAvailable && (
           <Card data-testid="account-card" className="px-4 py-3.5 md:p-6">
@@ -587,7 +571,7 @@ export function ParentDashboard({ onLock }: Props) {
                         onChange={e => setLinkEmailValue(e.target.value)}
                         className="h-11 min-w-0 flex-1 rounded-xl2 border-2 border-line-200 px-3 text-sm font-semibold text-ink-900"
                       />
-                      <Button type="submit" disabled={linkBusy} className="max-md:min-h-[44px] max-md:px-4 max-md:text-sm">
+                      <Button type="submit" size="adult" disabled={linkBusy}>
                         Liên kết
                       </Button>
                     </div>
@@ -606,7 +590,7 @@ export function ParentDashboard({ onLock }: Props) {
                         onChange={e => setLinkOtp(e.target.value)}
                         className="h-11 w-32 rounded-xl2 border-2 border-line-200 px-3 text-center text-sm font-semibold text-ink-900"
                       />
-                      <Button type="submit" disabled={linkBusy} className="max-md:min-h-[44px] max-md:px-4 max-md:text-sm">
+                      <Button type="submit" size="adult" disabled={linkBusy}>
                         Xác nhận
                       </Button>
                     </div>
@@ -649,13 +633,9 @@ export function ParentDashboard({ onLock }: Props) {
             <div className="mt-4 border-t border-line-200 pt-3">
               <div className="mb-2 flex items-center justify-between">
                 <h3 className="text-xs font-bold text-ink-500 md:text-sm">Hồ sơ</h3>
-                <button
-                  type="button"
-                  onClick={() => { void handleAddProfile() }}
-                  className="min-h-[36px] rounded-xl2 bg-teal-50 px-3 text-xs font-bold text-teal-700"
-                >
+                <Button size="adult" variant="outline" onClick={() => { void handleAddProfile() }}>
                   + Thêm hồ sơ
-                </button>
+                </Button>
               </div>
               {/* The roster can be unreadable — a half-written value this app now refuses to write
                 * over — and `speakup.profile` can be unset, in which case the device is reading the
@@ -667,9 +647,9 @@ export function ParentDashboard({ onLock }: Props) {
                   <p className="text-sm font-semibold text-ink-900" title={activeProfileEntry.name}>
                     {activeProfileEntry.avatar} {shortName(activeProfileEntry.name)}
                   </p>
-                  <button type="button" onClick={() => { void handleRenameActiveProfile() }} className="min-h-[36px] text-xs font-bold text-ink-500 underline">
+                  <Button size="adult" variant="outline" onClick={() => { void handleRenameActiveProfile() }}>
                     Đổi tên
-                  </button>
+                  </Button>
                 </div>
               ) : (
                 <Notice
@@ -695,15 +675,16 @@ export function ParentDashboard({ onLock }: Props) {
                 * own (it appears without this being pressed once a DIFFERENT profile is on the
                 * account; pressing it adds this device's own child, for comparing the two). */}
               {remoteProfiles.status === 'ready' && remoteProfiles.profiles.length > 0 && (
-                <button
-                  type="button"
+                <Button
+                  size="adult"
+                  variant="outline"
                   onClick={() => setRemoteViewOn(v => !v)}
                   aria-pressed={remoteViewOn}
                   data-testid="remote-view-toggle"
-                  className="mt-2 min-h-[36px] rounded-xl2 border border-line-200 px-3 text-xs font-bold text-ink-500"
+                  className="mt-2"
                 >
                   Xem từ xa
-                </button>
+                </Button>
               )}
             </div>
           </Card>
@@ -1027,8 +1008,7 @@ export function ParentDashboard({ onLock }: Props) {
         </div>
 
         <div className="flex flex-col items-start gap-2">
-          {/* `max-md:`, because `min-h-[64px] px-8 text-[22px]` are `Button`'s own classes. */}
-          <Button variant="outline" disabled={resetBusy} onClick={() => { void handleReset() }} className="self-start max-md:min-h-[48px] max-md:px-4 max-md:text-base">
+          <Button size="adult" variant="outline" disabled={resetBusy} onClick={() => { void handleReset() }} className="self-start">
             Đặt lại tiến trình
           </Button>
           {resetNotice && (
@@ -1042,6 +1022,7 @@ export function ParentDashboard({ onLock }: Props) {
           )}
         </div>
       </div>
-    </main>
+      </PageBody>
+    </PageShell>
   )
 }

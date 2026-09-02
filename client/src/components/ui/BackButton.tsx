@@ -7,7 +7,7 @@ export type BackVariant = 'child' | 'adult' | 'onArt'
 // the on-art disc sits on a story picture at 48 with a 64 hit.
 const VARIANT: Record<BackVariant, string> = {
   child: "h-14 w-14 rounded-full text-[22px] shadow-card-xs md:h-16 md:w-16 md:text-[24px] md:shadow-card-sm relative after:absolute after:-inset-1 after:content-[''] md:after:hidden",
-  adult: 'h-11 gap-1.5 rounded-r14 pl-2.5 pr-3.5 text-[14px] font-extrabold text-ink-500 shadow-[0_3px_0_#EFE2CC]',
+  adult: 'h-11 gap-1.5 whitespace-nowrap rounded-r14 pl-2.5 pr-3.5 text-[14px] font-extrabold text-ink-500 shadow-[0_3px_0_#EFE2CC]',
   onArt: "h-12 w-12 rounded-full bg-white/[.94] text-[20px] relative after:absolute after:-inset-2 after:content-['']",
 }
 
@@ -22,19 +22,24 @@ const VARIANT: Record<BackVariant, string> = {
  * width, exactly as `HomeLabel` does for a visible one, and the `aria-label` steps aside so the
  * element's own content is what names it.
  */
-export function BackButton({ to, label = 'Quay lại', mdLabel, variant = 'child', className = '' }: {
+export function BackButton({ to, label = 'Quay lại', mdLabel, variant = 'child', state, className = '' }: {
   to: string
   /** The accessible name. Below the tablet breakpoint when `mdLabel` is given; at every width otherwise. */
   label?: string
   /** The accessible name from the tablet breakpoint up, when it differs from `label`. */
   mdLabel?: string
   variant?: BackVariant
+  /** Router state to carry along, e.g. `MISSION_STATE` — a screen inside a lesson step that hands
+   * the flag on forward (`Button`'s own `state`) has to hand it on backward too, or the hop back
+   * drops the child out of the mission it is trying to return to. */
+  state?: unknown
   className?: string
 }) {
   const visibleLabel = variant === 'adult'
   return (
     <Link
       to={to}
+      state={state}
       aria-label={mdLabel === undefined && !visibleLabel ? label : undefined}
       // `shrink-0`: it lives in flex headers next to content that can be much wider than the
       // viewport (a long level's progress dots), and a squeezed circle drops below the

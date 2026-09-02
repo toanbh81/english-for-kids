@@ -25,53 +25,46 @@ import { SentenceBuilder } from './screens/SentenceBuilder'
 import { TopicHub } from './screens/TopicHub'
 import { ParentGate } from './screens/ParentGate'
 import { CloudStart } from './screens/CloudStart'
-import { LessonChip } from './components/LessonChip'
 
 export default function App() {
   return (
-    <>
-      <Routes>
-        <Route path="/" element={<Home />} />
-        <Route path="/mission" element={<DailyMission />} />
-        <Route path="/mission/done" element={<MissionComplete />} />
-        <Route path="/topic/:id" element={<TopicHub />} />
-        <Route path="/levels" element={<LevelStairs />} />
-        {/* Static before dynamic: Minimal Pairs, Sentence Stars and Story Voice are bậc of their
-          * own, not card levels. */}
-        <Route path="/level/minimal-pairs" element={<PairLevel />} />
-        <Route path="/level/sentence-stars" element={<StarLevel />} />
-        <Route path="/level/story-voice" element={<VoiceLevel />} />
-        <Route path="/level/:levelId" element={<LevelSelect />} />
-        <Route path="/practice/:cardId" element={<PracticeCard />} />
-        {/* A sound is a list of its words; one word is the drill. An old stored lesson still
-          * pointing at `/sound/<ph>` lands on the list, which is a fine place to be. */}
-        <Route path="/sound/:ph" element={<SoundWordList />} />
-        <Route path="/sound/:ph/:cardId" element={<SoundPractice />} />
-        <Route path="/pair/:id" element={<PairPractice />} />
-        <Route path="/star/:id" element={<StarPractice />} />
-        <Route path="/voice/:id" element={<VoicePractice />} />
-        <Route path="/stories" element={<StoryList />} />
-        <Route path="/story/:id" element={<StoryPlayer />} />
-        <Route path="/story/:id/quiz" element={<StoryQuiz />} />
-        <Route path="/story/:id/retell" element={<StoryRetell />} />
-        <Route path="/words" element={<WordTopics />} />
-        <Route path="/words/:topic" element={<WordList />} />
-        <Route path="/words/:topic/:wordId" element={<WordCard />} />
-        <Route path="/sentences" element={<SentenceList />} />
-        <Route path="/sentence/:id" element={<SentenceBuilder />} />
-        <Route path="/parent" element={<ParentGate />} />
-        {/* The route is open; the DOORS behind it are not. `/start` is only ever linked from a
-          * device with no history at all, but a typed URL still lands here, so the math question
-          * sits in front of both actions — the one that can sign this iPad into another account
-          * and the one that re-parents profiles onto it. Reading the two-button menu is harmless
-          * (spec flows 3, 4). */}
-        <Route path="/start" element={<CloudStart />} />
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
-
-      {/* Inside the router (it reads the current location) but outside `Routes`, so the one chip
-        * serves every screen instead of each screen having to remember to render it. */}
-      <LessonChip />
-    </>
+    <Routes>
+      <Route path="/" element={<Home />} />
+      <Route path="/mission" element={<DailyMission />} />
+      <Route path="/mission/done" element={<MissionComplete />} />
+      <Route path="/topic/:id" element={<TopicHub />} />
+      <Route path="/levels" element={<LevelStairs />} />
+      {/* Static before dynamic: Minimal Pairs, Sentence Stars and Story Voice are bậc of their
+        * own, not card levels. */}
+      <Route path="/level/minimal-pairs" element={<PairLevel />} />
+      <Route path="/level/sentence-stars" element={<StarLevel />} />
+      <Route path="/level/story-voice" element={<VoiceLevel />} />
+      <Route path="/level/:levelId" element={<LevelSelect />} />
+      <Route path="/practice/:cardId" element={<PracticeCard />} />
+      {/* A sound is a list of its words; one word is the drill. An old stored lesson still
+        * pointing at `/sound/<ph>` lands on the list, which is a fine place to be. */}
+      <Route path="/sound/:ph" element={<SoundWordList />} />
+      <Route path="/sound/:ph/:cardId" element={<SoundPractice />} />
+      <Route path="/pair/:id" element={<PairPractice />} />
+      <Route path="/star/:id" element={<StarPractice />} />
+      <Route path="/voice/:id" element={<VoicePractice />} />
+      <Route path="/stories" element={<StoryList />} />
+      <Route path="/story/:id" element={<StoryPlayer />} />
+      <Route path="/story/:id/quiz" element={<StoryQuiz />} />
+      <Route path="/story/:id/retell" element={<StoryRetell />} />
+      <Route path="/words" element={<WordTopics />} />
+      <Route path="/words/:topic" element={<WordList />} />
+      <Route path="/words/:topic/:wordId" element={<WordCard />} />
+      <Route path="/sentences" element={<SentenceList />} />
+      <Route path="/sentence/:id" element={<SentenceBuilder />} />
+      <Route path="/parent" element={<ParentGate />} />
+      {/* The route is open; the DOORS behind it are not. `/start` is only ever linked from a
+        * device with no history at all, but a typed URL still lands here, so the math question
+        * sits in front of both actions — the one that can sign this iPad into another account
+        * and the one that re-parents profiles onto it. Reading the two-button menu is harmless
+        * (spec flows 3, 4). */}
+      <Route path="/start" element={<CloudStart />} />
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
   )
 }

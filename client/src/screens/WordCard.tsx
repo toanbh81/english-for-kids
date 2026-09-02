@@ -35,7 +35,7 @@ function pickDistractors(word: Word, topic: string): Word[] {
  * Both faces sit on top of each other inside the rotating shell; only the one facing the
  * child is painted (`backface-visibility`).
  */
-const FACE = 'absolute inset-0 flex flex-col items-center justify-center gap-2 rounded-xl4 [backface-visibility:hidden] md:gap-3'
+const FACE = 'absolute inset-0 flex flex-col items-center justify-center gap-2 rounded-xl3 [backface-visibility:hidden] md:gap-3'
 
 const SPEAK_CHIP =
   'inline-flex min-h-[64px] items-center gap-2 rounded-full bg-white px-6 font-display text-lg font-extrabold text-teal-600 shadow-[0_4px_0_#F2DFC9] active:translate-y-[2px]'

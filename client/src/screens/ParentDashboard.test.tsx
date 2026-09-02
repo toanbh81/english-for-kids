@@ -498,11 +498,12 @@ describe('ParentDashboard', () => {
   })
 
   /**
-   * The design calls this screen an adult interface outright — "vùng chạm 36–48px (không cần 64)" —
-   * so it is the one screen in the app whose phone controls sit below the child floor. The iPad's
-   * 64 px is restored at `md`, which is what these class pairs pin.
+   * The design calls this screen an adult interface outright — "vùng chạm 36–48px (không cần 64)".
+   * Phase 12 task 15 pushed that further for the screen's own `Button` controls: they are
+   * `size="adult"`, a fixed 44 px at every width, not the earlier phone/md split. The raw chip
+   * buttons (band, length, limit) keep their own 44/64 responsive pair, untouched by this task.
    */
-  it('uses adult 44 px controls on a phone and the 64 px ones from md up', async () => {
+  it('uses adult 44 px controls at every width on the screen\'s own buttons', async () => {
     renderWithDialogs(<ParentDashboard />)
     await flush()
 
@@ -510,9 +511,10 @@ describe('ParentDashboard', () => {
       expect(screen.getByRole('button', { name }), name).toHaveClass('min-h-[44px]', 'md:min-h-[64px]')
     }
     expect(screen.getByRole('spinbutton')).toHaveClass('h-11', 'md:h-16')
-    // `max-md:` on the reset button, because `min-h-[64px] px-8` are `Button`'s own classes.
-    expect(screen.getByRole('button', { name: 'Đặt lại tiến trình' })).toHaveClass('max-md:min-h-[48px]')
-    expect(screen.getByRole('main')).toHaveClass('px-[18px]', 'md:px-6')
+    // `size="adult"`: fixed 44 px, no `md:` override.
+    expect(screen.getByRole('button', { name: 'Đặt lại tiến trình' })).toHaveClass('min-h-[44px]')
+    expect(screen.getByRole('button', { name: 'Đặt lại tiến trình' }).className).not.toMatch(/md:min-h/)
+    expect(screen.getByRole('main')).toHaveClass('px-6', 'md:px-6')
   })
 
   /** Fourteen days of data at every width; a phone draws the last seven, and each hidden bar takes

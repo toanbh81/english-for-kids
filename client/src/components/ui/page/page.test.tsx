@@ -3,7 +3,6 @@ import { MemoryRouter } from 'react-router-dom'
 import { PageShell, PageHeader, PageBody, PageFooter } from './index'
 import { BackButton } from '../BackButton'
 import { Button } from '../Button'
-import { LessonChip } from '../../LessonChip'
 
 const wrap = (ui: React.ReactNode) => render(<MemoryRouter initialEntries={['/practice/wp-cat']}>{ui}</MemoryRouter>)
 
@@ -47,10 +46,10 @@ describe('PageShell', () => {
 })
 
 describe('LessonChip in the header', () => {
-  it('renders the header variant in the right cell and the global one steps aside', () => {
+  it('renders in the header\'s right cell by default', () => {
     vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => null)
-    wrap(<><LessonChip /><PageShell><PageHeader back={<BackButton to="/" />}>x</PageHeader><PageBody>y</PageBody></PageShell></>)
-    // With no lesson the chip renders nothing either way, but the header cell still exists:
+    wrap(<PageShell><PageHeader back={<BackButton to="/" />}>x</PageHeader><PageBody>y</PageBody></PageShell>)
+    // With no lesson the chip renders nothing, but the header cell still exists:
     expect(screen.getByTestId('header-right')).toBeInTheDocument()
     vi.restoreAllMocks()
   })

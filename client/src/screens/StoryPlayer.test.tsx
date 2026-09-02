@@ -85,17 +85,14 @@ it('shows the scene 0 emoji', () => {
   expect(screen.getByText('🦊')).toBeInTheDocument()
 })
 
-it('spells the scene position out for a screen reader, since the dots beside it are decorative', () => {
+it('shows the scene position in the header chip at every width, with the dots joining from md', () => {
   state.sceneIndex = 2
   renderPlayer()
   const story = findStory('little-fox')!
-  const position = screen.getByText(`3/${story.scenes.length}`)
-  // Phase 10: the dots only exist from `md` up, so that is exactly where the number goes back to
-  // being screen-reader-only. On a phone it is the design's printed "Cảnh 3/7" pill.
-  expect(position).toHaveClass('md:sr-only')
-  expect(position).not.toHaveClass('sr-only')
-  expect(screen.getByTestId('scene-dots')).toHaveClass('max-md:hidden')
-  expect(position.parentElement).toHaveTextContent(`Cảnh 3/${story.scenes.length}`)
+  // The header chip carries the position in words at every width — it is no longer sr-only below
+  // `md`, since the decorative dots beside it are the ones that come and go.
+  expect(screen.getByText(`Cảnh 3/${story.scenes.length}`)).toBeInTheDocument()
+  expect(screen.getByTestId('scene-dots')).toHaveClass('hidden', 'md:inline-flex')
 })
 
 it('renders the words of scene 0 with wordIndex 1 active', () => {
@@ -110,20 +107,21 @@ it('renders the words of scene 0 with wordIndex 1 active', () => {
  * stretchy `flex-1` block, which had squeezed itself to 129 px at 375×667. From `md` up the
  * stretchy block is exactly what it was. */
 it('gives the picture a fixed 16/9 frame on a phone and the flexible one from md up', () => {
-  const { container } = renderPlayer()
-  const frame = container.querySelector('main > div.relative')!
+  renderPlayer()
+  const frame = screen.getByTestId('story-art')
   expect(frame).toHaveClass('aspect-[16/9]', 'flex-none')
   expect(frame).toHaveClass('md:aspect-auto', 'md:max-h-[52vh]', 'md:min-h-0', 'md:flex-1')
 })
 
-it('drops the text header and draws a scene progress bar only on a phone', () => {
-  const { container } = renderPlayer()
+it('drops the text title and draws a scene progress bar only on a phone', () => {
+  renderPlayer()
   // The title is still rendered — it is only hidden below the tablet breakpoint (design M6 has
-  // no text header at all), so the landscape frame keeps it.
-  expect(container.querySelector('header')).toHaveClass('hidden', 'md:block')
+  // no text header at all), so the landscape frame keeps it. It now lives in the body, below the
+  // real header (the back arrow and the scene chip), rather than being a header of its own.
+  expect(screen.getByTestId('story-title')).toHaveClass('hidden', 'md:block')
   expect(screen.getByText('The Little Fox')).toBeInTheDocument()
 
-  const bar = container.querySelector('main > div[aria-hidden="true"]')!
+  const bar = screen.getByTestId('scene-progress')
   expect(bar).toHaveClass('h-[11px]', 'md:hidden')
   // 7 scenes, showing the first: the solid teal fill is 1/7 wide, not a gradient.
   const fill = bar.firstElementChild as HTMLElement
@@ -233,13 +231,13 @@ it('leads a mission child home even when the story itself is missing', () => {
   expect(screen.getByRole('link', { name: '← Về trang chủ' })).toHaveAttribute('href', '/mission')
 })
 
-/** The spec's binding rules put the tap-target floor at 64 px with no exception, and the first
- * pass had shipped this arrow at 48 — on the artwork, where it is easiest to miss. */
-it('holds the back arrow to the 64 px tap floor on a phone', () => {
+/** The back arrow now lives in the header, off the artwork entirely — the child `BackButton`
+ * circle (56 px, with a 64 px hit band on a phone via its own pseudo-element). */
+it('draws the back arrow as the header\'s child-sized circle', () => {
   renderPlayer()
 
   const back = screen.getByRole('link', { name: 'Truyện' })
-  expect(back).toHaveClass('h-12', 'w-12', 'bg-white/[.94]')
+  expect(back).toHaveClass('h-14', 'w-14', 'md:h-16', 'md:w-16')
 })
 
 // --- as a step of today's lesson (fix: the story chain keeps its thread back) ------------------
@@ -256,8 +254,8 @@ it('sends the back arrow to the mission, not to the story library, when the chil
   const back = screen.getByRole('link', { name: 'Nhiệm vụ' })
   expect(back).toHaveAttribute('href', '/mission')
   expect(screen.queryByRole('link', { name: 'Truyện' })).not.toBeInTheDocument()
-  // The arrow moved destination, not place: it is still the 48 px on-art disc.
-  expect(back).toHaveClass('h-12', 'w-12', 'bg-white/[.94]')
+  // The arrow moved destination, not place: it is still the header's child-sized circle.
+  expect(back).toHaveClass('h-14', 'w-14', 'md:h-16', 'md:w-16')
 })
 
 it('carries the mission on to the quiz, before the story ends and after it', () => {

@@ -9,7 +9,8 @@ import { isCloudConfigured } from '../cloud/supabase'
 import { hasAnyHistory, profileHistory, sumHistory } from '../progress/history'
 import { ProfilePicker } from '../components/ProfilePicker'
 import { ParentQuestion } from '../components/ParentQuestion'
-import { Button, Card, Notice, PAGE_SHELL } from '../components/ui'
+import { BackButton, Button, Card, LinkText, Notice } from '../components/ui'
+import { PageShell, PageHeader, PageBody } from '../components/ui/page'
 
 /**
  * The start screen's other door (spec flows 3 and 4): "Đã dùng Speak Up rồi?" — for a device whose
@@ -359,95 +360,88 @@ export function CloudStart() {
 
   if (candidates) {
     return (
-      <main className={`flex h-full flex-col items-center gap-6 overflow-y-auto bg-cream-50 px-6 ${PAGE_SHELL}`}>
-        <Card className="flex w-full max-w-md flex-col gap-4 p-6 text-center">
-          <h1 className="font-display text-xl font-extrabold text-ink-900">Chọn hồ sơ của bé</h1>
-          <p className="text-sm font-semibold text-ink-500">Tài khoản này có {candidates.length} hồ sơ. Chọn một để khôi phục lên máy này.</p>
-          {/* A failed pull says so HERE too, next to the picker that is still up — tapping the same
-            * face again is the retry. */}
-          {error && <Notice kind="error" adult role="alert" title={error} />}
-          <ProfilePicker profiles={candidates} onSelect={finishRestore} busy={busy} />
-        </Card>
-      </main>
+      <PageShell>
+        <PageBody center>
+          <Card className="flex w-full max-w-md flex-col gap-4 p-6 text-center">
+            <h1 className="font-display text-xl font-extrabold text-ink-900">Chọn hồ sơ của bé</h1>
+            <p className="text-sm font-semibold text-ink-500">Tài khoản này có {candidates.length} hồ sơ. Chọn một để khôi phục lên máy này.</p>
+            {/* A failed pull says so HERE too, next to the picker that is still up — tapping the same
+              * face again is the retry. */}
+            {error && <Notice kind="error" adult role="alert" title={error} />}
+            <ProfilePicker profiles={candidates} onSelect={finishRestore} busy={busy} />
+          </Card>
+        </PageBody>
+      </PageShell>
     )
   }
 
   return (
-    <main className={`flex h-full flex-col items-center gap-6 overflow-y-auto bg-cream-50 px-6 ${PAGE_SHELL}`}>
-      <Link
-        to="/"
-        className="inline-flex min-h-[64px] items-center gap-2 self-start rounded-full bg-white px-6 font-display text-xl font-extrabold text-ink-900 shadow-card-sm active:translate-y-[2px]"
-      >
-        ← Về nhà
-      </Link>
-
-      <Card className="flex w-full max-w-md flex-col gap-5 p-6 text-center">
-        <div>
-          <h1 className="font-display text-xl font-extrabold text-ink-900">Đã dùng Speak Up rồi?</h1>
-          <p className="mt-1 text-sm font-semibold text-ink-500">Khôi phục tiến độ của bé trên máy này.</p>
-        </div>
-
-        {info && <Notice kind="info" adult title={info} />}
-        {error && <Notice kind="error" adult role="alert" title={error} />}
-        {/* A pull that failed leaves the parent one tap from trying again, on the same child —
-          * rather than back at a menu with no idea which door to take twice. */}
-        {retryId && (
-          <Button disabled={busy} onClick={() => { void finishRestore(retryId) }} className="w-full">
-            Thử tải lại
-          </Button>
-        )}
-
-        {stage === 'menu' && (
-          <div className="flex flex-col gap-3">
-            <Button onClick={() => openDoor('email')} className="w-full">
-              Tôi có email đã liên kết
-            </Button>
-            <Button variant="outline" onClick={() => openDoor('code')} className="w-full">
-              Tôi có mã khôi phục
-            </Button>
-            <Link to="/" className="mt-2 inline-flex min-h-[64px] items-center justify-center text-sm font-bold text-ink-500 underline">
-              Bắt đầu mới cho bé
-            </Link>
+    <PageShell>
+      <PageHeader back={<BackButton to="/" label="Về nhà" variant="adult" />} />
+      <PageBody center>
+        <Card className="flex w-full max-w-md flex-col gap-5 p-6 text-center">
+          <div>
+            <h1 className="font-display text-xl font-extrabold text-ink-900">Đã dùng Speak Up rồi?</h1>
+            <p className="mt-1 text-sm font-semibold text-ink-500">Khôi phục tiến độ của bé trên máy này.</p>
           </div>
-        )}
 
-        {stage === 'gate' && (
-          <div className="flex flex-col items-center gap-6">
-            <ParentQuestion
-              title="Câu hỏi dành cho bố/mẹ"
-              onPass={() => { setPassedGate(true); setStage(door) }}
-            />
-            <button type="button" onClick={backToMenu} className="min-h-[64px] text-sm font-bold text-ink-500 underline">
-              ← Chọn cách khác
-            </button>
-          </div>
-        )}
+          {info && <Notice kind="info" adult title={info} />}
+          {error && <Notice kind="error" adult role="alert" title={error} />}
+          {/* A pull that failed leaves the parent one tap from trying again, on the same child —
+            * rather than back at a menu with no idea which door to take twice. */}
+          {retryId && (
+            <Button size="adult" disabled={busy} onClick={() => { void finishRestore(retryId) }} className="w-full">
+              Thử tải lại
+            </Button>
+          )}
 
-        {stage === 'email' && (
-          <form onSubmit={handleSendEmail} className="flex flex-col gap-4">
-            <label className="flex flex-col gap-1 text-left">
-              <span className="text-sm font-bold text-ink-500">Email của bố/mẹ</span>
-              <input
-                type="email"
-                required
-                autoFocus
-                value={email}
-                onChange={e => setEmail(e.target.value)}
-                className="min-h-[64px] rounded-xl2 border-2 border-line-200 px-4 text-base font-semibold text-ink-900"
+          {stage === 'menu' && (
+            <div className="flex flex-col gap-3">
+              <Button size="adult" onClick={() => openDoor('email')} className="w-full">
+                Tôi có email đã liên kết
+              </Button>
+              <Button size="adult" variant="outline" onClick={() => openDoor('code')} className="w-full">
+                Tôi có mã khôi phục
+              </Button>
+              <LinkText to="/" className="mt-2 self-center">
+                Bắt đầu mới cho bé
+              </LinkText>
+            </div>
+          )}
+
+          {stage === 'gate' && (
+            <div className="flex flex-col items-center gap-6">
+              <ParentQuestion
+                title="Câu hỏi dành cho bố/mẹ"
+                onPass={() => { setPassedGate(true); setStage(door) }}
               />
-            </label>
-            {/* The button that led here says "email đã liên kết", and now the code means it:
-              * `signInWithEmail` cannot create an account any more. Saying so up front is cheaper
-              * than the parent discovering it from an error. */}
-            <p className="text-xs font-semibold text-ink-300">
-              Chỉ dùng được email đã liên kết với Speak Up từ trước. Chưa liên kết bao giờ thì dùng mã khôi phục nhé.
-            </p>
-            <Button type="submit" disabled={busy} className="w-full">Gửi mã xác nhận</Button>
-            <button type="button" onClick={backToMenu} className="min-h-[64px] text-sm font-bold text-ink-500 underline">
-              ← Chọn cách khác
-            </button>
-          </form>
-        )}
+              <LinkText onClick={backToMenu}>← Chọn cách khác</LinkText>
+            </div>
+          )}
+
+          {stage === 'email' && (
+            <form onSubmit={handleSendEmail} className="flex flex-col gap-4">
+              <label className="flex flex-col gap-1 text-left">
+                <span className="text-sm font-bold text-ink-500">Email của bố/mẹ</span>
+                <input
+                  type="email"
+                  required
+                  autoFocus
+                  value={email}
+                  onChange={e => setEmail(e.target.value)}
+                  className="min-h-[64px] rounded-xl2 border-2 border-line-200 px-4 text-base font-semibold text-ink-900"
+                />
+              </label>
+              {/* The button that led here says "email đã liên kết", and now the code means it:
+                * `signInWithEmail` cannot create an account any more. Saying so up front is cheaper
+                * than the parent discovering it from an error. */}
+              <p className="text-xs font-semibold text-ink-300">
+                Chỉ dùng được email đã liên kết với Speak Up từ trước. Chưa liên kết bao giờ thì dùng mã khôi phục nhé.
+              </p>
+              <Button type="submit" size="adult" disabled={busy} className="w-full">Gửi mã xác nhận</Button>
+              <LinkText onClick={backToMenu}>← Chọn cách khác</LinkText>
+            </form>
+          )}
 
         {/* The confirmation the auth contract asks for, in as many words: what is on this device,
           * what happens to it, and the way to keep it instead. It is only ever reached when there
@@ -501,6 +495,7 @@ export function CloudStart() {
               Muốn giữ lại? Vào <Link to="/parent" className="underline">Góc phụ huynh</Link> và liên kết email cho chính tài khoản đang có.
             </p>
             <Button
+              size="adult"
               variant="outline"
               disabled={busy}
               onClick={() => { void sendOtp(true) }}
@@ -508,13 +503,7 @@ export function CloudStart() {
             >
               Vẫn tiếp tục với {email}
             </Button>
-            <button
-              type="button"
-              onClick={() => { setStranding(null); setStage('email') }}
-              className="min-h-[64px] text-sm font-bold text-ink-500 underline"
-            >
-              ← Quay lại
-            </button>
+            <LinkText onClick={() => { setStranding(null); setStage('email') }}>← Quay lại</LinkText>
           </div>
         )}
 
@@ -532,14 +521,8 @@ export function CloudStart() {
                 className="min-h-[64px] rounded-xl2 border-2 border-line-200 px-4 text-center font-display text-2xl font-extrabold text-ink-900"
               />
             </label>
-            <Button type="submit" disabled={busy} className="w-full">Xác nhận</Button>
-            <button
-              type="button"
-              onClick={() => { setStage('email'); setOtp(''); setError(null) }}
-              className="min-h-[64px] text-sm font-bold text-ink-500 underline"
-            >
-              Sửa lại email
-            </button>
+            <Button type="submit" size="adult" disabled={busy} className="w-full">Xác nhận</Button>
+            <LinkText onClick={() => { setStage('email'); setOtp(''); setError(null) }}>Sửa lại email</LinkText>
           </form>
         )}
 
@@ -557,13 +540,13 @@ export function CloudStart() {
               />
             </label>
             <p className="text-xs font-semibold text-ink-300">Mã do màn hình phụ huynh cấp lúc tạo tài khoản.</p>
-            <Button type="submit" disabled={busy} className="w-full">Khôi phục</Button>
-            <button type="button" onClick={backToMenu} className="min-h-[64px] text-sm font-bold text-ink-500 underline">
-              ← Chọn cách khác
-            </button>
+            <Button type="submit" size="adult" disabled={busy} className="w-full">Khôi phục</Button>
+            <LinkText onClick={backToMenu}>← Chọn cách khác</LinkText>
           </form>
         )}
-      </Card>
-    </main>
+        </Card>
+      </PageBody>
+    </PageShell>
   )
 }
+

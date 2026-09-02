@@ -299,7 +299,7 @@ export function Home() {
   }
 
   // The parent-dashboard corner button, moved verbatim into the header's right cell — Home is
-  // excluded from the mission chip by route (`headerRegistry`'s `isExcluded`), so the default
+  // excluded from the mission chip by route (`LessonChip`'s own `isExcluded`), so the default
   // `right` (the chip) would just render nothing here; this is Home's own control for that cell.
   const parentButton = (
     <Link

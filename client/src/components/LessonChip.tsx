@@ -4,7 +4,6 @@ import { getActivity } from '../progress/activity'
 import { lessonStatus } from '../progress/lesson'
 import type { LessonItem } from '../progress/lesson'
 import { isItemRoute } from '../progress/missionNav'
-import { useHeaderMounted } from './ui/page/headerRegistry'
 
 /**
  * Screens that must never carry the chip: the map and the mission itself are already the way back,
@@ -59,53 +58,15 @@ function onItemRoute(pathname: string, route: string): boolean {
 }
 
 /**
- * Where the chip stands, and why the phone does not put it in the bottom-right corner.
+ * Where the chip stands: every migrated screen ends its `PageHeader` with the same right-hand
+ * cell, 56/64 px wide, and this is what fills it when nothing screen-specific claims it instead.
+ * It sits inside the header's own grid cell rather than floating over the page, so it carries no
+ * `fixed`, no `z-40`, and no safe-area offset of its own — the header that hosts it already
+ * accounts for those.
  *
- * The landscape frame really does keep that corner empty, and from `md` up this is the same pill
- * in the same place it has always been — the phase's binding rule is that 1194×834 renders
- * byte-for-byte as it did, so every `md:` below restores the *exact* previous value.
- *
- * Below 768 the corner is the busiest part of the screen. Every phone layout this phase built pins
- * its hand-off to the bottom edge — the flashcard's "Tiếp theo →", the sound result's CTA pair,
- * the story's "Tiếp tục ▸" — and a 204×64 pill floating over them covered 49–94% of the one
- * control the child is meant to press, so the tap went to `/mission` and threw them out of the
- * step they were finishing. A floating element cannot be pushed aside by the content under it;
- * the only fix is to stand somewhere the screens do not use.
- *
- * That place is the top-right. Every screen that can carry the chip ends its header with the same
- * reserved gutter — `min-w-[66px] text-right`, the engine badge, empty unless the simple engine is
- * running (WordCard, SoundPractice, PracticeCard, PairPractice, StarPractice, VoicePractice,
- * StoryRetell and Ghép câu all write it) — and the header's centre column is bounded by it, so a
- * 64 px badge dropped into that gutter covers no control at any phone width. It is `top`-anchored
- * through the same safe-area expression `PAGE_SHELL` uses, so it lands on the header's own first
- * line rather than under the notch.
- *
- * At 64 px wide the words do not fit beside the sun, so the count goes under it and "Nhiệm vụ"
+ * At 56 px wide the words do not fit beside the sun, so the count goes under it and "Nhiệm vụ"
  * stays in the accessibility tree (`sr-only`) — the name a screen reader reads is the same string
- * at every width. `md:not-sr-only` puts the words back in the flow and `md:text-xl` restores the
- * pill's size; `text-xl` carries its own 28 px leading and no unprefixed `leading-*` competes with
- * it here, so the size restore is enough.
- *
- * What the corner trades, in full — three read-outs, no controls:
- * - the story player's "Cảnh 2/4" and the quiz's "Câu 1/3" counters. On the player the chip is the
- *   child's only thread back to the lesson, worth more than a scene number the progress bar under
- *   the picture also gives them.
- * - the engine badge itself, the gutter this sits in: "chế độ đơn giản" is covered 53–86% whenever
- *   the simple engine is running. That line is written for the parent, not the child, and it is
- *   readable again the moment the screen is wider than a phone.
- */
-const CHIP_BOX
-  = 'fixed right-5 top-[max(1rem,calc(env(safe-area-inset-top)_+_9px))] z-40 inline-flex h-16 w-16'
-  + ' min-h-[64px] flex-col items-center justify-center gap-0 rounded-full bg-sun-50 px-0'
-  + ' font-display font-extrabold text-sun-700 shadow-chunky-sun active:translate-y-[2px]'
-  + ' md:bottom-4 md:right-4 md:top-auto md:h-auto md:w-auto md:flex-row md:justify-normal'
-  + ' md:gap-2 md:px-6 md:text-xl'
-
-/**
- * The header-cell chip Phase 12 screens draw themselves (via `PageHeader`'s `right` default),
- * sized to sit inside the header's own 56/64 px cell rather than float over the page — so unlike
- * `CHIP_BOX` this carries no `fixed`, no `z-40`, and no safe-area offset of its own; the header
- * that hosts it already accounts for those.
+ * at every width. `md:not-sr-only` puts the words back in the flow from the tablet breakpoint up.
  */
 const HEADER_BOX
   = 'inline-flex h-14 w-14 flex-col items-center justify-center rounded-r18 bg-sun-50'
@@ -135,44 +96,33 @@ export function useLessonChipStatus(pathname: string, inMission: boolean) {
  * It shows only while the child is standing on one of today's own item routes and the lesson is
  * unfinished, so it never nags during free practice.
  *
- * `variant="header"` is the smaller, unfixed chip `PageHeader` draws in its own right-hand cell;
- * the default `"global"` is the floating corner pill. A screen that has mounted a `PageHeader` —
- * `useHeaderMounted` — has already drawn its own header-cell chip, so the floating global one steps
- * aside rather than show the lesson twice. A screen not yet migrated onto `PageShell` has no header
- * to register, so the global chip keeps floating for it exactly as before.
+ * Every screen now draws its own `PageHeader`, and this is what that header's right-hand cell
+ * renders by default — the floating corner pill Phase 12 migrated away from is gone; there is only
+ * the one, header-sized chip.
  */
-export function LessonChip({ variant = 'global' }: { variant?: 'global' | 'header' } = {}) {
+export function LessonChip() {
   const { pathname, state } = useLocation()
-  const headerMounted = useHeaderMounted()
   const inMission = (state as { mission?: unknown } | null)?.mission === true
   if (isExcluded(pathname)) return null
-  // Phase 12 transition: a screen that mounts PageHeader draws its own chip in the header cell,
-  // so the global one steps aside; screens not yet migrated still get the floating chip.
-  if (variant === 'global' && headerMounted) return null
   // Keyed on the path so the inner component remounts on every navigation: its lazy state reads
   // the lesson and the event log exactly once per screen the child lands on, never per render.
-  return <LessonChipInner key={pathname} pathname={pathname} inMission={inMission} variant={variant} />
+  return <LessonChipInner key={pathname} pathname={pathname} inMission={inMission} />
 }
 
-function LessonChipInner({ pathname, inMission, variant }: { pathname: string; inMission: boolean; variant: 'global' | 'header' }) {
+function LessonChipInner({ pathname, inMission }: { pathname: string; inMission: boolean }) {
   const status = useLessonChipStatus(pathname, inMission)
 
   if (!status) return null
 
-  const box = variant === 'header' ? HEADER_BOX : CHIP_BOX
-  const emojiSize = variant === 'header' ? 'text-[18px]' : 'text-[22px]'
-
   return (
-    // `z-40` (global only, carried in CHIP_BOX) clears the screens' own content but stays under a
-    // full-screen overlay.
-    <Link to="/mission" className={box}>
+    <Link to="/mission" className={HEADER_BOX}>
       {/* Three spans, and from `md` up exactly one of them is rendered: the middle one, carrying
           the whole line as a single text run. That is deliberate. Splitting the label and the
           count into two visible spans made them two flex items, and the pill's own `gap-2` then
           stood where the space between the words used to — 4 px wider on the iPad, which this
           phase may not move. The phone's two lines are the outer pair; the middle span stays in
           the accessibility tree at both widths, so the name a screen reader reads never changes. */}
-      <span aria-hidden="true" className={`${emojiSize} leading-none md:hidden`}>🌞</span>
+      <span aria-hidden="true" className="text-[18px] leading-none md:hidden">🌞</span>
       <span className="sr-only md:not-sr-only">🌞 Nhiệm vụ {status.doneCount}/{status.total}</span>
       <span aria-hidden="true" className="text-[13px] leading-none md:hidden">{status.doneCount}/{status.total}</span>
     </Link>

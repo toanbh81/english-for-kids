@@ -4,7 +4,6 @@ import { dayKey, logActivity } from '../progress/activity'
 import { getLesson } from '../progress/lesson'
 import { saveLesson } from '../progress/lessonStore'
 import { LessonChip } from './LessonChip'
-import { registerHeader } from './ui/page/headerRegistry'
 
 const NOW = new Date('2026-08-23T10:00:00').getTime()
 
@@ -28,51 +27,24 @@ beforeEach(() => {
 
 afterEach(() => vi.useRealTimers())
 
-/** An element's classes as exact tokens. `className.includes('bottom-4')` also matches
- * `md:bottom-4` — which is the whole thing the placement tests below exist to catch — so every
- * breakpoint assertion compares tokens, never substrings. */
+/** An element's classes as exact tokens. */
 const classes = (el: Element) => el.className.split(/\s+/).filter(Boolean)
 
-it('shows the chip on a lesson item route, counting the steps done', () => {
+it('shows the chip on a lesson item route, counting the steps done, sized for the header cell', () => {
   const lesson = lessonWith(2)
 
   renderAt(lesson.items[3].route)
 
   const chip = screen.getByRole('link', { name: `🌞 Nhiệm vụ 2/${lesson.items.length}` })
   expect(chip).toHaveAttribute('href', '/mission')
-  expect(chip.className).toContain('min-h-[64px]')
-  expect(chip.className).toContain('z-40')
+  // The header-cell box: 56/48 px, never `fixed` — it sits inside the header's own grid cell
+  // rather than floating over the page.
+  const tokens = classes(chip)
+  expect(tokens).toEqual(expect.arrayContaining(['h-14', 'w-14', 'rounded-r18', 'md:h-12', 'md:px-4', 'md:rounded-r16']))
+  expect(tokens).not.toContain('fixed')
 })
 
-// --- where it stands (phase 10 final review, C1) ----------------------------------------------
-//
-// jsdom has no layout, so these assert the one thing that decides the placement: which breakpoint
-// each rule is written at. The geometry is measured in a browser (see the phase-10 fix report);
-// what these guard is that the bottom-right corner never comes back below `md`, where every phone
-// screen of this phase pins its own hand-off button and the chip covered 51–94% of it.
-
-it('leaves the bottom-right corner to the screens below `md` and keeps it from `md` up', () => {
-  const lesson = lessonWith(2)
-
-  renderAt(lesson.items[3].route)
-  const chip = classes(screen.getByRole('link', { name: /Nhiệm vụ/ }))
-
-  // The phone rule is unprefixed and top-anchored, through the same safe-area expression the
-  // page shell uses — so the badge lands on the header line, not under the notch.
-  expect(chip).not.toContain('bottom-4')
-  expect(chip).toContain('top-[max(1rem,calc(env(safe-area-inset-top)_+_9px))]')
-  expect(chip).toContain('h-16')
-  expect(chip).toContain('w-16')
-  // …and `md:` puts the landscape pill back, exactly where it has always been.
-  expect(chip).toContain('md:bottom-4')
-  expect(chip).toContain('md:top-auto')
-  expect(chip).toContain('md:h-auto')
-  expect(chip).toContain('md:w-auto')
-  expect(chip).toContain('md:px-6')
-  expect(chip).toContain('md:text-xl')
-})
-
-/** The 64 px badge cannot fit the words beside the sun, so it stacks the sun over the count and
+/** The 56 px badge cannot fit the words beside the sun, so it stacks the sun over the count and
  * keeps the whole sentence for a screen reader. The name it is read out by is the same string at
  * every width — the tests above and below both look it up by that name. */
 it('prints the count on the phone badge without changing the name it is announced by', () => {
@@ -224,38 +196,4 @@ it('still shows on the same route reached without the mission flag', () => {
   renderAt(speak.route)
 
   expect(screen.getByRole('link')).toHaveAttribute('href', '/mission')
-})
-
-// --- Phase 12: the header variant and the registry hand-off -----------------------------------
-
-/** The header cell draws a smaller chip than the floating one — 56 px, not 64, and never
- * `fixed`, since it sits inside the header's own grid cell rather than floating over the page. */
-it('renders the header-sized variant, unfixed, on a lesson item route', () => {
-  const lesson = lessonWith(2)
-
-  render(
-    <MemoryRouter initialEntries={[lesson.items[3].route]}>
-      <LessonChip variant="header" />
-    </MemoryRouter>,
-  )
-
-  const chip = screen.getByRole('link', { name: `🌞 Nhiệm vụ 2/${lesson.items.length}` })
-  const tokens = classes(chip)
-  expect(tokens).toEqual(expect.arrayContaining(['h-14', 'w-14', 'rounded-r18', 'md:h-12', 'md:px-4', 'md:rounded-r16']))
-  expect(tokens).not.toContain('fixed')
-})
-
-/** Once a screen has mounted its own `PageHeader` (which draws the header-variant chip itself),
- * the floating global chip has to get out of the way rather than show a second one. */
-it('steps aside once a screen has registered its own header', () => {
-  const lesson = lessonWith(2)
-  const unregister = registerHeader()
-
-  try {
-    renderAt(lesson.items[3].route)
-
-    expect(screen.queryByRole('link')).not.toBeInTheDocument()
-  } finally {
-    unregister()
-  }
 })

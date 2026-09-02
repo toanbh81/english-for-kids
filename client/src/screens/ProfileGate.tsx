@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
 import { activeProfileId, listProfiles, switchProfile } from '../cloud/profileState'
 import { ProfilePicker } from '../components/ProfilePicker'
-import { Card, PAGE_SHELL } from '../components/ui'
+import { Card } from '../components/ui'
+import { PageShell, PageBody } from '../components/ui/page'
 
 /**
  * Spec flow 6: "tap your face — no password, per the research."
@@ -173,9 +174,9 @@ export function ProfileGate({ children }: { children: ReactNode }) {
   // nothing may, until it is known whose stars they are.
   if (!chosen) {
     return (
-      <main className={`flex h-full flex-col items-center justify-center gap-6 overflow-y-auto bg-cream-50 px-6 ${PAGE_SHELL}`}>
-        {picker}
-      </main>
+      <PageShell>
+        <PageBody center>{picker}</PageBody>
+      </PageShell>
     )
   }
 
@@ -186,11 +187,10 @@ export function ProfileGate({ children }: { children: ReactNode }) {
         * there is nothing new to leak by leaving it mounted — and everything to lose by throwing
         * it away. The overlay takes every tap until somebody answers. */}
       {reasking && (
-        <div
-          data-testid="profile-reask"
-          className={`fixed inset-0 z-50 flex flex-col items-center justify-center overflow-y-auto bg-cream-50 px-6 ${PAGE_SHELL}`}
-        >
-          {picker}
+        <div data-testid="profile-reask" className="fixed inset-0 z-50">
+          <PageShell>
+            <PageBody center>{picker}</PageBody>
+          </PageShell>
         </div>
       )}
     </>

@@ -117,9 +117,9 @@ it('shows the question progress indicator', () => {
 
 it('offers a way back to the story from the question screen', () => {
   renderQuiz()
-  const back = screen.getByRole('link', { name: '← Truyện' })
+  const back = screen.getByRole('link', { name: 'Truyện' })
   expect(back).toHaveAttribute('href', '/story/little-fox')
-  expect(back).toHaveClass('min-h-[64px]')
+  expect(back).toHaveClass('h-14', 'w-14', 'md:h-16', 'md:w-16')
 })
 
 it('ignores taps while the correct-answer advance is pending', () => {
@@ -182,15 +182,16 @@ it('drops Foxy\'s bubble on a phone, where the banner at the foot already says i
   expect(screen.getByText('Gần đúng rồi — thử lại nhé! 💪')).toBeInTheDocument()
 })
 
-it('stacks the three result exits full width on a phone and keeps the row from md up', () => {
+it('stacks the two secondary result exits full width on a phone and keeps the row from md up', () => {
   renderQuiz()
   finishQuiz()
   const row = screen.getByRole('link', { name: 'Nghe lại' }).parentElement!
   expect(row).toHaveClass('w-full', 'flex-col', 'md:w-auto', 'md:flex-row', 'md:flex-wrap', 'md:gap-4')
-  for (const name of [/Kể lại câu chuyện/, /^Nghe lại$/, /Về bản đồ/]) {
-    // `max-md:` only, so `Button`'s own `min-h-[72px] px-10 text-[26px]` is what 1194 still gets.
-    expect(screen.getByRole('link', { name })).toHaveClass('max-md:w-full', 'max-md:min-h-[64px]')
+  for (const name of [/^Nghe lại$/, /Về bản đồ/]) {
+    expect(screen.getByRole('link', { name })).toHaveClass('w-full', 'md:w-auto')
   }
+  // The primary exit lives in the footer, full width on a phone.
+  expect(screen.getByRole('link', { name: /Kể lại câu chuyện/ })).toHaveClass('w-full', 'md:w-auto')
 })
 
 // --- as part of a lesson step (fix: the story chain keeps its thread back) ---------------------
@@ -202,7 +203,7 @@ it('stacks the three result exits full width on a phone and keeps the row from m
 it('keeps the mission alive on the hop back to the story', () => {
   renderQuiz('little-fox', true)
 
-  const back = screen.getByRole('link', { name: '← Truyện' })
+  const back = screen.getByRole('link', { name: 'Truyện' })
   // Still the story, not the mission: this arrow is the way to hear the tale again, and the
   // player it lands on is the screen that carries the arrow home.
   expect(back).toHaveAttribute('href', '/story/little-fox')
@@ -236,14 +237,14 @@ it('swaps the way out for the mission when the child is in a lesson', () => {
   expect(screen.queryByRole('link', { name: /Về bản đồ|Về trang chủ/ })).not.toBeInTheDocument()
   const out = screen.getByRole('link', { name: /Về nhiệm vụ/ })
   expect(out).toHaveAttribute('href', '/mission')
-  // The exit keeps the phone sizing the other two have — it is the same row.
-  expect(out).toHaveClass('max-md:w-full', 'max-md:min-h-[64px]')
+  // The exit keeps the phone sizing the other secondary exit has — it is the same row.
+  expect(out).toHaveClass('w-full', 'md:w-auto')
 })
 
 /** Free play is byte-identical: no flag, no change to a single target or label. */
 it('leaves every free-play exit exactly where it was', () => {
   renderQuiz()
-  expect(screen.getByRole('link', { name: '← Truyện' })).toHaveAttribute('href', '/story/little-fox')
+  expect(screen.getByRole('link', { name: 'Truyện' })).toHaveAttribute('href', '/story/little-fox')
   finishQuiz()
 
   expect(screen.getByRole('link', { name: /Kể lại câu chuyện/ })).toHaveAttribute('href', '/story/little-fox/retell')
