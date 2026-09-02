@@ -104,6 +104,14 @@ it('falls back to Web Speech with no request and no backoff when the browser rep
 // narrower question — does createScorer name the right reason — without caring how the token
 // request itself failed.
 describe('fallbackReason', () => {
+  // `createScorer`/`azureScorer` are already loaded via this file's top-level static imports (and
+  // exercised by the five tests above), so the FIRST dynamic import() in this block would
+  // otherwise still resolve to that cached, unmocked module graph. resetModules() has to run
+  // before each test here, not only after, or the first test's `doMock` never actually gets used.
+  beforeEach(() => {
+    vi.resetModules()
+  })
+
   afterEach(() => {
     vi.doUnmock('./azureScorer')
     vi.resetModules()
@@ -111,9 +119,11 @@ describe('fallbackReason', () => {
 
   it('names the reason it fell back', async () => {
     setOnLine(true)
-    vi.doMock('./azureScorer', () => ({ AzureScorer: class {}, fetchToken: vi.fn().mockRejectedValue(new Error('500')) }))
+    const fetchTokenMock = vi.fn().mockRejectedValue(new Error('500'))
+    vi.doMock('./azureScorer', () => ({ AzureScorer: class {}, fetchToken: fetchTokenMock }))
     const { createScorer: createScorerFresh } = await import('./createScorer')
     const b = await createScorerFresh()
+    expect(fetchTokenMock).toHaveBeenCalledTimes(2) // both attempts hit the mocked fetchToken
     expect(b.engine).toBe('webspeech')
     expect(b.fallbackReason).toBe('token')
   })
