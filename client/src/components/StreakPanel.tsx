@@ -19,7 +19,7 @@ export function StreakPanel({
   weekMinutes: number
   stars: number
   dots: { day: string; done: boolean; isToday: boolean }[]
-  minutes?: number[]
+  minutes?: Record<string, number>
   onClose: () => void
 }) {
   useEffect(() => {

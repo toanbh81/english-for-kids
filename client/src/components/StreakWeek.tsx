@@ -13,7 +13,7 @@ export function StreakWeek({
   longest: number
   weekMinutes: number
   stars: number
-  minutes?: number[]
+  minutes?: Record<string, number>
 }) {
   const [open, setOpen] = useState(false)
 

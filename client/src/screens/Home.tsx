@@ -177,9 +177,14 @@ export function Home() {
     return { events, now, lesson: lessonStatus(now, events) }
   })
   const counters = missionStatus(now, events)
-  // Shared by the streak strip's compact "🔥 N ngày" and its panel's per-day minute labels and
-  // "Tuần này" tile — the same seven days ParentDashboard sums for its own "Tuần này" line.
-  const weekMinutesDays = minutesPerDay(7, now, events)
+  // The streak panel's "Tuần này" tile: the same seven days ParentDashboard sums for its own
+  // "Tuần này" line.
+  const weekMinutes = minutesPerDay(7, now, events).reduce((sum, d) => sum + d.minutes, 0)
+  // The streak panel's per-day minute labels, keyed by day rather than by array index: `dots`
+  // below is the calendar week (Monday..Sunday from `weekDots()`), which only lines up with a
+  // *rolling* 7-day window on a Sunday. 14 days covers any Monday-aligned week no matter what day
+  // it is today, so every dot finds its own date in this map regardless of where the week falls.
+  const minutesByDay = Object.fromEntries(minutesPerDay(14, now, events).map(r => [r.day, r.minutes]))
   // TODAY's work, and only today's: `missionStatus` and `lessonStatus` both filter the log to the
   // current day. It is the right question for Foxy's mood and greeting ("Giỏi lắm, tiếp tục nhé!"
   // is about this morning) and the wrong one for anything about the child's history — see
@@ -380,9 +385,9 @@ export function Home() {
             dots={weekDots(now, events)}
             streak={streak(now, events)}
             longest={longestStreak(events)}
-            weekMinutes={weekMinutesDays.reduce((sum, d) => sum + d.minutes, 0)}
+            weekMinutes={weekMinutes}
             stars={totalStars()}
-            minutes={weekMinutesDays.map(d => d.minutes)}
+            minutes={minutesByDay}
           />
           {/* The star total is the design's 13 px line under the greeting on a phone and the
             * chunky sun pill of the map from `ipad` up — one element, restyled, so the number

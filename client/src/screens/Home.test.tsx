@@ -1,4 +1,4 @@
-import { act, render, screen, within } from '@testing-library/react'
+import { act, fireEvent, render, screen, within } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import type { TopicId } from '../content/topics'
 import { findTopic } from '../content/words'
@@ -48,6 +48,21 @@ function seedDoneDay(ts: number) {
   logActivity({ ts, kind: 'story', id: 'little-fox' })
   for (let i = 0; i < 5; i++) logActivity({ ts: ts + i, kind: 'speak', id: `sz-${i}` })
   for (let i = 0; i < 3; i++) logActivity({ ts: ts + i, kind: 'word', id: `w-${i}` })
+}
+
+/**
+ * Like `seedDoneDay`, but pins `sessionMinutes` (progress/activity.ts) to exactly `minutes` by
+ * chaining events no more than 10 minutes apart (the session-gap threshold) from `dayStart` to
+ * `dayStart + minutes`, so the streak panel's per-day label for this day is predictable.
+ */
+function seedDoneDayWithMinutes(dayStart: number, minutes: number) {
+  const MIN = 60 * 1000
+  logActivity({ ts: dayStart, kind: 'story', id: 'little-fox' })
+  for (let i = 0; i < 5; i++) logActivity({ ts: dayStart + i, kind: 'speak', id: `sz-${i}` })
+  logActivity({ ts: dayStart + 1, kind: 'word', id: 'w-0' })
+  logActivity({ ts: dayStart + 2, kind: 'word', id: 'w-1' })
+  logActivity({ ts: dayStart + (minutes / 2) * MIN, kind: 'word', id: 'w-mid' })
+  logActivity({ ts: dayStart + minutes * MIN, kind: 'word', id: 'w-last' })
 }
 
 /**
@@ -203,6 +218,34 @@ it('shows a 3-day streak after three consecutive completed days', () => {
   renderHome()
 
   expect(screen.getByText('🔥 3 ngày')).toBeInTheDocument()
+})
+
+/**
+ * Fix round 1 of the task-14 review: the streak panel's per-day minutes used to be a plain array
+ * read by index against `weekDots()`'s calendar-week (Monday..Sunday) dots — which only lines up
+ * with a *rolling* 7-day `minutesPerDay()` window on a Sunday. Pinning "today" to a Wednesday is
+ * exactly the case that broke: Monday's dot showed whatever the rolling window happened to have at
+ * position 0 (empty), not Monday's real minutes.
+ */
+it('keys the streak panel\'s per-day minutes to the calendar date, not array position, on a non-Sunday', () => {
+  vi.setSystemTime(new Date(2026, 8, 2, 12, 0, 0)) // Wednesday
+  const wed = Date.now()
+  const mon = wed - 2 * DAY_MS
+  const tue = wed - DAY_MS
+
+  seedDoneDayWithMinutes(mon, 20)
+  seedDoneDayWithMinutes(tue, 15)
+  seedDoneDayWithMinutes(wed, 10)
+
+  renderHome()
+  fireEvent.click(screen.getByRole('button', { name: /Tuần này/ }))
+
+  const dialog = screen.getByRole('dialog')
+  const dots = within(dialog).getAllByTestId('streak-dot')
+  // The Mon..Sun trail: index 0 is Monday, 1 Tuesday, 2 Wednesday (today).
+  expect(within(dots[0].parentElement!).getByText("20'")).toBeInTheDocument()
+  expect(within(dots[1].parentElement!).getByText("15'")).toBeInTheDocument()
+  expect(within(dots[2].parentElement!).getByText("10'")).toBeInTheDocument()
 })
 
 it('shows the time-limit banner once minutes today reach the configured limit', () => {

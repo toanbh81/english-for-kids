@@ -85,9 +85,16 @@ const sevenDots = [
   { day: '2026-08-07', done: false, isToday: false },
 ]
 
+// Keyed by day, not by array index — a `WeekDots` caller's minutes source need not share the
+// dots' own window (see the Home.test.tsx regression for why that distinction matters).
+const sevenMinutes: Record<string, number> = {
+  '2026-08-01': 14, '2026-08-02': 18, '2026-08-03': 9, '2026-08-04': 16,
+  '2026-08-05': 0, '2026-08-06': 0, '2026-08-07': 0,
+}
+
 describe('WeekDots', () => {
   it('draws seven 34px dots, marks today and dims the future', () => {
-    render(<WeekDots dots={sevenDots} minutes={[14, 18, 9, 16, 0, 0, 0]} />)
+    render(<WeekDots dots={sevenDots} minutes={sevenMinutes} />)
 
     for (const label of ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN']) {
       expect(screen.getByText(label)).toBeInTheDocument()

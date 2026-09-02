@@ -13,8 +13,15 @@ type Dot = { day: string; done: boolean; isToday: boolean }
  *
  * `size="sm"` shrinks the 34 px dot to 24 px, for the compact strip inside `StreakWeek`'s header
  * button — every other width keeps the full 34 px size.
+ *
+ * `minutes` is keyed by day (`YYYY-MM-DD` → minutes that day), not by array index: `dots` is
+ * always the calendar week (Monday..Sunday from `weekDots()`), but a caller's minutes source can
+ * be a different window — `Home` reads a 14-day rolling `minutesPerDay()` so it still covers a
+ * Monday-aligned week no matter what day it is today. Indexing the two arrays against each other
+ * pairs Monday's dot with whichever day happens to sit at position 0 of the OTHER window, which is
+ * only Monday when today is Sunday.
  */
-export function WeekDots({ dots, minutes, size }: { dots: Dot[]; minutes?: number[]; size?: 'sm' }) {
+export function WeekDots({ dots, minutes, size }: { dots: Dot[]; minutes?: Record<string, number>; size?: 'sm' }) {
   const todayKey = dots.find(d => d.isToday)?.day
   const small = size === 'sm'
   return (
@@ -39,7 +46,7 @@ export function WeekDots({ dots, minutes, size }: { dots: Dot[]; minutes?: numbe
             </span>
             {minutes && (
               <span className={`whitespace-nowrap text-[12px] font-extrabold ${d.done ? 'text-teal-600' : d.isToday ? 'text-coral-text' : 'text-ink-300'}`}>
-                {d.done ? `${minutes[i]}'` : d.isToday ? 'hôm nay' : '—'}
+                {d.done ? `${minutes[d.day] ?? 0}'` : d.isToday ? 'hôm nay' : '—'}
               </span>
             )}
           </div>
