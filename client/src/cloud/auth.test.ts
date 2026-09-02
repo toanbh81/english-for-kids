@@ -314,6 +314,20 @@ describe('linking a parent email', () => {
     expect(await isAnonymous()).toBe(false)
   })
 
+  it('reads an empty-string email from GoTrue as "nobody has linked yet"', async () => {
+    // Not a hypothetical: a live anonymous sign-in returns `email: ""`, not null or undefined.
+    // The mocks in this file omitted the field entirely, so `?? null` looked correct for the whole
+    // phase while production drew the LINKED branch of the parent screen for every anonymous
+    // child — an empty address beside a "Đăng xuất" button, with the link form and the recovery
+    // code both hidden. Pin the server's real shape, not a convenient one.
+    const client = makeClient()
+    client.state.session = { user: { id: 'anon-1', is_anonymous: true, email: '' } }
+    use(client)
+
+    expect(await currentEmail()).toBeNull()
+    expect(await isAnonymous()).toBe(true)
+  })
+
   it('refuses an obvious typo without asking the server', async () => {
     const client = makeClient()
     use(client)

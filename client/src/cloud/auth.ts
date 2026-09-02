@@ -81,9 +81,18 @@ export async function isAnonymous(): Promise<boolean> {
   return user !== null && user.is_anonymous === true
 }
 
-/** The linked parent email, or null. The parent screen shows this; the child never sees it. */
+/**
+ * The linked parent email, or null. The parent screen shows this; the child never sees it.
+ *
+ * GoTrue gives an anonymous user `email: ""`, not `null` — verified against the live project — so
+ * `?? null` alone reported every anonymous child as a linked account, and the parent screen drew
+ * the signed-in branch: an empty address and a "Đăng xuất" button, with no link form and no
+ * recovery code. That is the one screen that exists to make progress recoverable, so an empty
+ * string has to mean the same thing as no email at all: nobody has linked yet.
+ */
 export async function currentEmail(): Promise<string | null> {
-  return (await currentUser())?.email ?? null
+  const email = (await currentUser())?.email
+  return email ? email : null
 }
 
 // ---------------------------------------------------------------------------
