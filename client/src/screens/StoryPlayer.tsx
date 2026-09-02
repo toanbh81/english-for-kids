@@ -88,7 +88,7 @@ function StoryPlayerInner({ story, id, mission }: { story: Story; id: string; mi
             64 px target, so the hint is the least load-bearing line on the frame. The query names
             its own width bound, because a height query alone would also catch a short laptop
             window — where the landscape layout is the one being rendered. */}
-        <p className="text-center text-[13px] font-extrabold text-teal-600 [@media(max-width:767px)_and_(max-height:700px)]:hidden md:hidden">👆 Chạm 1 từ để nghe lại</p>
+        <p className="text-center text-[13px] font-extrabold text-teal-600 short:hidden md:hidden">👆 Chạm 1 từ để nghe lại</p>
 
         <Karaoke
           words={scene.words}

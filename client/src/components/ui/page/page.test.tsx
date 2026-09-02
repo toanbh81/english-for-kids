@@ -51,6 +51,14 @@ describe('PageShell', () => {
   })
 })
 
+describe('PageHeader dimmed', () => {
+  it('dimmed header fades and disables back and right cells', () => {
+    wrap(<PageShell><PageHeader dimmed back={<BackButton to="/" label="Về nhà" />}>x</PageHeader><PageBody>y</PageBody></PageShell>)
+    expect(screen.getByRole('link', { name: 'Về nhà' }).parentElement).toHaveClass('opacity-40', 'pointer-events-none')
+    expect(screen.getByTestId('header-right')).toHaveClass('opacity-40', 'pointer-events-none')
+  })
+})
+
 describe('LessonChip in the header', () => {
   it('renders in the header\'s right cell by default', () => {
     vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => null)

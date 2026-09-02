@@ -241,7 +241,7 @@ function WordCardInner({ word, topic, isReview, list }: { word: Word; topic: str
         <PageBody split={{
           teach: (
             <div className="flex w-full flex-col items-center gap-3">
-              <div className={`aspect-[16/17] w-[min(320px,82%)] shrink-0 [perspective:1200px] [@media(max-width:767px)_and_(max-height:700px)]:w-[min(320px,68%)] md:aspect-auto md:w-[320px] ${attempt.result ? 'md:h-[300px]' : 'md:h-[360px]'}`}>
+              <div className={`aspect-[16/17] w-[min(320px,82%)] shrink-0 [perspective:1200px] short:w-[min(320px,68%)] md:aspect-auto md:w-[320px] ${attempt.result ? 'md:h-[300px]' : 'md:h-[360px]'}`}>
               <div
                 data-testid="flip-card"
                 role="button"

@@ -134,6 +134,9 @@ export default {
     // build, and nothing failed. A variant registered here has no such side effect.
     plugin(({ addVariant }) => {
       addVariant('ipad', '@media (min-width: 1024px) and (orientation: landscape) and (min-height: 692px)')
+      // Short-phone variant: the raw `[@media(max-width:767px)_and_(max-height:700px)]:` prefix,
+      // named so call sites read like every other breakpoint.
+      addVariant('short', '@media (max-width: 767px) and (max-height: 700px)')
     }),
   ],
 } satisfies Config

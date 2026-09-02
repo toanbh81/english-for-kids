@@ -4,6 +4,7 @@ import { MemoryRouter } from 'react-router-dom'
 import { BackButton } from './BackButton'
 import { Button } from './Button'
 import { Chip } from './Chip'
+import { ChipPair } from './ChipPair'
 import { EmptyState } from './EmptyState'
 import { NotFound } from './NotFound'
 import { Notice } from './Notice'
@@ -169,6 +170,16 @@ describe('Chip', () => {
     rerender(<Chip size="sm">Sắp có</Chip>)
     expect(screen.getByText('Sắp có')).toHaveClass('text-base')
     expect(screen.getByText('Sắp có')).not.toHaveClass('text-lg')
+  })
+})
+
+describe('ChipPair', () => {
+  it('joins a teal left half and a coral right half', () => {
+    render(<ChipPair left="Âm 2/9" right="Từ 1/3" />)
+    const pair = screen.getByTestId('chip-pair')
+    expect(pair.children[0]).toHaveClass('bg-teal-50', 'text-teal-600', 'rounded-l-r12', 'rounded-r-none')
+    expect(pair.children[1]).toHaveClass('bg-coral-50', 'text-coral-text', 'rounded-r-r12', 'rounded-l-none')
+    expect(pair).toHaveTextContent('Âm 2/9Từ 1/3')
   })
 })
 
