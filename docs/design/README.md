@@ -21,3 +21,5 @@ Source project: https://claude.ai/design/p/9c792842-beb0-4158-a5d7-a3ac91730d3c
 - `round-2026-09/` — 4 page redesign kéo về từ Claude Design bằng DesignSync (vòng 1 đủ, vòng 2 mới có carrier B6, vòng 3 đủ, vòng 4 rỗng) + token CSS. Xem README trong đó.
 
 - `2026-09-02-round1-foundation-brief.md` — brief triển khai vòng 1 (khung trang 3 frame, component sheet, Q3/Q4/Q6, 20 mâu thuẫn R1–R20, rủi ro iPad, việc mới Phase 12).
+
+- `2026-09-03-round2-practice-brief.md` — brief triển khai vòng 2 (Phase 13): khung luyện nói 3 frame, 9 biến thể phần "dạy", Q7–Q10, R1–R24.
