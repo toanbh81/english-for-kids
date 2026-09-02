@@ -236,7 +236,7 @@ it('says the intonation was not marked on the simple engine, and caps the stars'
   const bars = screen.getAllByTestId('score-bar')
   expect(bars[3]).toHaveAttribute('data-value', 'none')
   expect(bars[3].style.width).toBe('0%')
-  expect(screen.getByText('Ngữ điệu —')).toBeInTheDocument()
+  expect(bars[3]).toHaveAttribute('aria-label', 'Ngữ điệu chưa chấm được')
   expect(screen.getAllByTestId('star-filled')).toHaveLength(2)
   expect(screen.queryByTestId('confetti')).not.toBeInTheDocument()
   expect(JSON.parse(localStorage.getItem('speakup.stars') ?? '{}')['voice:sv1']).toBe(2)

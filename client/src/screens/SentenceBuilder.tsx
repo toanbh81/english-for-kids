@@ -284,7 +284,7 @@ function SentenceBuilderInner({ sentence }: { sentence: Sentence }) {
               <section className="flex w-full flex-col items-center gap-2 max-md:flex-1 md:w-auto md:gap-4">
                 <Stars value={feedback.stars} animate={feedback.stars === 3} />
                 <p className="text-center font-display text-lg font-extrabold text-ink-900 md:text-3xl">{feedback.message}</p>
-                <ScoredWords words={feedback.words} onWordTap={playSample} />
+                <ScoredWords words={feedback.words} />
                 {feedback.hint && <HintCard hint={feedback.hint} />}
                 {/* Four bars are the least actionable thing on the screen and the first to go on a
                     667 phone, where the tip above them is what tells the child what to do next. */}

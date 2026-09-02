@@ -257,7 +257,8 @@ it('turns an accurate, fluent, complete attempt into 3 stars on the sentence key
     .toContainEqual(expect.objectContaining({ kind: 'speak', id: 'ss1' }))
   expect(store.saveRecording).toHaveBeenCalledTimes(1)
   // The words come back with their own tone, and the four bars are all there.
-  expect(screen.getByRole('button', { name: 'have tốt' })).toBeInTheDocument()
+  const haveChip = screen.getAllByTestId('word-chip').find(c => c.textContent?.includes('have'))!
+  expect(haveChip).toHaveAttribute('aria-label', 'have đúng')
   expect(screen.getAllByTestId('score-bar')).toHaveLength(4)
   expect(screen.getByRole('button', { name: /nghe mình/i })).toBeInTheDocument()
 })

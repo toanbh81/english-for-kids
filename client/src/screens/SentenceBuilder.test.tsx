@@ -319,7 +319,7 @@ it('folds the tray, the legend and the pool away on a phone once a score is in, 
   expect(classes(screen.getByTestId('tray').parentElement!)).toContain('max-md:hidden')
   expect(classes(screen.getByTestId('pool'))).toContain('max-md:hidden')
   // The sentence itself is still on screen, one chip per word.
-  expect(screen.getByRole('button', { name: /^I / })).toBeInTheDocument()
+  expect(screen.getAllByTestId('word-chip')[0]).toHaveAttribute('aria-label', expect.stringMatching(/^I /))
 })
 
 /** The two CTAs are the bottom row of the phone frame, put there by layout — never by a pinned

@@ -255,8 +255,9 @@ it('turns a good attempt into 3 stars stored on the pair key', async () => {
   expect(JSON.parse(localStorage.getItem('speakup.activity') ?? '[]'))
     .toContainEqual(expect.objectContaining({ kind: 'speak', id: 'pair-ship-sheep' }))
   // Both words are shown back with their own tone.
-  expect(screen.getByRole('button', { name: 'ship tốt' })).toBeInTheDocument()
-  expect(screen.getByRole('button', { name: 'sheep tốt' })).toBeInTheDocument()
+  const chips = screen.getAllByTestId('word-chip')
+  expect(chips.find(c => c.textContent?.includes('ship'))).toHaveAttribute('aria-label', 'ship đúng')
+  expect(chips.find(c => c.textContent?.includes('sheep'))).toHaveAttribute('aria-label', 'sheep đúng')
 })
 
 it('offers a hint and a retry when the attempt was weak', async () => {

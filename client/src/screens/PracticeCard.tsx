@@ -189,7 +189,7 @@ export function PracticeCard() {
                     {isWordPop && streak >= 2 ? 'Nói đúng 2 lần liên tiếp! 🎉' : feedback.message}
                   </p>
                 </div>
-                <ScoredWords words={feedback.words} onWordTap={playSample} />
+                <ScoredWords words={feedback.words} />
                 {feedback.hint && <HintCard hint={feedback.hint} />}
                 <div className="flex w-full flex-wrap justify-center gap-2 md:w-auto md:gap-4">
                   {attempt.lastBlob && (
