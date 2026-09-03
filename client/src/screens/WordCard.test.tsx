@@ -268,6 +268,21 @@ it('shows the 🔄 corner icon until the first flip, then retires it for good', 
   expect(screen.queryByText('🔄')).not.toBeInTheDocument()
 })
 
+/** Fix round 1: the mic and the flip are independent affordances — a child can speak without ever
+ * tapping the card. A result is the same "stop nudging" signal as a flip or a recording, so the
+ * peek animation and the 🔄 icon must not keep animating over an already-scored word. */
+it('stops the peek animation and hides the 🔄 icon once a result exists, even if the card was never flipped', () => {
+  promote('food-apple')
+  renderCard('food', 'food-apple')
+  expect(screen.getByTestId('flip-card')).toHaveClass('animate-peek')
+  expect(screen.getByText('🔄')).toBeInTheDocument()
+
+  score(resultHigh, null)
+
+  expect(screen.getByTestId('flip-card')).not.toHaveClass('animate-peek')
+  expect(screen.queryByText('🔄')).not.toBeInTheDocument()
+})
+
 /** Q9: "Mặt sau: nghĩa + câu ví dụ + 🔊" — no text label rides on the card faces themselves, this
  * line under the card is the only hint. It gives way to the compact result the moment there is
  * one, so it never sits stale under a card the child already answered for. */

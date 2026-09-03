@@ -288,8 +288,11 @@ function WordCardInner({ word, topic, isReview, list }: { word: Word; topic: str
               {/* Round-2 decision: the corner icon is a one-time "this turns over" nudge, retired
                   for good the moment the child flips once — it does not come back on a flip home —
                   and it is hidden mid-recording along with the peek animation below (Foxy is
-                  listening; nothing should be inviting a flip). */}
-              {!hasFlipped && !recording && (
+                  listening; nothing should be inviting a flip). Fix round 1: a result is the same
+                  kind of "stop nudging" signal as a flip or a recording — a child who speaks
+                  without ever tapping the card must not find the nudge still animating over an
+                  already-scored word (it may come back after "Thử lại" resets the attempt). */}
+              {!hasFlipped && !recording && !feedback && (
                 <span aria-hidden="true" className="pointer-events-none absolute right-2 top-2 z-[1] text-[22px] leading-none opacity-30">🔄</span>
               )}
               <div
@@ -301,7 +304,7 @@ function WordCardInner({ word, topic, isReview, list }: { word: Word; topic: str
                 onKeyDown={onCardKey}
                 className={`relative h-full w-full cursor-pointer transition-transform duration-500 [transform-style:preserve-3d] ${
                   flipped ? '[transform:rotateY(180deg)]' : ''
-                } ${hasFlipped || flipped || recording ? '' : 'animate-peek'}`}
+                } ${hasFlipped || flipped || recording || feedback ? '' : 'animate-peek'}`}
               >
                 <div
                   data-testid="face-front"
