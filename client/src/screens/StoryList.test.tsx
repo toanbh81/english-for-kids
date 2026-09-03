@@ -13,22 +13,47 @@ it('sits in the shared page frame', () => {
   expect(screen.getByTestId('page-body')).toHaveClass('overflow-y-auto')
 })
 
-it('renders a card for every story linking to /story/<id> with Stars', () => {
+it('phone: three 96px rows with a coloured disc, then Foxy filling the slack', () => {
   setStars('story:little-fox', 2)
   render(<MemoryRouter><StoryList /></MemoryRouter>)
 
-  expect(screen.getByText('🎧 Nghe kể chuyện')).toBeInTheDocument()
-  expect(screen.getByRole('link', { name: /Về nhà/ })).toHaveAttribute('href', '/')
+  expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('🎧 Nghe kể chuyện')
+  expect(screen.getByText(`${STORIES.length} truyện · nghe rồi làm quiz`)).toBeInTheDocument()
 
-  const cardLinks = screen.getAllByRole('link').filter(a => a.getAttribute('href')?.startsWith('/story/'))
-  expect(cardLinks).toHaveLength(STORIES.length)
+  const rows = screen.getAllByTestId('list-row')
+  expect(rows).toHaveLength(STORIES.length)
+  expect(rows[0]).toHaveClass('min-h-[96px]', 'rounded-r20', 'shadow-[0_6px_0_#EFE2CC]')
+  expect(rows[0]).toHaveAttribute('href', '/story/little-fox')
+  // The disc's background is the story's own colour, not a shared token.
+  expect(within(rows[0]).getByText('🦊')).toHaveClass('bg-[#FFE7D2]')
+  expect(within(rows[0]).getAllByTestId('star-filled')).toHaveLength(2)
 
-  STORIES.forEach(s => {
-    const link = screen.getByRole('link', { name: new RegExp(s.title) })
-    expect(link).toHaveAttribute('href', `/story/${s.id}`)
-    expect(within(link).getByText(s.titleVi)).toBeInTheDocument()
+  const filler = screen.getByTestId('story-filler')
+  expect(filler).toHaveClass('flex-1', 'md:hidden')
+  expect(within(filler).getByTestId('foxy')).toBeInTheDocument()
+})
+
+it('every row links to its story with title, sub and stars', () => {
+  render(<MemoryRouter><StoryList /></MemoryRouter>)
+  const rows = screen.getAllByTestId('list-row')
+  STORIES.forEach((s, i) => {
+    expect(rows[i]).toHaveAttribute('href', `/story/${s.id}`)
+    expect(within(rows[i]).getByText(`${s.titleVi} · ${s.scenes.length} cảnh`)).toBeInTheDocument()
   })
+})
 
-  const foxLink = screen.getByRole('link', { name: /The Little Fox/ })
-  expect(within(foxLink).getAllByTestId('star-filled')).toHaveLength(2)
+it('iPad: three centred small tiles instead of rows, never stretched', () => {
+  render(<MemoryRouter><StoryList /></MemoryRouter>)
+
+  const tiles = screen.getByTestId('story-tiles')
+  expect(tiles).toHaveClass('hidden', 'md:grid', 'md:grid-cols-[repeat(3,200px)]', 'md:justify-center', 'md:gap-3')
+  expect(screen.getAllByTestId('tile')).toHaveLength(STORIES.length)
+
+  const rows = screen.getAllByTestId('list-row')
+  expect(rows[0].parentElement).toHaveClass('md:hidden')
+})
+
+it('the right header cell keeps its default LessonChip slot', () => {
+  render(<MemoryRouter><StoryList /></MemoryRouter>)
+  expect(screen.getByTestId('header-right')).toBeInTheDocument()
 })

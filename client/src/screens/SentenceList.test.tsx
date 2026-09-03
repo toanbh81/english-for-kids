@@ -1,13 +1,14 @@
 import { render, screen, within } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { SENTENCES } from '../content'
+import { findTopic } from '../content/topics'
 import { TOPICS as WORD_DECKS } from '../content/words'
 import { promote } from '../progress/leitner'
 import { setStars } from '../progress/store'
 import { SentenceList } from './SentenceList'
 
 /** Opens every island the way the map does — six of each deck's eight words in the Leitner box —
- * so the unfiltered list has all five topics to show. */
+ * so the unfiltered list has all eight topics to show. */
 function openEveryTopic() {
   for (const deck of WORD_DECKS) deck.words.slice(0, 6).forEach(w => promote(w.id))
 }
@@ -27,23 +28,31 @@ it('sits in the shared page frame', () => {
   expect(screen.getByTestId('page-body')).toHaveClass('overflow-y-auto')
 })
 
-it('renders a row for every sentence, grouped by topic, linking to /sentence/<id> with Stars', () => {
+it('unfiltered: sticky topic groups of 64px truncating rows, two columns on iPad', () => {
   openEveryTopic()
   setStars('sentence:s1', 2)
   renderList()
 
-  expect(screen.getByText('🧱 Ghép câu')).toBeInTheDocument()
-  expect(screen.getByRole('link', { name: /Về nhà/ })).toHaveAttribute('href', '/')
+  expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('🧱 Ghép câu')
+  expect(screen.getByText(/^32 câu · \d+ chủ đề$/)).toBeInTheDocument()
+
+  const groups = screen.getByTestId('sentence-groups')
+  expect(groups).toHaveClass('md:grid', 'md:grid-cols-2', 'md:items-start', 'md:gap-3')
+
+  const h2s = screen.getAllByTestId('sticky-group')
+  expect(h2s.length).toBeGreaterThan(0)
+  const h2 = h2s[0]
+  expect(h2).toHaveClass('sticky', 'top-0', 'z-10', 'bg-cream-50', 'pt-1.5')
+  // C8: no count tail on the sticky heading.
+  expect(h2.textContent).not.toMatch(/·/)
 
   expect(rowLinks()).toHaveLength(SENTENCES.length)
+  const row = screen.getAllByTestId('list-row')[0]
+  expect(row).toHaveClass('min-h-[64px]', 'rounded-r16', 'shadow-card-xs')
+  expect(row.querySelector('.truncate')).toHaveClass('text-[16px]')
+  expect(within(row).getByTestId('stars')).toHaveClass('text-[13px]')
 
-  SENTENCES.forEach(s => {
-    const link = screen.getByRole('link', { name: new RegExp(s.vi.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')) })
-    expect(link).toHaveAttribute('href', `/sentence/${s.id}`)
-  })
-
-  const s1 = SENTENCES.find(s => s.id === 's1')!
-  const s1Link = screen.getByRole('link', { name: new RegExp(s1.vi.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')) })
+  const s1Link = screen.getByRole('link', { name: 'Con ăn một quả táo.' })
   expect(within(s1Link).getAllByTestId('star-filled')).toHaveLength(2)
 })
 
@@ -57,22 +66,21 @@ it('groups sentences under all topic headings', () => {
   expect(screen.getByText('Thời tiết')).toBeInTheDocument()
 })
 
-it('shows only one topic — and names it — when the topic hub links in with ?topic=', () => {
-  renderList('/sentences?topic=animals')
+it('a valid ?topic= filter drops the H2s and names the topic in the subtitle', () => {
+  renderList('/sentences?topic=family')
 
-  const animals = SENTENCES.filter(s => s.topic === 'animals')
-  expect(animals.length).toBeGreaterThan(0)
-  expect(rowLinks()).toHaveLength(animals.length)
-  expect(screen.getByText('🧱 Ghép câu — Động vật')).toBeInTheDocument()
+  expect(screen.queryAllByTestId('sticky-group')).toHaveLength(0)
+  expect(screen.getByText('4 câu · Gia đình')).toBeInTheDocument()
+
+  const family = SENTENCES.filter(s => s.topic === 'family')
+  const rows = screen.getAllByTestId('list-row')
+  expect(rows).toHaveLength(family.length)
+  expect(rows[0]).toHaveAttribute('href', `/sentence/${family[0].id}?topic=family`)
   // Back to the hub the child came from, not all the way home.
-  expect(screen.getByRole('link', { name: /Quay lại/ })).toHaveAttribute('href', '/topic/animals')
+  expect(screen.getByRole('link', { name: /Quay lại/ })).toHaveAttribute('href', '/topic/family')
   expect(screen.queryByText('Đồ ăn')).not.toBeInTheDocument()
 })
 
-/** Fix round 1, D2: SentenceBuilder's "Tiếp theo" only stays inside a topic when the route it
- * lands on already carries `?topic=` — so a row reached through a topic-filtered list has to hand
- * that topic on, or R20's in-topic navigation is dead code with nothing in the real app that ever
- * triggers it. */
 it('carries ?topic= on each row link when the list is topic-filtered', () => {
   renderList('/sentences?topic=animals')
   const animals = SENTENCES.filter(s => s.topic === 'animals')
@@ -91,12 +99,14 @@ it('drops ?topic= from every row link when the list is not filtered', () => {
   rowLinks().forEach(link => expect(link.getAttribute('href')).not.toContain('?topic='))
 })
 
-it('falls back to the full list for a topic id that no longer exists', () => {
+it('an unknown ?topic= is no filter at all', () => {
   openEveryTopic()
-  renderList('/sentences?topic=dinosaurs')
+  renderList('/sentences?topic=nope')
 
+  expect(screen.getAllByTestId('sticky-group').length).toBeGreaterThan(0)
   expect(rowLinks()).toHaveLength(SENTENCES.length)
-  expect(screen.getByText('🧱 Ghép câu')).toBeInTheDocument()
+  expect(screen.getByText(/^32 câu · \d+ chủ đề$/)).toBeInTheDocument()
+  expect(findTopic('nope')).toBeUndefined()
 })
 
 // The unfiltered list is a full index of the game's sentences, so it must not be a way around the
@@ -113,4 +123,9 @@ it('lists only unlocked topics when it is not filtered', () => {
   for (const name of ['Thời tiết', 'Màu sắc', 'Cơ thể', 'Đồ chơi']) {
     expect(screen.queryByText(name)).not.toBeInTheDocument()
   }
+})
+
+it('the right header cell keeps its default LessonChip slot', () => {
+  renderList()
+  expect(screen.getByTestId('header-right')).toBeInTheDocument()
 })

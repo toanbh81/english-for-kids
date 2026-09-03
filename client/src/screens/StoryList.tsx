@@ -1,24 +1,56 @@
-import { Link } from 'react-router-dom'
 import { STORIES } from '../content/stories'
 import { getStars } from '../progress/store'
-import { BackButton, CARD_LINK, StarRow } from '../components/ui'
+import { BackButton, ListRow, Tile } from '../components/ui'
 import { PageShell, PageHeader, PageBody } from '../components/ui/page'
+import { Foxy } from '../components/Foxy'
+
+// brief §2 C1: nền đĩa theo truyện. Chưa có token cho ba hex nền — chúng là màu của truyện,
+// không phải vai trò trong hệ thống.
+const DISC: Record<string, string> = { 'little-fox': 'bg-[#FFE7D2]', 'at-the-zoo': 'bg-sun-50', 'my-breakfast': 'bg-teal-50' }
 
 export function StoryList() {
   return (
     <PageShell>
-      <PageHeader back={<BackButton to="/" label="Về nhà" />}>
-        <h1 className="font-display text-[22px] font-extrabold leading-tight text-ink-900 md:text-[32px]">🎧 Nghe kể chuyện</h1>
-      </PageHeader>
-      <PageBody>
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-3 md:gap-5">
+      <PageHeader
+        back={<BackButton to="/" label="Về nhà" />}
+        title="🎧 Nghe kể chuyện"
+        sub={`${STORIES.length} truyện · nghe rồi làm quiz`}
+      />
+      <PageBody fade gap={8}>
+        {/* Phone: 3 rows (h=96) with a disc coloured for the story — 3 stories on a 390px phone
+            is the opposite problem from the review deck's 64 words, so the Foxy filler below
+            eats the leftover space instead of the rows stretching to reach it. */}
+        <div className="flex flex-col gap-2 md:hidden">
           {STORIES.map(s => (
-            <Link key={s.id} to={`/story/${s.id}`} className={CARD_LINK}>
-              <span aria-hidden="true" className="text-[72px] leading-none">{s.emoji}</span>
-              <span className="text-center font-display text-[26px] font-extrabold leading-tight text-ink-900">{s.title}</span>
-              <span className="text-center text-lg font-bold text-ink-500">{s.titleVi}</span>
-              <StarRow value={getStars(`story:${s.id}`)} />
-            </Link>
+            <ListRow
+              key={s.id}
+              to={`/story/${s.id}`}
+              h={96}
+              disc={{ emoji: s.emoji, bg: DISC[s.id] ?? 'bg-cream-50' }}
+              title={s.title}
+              sub={`${s.titleVi} · ${s.scenes.length} cảnh`}
+              stars={getStars(`story:${s.id}`)}
+              chevron
+              ariaLabel={s.title}
+            />
+          ))}
+        </div>
+        <div data-testid="story-filler" className="flex flex-1 flex-col items-center justify-center gap-2 md:hidden">
+          <Foxy mood="idle" size="md" className="animate-bob [&_svg]:h-[93px] [&_svg]:w-[96px]" />
+          <p className="text-[14px] font-bold text-ink-500">Nghe truyện xong thì làm quiz nhé! 🦊</p>
+        </div>
+        {/* iPad: 3 small tiles centred on their own track — not `ListGrid`, whose 5/6-column
+            track would leave 3 tiles stranded on the left (same exception as B2/SoundWordList). */}
+        <div data-testid="story-tiles" className="hidden md:grid md:grid-cols-[repeat(3,200px)] md:justify-center md:gap-3">
+          {STORIES.map(s => (
+            <Tile
+              key={s.id}
+              to={`/story/${s.id}`}
+              size="sm"
+              emoji={s.emoji}
+              title={s.title}
+              stars={getStars(`story:${s.id}`)}
+            />
           ))}
         </div>
       </PageBody>

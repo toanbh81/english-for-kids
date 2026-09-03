@@ -1,13 +1,10 @@
-import { Link, useSearchParams } from 'react-router-dom'
+import { useSearchParams } from 'react-router-dom'
 import { SENTENCES } from '../content'
 import { TOPICS, findTopic } from '../content/topics'
 import { getStars } from '../progress/store'
 import { topicUnlocked } from '../progress/topicProgress'
-import { BackButton, StarRow } from '../components/ui'
+import { BackButton, ListRow, StickyGroup } from '../components/ui'
 import { PageShell, PageHeader, PageBody } from '../components/ui/page'
-
-const ROW =
-  'flex min-h-[80px] items-center justify-between gap-4 rounded-xl3 bg-white px-6 py-3 shadow-card transition-transform active:scale-95'
 
 export function SentenceList() {
   const [params] = useSearchParams()
@@ -18,45 +15,43 @@ export function SentenceList() {
   // the map has opened, or it would be a way around the island unlocks. A hub that links in with
   // its own `?topic=` has already made that decision.
   const shown = topic ? [topic] : TOPICS.filter(t => topicUnlocked(t.id))
+  const list = topic ? SENTENCES.filter(s => s.topic === topic.id) : []
 
   return (
     <PageShell>
-      <PageHeader back={(
-        <BackButton
-          to={topic ? `/topic/${topic.id}` : '/'}
-          label={topic ? 'Quay lại' : 'Về nhà'}
-        />
-      )}
-      >
-        <h1 className="font-display text-[22px] font-extrabold leading-tight text-ink-900 md:text-[32px]">
-          {topic ? `🧱 Ghép câu — ${topic.name}` : '🧱 Ghép câu'}
-        </h1>
-      </PageHeader>
-      <PageBody>
-        <div className="flex flex-col gap-7">
-          {shown.map(t => (
-            <section key={t.id}>
-              {/* One topic on screen is already named by the heading above — a second copy of the
-                * same name would only repeat itself. */}
-              {!topic && (
-                <h2 className="mb-3 flex items-center gap-2 font-display text-[26px] font-extrabold text-ink-900">
-                  <span aria-hidden="true">{t.emoji}</span>
-                  <span>{t.name}</span>
-                </h2>
-              )}
-              <div className="flex flex-col gap-4">
-                {SENTENCES.filter(s => s.topic === t.id).map(s => (
-                  // Fix round 1, D2: a topic-filtered row hands the topic on so SentenceBuilder's
-                  // "Tiếp theo" can stay inside it (spec brief R20) — an unfiltered row has no
-                  // topic of its own to carry, so it keeps stepping through the flat list instead.
-                  <Link key={s.id} to={topic ? `/sentence/${s.id}?topic=${topic.id}` : `/sentence/${s.id}`} className={ROW}>
-                    <span className="font-display text-[24px] font-extrabold text-ink-900">{s.vi}</span>
-                    <StarRow value={getStars(`sentence:${s.id}`)} />
-                  </Link>
-                ))}
-              </div>
-            </section>
-          ))}
+      <PageHeader
+        back={(
+          <BackButton
+            to={topic ? `/topic/${topic.id}` : '/'}
+            label={topic ? 'Quay lại' : 'Về nhà'}
+          />
+        )}
+        title="🧱 Ghép câu"
+        sub={topic ? `${list.length} câu · ${topic.name}` : `${SENTENCES.length} câu · ${shown.length} chủ đề`}
+      />
+      <PageBody fade gap={8}>
+        <div data-testid="sentence-groups" className="flex flex-col gap-3 md:grid md:grid-cols-2 md:items-start md:gap-3">
+          {shown.map(t => {
+            // Unfiltered, `t` ranges over every shown topic and needs its own slice; filtered,
+            // `shown` is just `[topic]` so `t` is always `topic` and `list` already is that slice.
+            const rows = (topic ? list : SENTENCES.filter(s => s.topic === t.id)).map(s => (
+              <ListRow
+                key={s.id}
+                to={topic ? `/sentence/${s.id}?topic=${topic.id}` : `/sentence/${s.id}`}
+                h={64}
+                title={s.vi}
+                stars={getStars(`sentence:${s.id}`)}
+              />
+            ))
+            // One topic on screen is already named by the header's subtitle above — a second sticky
+            // H2 repeating the same name would only repeat itself.
+            if (topic) return <div key={t.id} className="flex flex-col gap-2.5">{rows}</div>
+            return (
+              <StickyGroup key={t.id} emoji={t.emoji} name={t.name} pad="row">
+                <div className="flex flex-col gap-2.5">{rows}</div>
+              </StickyGroup>
+            )
+          })}
         </div>
       </PageBody>
     </PageShell>
