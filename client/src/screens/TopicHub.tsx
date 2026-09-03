@@ -13,26 +13,35 @@ import { BackButton, Button, Chip, Stars } from '../components/ui'
 import { PageShell, PageHeader, PageBody, PageFooter } from '../components/ui/page'
 
 /**
- * Task 12 (R19/R20, decision 5): one row layout at every width — the phone numbers the design
- * gives (there is no A8 iPad artboard, R32) rather than a second `md:` scale bolted on top of a
- * screen that no longer has a `md:`-only decorative band to key off. Section cards are the child's
- * tap targets, so both breakpoints sit well above the 64 px floor.
+ * Task 12 (R19/R20, decision 5) fix round 1, decision 15: since A8 has no iPad artboard (R32),
+ * the inferred default is phone × 1.25 rather than the phone numbers held flat at every width —
+ * `ipad:` counterparts sit next to every new `md:` value even though the two never disagree here
+ * (decision 15: landscape must not differ from portrait), because `ipad:` is the variant the
+ * `:is(&)` specificity fix (`tailwind.config.ts`) actually arms against a real `md:` tie on a real
+ * iPad landscape — writing only `md:` would rely on there never being a competing `ipad:` rule for
+ * the same property, which is exactly the trap that fix exists to close. Section cards are the
+ * child's tap targets, so every size here sits well above the 64 px floor.
  */
 const SECTION =
   'flex min-h-[84px] flex-wrap items-center gap-3.5 rounded-[24px] bg-white px-[18px] py-4 shadow-card transition-transform active:scale-95'
-  + ' md:min-h-[96px] md:flex-nowrap md:gap-5 md:rounded-xl3 md:px-6'
+  + ' md:min-h-[105px] md:flex-nowrap md:gap-5 md:rounded-xl3 md:px-6 ipad:min-h-[105px]'
 /** The empty-story row (R20): `#F6EFE2`/`0 6px 0 #E2D5C0`, opacity .8, never a link. */
 const SECTION_EMPTY =
   'flex min-h-[84px] flex-wrap items-center gap-3.5 rounded-[24px] bg-[#F6EFE2] px-[18px] py-4 opacity-80 shadow-[0_6px_0_#E2D5C0]'
-  + ' md:min-h-[96px] md:flex-nowrap md:gap-5 md:rounded-xl3 md:px-6'
+  + ' md:min-h-[105px] md:flex-nowrap md:gap-5 md:rounded-xl3 md:px-6 ipad:min-h-[105px]'
 const SECTION_EMOJI = 'text-[34px] leading-none md:text-[56px]'
 /** Now a flex row of two children — the row's own name and, right after it with no text-node
  * space in between (so `nextSibling` in the title lands on the count, not a whitespace node), the
- * teal count that used to live in a separate note line (R20: "counts move into the row titles"). */
-const SECTION_TITLE = 'flex items-baseline gap-1.5 font-display text-[19px] font-extrabold text-ink-900 md:text-[26px]'
-const SECTION_TITLE_EMPTY = 'font-display text-[19px] font-extrabold text-sand-text md:text-[26px]'
-/** Still used for a story row's English subtitle — the only row left with a plain note line. */
+ * teal count that used to live in a separate note line (R20: "counts move into the row titles").
+ * 19px × 1.25 rounds to 24, not the Phase-10-era 26 this carried before decision 15. */
+const SECTION_TITLE = 'flex items-baseline gap-1.5 font-display text-[19px] font-extrabold text-ink-900 md:text-[24px] ipad:text-[24px]'
+const SECTION_TITLE_EMPTY = 'font-display text-[19px] font-extrabold text-sand-text md:text-[24px] ipad:text-[24px]'
+/** The generic empty-state note (LockedTopic's own copy) — untouched by decision 15's ×1.25,
+ * which is specific to A8's own rows; kept separate from `ROW_SUB` below so scaling one doesn't
+ * silently reach into the other. */
 const SECTION_NOTE = 'text-sm font-bold text-ink-500 md:text-lg'
+/** A story row's English subtitle — decision 15's "sub" (13px phone → 16px at ×1.25). */
+const ROW_SUB = 'text-sm font-bold text-ink-500 md:text-[16px] ipad:text-[16px]'
 /** The row's right-hand group: the "hôm nay" chip, a sentence/story's stars, and the phone's
  * chevron. It is always rendered, so at 768 up an empty one is a zero-width box and `ml-auto` a
  * no-op. */
@@ -163,12 +172,14 @@ function TopicHubInner({ topic }: { topic: Topic }) {
           it, the band (having no stacking context of its own to climb out of) hands its negative
           z-index up to the nearest ancestor that DOES have one, which painted it behind the whole
           app rather than just behind this screen's own header and body. Its height keeps the
-          phase-13 formula (180 px of content below the shell's own top padding) unchanged; only
-          the corner radius moved from a flat 40 to the design's 44/44/40/40. */}
+          phase-13 formula (180 px of content below the shell's own top padding) unchanged on a
+          phone; only the corner radius moved from a flat 40 to the design's 44/44/40/40. Fix
+          round 1 / decision 15: 236px × 1.25 = 295 from `md:` up, fixed rather than formula-based
+          since the safe-area top inset that formula exists for is a phone-only concern. */}
       <div
         aria-hidden="true"
         data-testid="island-header"
-        className="pointer-events-none absolute inset-x-0 top-0 h-[calc(180px_+_max(1.5rem,calc(env(safe-area-inset-top)_+_9px)))] rounded-b-[44px_44px_40px_40px] bg-teal-500 -z-10"
+        className="pointer-events-none absolute inset-x-0 top-0 h-[calc(180px_+_max(1.5rem,calc(env(safe-area-inset-top)_+_9px)))] rounded-b-[44px_44px_40px_40px] bg-teal-500 -z-10 md:h-[295px] ipad:h-[295px]"
       />
 
       {/* R19 / decision 5: the one named exception to "header always on cream" — `onBand` turns
@@ -181,82 +192,91 @@ function TopicHubInner({ topic }: { topic: Topic }) {
         </span>
       </PageHeader>
 
-      <PageBody className="gap-3 md:gap-5">
-        <div className="flex items-center gap-3.5 pb-3">
-          <span
-            aria-hidden="true"
-            className="flex h-[84px] w-[84px] shrink-0 items-center justify-center rounded-full bg-white text-[42px] leading-none shadow-[0_6px_0_#1FA396]"
-          >
-            {topic.emoji}
-          </span>
-          <div className="flex min-w-0 flex-col gap-1">
-            <h1 className="truncate font-display text-[28px] font-extrabold leading-tight text-white">{topic.name}</h1>
-            <div className="flex items-center gap-1.5">
-              <Stars value={wordsStars} size="13" />
-              <span className="text-[13px] font-bold text-[#D3F1EC]">Đảo số {islandNo} · Luyện thêm nhé!</span>
+      <PageBody>
+        {/* Decision 15: no A8 iPad artboard, so the inferred default is phone × 1.25, applied to
+            every size below (rounded to a whole px) — `ipad:` mirrors `md:` verbatim rather than
+            leaving landscape to inherit portrait's rule by omission (see the note on `SECTION`
+            above). `ipad:mx-auto ipad:max-w-[1080px]` is the same centring every list screen gets
+            for free from `PageShell`'s own wrapper (`WordList.tsx` relies on it without writing it
+            out) — written explicitly here since this content sits beside the full-bleed band, not
+            inside a plain cream shell, so it is worth being able to see at the call site. */}
+        <div className="flex w-full flex-col gap-3 md:gap-5 ipad:mx-auto ipad:max-w-[1080px] ipad:gap-5">
+          <div className="flex items-center gap-3.5 pb-3">
+            <span
+              aria-hidden="true"
+              className="flex h-[84px] w-[84px] shrink-0 items-center justify-center rounded-full bg-white text-[42px] leading-none shadow-[0_6px_0_#1FA396] md:h-[105px] md:w-[105px] md:text-[53px] ipad:h-[105px] ipad:w-[105px] ipad:text-[53px]"
+            >
+              {topic.emoji}
+            </span>
+            <div className="flex min-w-0 flex-col gap-1">
+              <h1 className="truncate font-display text-[28px] font-extrabold leading-tight text-white md:text-[35px] ipad:text-[35px]">{topic.name}</h1>
+              <div className="flex items-center gap-1.5">
+                <Stars value={wordsStars} size="13" />
+                <span className="text-[13px] font-bold text-[#D3F1EC] md:text-[16px] ipad:text-[16px]">Đảo số {islandNo} · Luyện thêm nhé!</span>
+              </div>
             </div>
           </div>
+
+          <Link to={`/words/${topic.id}`} className={`${SECTION} ${wordsToday ? TODAY_OUTLINE : ''}`}>
+            <span aria-hidden="true" className={SECTION_EMOJI}>🧩</span>
+            <span className={SECTION_TITLE}>
+              <span>Từ mới</span>
+              <span className="text-teal-600">{words}/{deckSize}</span>
+            </span>
+            <span className={SECTION_TAIL}>
+              {wordsToday && <TodayChip />}
+              <Chevron />
+            </span>
+          </Link>
+
+          <Link to={`/sentences?topic=${topic.id}`} className={`${SECTION} ${sentencesToday ? TODAY_OUTLINE : ''}`}>
+            <span aria-hidden="true" className={SECTION_EMOJI}>🧱</span>
+            <span className={SECTION_TITLE}>
+              <span>Ghép câu</span>
+              <span className="text-teal-600">{starred}/{sentences.length}</span>
+            </span>
+            <span className={SECTION_TAIL}>
+              {sentencesToday && <TodayChip />}
+              <Stars value={sentenceStars} size="13" />
+              <Chevron />
+            </span>
+          </Link>
+
+          <section className="flex flex-col gap-3 md:gap-4">
+            {stories.length === 0 ? (
+              // No story for this topic yet: a muted card, never a link, so a tap cannot dead-end.
+              <div className={SECTION_EMPTY}>
+                <span aria-hidden="true" className={`${SECTION_EMOJI} grayscale`}>🎧</span>
+                <span className="flex min-w-0 flex-col gap-1">
+                  <span className={SECTION_TITLE_EMPTY}>Truyện</span>
+                  <span className="text-[12px] font-bold text-ink-500">
+                    {`Đảo này chưa có truyện — nghe truyện ở ${TOPICS_WITH_STORY} đảo khác nhé`}
+                  </span>
+                </span>
+                <Chip tone="sand" size="sm" className="ml-auto shrink-0">Sắp có 📖</Chip>
+              </div>
+            ) : (
+              stories.map(story => (
+                <Link
+                  key={story.id}
+                  to={`/story/${story.id}`}
+                  className={`${SECTION} ${todayRoutes.has(`/story/${story.id}`) ? TODAY_OUTLINE : ''}`}
+                >
+                  <span aria-hidden="true" className={SECTION_EMOJI}>🎧</span>
+                  <span className="flex flex-col">
+                    <span className="font-display text-[19px] font-extrabold text-ink-900 md:text-[24px] ipad:text-[24px]">{story.titleVi}</span>
+                    <span className={ROW_SUB}>{story.title}</span>
+                  </span>
+                  <span className={SECTION_TAIL}>
+                    {todayRoutes.has(`/story/${story.id}`) && <TodayChip />}
+                    <Stars value={getStars(`story:${story.id}`)} size="sm" />
+                    <Chevron />
+                  </span>
+                </Link>
+              ))
+            )}
+          </section>
         </div>
-
-        <Link to={`/words/${topic.id}`} className={`${SECTION} ${wordsToday ? TODAY_OUTLINE : ''}`}>
-          <span aria-hidden="true" className={SECTION_EMOJI}>🧩</span>
-          <span className={SECTION_TITLE}>
-            <span>Từ mới</span>
-            <span className="text-teal-600">{words}/{deckSize}</span>
-          </span>
-          <span className={SECTION_TAIL}>
-            {wordsToday && <TodayChip />}
-            <Chevron />
-          </span>
-        </Link>
-
-        <Link to={`/sentences?topic=${topic.id}`} className={`${SECTION} ${sentencesToday ? TODAY_OUTLINE : ''}`}>
-          <span aria-hidden="true" className={SECTION_EMOJI}>🧱</span>
-          <span className={SECTION_TITLE}>
-            <span>Ghép câu</span>
-            <span className="text-teal-600">{starred}/{sentences.length}</span>
-          </span>
-          <span className={SECTION_TAIL}>
-            {sentencesToday && <TodayChip />}
-            <Stars value={sentenceStars} size="13" />
-            <Chevron />
-          </span>
-        </Link>
-
-        <section className="flex flex-col gap-3 md:gap-4">
-          {stories.length === 0 ? (
-            // No story for this topic yet: a muted card, never a link, so a tap cannot dead-end.
-            <div className={SECTION_EMPTY}>
-              <span aria-hidden="true" className={`${SECTION_EMOJI} grayscale`}>🎧</span>
-              <span className="flex min-w-0 flex-col gap-1">
-                <span className={SECTION_TITLE_EMPTY}>Truyện</span>
-                <span className="text-[12px] font-bold text-ink-500">
-                  {`Đảo này chưa có truyện — nghe truyện ở ${TOPICS_WITH_STORY} đảo khác nhé`}
-                </span>
-              </span>
-              <Chip tone="sand" size="sm" className="ml-auto shrink-0">Sắp có 📖</Chip>
-            </div>
-          ) : (
-            stories.map(story => (
-              <Link
-                key={story.id}
-                to={`/story/${story.id}`}
-                className={`${SECTION} ${todayRoutes.has(`/story/${story.id}`) ? TODAY_OUTLINE : ''}`}
-              >
-                <span aria-hidden="true" className={SECTION_EMOJI}>🎧</span>
-                <span className="flex flex-col">
-                  <span className="font-display text-[19px] font-extrabold text-ink-900 md:text-[26px]">{story.titleVi}</span>
-                  <span className={SECTION_NOTE}>{story.title}</span>
-                </span>
-                <span className={SECTION_TAIL}>
-                  {todayRoutes.has(`/story/${story.id}`) && <TodayChip />}
-                  <Stars value={getStars(`story:${story.id}`)} size="sm" />
-                  <Chevron />
-                </span>
-              </Link>
-            ))
-          )}
-        </section>
       </PageBody>
 
       <PageFooter>

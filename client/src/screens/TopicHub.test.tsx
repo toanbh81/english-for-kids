@@ -214,6 +214,34 @@ it('the pinned CTA points at the first unfinished section, or offers a replay wh
   expect(screen.getByRole('link', { name: /^Luyện lại: / })).toBeInTheDocument()
 })
 
+/* Fix round 1, Important #1: `nextItem()`'s priority chain was only exercised at its two
+ * endpoints above — words unfinished, and everything at 3★. These two cover the two middle
+ * branches (`TopicHub.tsx`'s `nextItem`). */
+
+it('the pinned CTA moves to Ghép câu once words are 3★ but sentences are not', () => {
+  unlockWords('animals', 8) // topicStars === 3, DECK_SIZE
+  setStars('sentence:s13', 1) // bestOf < 3: sentences section still unfinished
+
+  renderHub('animals')
+
+  expect(screen.getByRole('link', { name: 'Học tiếp: Ghép câu 1/4 ▸' })).toHaveAttribute('href', '/sentences?topic=animals')
+})
+
+/** `animals` has two stories (`little-fox`, `at-the-zoo`) — this pins that the CTA names the
+ * first one still under 3★ *in `STORIES`' own order*, not whichever has the most (or fewest)
+ * stars already, and not a hardcoded `stories[0]` (`TopicHub.tsx`'s `nextItem`, the
+ * `stories.find(...) ?? stories[0]` line): `at-the-zoo` here has *more* progress than `little-fox`
+ * (1★ vs 0★) but is second in the content file, so `little-fox` is still the one the CTA names. */
+it('the pinned CTA names the first unfinished story, in content order, once words and sentences are 3★', () => {
+  unlockWords('animals', 8)
+  setStars('sentence:s13', 3)
+  setStars('story:at-the-zoo', 1) // started but unfinished — and NOT the first story in content order
+
+  renderHub('animals')
+
+  expect(screen.getByRole('link', { name: 'Học tiếp: Chú cáo nhỏ ▸' })).toHaveAttribute('href', '/story/little-fox')
+})
+
 /* ---- Phase 10, design §12 M8 / Task 12, design §A8: the phone layout ---- */
 
 /** jsdom has no stylesheet and so no layout: these pin *which breakpoint each rule is written at*.
@@ -245,11 +273,51 @@ it('sizes the section rows for a phone and restores the landscape card from md u
   renderHub('animals')
 
   const words = within(body()).getByRole('link', { name: /Từ mới/ })
-  // 84 px on a phone (§12 M8) — still well above the 64 px tap floor — and the 96 px row from 768.
+  // 84 px on a phone (§12 M8) — still well above the 64 px tap floor — and the 105 px row from 768
+  // (decision 15: 84 × 1.25, fix round 1 — was the Phase-10-era 96 before there was an A8 CTA).
   expect(words).toHaveClass('min-h-[84px]', 'gap-3.5', 'rounded-[24px]', 'px-[18px]')
-  expect(words).toHaveClass('md:min-h-[96px]', 'md:gap-5', 'md:rounded-xl3', 'md:px-6')
+  expect(words).toHaveClass('md:min-h-[105px]', 'md:gap-5', 'md:rounded-xl3', 'md:px-6')
   // The wrap is the phone's safety valve only: the landscape row never wrapped and still does not.
   expect(words).toHaveClass('flex-wrap', 'md:flex-nowrap')
+})
+
+/* ---- Fix round 1, Important #2 / decision 15: no A8 iPad artboard → phone × 1.25 ---- */
+
+it('scales the band, name block and rows to phone × 1.25 from md up (decision 15)', () => {
+  unlockWords('animals', 6)
+
+  renderHub('animals')
+
+  // 236px band → 295 (236 × 1.25); `ipad:` repeats it verbatim, per the file's own note on why a
+  // real iPad landscape needs an explicit `ipad:` value and not just a `md:` one left to carry over.
+  expect(screen.getByTestId('island-header')).toHaveClass('md:h-[295px]', 'ipad:h-[295px]')
+
+  // Name-block avatar 84×84/42px emoji → 105×105/53px (84 × 1.25, 42 × 1.25 rounded to 53).
+  const avatar = screen.getByText('🐘')
+  expect(avatar).toHaveClass('md:h-[105px]', 'md:w-[105px]', 'md:text-[53px]')
+  expect(avatar).toHaveClass('ipad:h-[105px]', 'ipad:w-[105px]', 'ipad:text-[53px]')
+
+  // Island name 28px → 35 (28 × 1.25); subline 13px → 16 (13 × 1.25 rounded).
+  expect(screen.getByText('Động vật')).toHaveClass('md:text-[35px]', 'ipad:text-[35px]')
+  expect(screen.getByText(/Đảo số 1/)).toHaveClass('md:text-[16px]', 'ipad:text-[16px]')
+
+  // Row title 19px → 24 (19 × 1.25 rounded); the count still shares the title's own font size.
+  const words = within(body()).getByRole('link', { name: /Từ mới/ })
+  expect(within(words).getByText('Từ mới').parentElement).toHaveClass('md:text-[24px]', 'ipad:text-[24px]')
+
+  // The row content sits inside the same `ipad:max-w-[1080px] ipad:mx-auto` centring every list
+  // screen gets for free from `PageShell`'s own wrapper on a landscape iPad wider than 1080.
+  expect(within(words).getByText('Từ mới').closest('[class*="ipad:max-w-"]'))
+    .toHaveClass('ipad:mx-auto', 'ipad:max-w-[1080px]')
+})
+
+it('scales a story row\'s title and English subtitle to phone × 1.25 from md up (decision 15)', () => {
+  renderHub('animals')
+
+  const story = screen.getByRole('link', { name: /Chú cáo nhỏ/ })
+  expect(within(story).getByText('Chú cáo nhỏ')).toHaveClass('md:text-[24px]', 'ipad:text-[24px]')
+  // The English subtitle (13px phone) → 16 (decision 15's "sub"), same as the name-block subline.
+  expect(within(story).getByText('The Little Fox')).toHaveClass('md:text-[16px]', 'ipad:text-[16px]')
 })
 
 /** The design outlines a section that holds one of today's items as well as chipping it, because
