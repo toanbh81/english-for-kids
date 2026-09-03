@@ -114,42 +114,72 @@ it('takes the best of the new sound key and the legacy card key', () => {
   expect(within(screen.getByTestId('step-sound-zoo')).getAllByTestId('star-filled')).toHaveLength(3)
 })
 
-/* ---- Phase 10, design §11 M7: the phone zigzag, with the diagonal staircase untouched ---- */
+/* ---- Phase 14, design round 3 §2 A9 / R21 / R22 ---- */
 
-/** jsdom has no layout, so these pin *which breakpoint each rule is written at* — the failure
- * mode the phase is graded on. The pixel geometry is the browser's job. */
-it('lays the steps out bottom-up and alternating below md, and as the grid from md up', () => {
-  const { container } = renderStairs()
-  const region = container.querySelector('main svg')!.parentElement!
-  expect(region).toHaveClass('flex', 'flex-col-reverse', 'justify-around')
-  expect(region).toHaveClass('md:grid', 'md:grid-cols-2', 'md:items-end', 'md:justify-items-center', 'md:gap-5')
-  // The iPad-landscape diagonal is untouched: five across, top-aligned, lifted by `ipad:mt-*`.
-  expect(region).toHaveClass('ipad:grid-cols-5', 'ipad:items-start')
-
-  const keys = ['sound-zoo', 'word-pop', 'minimal-pairs', 'sentence-stars', 'story-voice']
-  keys.forEach((key, i) => {
-    const step = screen.getByTestId(`step-${key}`)
-    expect(step).toHaveClass(i % 2 === 0 ? 'self-start' : 'self-end')
-    // `md:self-auto`, not "no class": inside the grid `align-self` is what `items-end` sets, so a
-    // bare `self-start` would move the step at 1194 too.
-    expect(step).toHaveClass('md:self-auto', 'md:w-full', 'md:flex-col')
-  })
-  expect(screen.getByTestId('step-sound-zoo')).toHaveClass('ipad:mt-[240px]')
+it('one title at every frame, subtitle in the header, no "Speak Lab" branch', () => {
+  renderStairs()
+  expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Các bậc luyện nói 🗣️')
+  expect(screen.queryByText('Speak Lab 🗣️')).toBeNull()
+  expect(screen.getByText('Leo từng bậc — mỗi bậc một trò mới!')).toBe(screen.getByRole('banner').querySelector('p'))
 })
 
-it('draws a dotted trail behind the zigzag and nowhere else', () => {
+it('the CTA is no longer phone-only', () => {
+  renderStairs()
+  expect(screen.getByRole('contentinfo')).not.toHaveClass('md:hidden')
+  expect(screen.getByRole('link', { name: /^Luyện bậc/ })).toHaveClass('ipad:w-[420px]', 'ipad:mx-auto')
+})
+
+it('landscape positions the five tiles by percentage, not by magic margins', () => {
+  renderStairs()
+  const step = screen.getByTestId('step-sound-zoo')
+  expect(step.className).not.toMatch(/ipad:mt-/)
+  expect(step).toHaveStyle({ left: '10%', top: '70%' })
+  expect(screen.getByTestId('step-story-voice')).toHaveStyle({ left: '90%', top: '0%' })
+  expect(step).toHaveClass('ipad:absolute', 'ipad:h-[176px]', 'ipad:w-[176px]')
+})
+
+it('iPad portrait reuses the phone zigzag at 300×96 — no md: grid', () => {
+  renderStairs()
+  expect(screen.getByTestId('stairs-region').className).not.toMatch(/md:grid/)
+  expect(screen.getByTestId('step-word-pop').querySelector('a')).toHaveClass('md:h-[96px]', 'md:w-[300px]')
+})
+
+it('phone: the stair region is its own scroller, space-between, and scrolls to the bottom on mount', () => {
+  renderStairs()
+  const region = screen.getByTestId('stairs-region')
+  expect(region).toHaveClass('flex-1', 'min-h-0', 'overflow-y-auto', 'justify-between')
+  expect(region.scrollTop).toBe(region.scrollHeight - region.clientHeight)
+  expect(screen.getByTestId('step-word-pop').querySelector('a')).toHaveClass('h-[84px]', 'w-[236px]', 'short:h-[72px]')
+  expect(screen.getByTestId('foxy').parentElement).toHaveClass('h-[56px]', 'w-[58px]')
+  expect(screen.getByText('ĐANG HỌC')).toHaveClass('text-[12px]')
+})
+
+it('draws a dotted trail behind the zigzag at every frame below ipad, and a second one for the landscape diagonal', () => {
   const { container } = renderStairs()
-  const svg = container.querySelector('main svg')!
-  expect(svg).toHaveClass('md:hidden')
-  expect(svg).toHaveAttribute('viewBox', '0 0 350 560')
-  expect(svg).toHaveAttribute('preserveAspectRatio', 'none')
+  // Direct children only — Foxy draws its own `<svg>` nested inside one of the steps.
+  const svgs = screen.getByTestId('stairs-region').querySelectorAll(':scope > svg')
+  expect(svgs).toHaveLength(2)
+
+  const zigzag = svgs[0]
+  expect(zigzag).toHaveClass('ipad:hidden')
+  expect(zigzag).toHaveAttribute('viewBox', '0 0 350 560')
+  expect(zigzag).toHaveAttribute('preserveAspectRatio', 'none')
   // Five corners, bottom-left up, alternating x — the same shape as the five rows above it.
-  expect(svg.querySelector('path')).toHaveAttribute('d', 'M118 504 L232 392 L118 280 L232 168 L118 56')
-  // The teal blob the design drops from M7 is gone below the tablet breakpoint.
-  expect(container.querySelector('.bg-teal-50')).toHaveClass('hidden', 'md:block')
+  expect(zigzag.querySelector('path')).toHaveAttribute('d', 'M118 504 L232 392 L118 280 L232 168 L118 56')
+
+  const diagonal = svgs[1]
+  expect(diagonal).toHaveClass('hidden', 'ipad:block')
+  expect(diagonal).toHaveAttribute('viewBox', '0 0 1080 600')
+  expect(diagonal).toHaveAttribute('preserveAspectRatio', 'none')
+  // Same five centres the steps are positioned at, in the 1080×600 landscape viewBox.
+  expect(diagonal.querySelector('path')).toHaveAttribute('d', 'M108 420 L324 315 L540 210 L756 105 L972 0')
+
+  // The teal blob is landscape-only from this phase: portrait now fills that corner with the
+  // (bigger) zigzag itself.
+  expect(container.querySelector('.bg-teal-50')).toHaveClass('hidden', 'ipad:block')
 })
 
-it('pins a CTA for the step Foxy is standing on, phone only, as a sibling of the scroll area', () => {
+it('pins a CTA for the step Foxy is standing on, as a sibling of the scroll area', () => {
   localStorage.setItem('speakup.stars', JSON.stringify({ 'sound:th': 3 }))
   renderStairs()
   // Tập âm is finished, so Foxy — and the CTA — are on Đọc từ, bậc 2.
@@ -161,27 +191,20 @@ it('pins a CTA for the step Foxy is standing on, phone only, as a sibling of the
   // scrolling body, inside the shared page footer.
   expect(cta).not.toHaveClass('sticky', 'fixed', 'absolute')
   expect(screen.getByRole('contentinfo')).toContainElement(cta)
-  expect(screen.getByRole('contentinfo')).toHaveClass('md:hidden')
   expect(screen.getByRole('main').className).not.toContain('max-md:overflow-hidden')
 })
 
-it('tags the current step and the finished ones on a phone, and keeps Foxy beside it', () => {
+it('tags the current step and the finished ones at every frame, and keeps Foxy beside it below ipad', () => {
   localStorage.setItem('speakup.stars', JSON.stringify({ 'sound:th': 3 }))
   renderStairs()
   const done = within(screen.getByTestId('step-sound-zoo'))
   const learning = within(screen.getByTestId('step-word-pop'))
-  expect(done.getByText('✓')).toHaveClass('md:hidden')
-  expect(learning.getByText('ĐANG HỌC')).toHaveClass('md:hidden')
-  // Foxy sits after the tile on a phone (`order-2`) and back above it from md up.
-  expect(learning.getByTestId('foxy').parentElement!.parentElement).toHaveClass('order-2', 'md:order-none')
+  expect(done.getByText('✓')).toHaveClass('text-[12px]')
+  expect(learning.getByText('ĐANG HỌC')).toHaveClass('text-[12px]')
+  // Foxy sits after the tile below `ipad` (`order-2`) and back above it on iPad landscape.
+  expect(learning.getByTestId('foxy').parentElement!.parentElement).toHaveClass('order-2', 'ipad:order-none')
   // A step that is neither current nor finished carries an empty tag, not a missing one.
   expect(within(screen.getByTestId('step-story-voice')).queryByText('ĐANG HỌC')).not.toBeInTheDocument()
-})
-
-it('titles the screen in Vietnamese on a phone and keeps "Speak Lab" from md up', () => {
-  renderStairs()
-  expect(screen.getByText('Các bậc luyện nói 🗣️')).toHaveClass('md:hidden')
-  expect(screen.getByText('Speak Lab 🗣️')).toHaveClass('hidden', 'md:inline')
 })
 
 /** The spec's binding rules put the tap-target floor at 64 px with no exception, and the first

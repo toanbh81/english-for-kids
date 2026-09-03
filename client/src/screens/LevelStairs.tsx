@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import { LEVELS, PAIRS, SENTENCE_STARS, SOUNDS, STORY_VOICE } from '../content'
 import { getStars, soundStars as starsForSound } from '../progress/store'
@@ -7,43 +8,48 @@ import { PageShell, PageHeader, PageBody, PageFooter } from '../components/ui/pa
 
 type Stars = 0 | 1 | 2 | 3
 
-type Step = { key: string; emoji: string; name: string; to?: string; lift: string }
+type Step = { key: string; emoji: string; name: string; to?: string }
 
 /** Bottom-left to top-right: each step sits a little higher than the one before, so the five
- * games read as a staircase the child climbs. The lifts only apply from `ipad` up — below that the
- * steps stack into a plain list. */
+ * games read as a staircase the child climbs. */
 const STEPS: Step[] = [
-  { key: 'sound-zoo', emoji: '🦁', name: 'Tập âm', to: '/level/sound-zoo', lift: 'ipad:mt-[240px]' },
-  { key: 'word-pop', emoji: '🎈', name: 'Đọc từ', to: '/level/word-pop', lift: 'ipad:mt-[180px]' },
-  { key: 'minimal-pairs', emoji: '👯', name: 'Nghe & chọn', to: '/level/minimal-pairs', lift: 'ipad:mt-[120px]' },
-  { key: 'sentence-stars', emoji: '⭐', name: 'Sentence Stars', to: '/level/sentence-stars', lift: 'ipad:mt-[60px]' },
-  { key: 'story-voice', emoji: '🎭', name: 'Story Voice', to: '/level/story-voice', lift: 'ipad:mt-0' },
+  { key: 'sound-zoo', emoji: '🦁', name: 'Tập âm', to: '/level/sound-zoo' },
+  { key: 'word-pop', emoji: '🎈', name: 'Đọc từ', to: '/level/word-pop' },
+  { key: 'minimal-pairs', emoji: '👯', name: 'Nghe & chọn', to: '/level/minimal-pairs' },
+  { key: 'sentence-stars', emoji: '⭐', name: 'Sentence Stars', to: '/level/sentence-stars' },
+  { key: 'story-voice', emoji: '🎭', name: 'Story Voice', to: '/level/story-voice' },
 ]
 
 /**
- * Phase 10, design §11 M7. **The staircase is two layouts of one DOM**, and which one you get is
- * decided entirely by prefixes — the phase's binding rule (see the block comment in
- * `screens/SoundPractice.tsx`): every phone rule sits at the default breakpoint, `md:` (768) puts
- * the exact previous value back, and the `ipad:` diagonal is not touched at all.
- *
- * Below 768 the steps are the design's bottom-up zigzag: a `flex-col-reverse` column, so step 1 is
- * the bottom stair and the child climbs upwards, with odd rows pushed to the right edge and a
- * dotted trail drawn behind them. From 768 up it is the two-column grid it has always been, and
- * from `ipad` up the five-across diagonal with `lift` doing the climbing.
- *
- * `self-start` / `self-end` are the zigzag, and they are undone with `md:self-auto` rather than
- * dropped: inside the grid `align-self` is what `items-end` sets, so leaving a bare `self-start`
- * on would move a step to the top of its grid row at 1194 too.
+ * Phase 14, §2 A9 (design round 3, R21/R22). **The staircase is still two layouts of one DOM**,
+ * but the split moved: below `ipad` it is one zigzag — a `flex-col-reverse` scroll region, step 1
+ * at the bottom, odd rows pushed to the right edge, a dotted trail drawn behind them — used by
+ * both the phone AND iPad portrait (portrait only gets bigger cells, `md:h-[96px] md:w-[300px]`,
+ * never the old two-column grid). From `ipad` (landscape) up the five steps leave that flow
+ * entirely: the region switches to `ipad:block` and every step is positioned by percentage —
+ * `left = 10% + i·20%`, `top = 70% − i·17.5%` of the region's own box — so the diagonal holds at
+ * every iPad height (692–834) without five hand-tuned `mt-` values.
  */
-const TILE = 'flex h-[84px] w-[236px] max-w-full flex-row items-center justify-start gap-2.5 rounded-[20px] px-3.5 max-md:min-w-0'
-  + ' md:h-[180px] md:w-full md:max-w-[220px] md:flex-col md:justify-center md:gap-2 md:rounded-xl3 md:px-0'
+const TILE = 'flex h-[84px] w-[236px] max-w-full flex-row items-center gap-2.5 rounded-r20 px-3.5 max-md:min-w-0'
+  + ' short:h-[72px] md:h-[96px] md:w-[300px]'
+  + ' ipad:h-[176px] ipad:w-[176px] ipad:flex-col ipad:justify-center ipad:gap-1.5 ipad:rounded-r26 ipad:p-3 ipad:shrink-0'
 
-/** The dotted trail that joins the five zigzag rows, bottom-left up to top-left. The viewBox is
- * the design's 350×560 and `preserveAspectRatio="none"` stretches it over whatever the column
- * actually is, exactly as `Home`'s map trail does — the dashes are decoration, not measurement.
- * Row *i* counting from the bottom sits at y = 560 − 56 − i·112, on the left at x 118 and on the
- * right at x 232 (a 236 px tile centred in a 350 px band). */
+/** The dotted trail that joins the five zigzag rows, bottom-left up to top-left — used by both the
+ * phone and iPad-portrait zigzag. The viewBox is the design's 350×560 and `preserveAspectRatio=
+ * "none"` stretches it over whatever the column actually is, exactly as `Home`'s map trail does —
+ * the dashes are decoration, not measurement. Row *i* counting from the bottom sits at
+ * y = 560 − 56 − i·112, on the left at x 118 and on the right at x 232 (a 236 px tile centred in a
+ * 350 px band). */
 const TRAIL = STEPS.map((_, i) => `${i === 0 ? 'M' : 'L'}${i % 2 === 0 ? 118 : 232} ${504 - i * 112}`).join(' ')
+
+/** The iPad-landscape trail joins the same five centres the steps are positioned at — `left`/`top`
+ * as fractions of the design's 1080×600 viewBox — so the dashes always run through the diagonal
+ * regardless of the actual iPad height `preserveAspectRatio="none"` stretches it to. */
+const LANDSCAPE_TRAIL = STEPS.map((_, i) => {
+  const x = ((10 + i * 20) / 100) * 1080
+  const y = ((70 - i * 17.5) / 100) * 600
+  return `${i === 0 ? 'M' : 'L'}${x} ${y}`
+}).join(' ')
 
 /** The best a child has done on any card of a level — one row of stars per step. */
 function levelStars(id: string): Stars {
@@ -107,83 +113,110 @@ export function LevelStairs() {
   // it: "Luyện bậc 2: Đọc từ 🎈".
   const currentIndex = STEPS.indexOf(current) + 1
 
+  // The zigzag reads bottom-up (step 1 at the bottom), so a child opening the screen should see
+  // step 1 first rather than the top of a tall scroll region — scroll the stair region to its own
+  // bottom once, on mount.
+  const regionRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    const el = regionRef.current
+    if (el) el.scrollTop = el.scrollHeight
+  }, [])
+
   return (
     <PageShell>
-      {/* One header row on a phone — back button, title and subtitle side by side (§11). */}
-      <PageHeader back={<BackButton to="/" label="Về trang chủ" mdLabel="Về bản đồ" />}>
-        {/* The design titles this screen in Vietnamese, which is also what the way in from
-            Home is called ("🗣️ Các bậc luyện nói"). Only the phone gets the new wording: the
-            landscape frame is unchanged this phase. */}
-        <h1 className="font-display text-[22px] font-extrabold leading-tight text-ink-900 md:text-[32px]">
-          <span className="md:hidden">Các bậc luyện nói 🗣️</span>
-          <span className="hidden md:inline">Speak Lab 🗣️</span>
-        </h1>
-      </PageHeader>
+      <PageHeader
+        back={<BackButton to="/" label="Về trang chủ" mdLabel="Về bản đồ" />}
+        title="Các bậc luyện nói 🗣️"
+        sub="Leo từng bậc — mỗi bậc một trò mới!"
+      />
       <PageBody className="relative">
-        {/* M7 has no blob (design §11). */}
-        <div aria-hidden="true" className="pointer-events-none absolute -right-20 -top-24 hidden h-[320px] w-[320px] rounded-full bg-teal-50 md:block" />
+        {/* M7 has no blob (design §11) — and from iPad-portrait up the zigzag itself now fills the
+            corner this decoration used to sit in, so it stays landscape-only. */}
+        <div aria-hidden="true" className="pointer-events-none absolute -right-20 -top-24 hidden h-[320px] w-[320px] rounded-full bg-teal-50 ipad:block" />
 
-        <p className="text-center text-[15px] font-bold text-ink-500 md:text-lg">Leo từng bậc — mỗi bậc một trò mới!</p>
-
-        {/* `justify-around`, not the design's `space-between`: it puts each row's centre at
-            exactly (2i+1)/10 of the column, which is where the trail below draws its corners at
-            every viewport height. `space-between` would leave the dotted line ~24 px off the top
-            and bottom stairs at 844 and further out at 667. */}
-        <div className="relative mt-3 flex flex-col-reverse justify-around gap-2 py-1.5 md:mt-6 md:grid md:grid-cols-2 md:items-end md:justify-items-center md:gap-5 md:py-0 ipad:grid-cols-5 ipad:items-start">
+        <div
+          data-testid="stairs-region"
+          ref={regionRef}
+          className="relative flex min-h-0 flex-1 flex-col-reverse justify-between gap-2 overflow-y-auto py-1.5 md:mt-4 ipad:block ipad:overflow-visible"
+        >
+          {/* Phone / iPad-portrait trail — the same zigzag at both sizes, just bigger cells. */}
           <svg
             aria-hidden="true"
             viewBox="0 0 350 560"
             preserveAspectRatio="none"
-            className="pointer-events-none absolute inset-0 h-full w-full md:hidden"
+            className="pointer-events-none absolute inset-0 h-full w-full ipad:hidden"
           >
             <path d={TRAIL} stroke="#EAD9BE" strokeWidth={9} strokeLinecap="round" strokeDasharray="2 18" fill="none" />
+          </svg>
+          {/* iPad-landscape trail — the same five centres the steps below are positioned at. */}
+          <svg
+            aria-hidden="true"
+            viewBox="0 0 1080 600"
+            preserveAspectRatio="none"
+            className="pointer-events-none absolute inset-0 hidden h-full w-full ipad:block"
+          >
+            <path d={LANDSCAPE_TRAIL} stroke="#EAD9BE" strokeWidth={10} strokeLinecap="round" strokeDasharray="2 22" fill="none" />
           </svg>
 
           {STEPS.map((step, i) => (
             <div
               key={step.key}
               data-testid={`step-${step.key}`}
-              // `max-w-full` + the tile's `min-w-0`: at 320 px the design's 236 px tile and the
-              // 64 px fox together want 306 px of a 280 px column, so the tile gives up the
-              // difference rather than the fox being clipped off the edge.
-              className={`flex flex-row items-center gap-1.5 max-md:relative max-md:z-[1] max-md:max-w-full ${i % 2 === 0 ? 'self-start' : 'self-end'} md:w-full md:flex-col md:gap-2 md:self-auto ${step.lift}`}
+              // Positioned by percentage always; the `style` only takes effect once `ipad:absolute`
+              // switches the box out of the zigzag's normal flow. Below `ipad` the box stays
+              // `position: static`, on purpose — `top`/`left` apply to any *non-static* box, so a
+              // stray `relative` here would let this same inline style shove the box around the
+              // zigzag too. `z-[1]` still lifts it above the absolutely-positioned trail SVG
+              // without that: flex items honour `z-index` even while `position: static`.
+              style={{ left: `${10 + i * 20}%`, top: `${70 - i * 17.5}%` }}
+              className={`flex flex-row items-center gap-1.5 z-[1] max-md:max-w-full ${i % 2 === 0 ? 'self-start' : 'self-end'}`
+                + ' ipad:absolute ipad:h-[176px] ipad:w-[176px] ipad:flex-col ipad:items-center ipad:justify-end ipad:gap-0 ipad:-translate-x-1/2'}
             >
-              {/* Above the step from 768 up, beside it on a phone (`order-2`), and simply absent
-                  on a phone when it is not this child's step — an invisible 64 px box next to a
+              {/* Beside the tile on a phone / iPad portrait (`order-2`), above it on iPad
+                  landscape (`ipad:order-none` inside the `ipad:flex-col` box) — and simply absent
+                  on a phone when it is not this child's step, since an invisible box next to a
                   right-hand tile would push it off the zigzag's right edge. */}
-              <div className={`h-16 max-md:shrink-0 md:h-[96px] ${foxyOn === step.key ? 'order-2 animate-bob md:order-none' : 'invisible max-md:hidden'}`}>
-                {foxyOn === step.key && <Foxy mood="cheer" size="sm" />}
+              <div className={`shrink-0 h-[56px] w-[58px] -ml-1.5 ipad:ml-0 ipad:-mb-1.5 ipad:h-[77px] ipad:w-[80px] ${foxyOn === step.key ? 'order-2 animate-bob ipad:order-none' : 'invisible max-md:hidden'}`}>
+                {foxyOn === step.key && (
+                  <Foxy
+                    mood="cheer"
+                    size="sm"
+                    className="h-[56px] w-[58px] [&_svg]:h-[56px] [&_svg]:w-[58px] ipad:h-[77px] ipad:w-[80px] ipad:[&_svg]:h-[77px] ipad:[&_svg]:w-[80px]"
+                  />
+                )}
               </div>
 
               {step.to ? (
-                <Link to={step.to} className={`${TILE} bg-white shadow-card active:translate-y-[2px] ${foxyOn === step.key ? 'max-md:shadow-[0_6px_0_#1FA396,0_0_0_3px_#2EC4B6]' : ''}`}>
-                  <span aria-hidden="true" className="text-[30px] leading-none md:text-[56px]">{step.emoji}</span>
-                  <span className="font-display text-[16px] font-extrabold text-ink-900 md:text-[21px]">{step.name}</span>
-                  <StarRow value={stars[step.key]} className="max-md:gap-0 max-md:text-xs" />
-                  {/* The design's status tag, phone only: the landscape tile says the same thing
-                      with Foxy standing on it and has no room to spare. */}
-                  <span className="ml-auto font-display text-[13px] font-extrabold text-ink-300 md:hidden">
+                <Link to={step.to} className={`${TILE} bg-white shadow-card active:translate-y-[2px] ${foxyOn === step.key ? 'max-md:shadow-[0_6px_0_#1FA396,0_0_0_3px_#2EC4B6] ipad:shadow-[0_8px_0_#1FA396,0_0_0_4px_#2EC4B6]' : ''}`}>
+                  <span aria-hidden="true" className="text-[30px] leading-none ipad:text-[52px]">{step.emoji}</span>
+                  <span className="font-display text-[16px] font-extrabold text-ink-900 ipad:text-[19px]">{step.name}</span>
+                  <StarRow value={stars[step.key]} size="13" className="ipad:text-[14px]" />
+                  {/* The design's status tag — visible at every frame now, iPad portrait included,
+                      since portrait reuses this same tile and has no landscape row to say it
+                      another way. */}
+                  <span className="ml-auto font-display text-[12px] font-extrabold text-ink-300 ipad:min-h-[14px]">
                     {foxyOn === step.key ? 'ĐANG HỌC' : stars[step.key] === 3 ? '✓' : ''}
                   </span>
                 </Link>
               ) : (
                 <div className={`${TILE} bg-[#F3EADA] opacity-75 shadow-[0_8px_0_#E2D5C0] max-md:shadow-[0_5px_0_#E2D5C0]`}>
-                  <span aria-hidden="true" className="text-[30px] leading-none md:text-[48px]">🔒</span>
-                  <span className="font-display text-[16px] font-extrabold text-[#A79781] md:text-[21px]">{step.name}</span>
-                  <Chip tone="neutral" size="sm" className="max-md:hidden">Sắp có</Chip>
+                  <span aria-hidden="true" className="text-[30px] leading-none ipad:text-[48px]">🔒</span>
+                  <span className="font-display text-[16px] font-extrabold text-[#A79781] ipad:text-[19px]">{step.name}</span>
+                  <Chip tone="neutral" size="sm" className="hidden ipad:inline-flex">Sắp có</Chip>
                 </div>
               )}
             </div>
           ))}
         </div>
       </PageBody>
-      {/* The design's pinned CTA (§11), phone only — a sibling of the scrolling body now, never a
-          `sticky` overlay covering the content under it. */}
+      {/* The design's pinned CTA (§11) — a sibling of the scrolling body, never a `sticky` overlay
+          covering the content under it, and no longer phone-only: iPad landscape gets it too
+          (R21), centred and capped at 420 px wide. */}
       {current.to && (
-        <PageFooter className="md:hidden">
+        <PageFooter>
           <Button
             to={current.to}
-            className="min-h-[64px] w-full shrink-0 rounded-[20px] px-4 text-xl"
+            className="min-h-[64px] w-full shrink-0 rounded-[20px] px-4 text-xl ipad:mx-auto ipad:h-[64px] ipad:w-[420px] ipad:rounded-r20 ipad:text-[20px]"
           >
             Luyện bậc {currentIndex}: {current.name} {current.emoji}
           </Button>
