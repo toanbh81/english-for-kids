@@ -189,12 +189,27 @@ export function LevelStairs() {
               {step.to ? (
                 <Link to={step.to} className={`${TILE} bg-white shadow-card active:translate-y-[2px] ${foxyOn === step.key ? 'max-md:shadow-[0_6px_0_#1FA396,0_0_0_3px_#2EC4B6] ipad:shadow-[0_8px_0_#1FA396,0_0_0_4px_#2EC4B6]' : ''}`}>
                   <span aria-hidden="true" className="text-[30px] leading-none ipad:text-[52px]">{step.emoji}</span>
-                  <span className="font-display text-[16px] font-extrabold text-ink-900 ipad:text-[19px]">{step.name}</span>
-                  <StarRow value={stars[step.key]} size="13" className="ipad:text-[14px]" />
+                  {/* Fix round 1: giving the name `flex-1` right next to the star row still wasn't
+                      enough room on a 236 px phone tile — "Sentence Stars"/"Nghe & chọn" started
+                      ellipsizing even with a short "✓" tag, since stars (~39 px) were still
+                      competing for the same line. The artboard's own structure is the actual fix:
+                      name and stars stack in their own column (full tile width, stars below) with
+                      the tag a separate trailing sibling — so the name only ever shares a line
+                      with the *tag*, not the tag AND the stars. `md:contents`/`ipad:contents`
+                      remove this wrapper from the box tree at 768 px and up: portrait (768–1023,
+                      more width, never had this bug) and landscape (`ipad:flex-col` on `TILE`
+                      itself already stacks emoji/name/stars/tag) both fall straight back to name
+                      and `StarRow` being direct `TILE` children, byte-for-byte the reviewed,
+                      working structure — only the phone/`short:` column below is new. */}
+                  <div className="flex min-w-0 flex-1 flex-col md:contents ipad:contents">
+                    <span className="truncate font-display text-[16px] font-extrabold text-ink-900 ipad:text-[19px]">{step.name}</span>
+                    <StarRow value={stars[step.key]} size="13" className="ipad:text-[14px]" />
+                  </div>
                   {/* The design's status tag — visible at every frame now, iPad portrait included,
                       since portrait reuses this same tile and has no landscape row to say it
-                      another way. */}
-                  <span className="ml-auto font-display text-[12px] font-extrabold text-ink-300 ipad:min-h-[14px]">
+                      another way. `whitespace-nowrap`/`shrink-0` keep "ĐANG HỌC" itself from
+                      wrapping into "ĐANG"/"HỌC" once the name above stops yielding it width. */}
+                  <span className="ml-auto shrink-0 whitespace-nowrap font-display text-[12px] font-extrabold text-ink-300 ipad:min-h-[14px]">
                     {foxyOn === step.key ? 'ĐANG HỌC' : stars[step.key] === 3 ? '✓' : ''}
                   </span>
                 </Link>

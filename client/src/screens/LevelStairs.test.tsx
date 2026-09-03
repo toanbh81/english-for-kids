@@ -144,14 +144,65 @@ it('iPad portrait reuses the phone zigzag at 300×96 — no md: grid', () => {
   expect(screen.getByTestId('step-word-pop').querySelector('a')).toHaveClass('md:h-[96px]', 'md:w-[300px]')
 })
 
-it('phone: the stair region is its own scroller, space-between, and scrolls to the bottom on mount', () => {
+it('phone: the stair region is its own scroller and space-between', () => {
   renderStairs()
   const region = screen.getByTestId('stairs-region')
   expect(region).toHaveClass('flex-1', 'min-h-0', 'overflow-y-auto', 'justify-between')
-  expect(region.scrollTop).toBe(region.scrollHeight - region.clientHeight)
   expect(screen.getByTestId('step-word-pop').querySelector('a')).toHaveClass('h-[84px]', 'w-[236px]', 'short:h-[72px]')
   expect(screen.getByTestId('foxy').parentElement).toHaveClass('h-[56px]', 'w-[58px]')
   expect(screen.getByText('ĐANG HỌC')).toHaveClass('text-[12px]')
+})
+
+/** Fix round 1: on the 236 px phone tile (72 px at `short:`) the active step's name and its
+ * "ĐANG HỌC" tag used to share one row with the star row and wrap onto two lines each. `truncate`
+ * on the name and `whitespace-nowrap` on the tag are what stop that — a single-line guarantee this
+ * test would catch losing even though jsdom can't render the actual wrap. */
+it('keeps the active step\'s name and tag single-line on the phone tile', () => {
+  // Default (empty) storage already leaves Tập âm — the longest-tag case since it also carries
+  // the "ĐANG HỌC" text — as the current, un-started step.
+  renderStairs()
+  expect(screen.getByText('Tập âm')).toHaveClass('truncate')
+  expect(screen.getByText('ĐANG HỌC')).toHaveClass('whitespace-nowrap')
+  // The tile itself still carries every height the three frames need.
+  const tile = screen.getByTestId('step-sound-zoo').querySelector('a')
+  expect(tile).toHaveClass('h-[84px]', 'short:h-[72px]', 'md:h-[96px]')
+})
+
+/** jsdom never runs layout, so `scrollHeight`/`clientHeight`/`scrollTop` are all `0` by default —
+ * `expect(region.scrollTop).toBe(region.scrollHeight - region.clientHeight)` against the real
+ * (unmocked) element is `0 === 0 - 0`, true whether or not the mount effect ever runs. Overriding
+ * the three accessors on `Element.prototype` before render, with a `scrollTop` setter that clamps
+ * to `[0, scrollHeight - clientHeight]` the way a real scroller does, makes the assertion actually
+ * depend on the effect: deleting `LevelStairs.tsx`'s `useEffect(() => { el.scrollTop =
+ * el.scrollHeight }, [])` (checked by hand — commented it out locally, this test failed with
+ * `scrollTop` still `0`, then restored it) leaves `scrollTop` at its untouched `0`, not `600`. */
+it('phone: the stair region scrolls itself to the bottom on mount', () => {
+  const SCROLL_HEIGHT = 1200
+  const CLIENT_HEIGHT = 600
+  const props = ['scrollHeight', 'clientHeight', 'scrollTop'] as const
+  const original = Object.fromEntries(props.map(p => [p, Object.getOwnPropertyDescriptor(Element.prototype, p)]))
+  let scrollTop = 0
+
+  Object.defineProperty(Element.prototype, 'scrollHeight', { configurable: true, get: () => SCROLL_HEIGHT })
+  Object.defineProperty(Element.prototype, 'clientHeight', { configurable: true, get: () => CLIENT_HEIGHT })
+  Object.defineProperty(Element.prototype, 'scrollTop', {
+    configurable: true,
+    get: () => scrollTop,
+    set(value: number) { scrollTop = Math.max(0, Math.min(value, SCROLL_HEIGHT - CLIENT_HEIGHT)) },
+  })
+
+  try {
+    renderStairs()
+    // The effect sets `scrollTop = scrollHeight` (1200); the mocked setter clamps that to the
+    // real max, `scrollHeight - clientHeight` = 600 — a value only the effect running produces.
+    expect(screen.getByTestId('stairs-region').scrollTop).toBe(600)
+  } finally {
+    for (const p of props) {
+      const desc = original[p]
+      if (desc) Object.defineProperty(Element.prototype, p, desc)
+      else delete (Element.prototype as unknown as Record<string, unknown>)[p]
+    }
+  }
 })
 
 it('draws a dotted trail behind the zigzag at every frame below ipad, and a second one for the landscape diagonal', () => {
