@@ -68,9 +68,11 @@ describe('SpeakPrompt', () => {
     render(<SpeakPrompt mood="idle" say="Đọc cả đoạn thật có hồn nhé!" seconds={13} />)
     expect(screen.getByTestId('foxy')).toHaveAttribute('data-mood', 'idle')
     expect(screen.getByText('13 giây')).toHaveClass('text-coral-text')
-    // C1: constrain Foxy's unsized SVG to the wrapper box, or it overflows into the bubble.
+    // C1 round 2: a percentage (`h-full`) can't do this job — it resolves against Foxy's own
+    // inner div, which is auto-height/shrink-to-fit, so the percentage collapses to `auto` and the
+    // SVG keeps its 64x62 intrinsic attributes. Explicit lengths per breakpoint are required.
     const foxWrap = screen.getByTestId('foxy').parentElement!.parentElement!
-    expect(foxWrap).toHaveClass('[&_svg]:h-full', '[&_svg]:w-full')
+    expect(foxWrap).toHaveClass('[&_svg]:h-[58px]', '[&_svg]:w-[60px]', 'md:[&_svg]:h-[70px]', 'md:[&_svg]:w-[72px]')
   })
 
   /** Fix round 1: the bubble was breaking one word per line once it had to share a wrapped
@@ -149,10 +151,11 @@ describe('ResultCard', () => {
     render(<MemoryRouter><ResultCard stars={2} praise="x" hint={{ word: 'w', tip: 't' }} forceHint fox={{ mood: 'cheer', say: 'Giọng vui thật đấy!' }} onSample={() => {}} onRetry={() => {}} /></MemoryRouter>)
     const rows = Array.from(screen.getByTestId('result-card').children).map(c => c.getAttribute('data-row'))
     expect(rows).toEqual(['head', 'hint', 'listen', 'fox', 'cta'])
-    // C1: Foxy's SVG has no intrinsic CSS sizing, so the wrapper must constrain it or it overflows
-    // the box and paints over neighbouring rows (worst case, the CTA below).
+    // C1 round 2: a percentage (`h-full`) can't do this job — it resolves against Foxy's own
+    // inner div, which is auto-height/shrink-to-fit, so the percentage collapses to `auto` and the
+    // SVG keeps its 64x62 intrinsic attributes. Explicit lengths per breakpoint are required.
     const foxWrap = screen.getByTestId('result-card').querySelector('[data-row="fox"]')!.firstElementChild!
-    expect(foxWrap).toHaveClass('[&_svg]:h-full', '[&_svg]:w-full')
+    expect(foxWrap).toHaveClass('[&_svg]:h-[42px]', '[&_svg]:w-[44px]', 'md:[&_svg]:h-[93px]', 'md:[&_svg]:w-[96px]', 'ipad:[&_svg]:h-[50px]', 'ipad:[&_svg]:w-[52px]')
     render(<MemoryRouter><ResultCard compact stars={1} praise="y" words={[{ word: 'a', tone: 'fix' }]} bars={{ accuracy: 1, fluency: 1, completeness: 1 } as never} hint={{ word: 'w', tip: 't' }} onRetry={() => {}} /></MemoryRouter>)
     const rows2 = Array.from(screen.getAllByTestId('result-card')[1].children).map(c => c.getAttribute('data-row'))
     expect(rows2).toEqual(['head', 'hint', 'cta'])

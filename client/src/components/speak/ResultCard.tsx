@@ -71,7 +71,7 @@ export function ResultCard(p: ResultCardProps) {
       )}
       {p.fox && (
         <div data-row="fox" className="flex items-center justify-center gap-2 ipad:mt-auto md:gap-2.5">
-          <div className="h-[42px] w-[44px] md:h-[93px] md:w-[96px] ipad:h-[50px] ipad:w-[52px] [&_svg]:h-full [&_svg]:w-full"><Foxy mood={p.fox.mood} size="sm" /></div>
+          <div className="h-[42px] w-[44px] md:h-[93px] md:w-[96px] ipad:h-[50px] ipad:w-[52px] [&_svg]:h-[42px] [&_svg]:w-[44px] md:[&_svg]:h-[93px] md:[&_svg]:w-[96px] ipad:[&_svg]:h-[50px] ipad:[&_svg]:w-[52px]"><Foxy mood={p.fox.mood} size="sm" /></div>
           <p className="text-[13px] font-bold text-ink-500 md:rounded-r16 md:rounded-bl-[6px] md:bg-white md:px-4 md:py-2.5 md:font-display md:text-[17px] md:font-extrabold md:text-ink-900 md:shadow-card-xs ipad:bg-transparent ipad:p-0 ipad:font-sans ipad:text-[14px] ipad:font-bold ipad:text-ink-500 ipad:shadow-none">{p.fox.say}</p>
         </div>
       )}
