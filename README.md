@@ -1409,9 +1409,10 @@ Recorded in `.superpowers/sdd/2026-09-03-phase13-practice-frame/progress.md`'s `
 implementation, not silently picked:
 
 - Same workspace policy as Phase 12 — branch worked in the main tree, no separate worktree.
-- `countdownLayout="row"` stays on every Phase 13 screen; the design's iPad-portrait `column` variant
-  is parked for the final review (not responsive without a media-query hook or a `MicButton` `order`
-  rework) — cosmetic only if wrong.
+- The spec (decisions 5 and the architecture note) named a `MicButton` `countdownLayout` prop; it
+  shipped instead as responsive classes (row on phone and iPad landscape, column on iPad portrait via
+  `md:flex-col ipad:flex-row` + `order`) with no prop at all — possible only after the `ipad:`
+  specificity fix below, and resolved in the final fix wave.
 - Phone's tips card keeps one tip per line, and a 1 px shoot-probe graze on `phone/voice-recording` is
   accepted as-is — the brief has no single-row requirement and nothing is clipped.
 - The iPad-portrait error-banner squeeze (act row forcing the prompt bubble to one word per line) was
@@ -1448,10 +1449,11 @@ implementation, not silently picked:
 - Phase 14 follow-up: extract `useCountdown` and `useTeachCollapse` (the countdown effect is repeated
   8×, the collapse block 6×).
 
-Parked for the phase's final review (not fixed in Task 12, since Task 12 makes no product-code
-changes): on phone, `ResultCard`'s `fox` row (44 px) lets Foxy's face overlap the CTA row below it on
-`voice-result3` and `sentence-result3` — a Phase 12 `ResultCard` defect surfaced by Phase 13's shots,
-not a Phase 13 regression.
+Fixed in the final fix wave: `Foxy` draws a 64×62 SVG whose size no CSS constrained, so it overflowed
+the brief-sized fox row (44×42 phone) and `SpeakPrompt` box and overlapped the CTA row on phone
+(`voice-result3`, `sentence-result3`). The wrappers now set explicit per-breakpoint SVG lengths
+(`[&_svg]:h-[42px] …`); a percentage (`h-full`) does not work there because Foxy's inner box has an
+auto height.
 
 ### iPad checklist rows for this phase
 
