@@ -41,13 +41,28 @@ describe('PageShell', () => {
     wrap(<PageShell><PageBody split={{ teach: <p>dạy</p>, act: <p>làm</p> }} /></PageShell>)
     const body = screen.getByTestId('page-body')
     expect(body).toHaveClass('ipad:flex-row', 'ipad:gap-6', 'ipad:overflow-visible')
-    expect(screen.getByText('làm').parentElement).toHaveClass('md:h-[300px]', 'md:shrink-0', 'ipad:h-auto', 'ipad:max-h-full', 'ipad:w-[440px]', 'ipad:shrink-0')
+    expect(screen.getByText('làm').parentElement).toHaveClass('md:min-h-[300px]', 'md:shrink-0', 'ipad:h-auto', 'ipad:max-h-full', 'ipad:w-[440px]', 'ipad:shrink-0')
   })
 
   it('both split columns scroll independently on ipad (the outer body stays overflow-visible)', () => {
     wrap(<PageShell><PageBody split={{ teach: <p>dạy</p>, act: <p>làm</p> }} /></PageShell>)
-    expect(screen.getByText('dạy').parentElement).toHaveClass('ipad:min-h-0', 'ipad:overflow-y-auto')
+    // `dạy` sits inside PageBody's own `my-auto` centring wrapper (see below), one level under
+    // the scrolling column itself.
+    expect(screen.getByText('dạy').parentElement!.parentElement).toHaveClass('ipad:min-h-0', 'ipad:overflow-y-auto')
     expect(screen.getByText('làm').parentElement).toHaveClass('ipad:min-h-0', 'ipad:overflow-y-auto')
+  })
+
+  /** Fix round 2: `justify-center` on the scrolling teach column clips the *top* of its content
+   * once that content no longer fits (a shrunk portrait column, once the act row below it has
+   * grown past its 300px floor — see the act-row test below) — centred-but-overflowing content is
+   * pushed above the box's own top edge, past where page-body's scroll can ever reach it. `my-auto`
+   * on an inner wrapper centres the same way when there is slack, but collapses to 0 (ordinary
+   * top-aligned flow) the moment there isn't, so the overflow is always at the bottom instead. */
+  it('centres the teach column with margin instead of justify-content, so overflow never clips the top', () => {
+    wrap(<PageShell><PageBody split={{ teach: <p>dạy</p>, act: <p>làm</p> }} /></PageShell>)
+    const outer = screen.getByText('dạy').parentElement!.parentElement!
+    expect(outer.className).not.toMatch(/\bjustify-center\b/)
+    expect(screen.getByText('dạy').parentElement).toHaveClass('my-auto')
   })
 
   it('collapsed split body shows the strip on a phone/portrait and keeps the teach column CSS-visible on iPad landscape', () => {
@@ -55,7 +70,7 @@ describe('PageShell', () => {
     wrap(<PageShell><PageBody split={{ teach: <p>dạy</p>, act: <p>làm</p>, collapsed: { emoji: '😊', label: 'I love my dog!', onExpand } }} /></PageShell>)
     // Both the strip and the teach column render — CSS (not JS) decides which one shows, since a
     // screen has no way to detect the compound `ipad` landscape variant at runtime.
-    expect(screen.getByText('dạy').parentElement).toHaveClass('hidden', 'ipad:flex')
+    expect(screen.getByText('dạy').parentElement!.parentElement).toHaveClass('hidden', 'ipad:flex')
     const strip = screen.getByRole('button', { name: /mở/ })
     expect(strip).toHaveClass('h-8', 'text-[15px]', 'text-[#D9C9AE]', 'md:h-16', 'md:bg-white', 'ipad:hidden')
     fireEvent.click(strip)
@@ -75,15 +90,15 @@ describe('PageShell', () => {
     expect(screen.getByText('làm').parentElement).toHaveClass('md:flex-wrap', 'ipad:flex-nowrap')
   })
 
-  it('actGrow swaps the fixed 300px act column for one that fills the remaining height', () => {
+  it('actGrow swaps the 300px-floor act column for one that fills the remaining height', () => {
     wrap(<PageShell><PageBody split={{ teach: <p>dạy</p>, act: <p>làm</p> }} /></PageShell>)
-    expect(screen.getByText('làm').parentElement).toHaveClass('md:h-[300px]', 'md:shrink-0')
+    expect(screen.getByText('làm').parentElement).toHaveClass('md:min-h-[300px]', 'md:shrink-0')
     expect(screen.getByText('làm').parentElement).not.toHaveClass('md:flex-1')
 
     wrap(<PageShell><PageBody actGrow split={{ teach: <p>dạy 2</p>, act: <p>làm 2</p> }} /></PageShell>)
     const grownAct = screen.getByText('làm 2').parentElement!
     expect(grownAct).toHaveClass('md:flex-1', 'md:min-h-0')
-    expect(grownAct.className).not.toMatch(/md:h-\[300px\]/)
+    expect(grownAct.className).not.toMatch(/md:min-h-\[300px\]/)
   })
 })
 

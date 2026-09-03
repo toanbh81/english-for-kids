@@ -132,8 +132,19 @@ export default {
     // Tailwind 3 stop emitting EVERY `max-*` variant in the project. That is not a warning: it
     // silently deleted all 276 `max-md:` rules — the phone-only overrides of Phase 10 — from the
     // build, and nothing failed. A variant registered here has no such side effect.
+    //
+    // The `&:is(&)` on the end is not decorative: Tailwind 3 emits plugin-registered variants
+    // (this one, `short`) into the stylesheet BEFORE the core `screens` breakpoints (`md`, `lg`,
+    // …), so on a real iPad landscape — which matches both `md:` and `ipad:` at once — a plain
+    // `.ipad\:x{…}` and `.md\:x{…}` tie on specificity (0,1,0 each) and the later-in-source `md:`
+    // rule wins, silently undoing every `ipad:` override sharing a property with an `md:` one
+    // (found via Task 5's `order` bug, then confirmed for `flex-row`/`gap-10`/`h-[300px]` on the
+    // same act column). `:is(&)` repeats the class selector inside `:is()`, which counts its
+    // *contents’* specificity once more — `.ipad\:x:is(.ipad\:x)` is (0,2,0), always ahead of a
+    // single-class `md:` rule regardless of source order. No call site combines `ipad:` with
+    // `hover:` (or any other pseudo-class) today, so this cannot create a NEW tie there either.
     plugin(({ addVariant }) => {
-      addVariant('ipad', '@media (min-width: 1024px) and (orientation: landscape) and (min-height: 692px)')
+      addVariant('ipad', '@media (min-width: 1024px) and (orientation: landscape) and (min-height: 692px) { &:is(&) }')
       // Short-phone variant: the raw `[@media(max-width:767px)_and_(max-height:700px)]:` prefix,
       // named so call sites read like every other breakpoint.
       addVariant('short', '@media (max-width: 767px) and (max-height: 700px)')

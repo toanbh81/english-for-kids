@@ -3,7 +3,7 @@ import { SPEAK_ERROR_COPY, type SpeakError as SpeakErrorValue, type SpeakErrorKi
 export function SpeakError({ error, onAction, onDismiss }: { error: SpeakErrorValue; onAction: (kind: SpeakErrorKind) => void; onDismiss: () => void }) {
   const c = SPEAK_ERROR_COPY[error.kind]
   return (
-    <div role="alert" className="flex w-full max-w-[440px] items-center gap-3 rounded-r16 border-[3px] border-fix-300 bg-fix-50 py-2 pl-3.5 pr-2 min-h-[56px] md:order-first md:mx-auto ipad:!order-none">
+    <div role="alert" className="flex w-full max-w-[440px] items-center gap-3 rounded-r16 border-[3px] border-fix-300 bg-fix-50 py-2 pl-3.5 pr-2 min-h-[56px] md:order-first md:mx-auto ipad:order-none">
       <span aria-hidden="true" className="text-[22px] leading-none">{c.icon}</span>
       <div className="min-w-0 flex-1">
         <div className="font-display text-[15px] font-extrabold leading-tight text-fix-700">{c.title}</div>

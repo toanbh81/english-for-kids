@@ -441,13 +441,24 @@ it('collapses the teach column to a tap-to-expand strip once a result lands, and
 
 /** Retrying from the collapsed result must also reopen the strip — a retry should not leave the
  * child staring at yesterday's collapsed strip once they start reading again. */
-it('reopens the teach column on retry', () => {
+/** Reviewer minor: scoring via "Thử lại" nulls `result` on its own, so a test that only clicks
+ * retry and checks the strip is gone would pass whether or not `setTeachOpen(true)` ever ran — the
+ * strip's own condition (`result && !teachOpen`) is already false from the null `result` alone.
+ * The real behaviour under test is `teachOpen` itself: tap the strip open (no retry, `result`
+ * stays the SAME weak attempt) and confirm the full teach column is back, then push a fresh
+ * result over top of it and confirm the strip collapses again — this only passes if the `teachOpen`
+ * effect re-fires on a genuinely new `result`, not merely on the presence of any result at all. */
+it('reopens the teach column on tap, and collapses again once a fresh result lands', () => {
   renderStar()
   score(result(40, 40, 40))
   expect(screen.getByRole('button', { name: /mở/i })).toBeInTheDocument()
 
-  fireEvent.click(screen.getByRole('button', { name: /thử lại/i }))
+  fireEvent.click(screen.getByRole('button', { name: /mở/i }))
   expect(screen.queryByRole('button', { name: /mở/i })).not.toBeInTheDocument()
+  expect(screen.getByText('Chữ cam = nhấn mạnh · ‿ = nối âm')).toBeInTheDocument()
+
+  score(result(85, 85, 100))
+  expect(screen.getByRole('button', { name: /mở/i })).toBeInTheDocument()
 })
 
 /** Brief §1 "Header không đè" + "Đang ghi": Back/LessonChip mute, the centre chip becomes

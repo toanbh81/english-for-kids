@@ -157,18 +157,13 @@ describe('SpeakError', () => {
 
   /** Fix round 1: on iPad portrait (`md:` without `ipad:`) the banner reorders ahead of the
    * prompt/mic instead of squeezing them onto one line; real iPad landscape (`ipad:`) and phone
-   * (unprefixed) keep document order — prompt → error → mic. `ipad:order-none` needs `!important`
-   * here: both `md:` (min-width:768) and `ipad:` (min-width:1024 + landscape + min-height:692)
-   * match simultaneously on a real iPad landscape, and this build emits `ipad:` rules *before*
-   * `md:` in the stylesheet — confirmed live via `getComputedStyle(...).order` at 1194×834, which
-   * read `-9999` (order-first still winning) until `!` was added, then `0`. Every other `ipad:`
-   * override elsewhere in the carrier (PageBody's `md:flex-row ipad:flex-col`, etc.) never hit
-   * this because those pairs don't share a plain Tailwind screen name AND a custom variant that
-   * both match the same viewport with a utility whose last-writer changes the rendered box the
-   * same way — this is the first one that does. */
+   * (unprefixed) keep document order — prompt → error → mic. Fix round 2: `ipad:order-none` needs
+   * no `!important` any more — the `ipad` variant itself now compiles to `:is(&)` (see
+   * tailwind.config.ts), which outranks any single-class `md:` rule on specificity alone, so a
+   * plain `ipad:order-none` beats `md:order-first` on a real iPad landscape without help here. */
   it('reorders ahead of the rest on iPad portrait, and stays in place on landscape', () => {
     render(<SpeakError error={{ kind: 'limit' }} onAction={() => {}} onDismiss={() => {}} />)
-    expect(screen.getByRole('alert')).toHaveClass('md:order-first', 'md:mx-auto', 'ipad:!order-none')
+    expect(screen.getByRole('alert')).toHaveClass('md:order-first', 'md:mx-auto', 'ipad:order-none')
     // The max width from before is untouched — only centred, never widened past it.
     expect(screen.getByRole('alert')).toHaveClass('w-full', 'max-w-[440px]')
   })

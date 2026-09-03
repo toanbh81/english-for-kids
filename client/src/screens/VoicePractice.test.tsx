@@ -266,6 +266,25 @@ it('collapses the teach column to a tap-to-expand strip once a result lands, and
   expect(screen.getAllByTestId('mood-tip').length).toBeGreaterThan(0)
 })
 
+/** Reviewer minor (also applied to StarPractice.test.tsx): a test that only retries and checks
+ * the strip is gone would pass whether or not `setTeachOpen(true)` ever ran, since a null `result`
+ * alone already makes the strip's condition false. This drives `teachOpen` itself — tap the strip
+ * open (no retry, `result` is untouched) and confirm the full teach column is back, then push a
+ * fresh result over top and confirm the strip collapses again, which only passes if the
+ * `teachOpen` effect re-fires on a genuinely new `result` object, not merely on any result. */
+it('reopens the teach column on tap, and collapses again once a fresh result lands', () => {
+  renderVoice()
+  score(result({ prosody: 30, accuracy: 40, fluency: 40, completeness: 40 }))
+  expect(screen.getByRole('button', { name: /mở/i })).toBeInTheDocument()
+
+  fireEvent.click(screen.getByRole('button', { name: /mở/i }))
+  expect(screen.queryByRole('button', { name: /mở/i })).not.toBeInTheDocument()
+  expect(screen.getByTestId('mood-tips')).toBeInTheDocument()
+
+  score(result({ prosody: 84, accuracy: 75 }))
+  expect(screen.getByRole('button', { name: /mở/i })).toBeInTheDocument()
+})
+
 /** A ! that closes a quote inside a sentence is not an instruction to the voice — the sentence
  * keeps going. Only a mark with a space (or nothing) after it ends a line. */
 it('tints only the marks that actually end a sentence', () => {
