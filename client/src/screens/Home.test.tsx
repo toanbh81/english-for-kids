@@ -596,7 +596,10 @@ it('keeps the mission card and the stairs link in flow on a phone', () => {
   renderHome()
 
   const wrappers = {
-    mission: screen.getByRole('link', { name: 'Bắt đầu ▸' }).closest('div.col-span-2')!,
+    // Fix round 1: MissionCard's wrapper is a plain flow `<div>` now (Critical #1 — it moved out
+    // of the island grid entirely), not a `col-span-2` grid item, so it needs its own testid to
+    // find rather than a class selector that no longer applies to it.
+    mission: screen.getByTestId('home-mission'),
     stairs: screen.getByRole('link', { name: /Các bậc luyện nói/ }).parentElement!,
   }
 
@@ -794,10 +797,38 @@ it('spells the parent link out twice rather than growing the map corner by a gap
 // moves into the header's right cell — all from `md` up, so it applies on a real iPad in either
 // orientation. iPad landscape (the map) keeps its own `ipad:` layout untouched throughout.
 
-it('iPad portrait lays the islands out three to a row with equal rows', () => {
+it('iPad portrait lays the islands out three to a row', () => {
   renderHome()
+  // Fix round 1 / Critical #1: `island-animals`'s grandparent is now `home-island-grid`, the
+  // dedicated 8-island-plus-Speak-Lab grid (see the next test) — `md:auto-rows-fr` (equalising
+  // every row, including MissionCard's and the heading's, to the tallest one) is gone, and so is
+  // `ipad:block` (this element now goes `ipad:contents`, not `ipad:block` — see next test).
   expect(screen.getByTestId('island-animals').parentElement?.parentElement)
-    .toHaveClass('grid-cols-2', 'md:grid-cols-3', 'md:auto-rows-fr', 'ipad:block')
+    .toHaveClass('grid-cols-2', 'md:grid-cols-3')
+})
+
+/**
+ * Fix round 1 / Critical #1 (reviewer): a single `md:auto-rows-fr` grid used to hold MissionCard,
+ * the heading AND the 9 island/Speak-Lab tiles — in an auto-height CSS grid, `1fr` rows are not
+ * independent, so every row (MissionCard's, the heading's, each island row) was forced to the
+ * SAME pixel height as the tallest one (MissionCard's), rendering every island ~250 px tall
+ * instead of the design's 150. The fix nests the 9 tiles in their own grid, sized only by an
+ * explicit `md:auto-rows-[150px]`, with MissionCard and the heading as ordinary flow siblings
+ * outside it.
+ */
+it('nests the 8 islands + Speak Lab in their own 150px-row grid, apart from MissionCard and the heading', () => {
+  renderHome()
+
+  const grid = screen.getByTestId('home-island-grid')
+  expect(grid).toHaveClass('md:grid-cols-3', 'md:auto-rows-[150px]', 'md:gap-3', 'ipad:contents')
+
+  // Exactly 9 tiles: the 8 islands (locked or not) plus Speak Lab as the 9th.
+  expect(within(grid).getAllByTestId(/^island-/)).toHaveLength(8)
+  expect(within(grid).getByRole('link', { name: '🗣️ Các bậc luyện nói' })).toBeInTheDocument()
+
+  // MissionCard is a sibling of this grid, not a child of it.
+  expect(screen.getByTestId('home-mission')).not.toContainElement(grid)
+  expect(within(grid).queryByRole('link', { name: 'Bắt đầu ▸' })).not.toBeInTheDocument()
 })
 
 it('phone islands drop to 110 so two rows survive two banners', () => {

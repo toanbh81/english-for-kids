@@ -322,19 +322,22 @@ export function Home() {
   )
 
   /**
-   * Task 9 / design decision 16: the streak week pill and the star total, which used to sit only in
-   * the body (a bare row on a phone, restyled into the map's chunky sun pill from `ipad` up), move
-   * into the header's right cell from `md` up — portrait AND landscape both, since `md:` matches a
-   * real iPad at either orientation. `parentButton` rides along unconditionally: it already lives in
-   * this cell at every width (see `right` below), so nothing about its own placement changes.
+   * Task 9 / design decision 16: the streak week pill and the star total move into the header's
+   * right cell — but PORTRAIT only (fix round 1 / reviewer Important #2). At landscape the header
+   * falls back to its Phase-13 shape: Foxy + the full bubble in the header centre (see `ipad:flex`
+   * below), and the streak/⭐ pair back in the body as the map's own chunky pills
+   * (`home-streak-row`, `md:hidden ipad:flex`) — that's what `ipad:hidden` on this cluster is for.
+   * A landscape iPad matches `md:` too, so without it the compact cluster here and the full-size
+   * body pills would both render at once.
    *
-   * The `hidden md:flex` wrapper is what keeps this pair off a phone header, where the two fixed
-   * 56 px side columns leave no room for them — the body keeps its own copy for a phone, marked
-   * `home-streak-row` + `md:hidden` below, so the two never show at once.
+   * `parentButton` is wrapped `contents max-md:hidden` (fix round 1 / Important #3): `contents`
+   * makes the wrapper disappear from the box tree entirely, so from `md` up this cell renders the
+   * one, unwrapped `parentButton` exactly as before; `max-md:hidden` removes it below `md`,
+   * leaving `home-foot-parent` next to Speak Lab as the phone's only "Phụ huynh" button.
    */
   const headerCluster = (
     <>
-      <div className="hidden items-center gap-2 md:flex">
+      <div className="hidden items-center gap-2 md:flex ipad:hidden">
         <StreakWeek
           dots={weekDots(now, events)}
           streak={streak(now, events)}
@@ -343,11 +346,11 @@ export function Home() {
           stars={totalStars()}
           minutes={minutesByDay}
         />
-        <div className="inline-flex items-center gap-2 rounded-[18px] font-display text-lg font-extrabold text-sun-700 ipad:bg-sun-50 ipad:px-5 ipad:py-3 ipad:text-[22px] ipad:leading-normal ipad:shadow-chunky-sun">
+        <div className="inline-flex items-center gap-2 rounded-[18px] font-display text-lg font-extrabold text-sun-700">
           ⭐ {totalStars()}
         </div>
       </div>
-      {parentButton}
+      <span className="contents max-md:hidden">{parentButton}</span>
     </>
   )
 
@@ -368,19 +371,22 @@ export function Home() {
       {/* Home has no destination to walk back to. */}
       <PageHeader back={null} right={<div className="flex items-center gap-2 max-md:contents md:gap-3">{headerCluster}</div>}>
         <h1 className="sr-only">Speak Up!</h1>
-        {/* The header's centre column sits between two fixed 56/64 px side columns — no room
-          * there for Foxy and the full speech bubble below `md`, so the phone header shows a
-          * single truncated greeting line instead; Foxy and the full bubble move to the body's
-          * first row (see below), which is not squeezed by the header's side columns. */}
+        {/* The header's centre column sits between two fixed side columns — no room there for
+          * Foxy and the full speech bubble below `ipad` landscape (fix round 1 / Important #2:
+          * portrait now reads the same as a phone, not just below `md`, so this line and the
+          * header cluster in `right` above don't fight the same 64 px row for space), so the
+          * portrait/phone header shows a single truncated greeting line instead; Foxy and the
+          * full bubble move to the body's first row (see below), which is not squeezed by the
+          * header's side columns. */}
         {/* `block max-w-[190px]`: `PageHeader`'s centre cell is `justify-self-center` — a
           * shrink-to-fit box, not stretched to the grid track — so `truncate` alone on a bare
           * `<span>` has no bounded width to clip against and just overflows past the column. A
           * fixed cap (comfortably inside the ~260 px a 390 px phone's `1fr` column leaves after
           * the two 56 px side columns) gives it one regardless of ancestor sizing. */}
-        <span className="block max-w-[190px] truncate font-display text-[17px] font-extrabold text-coral-text md:hidden md:text-[20px]">
+        <span className="block max-w-[190px] truncate font-display text-[17px] font-extrabold text-coral-text ipad:hidden">
           {say}
         </span>
-        <div className="hidden items-center gap-3 md:flex">
+        <div className="hidden items-center gap-3 ipad:flex">
           <Foxy mood={mood} size="md" className="animate-bob" />
           <SpeechBubble
             title={<span className="text-coral-text">Chào bé! 👋</span>}
@@ -396,15 +402,15 @@ export function Home() {
           * the header regardless of scroll position. */}
         <NoticeStack items={noticeItems} />
 
-        {/* Foxy and the full greeting, phone only — restored here because the header has no room
-          * for them below `md` (see above). M1b prints the greeting as plain text: the bubble is
-          * M1a's, and on a 390 px screen its white panel, its padding and its shadow cost ~26 px
-          * of height for decoration the grid below needs more. Only the chrome goes — the two
-          * lines themselves are the same element at every width, so the greeting is never in the
-          * page twice below `md`. `max-md:` because every one of these classes is `SpeechBubble`'s
-          * own, and an unprefixed override of ours would be a coin toss on Tailwind's utility
-          * order — harmless here since the block is already `md:hidden`, but kept for safety. */}
-        <div className="flex items-center gap-3 md:hidden">
+        {/* Foxy and the full greeting, phone AND iPad portrait — restored here because the header
+          * has no room for them below `ipad` landscape (fix round 1 / Important #2; see above).
+          * M1b prints the greeting as plain text: the bubble is M1a's, and its white panel,
+          * padding and shadow cost height the grid below needs more. Only the chrome goes — the
+          * two lines themselves are the same element at every width, so the greeting is never in
+          * the page twice below `ipad`. `max-md:` (unchanged) because every one of these classes
+          * is `SpeechBubble`'s own; it only ever matters below `md`, since this block still shows
+          * unstyled-chrome-and-all through the `md`-and-up portrait range too. */}
+        <div className="flex items-center gap-3 ipad:hidden">
           <Foxy mood={mood} size="md" className="animate-bob" />
           <SpeechBubble
             title={<span className="text-coral-text">Chào bé! 👋</span>}
@@ -413,9 +419,11 @@ export function Home() {
           />
         </div>
 
-        {/* The phone-only copy: from `md` up the same numbers live in the header's right cell
-          * instead (`headerCluster` above), so this row hides there rather than showing twice. */}
-        <div data-testid="home-streak-row" className="flex flex-wrap items-center gap-2 ipad:gap-3 md:hidden">
+        {/* The phone-only copy: from `md` up (portrait) the same numbers live in the header's
+          * right cell instead (`headerCluster` above); `ipad:flex` brings this row back at
+          * landscape, where the header cluster hides again and the map wants its own chunky
+          * pills here (fix round 1 / Important #2 and Minor #4). */}
+        <div data-testid="home-streak-row" className="flex flex-wrap items-center gap-2 ipad:gap-3 md:hidden ipad:flex">
           <StreakWeek
             dots={weekDots(now, events)}
             streak={streak(now, events)}
@@ -437,16 +445,21 @@ export function Home() {
           </div>
         </div>
 
-        {/* One set of islands serves both layouts: a 2-column grid on a phone or portrait tablet,
-          * and the absolutely positioned map from `ipad` up, where the percentage offsets take
-          * effect. The frame keeps the handoff's 1194×834 proportions but never grows past the
-          * viewport, so on a short landscape iPad the whole map — mission card included — stays
-          * on screen. */}
-        <div className="relative grid grid-cols-2 gap-2.5 md:grid-cols-3 md:auto-rows-fr md:gap-3 ipad:block ipad:aspect-[1194/834] ipad:max-h-[calc(100vh-260px)]">
-          {/* First in the grid, and so first under the greeting: on a phone the one thing the child
-            * is here to do must not sit below the fold. It used to be last, which put "Bắt đầu" at
-            * y≈1221 on an 844 px screen (design M1b). From `ipad` up it goes back to the bottom-left
-            * corner of the map, where DOM order stops mattering because every child is absolute. */}
+        {/* MissionCard, the "🏝️ Đảo chủ đề" heading, and the island grid are three ordinary flow
+          * blocks (fix round 1 / Critical #1) — not grid items sharing one track-sizing function
+          * with each other. A single `md:auto-rows-fr` grid used to hold all five conceptual rows
+          * (MissionCard, the heading, and the 3 island rows): in an auto-height CSS grid, `1fr`
+          * tracks are NOT independent — the browser computes one `fr` size from the tallest row's
+          * content and applies that same pixel height to every `1fr` row, so every island rendered
+          * as tall as MissionCard's own much-taller row (~250 px instead of 150). `space-y-2.5
+          * md:space-y-3` reproduces the old grid `gap` between these three blocks without putting
+          * them in a shared grid; from `ipad` up MissionCard is `ipad:absolute` and the heading is
+          * `ipad:hidden`, so this container is the map's own 1194×834 frame exactly as before. */}
+        <div className="relative space-y-2.5 md:space-y-3 ipad:aspect-[1194/834] ipad:max-h-[calc(100vh-260px)]">
+          {/* First under the greeting: on a phone the one thing the child is here to do must not
+            * sit below the fold. It used to be last, which put "Bắt đầu" at y≈1221 on an 844 px
+            * screen (design M1b). From `ipad` up it goes back to the bottom-left corner of the
+            * map, where DOM order stops mattering because every child is absolute. */}
           {/* `w-[min(380px,32%)]`, not a flat 380: the three controls along the foot of the map are
             * positioned independently — this one from the left, Speak Lab centred, the parent link
             * from the right — so the only thing keeping them apart is their widths. 380 px was
@@ -454,37 +467,42 @@ export function Home() {
             * once Safari takes its tab and bookmark bars) the card reached past the centre and sat
             * under the Speak Lab button. A percentage cap keeps the gap proportional at every
             * iPad width instead of only at the one the design was drawn on. */}
-          {/* `md:col-span-3`, not just `col-span-2`: task 9 makes the grid three columns from `md`
-            * up, and a 2-of-3 span no longer reaches the last column — CSS auto-placement then slid
-            * the first island into that leftover cell, on the SAME row as this card, instead of
-            * giving it (and the heading below) a clean row of their own. A full-width span is what
-            * lets the 8 islands + Speak Lab that follow start their own fresh 3×3 block: 9 items,
-            * 3 whole rows, no leftover cell for one of them to hide in. */}
-          <div className="col-span-2 md:col-span-3 ipad:absolute ipad:bottom-2 ipad:left-2 ipad:w-[min(380px,32%)]">
+          <div data-testid="home-mission" className="ipad:absolute ipad:bottom-2 ipad:left-2 ipad:w-[min(380px,32%)]">
             <MissionCard status={lesson} />
           </div>
 
-          {/* The grid needs a heading; the map does not — the islands *are* the map. Same
-            * full-width reasoning as the mission card above. */}
-          <h2 className="col-span-2 md:col-span-3 font-display text-base font-extrabold text-ink-500 ipad:hidden">
+          {/* The grid needs a heading; the map does not — the islands *are* the map. */}
+          <h2 className="font-display text-base font-extrabold text-ink-500 ipad:hidden">
             🏝️ Đảo chủ đề
           </h2>
 
-          {/* `contents` in the stacked grid, so the islands stay plain grid items; from `ipad` up it
-            * becomes the top band of the map and the percentages resolve against it. The band stops
-            * 244 px short of the bottom, which is the strip the mission card and the parent link
-            * occupy — that keeps the trail and the island labels clear of them at any frame size. */}
-          <div className="contents ipad:absolute ipad:inset-x-0 ipad:bottom-[244px] ipad:top-0 ipad:block">
-            <svg
-              aria-hidden="true"
-              viewBox="0 0 1194 834"
-              preserveAspectRatio="none"
-              className="pointer-events-none absolute inset-0 hidden h-full w-full ipad:block"
-            >
-              <path d={TRAIL} stroke="#EAD9BE" strokeWidth={14} strokeLinecap="round" strokeDasharray="2 26" fill="none" />
-            </svg>
+          {/* The island grid, on its own: 2 columns on a phone, 3 columns of 150 px-tall rows
+            * from `md` up (fix round 1 / Critical #1 — `md:auto-rows-[150px]`, an EXPLICIT row
+            * height, not `fr`, so this grid's rows are sized only by what is actually inside it:
+            * 8 islands + Speak Lab, nothing MissionCard or the heading contribute to). From `ipad`
+            * up it turns `ipad:contents` and hands its two children — the trail/islands band, and
+            * `home-foot` — back to THIS element's own parent (the `relative` block above), which
+            * is what keeps them positioned against the full map frame rather than against a box
+            * that only spans this (here, transparent) grid's own bounds. */}
+          <div
+            data-testid="home-island-grid"
+            className="grid grid-cols-2 gap-2.5 md:grid-cols-3 md:auto-rows-[150px] md:gap-3 ipad:contents"
+          >
+            {/* `contents` in the stacked grid, so the islands stay plain grid items; from `ipad` up it
+              * becomes the top band of the map and the percentages resolve against it. The band stops
+              * 244 px short of the bottom, which is the strip the mission card and the parent link
+              * occupy — that keeps the trail and the island labels clear of them at any frame size. */}
+            <div className="contents ipad:absolute ipad:inset-x-0 ipad:bottom-[244px] ipad:top-0 ipad:block">
+              <svg
+                aria-hidden="true"
+                viewBox="0 0 1194 834"
+                preserveAspectRatio="none"
+                className="pointer-events-none absolute inset-0 hidden h-full w-full ipad:block"
+              >
+                <path d={TRAIL} stroke="#EAD9BE" strokeWidth={14} strokeLinecap="round" strokeDasharray="2 26" fill="none" />
+              </svg>
 
-            {ISLANDS.map(island => {
+              {ISLANDS.map(island => {
               const unlocked = topicUnlocked(island.id)
               const stars = topicStars(island.id)
               // `left`/`top` are the island's top-left corner, the same anchor the handoff frame
@@ -608,6 +626,7 @@ export function Home() {
                 </Link>
               </div>
             )}
+          </div>
           </div>
         </div>
       </PageBody>
