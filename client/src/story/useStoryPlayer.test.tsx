@@ -558,6 +558,58 @@ it('retry() reloads the scene audio and plays again', async () => {
   unmount()
 })
 
+it('retry() reruns the scene load so hasAudio recovers once the second attempt succeeds', async () => {
+  // Fires events by hand instead of resolving synchronously, so the test can prove retry() binds
+  // FRESH `loadedmetadata`/`canplaythrough`/`error` listeners (to the new load token) rather than
+  // leaving the mount's listeners — bound to the old token — as the only ones ever registered.
+  class FlakyAudio {
+    static instances: FlakyAudio[] = []
+    src = ''
+    currentTime = 0
+    playbackRate = 1
+    private listeners: Record<string, Array<() => void>> = {}
+    constructor() {
+      FlakyAudio.instances.push(this)
+    }
+    addEventListener(type: string, cb: () => void): void {
+      ;(this.listeners[type] ??= []).push(cb)
+    }
+    removeEventListener(type: string, cb: () => void): void {
+      this.listeners[type] = (this.listeners[type] ?? []).filter(l => l !== cb)
+    }
+    play(): Promise<void> {
+      return Promise.resolve()
+    }
+    pause(): void {}
+    removeAttribute(): void {}
+    load(): void {}
+    fire(type: string): void {
+      ;(this.listeners[type] ?? []).slice().forEach(cb => cb())
+    }
+  }
+  FlakyAudio.instances.length = 0
+  // @ts-expect-error stub Audio whose events this test fires by hand
+  globalThis.Audio = FlakyAudio
+  const story = makeStory()
+  const { result, unmount } = renderHook(() => useStoryPlayer(story))
+  const audio = FlakyAudio.instances[0]
+
+  act(() => result.current.play())
+  await flush() // let the first play() promise resolve (playResolvedRef true, metadata still not ready)
+  act(() => audio.fire('error')) // the element's own failure, not a rejected play() promise
+  expect(result.current.hasAudio).toBe(false)
+
+  act(() => result.current.retry())
+  await flush() // let the second attempt's play() promise resolve
+
+  // One shared element throughout — retry() must not construct a fresh Audio().
+  expect(FlakyAudio.instances).toHaveLength(1)
+
+  act(() => audio.fire('canplaythrough')) // the second attempt's own metadata event
+  expect(result.current.hasAudio).toBe(true) // a stale-token listener would leave this false forever
+  unmount()
+})
+
 it('subtitles default off under a 700px viewport, on at or above', () => {
   const story = makeStory()
   const original = Object.getOwnPropertyDescriptor(window, 'innerHeight')

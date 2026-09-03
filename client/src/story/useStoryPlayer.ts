@@ -75,6 +75,10 @@ export function useStoryPlayer(story: Story): StoryPlayer {
     try { return window.innerHeight >= 700 } catch { return true }
   })
   const [ended, setEnded] = useState(false)
+  // Review fix round 1 (Important #1): bumped by retry() so the scene-change effect below reruns
+  // its own load path — fresh token, freshly-closed `onReady`/`onError`/`onEnded` — instead of a
+  // bespoke reload whose listeners stayed bound to a stale token forever.
+  const [loadAttempt, setLoadAttempt] = useState(0)
 
   const scene = story.scenes[sceneIndex]
   const { timings, complete } = useMemo(() => sceneTimings(scene), [scene])
@@ -194,6 +198,9 @@ export function useStoryPlayer(story: Story): StoryPlayer {
   // (playingRef is true here only for that case — manual scene navigation pauses first). Scenes
   // whose timings aren't complete never touch `src`: nothing to sync audio to, no point fetching a
   // 404, and the element stays idle (and unlocked) for whichever later scene does have narration.
+  // Also `retry()`'s own load path: it bumps `loadAttempt` (not `story`/`sceneIndex`) to rerun this
+  // exact effect for the SAME scene — a fresh token and freshly-closed listeners, "as a real scene
+  // load would", rather than a hand-rolled reload whose listeners stay bound to a stale token.
   useEffect(() => {
     stopClock()
     replayUntilRef.current = null
@@ -252,7 +259,7 @@ export function useStoryPlayer(story: Story): StoryPlayer {
       stopClock()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [story, sceneIndex])
+  }, [story, sceneIndex, loadAttempt])
 
   // True unmount only: release the shared element. Declared after the scene effect
   // so React runs that cleanup (listener removal + pause) first.
@@ -318,22 +325,15 @@ export function useStoryPlayer(story: Story): StoryPlayer {
 
   function toggleSubtitles() { setSubtitles(s => !s) }
 
-  /** R23: nút "Thử lại" của dòng lỗi. Nạp lại src của cảnh hiện tại và chơi lại từ vị trí đang
-   * đứng — cùng đường đi mà effect đổi cảnh dùng, chỉ khác là nó không đổi `sceneIndex`. */
+  /** R23 / review fix round 1: nút "Thử lại" của dòng lỗi. Không tự tay nạp lại `audio.src` —
+   * một đường tải lại viết tay không bao giờ gắn lại `onReady`/`onError`/`onEnded` vào token mới,
+   * nên `hasAudio` không bao giờ hồi phục kể cả khi lần tải lại thành công. Bump `loadAttempt` để
+   * effect đổi cảnh chạy lại CHO CHÍNH cảnh này — cùng đường đi, token mới, listener mới. Cảnh
+   * chưa từng wiring audio (`!complete`, `audioActiveRef.current` false) không có gì để tải lại —
+   * rơi về `beginPlayback()` như `play()` vẫn làm. */
   function retry() {
-    const audio = audioElRef.current
-    if (!audio || !audioActiveRef.current) { beginPlayback(tMs === NOT_STARTED ? 0 : tMs); return }
-    const token = ++loadTokenRef.current
-    metadataReadyRef.current = false
-    playResolvedRef.current = false
-    hasAudioRef.current = false
-    setHasAudio(false)
-    audio.pause()
-    audio.src = scene.audio
-    audio.load()
-    audio.playbackRate = rateRef.current
-    beginPlayback(tMs === NOT_STARTED ? 0 : tMs)
-    void token
+    if (!audioActiveRef.current) { beginPlayback(tMs === NOT_STARTED ? 0 : tMs); return }
+    setLoadAttempt(a => a + 1)
   }
 
   return {
