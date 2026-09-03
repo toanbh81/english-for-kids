@@ -8,7 +8,7 @@ import { MISSION_ROUTE, MISSION_STATE, RETURN_LABEL, useMissionFlag } from '../p
 import { speakText } from '../story/speak'
 import { Foxy } from '../components/Foxy'
 import type { FoxyMood } from '../components/Foxy'
-import { BackButton, Button, Chip, HomeLabel, NotFound, SpeechBubble, StarRow } from '../components/ui'
+import { BackButton, Button, Chip, HomeLabel, LinkText, NotFound, SpeechBubble, StarRow } from '../components/ui'
 import { PageShell, PageHeader, PageBody, PageFooter } from '../components/ui/page'
 
 const ADVANCE_MS = 900
@@ -47,7 +47,7 @@ function StoryQuizInner({ quiz, id, mission: inMission }: { quiz: QuizQ[]; id: s
   const [feedback, setFeedback] = useState<Feedback>('idle')
   const [hasWrong, setHasWrong] = useState(false)
   const [firstTryCorrect, setFirstTryCorrect] = useState(0)
-  const [result, setResult] = useState<{ stars: 1 | 2 | 3; correctCount: number } | null>(null)
+  const [result, setResult] = useState<{ stars: 0 | 1 | 2 | 3; correctCount: number } | null>(null)
 
   const pendingRef = useRef(false)
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -57,6 +57,18 @@ function StoryQuizInner({ quiz, id, mission: inMission }: { quiz: QuizQ[]; id: s
   useEffect(() => () => { if (timeoutRef.current) clearTimeout(timeoutRef.current) }, [])
 
   const q = quiz[qIndex]
+
+  // "Làm quiz lại" on the 0-star result stays on `/story/:id/quiz` (same route, same component) —
+  // a `<Link to>` there is not a remount, so replaying is this local reset, not a navigation.
+  function resetQuiz() {
+    savedRef.current = false
+    setQIndex(0)
+    setSelected(null)
+    setFeedback('idle')
+    setHasWrong(false)
+    setFirstTryCorrect(0)
+    setResult(null)
+  }
 
   function handleTap(i: number) {
     if (pendingRef.current) return
@@ -69,10 +81,12 @@ function StoryQuizInner({ quiz, id, mission: inMission }: { quiz: QuizQ[]; id: s
         pendingRef.current = false
         const nextFirstTryCorrect = firstTryCorrect + (earnedFirstTry ? 1 : 0)
         if (qIndex === quiz.length - 1) {
-          const stars: 1 | 2 | 3 = nextFirstTryCorrect === 3 ? 3 : nextFirstTryCorrect === 2 ? 2 : 1
+          // First-try-correct count IS the star count, 0 included — `setStars` only ever raises a
+          // score, never lowers it, so 0 is simply not written; the day's attempt is still logged.
+          const stars = nextFirstTryCorrect as 0 | 1 | 2 | 3
           if (!savedRef.current) {
             savedRef.current = true
-            setStars(`story:${id}`, stars)
+            if (stars !== 0) setStars(`story:${id}`, stars)
             logActivity({ ts: Date.now(), kind: 'story', id })
           }
           setFirstTryCorrect(nextFirstTryCorrect)
@@ -93,12 +107,38 @@ function StoryQuizInner({ quiz, id, mission: inMission }: { quiz: QuizQ[]; id: s
   }
 
   if (result) {
+    const { stars, correctCount } = result
+    // 3 → cheer, 2 → happy, 1 and 0 both → idle: a single first-try slip is not a reason for a sad
+    // fox, but only a clean sweep earns the big reaction (R27).
+    const mood: FoxyMood = stars === 3 ? 'cheer' : stars === 2 ? 'happy' : 'idle'
+
+    if (stars === 0) {
+      // Worst case: no footer, no confetti, three stacked exits sized to clear 667px tall.
+      return (
+        <PageShell gutter="20">
+          <PageBody center className="items-center gap-3.5 text-center">
+            <Foxy mood={mood} size="lg" className="[&_svg]:h-[126px] [&_svg]:w-[130px]" />
+            <StarRow value={stars} size="lg" />
+            <p className="font-display text-2xl font-extrabold text-ink-900">Bé trả lời đúng {correctCount}/3</p>
+            <p className="text-[14px] font-bold text-ink-500">Không sao! Nghe lại truyện một lần rồi thử lại nhé.</p>
+            <div className="flex w-full flex-col items-center gap-3 md:w-auto">
+              <Button to={`/story/${id}`} state={missionState} size="md" className="w-full md:w-auto">🎧 Nghe lại truyện</Button>
+              {/* Same route, not a fresh mount — `resetQuiz` is what actually replays the quiz; the
+                  `Link` just keeps the URL, the mission flag and the tap target honest. */}
+              <Button to={`/story/${id}/quiz`} state={missionState} variant="outline" size="md" onClick={resetQuiz} className="w-full md:w-auto">Làm quiz lại</Button>
+              <LinkText to={inMission ? MISSION_ROUTE : '/'} state={missionState}>{inMission ? RETURN_LABEL : <HomeLabel />}</LinkText>
+            </div>
+          </PageBody>
+        </PageShell>
+      )
+    }
+
     return (
       <PageShell gutter="20">
         <PageBody center className="items-center gap-4 text-center md:gap-7">
-          <Foxy mood={result.stars === 3 ? 'cheer' : 'happy'} size="lg" />
-          <StarRow value={result.stars} size="lg" animate={result.stars === 3} />
-          <p className="font-display text-2xl font-extrabold text-ink-900">Bé trả lời đúng {result.correctCount}/3</p>
+          <Foxy mood={mood} size="lg" />
+          <StarRow value={stars} size="lg" animate={stars === 3} />
+          <p className="font-display text-2xl font-extrabold text-ink-900">Bé trả lời đúng {correctCount}/3</p>
           <div className="flex w-full flex-col gap-3 md:w-auto md:flex-row md:flex-wrap md:justify-center md:gap-4">
             <Button to={`/story/${id}`} state={missionState} variant="outline" size="md" className="w-full md:w-auto">Nghe lại</Button>
             {/* The way out. Retell and re-listen both keep the child inside this story, so without
@@ -155,14 +195,14 @@ function StoryQuizInner({ quiz, id, mission: inMission }: { quiz: QuizQ[]; id: s
           </div>
         </div>
 
-        {/* Three answers, three shapes of the same DOM. The landscape frame lays them out as a row
-            of 250×270 picture cards; the design's phone frame stacks them (§10 M6b) and the stack
-            is what has to be measured, because at 390×844 the row version put the third card at
-            y875 — 31 px of it on screen out of 270.
-            They are sized by `flex-1` rather than the design's flat 170 px so that the same rule
-            gives 170-ish at 844 and the design's own 128-ish at 667 without a second breakpoint;
-            `min-h-[96px]` is the floor, comfortably above the 64 px tap target. */}
-        <div className="flex w-full flex-1 flex-col justify-center gap-3 max-md:min-h-0 md:w-auto md:flex-initial md:flex-row md:flex-wrap md:gap-5">
+        {/* Three answers, three shapes of the same DOM. On a phone each card is itself a row —
+            emoji beside the label, `min-h-[96px]` tall, stacked in a column — because at 390×844
+            the old 250×270 picture-card row put the third card at y875, 31 px of it off screen.
+            From `md` up the card flips to a portrait 4:3 tile (emoji 96) and the deck lays all
+            three out in one row, `flex-1` up to a `300px` cap so they still fill it evenly.
+            `opt.image` (Q14, no story ships one yet) swaps in a 16:9 picture in the same slot —
+            the layout around it never changes. */}
+        <div className="flex w-full max-w-3xl flex-1 flex-col justify-center gap-3 max-md:min-h-0 md:flex-initial md:flex-row md:flex-nowrap md:items-start md:gap-5">
           {q.options.map((opt, i) => {
             const state = selected === i && feedback !== 'idle' ? CARD_STATE[feedback] : 'shadow-card'
             const badge = selected === i && feedback === 'correct' ? '✅' : selected === i && feedback === 'wrong' ? '🙈' : null
@@ -172,10 +212,12 @@ function StoryQuizInner({ quiz, id, mission: inMission }: { quiz: QuizQ[]; id: s
                 type="button"
                 aria-label={opt.label}
                 onClick={() => handleTap(i)}
-                className={`relative flex w-full max-w-full flex-1 flex-col items-center justify-center gap-2 rounded-[22px] bg-white transition-shadow active:translate-y-[2px] max-md:min-h-[96px] md:h-[270px] md:w-[250px] md:flex-initial md:rounded-r28 ${state}`}
+                className={`relative flex w-full max-w-full flex-1 flex-row items-center justify-center gap-3 rounded-r22 bg-white px-4 transition-shadow active:translate-y-[2px] max-md:min-h-[96px] md:aspect-[4/3] md:max-w-[300px] md:flex-1 md:flex-col md:gap-2 md:px-0 md:rounded-r28 ${state}`}
               >
-                <span aria-hidden="true" className="text-[64px] leading-none md:text-[110px]">{opt.emoji}</span>
-                <span className="font-display text-lg font-extrabold text-ink-500 md:text-xl">{opt.label}</span>
+                {opt.image
+                  ? <img src={opt.image} alt={opt.label} className="aspect-[16/9] w-full rounded-r16 object-cover" />
+                  : <span aria-hidden="true" className="text-[56px] leading-none md:text-[96px]">{opt.emoji}</span>}
+                <span className="font-display text-[20px] font-extrabold text-ink-500 md:text-xl">{opt.label}</span>
                 {badge && <span aria-hidden="true" className="absolute right-3 top-3 text-3xl md:right-4 md:top-4 md:text-4xl">{badge}</span>}
               </button>
             )

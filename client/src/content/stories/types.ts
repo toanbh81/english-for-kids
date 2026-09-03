@@ -23,7 +23,10 @@ export type Scene = {
 export type QuizQ = {
   q: string
   qVi: string
-  options: { emoji: string; label: string }[]
+  // `image` is the Q14 branch (round-3 brief §3): a 16:9 picture in place of the emoji, same
+  // layout. No story ships one yet — the field exists so the branch has something to type-check
+  // against once art does.
+  options: { emoji: string; label: string; image?: string }[]
   answer: 0 | 1 | 2
 }
 export type Story = {

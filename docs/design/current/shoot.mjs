@@ -271,6 +271,17 @@ async function run(vpName, vp) {
   await S('quiz-wrong', null, async () => { await tapText(page, 'cat'); await sleep(200) })
   await S('quiz-correct', null, async () => { await tapText(page, 'fox'); await sleep(150) })
   await S('quiz-result', null, async () => { await sleep(1200); await tapText(page, 'apple'); await sleep(1200); await tapText(page, 'bird'); await sleep(1200) })
+  // Round-3 §2 C3 / R27: the 0-star result — worst case for this screen (2 buttons 56 + a link 44
+  // + Foxy 130 + 44px stars in 844, and in 667 at `short:`). Wrong is never picked at random and
+  // never auto-advances, so getting there is deliberate: miss every question once (little-fox's
+  // own wrong options below), then answer it for real. A fresh `go` resets the quiz — the previous
+  // shot above already left it on the (3/3) result screen.
+  await S('quiz-result-zero', '/story/little-fox/quiz', async () => {
+    for (const [wrong, right] of [['cat', 'fox'], ['banana', 'apple'], ['fish', 'bird']]) {
+      await tapText(page, wrong); await sleep(250)
+      await tapText(page, right); await sleep(1200)
+    }
+  })
   await S('retell-idle', '/story/little-fox/retell')
   await S('retell-result3', '/story/little-fox/retell?fixture=result3')
   await S('words', '/words')

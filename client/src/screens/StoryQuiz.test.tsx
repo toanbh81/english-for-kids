@@ -1,5 +1,6 @@
-import { render, screen, fireEvent, act } from '@testing-library/react'
+import { render, screen, fireEvent, act, within } from '@testing-library/react'
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
+import * as storiesModule from '../content/stories'
 import { findStory, STORIES } from '../content/stories'
 import { StoryQuiz } from './StoryQuiz'
 
@@ -31,6 +32,17 @@ function finishQuiz() {
   })
 }
 
+/** Miss every question once before getting it right — the 0-star path (R27's worst case): no
+ * question is ever first-try-correct, so `firstTryCorrect` never leaves 0. */
+function answerWrongThenRight() {
+  story.quiz.forEach(q => {
+    const wrongIndex = q.options.findIndex((_, i) => i !== q.answer)
+    fireEvent.click(screen.getByRole('button', { name: q.options[wrongIndex].label }))
+    fireEvent.click(screen.getByRole('button', { name: q.options[q.answer].label }))
+    act(() => { vi.advanceTimersByTime(900) })
+  })
+}
+
 beforeEach(() => {
   localStorage.clear()
   vi.useFakeTimers()
@@ -38,6 +50,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.useRealTimers()
+  vi.restoreAllMocks()
 })
 
 it('answering all three questions correctly on the first try gives 3 stars and saves progress', () => {
@@ -148,24 +161,85 @@ it('shows result buttons linking to retell and to listen again', () => {
   expect(screen.getByRole('link', { name: /Về bản đồ 🏝️/ })).toHaveAttribute('href', '/')
 })
 
-/* ---- Phase 10, design §10 M6b: the phone stack, with the landscape row untouched ---- */
+/* ---- Phase 14, round-3 brief §2 C3 / R27: the 0-star result, and the 3-star one left alone ---- */
+
+it('3 correct keeps the Phase 12 result exactly', () => {
+  renderQuiz()
+  finishQuiz()
+  expect(screen.getByTestId('foxy')).toHaveAttribute('data-mood', 'cheer')
+  expect(screen.getByRole('link', { name: 'Kể lại câu chuyện →' })).toBeInTheDocument()
+  const saved = JSON.parse(localStorage.getItem('speakup.stars') ?? '{}')
+  expect(saved['story:little-fox']).toBe(3)
+})
+
+it('0 correct: 0 stars, idle Foxy, no store write, activity still logged', () => {
+  renderQuiz()
+  answerWrongThenRight()
+
+  expect(screen.getByTestId('foxy')).toHaveAttribute('data-mood', 'idle')
+  expect(screen.getAllByTestId('star-empty')).toHaveLength(3)
+  expect(screen.getByTestId('stars')).toHaveClass('text-[44px]')
+  expect(screen.getByText('Bé trả lời đúng 0/3')).toBeInTheDocument()
+  expect(screen.getByText('Không sao! Nghe lại truyện một lần rồi thử lại nhé.')).toBeInTheDocument()
+
+  // `setStars` only ever raises a score, so 0 is simply never written — but the attempt still
+  // counts as today's story activity.
+  const savedStars = JSON.parse(localStorage.getItem('speakup.stars') ?? '{}')
+  expect(savedStars['story:little-fox']).toBeUndefined()
+  const activity = JSON.parse(localStorage.getItem('speakup.activity') ?? '[]')
+  expect(activity).toContainEqual(expect.objectContaining({ kind: 'story', id: 'little-fox' }))
+})
+
+it('0 correct changes the primary CTA and demotes the third action to a 44px link', () => {
+  renderQuiz()
+  answerWrongThenRight()
+
+  expect(screen.getByRole('link', { name: '🎧 Nghe lại truyện' })).toHaveClass('bg-coral-500', 'min-h-[56px]')
+  expect(screen.getByRole('link', { name: 'Làm quiz lại' })).toHaveClass('border-teal-line')
+  const third = screen.getByRole('link', { name: /Về nhiệm vụ|Về trang chủ/ })
+  expect(third).toHaveClass('min-h-[44px]', 'underline')
+  expect(third.className).not.toMatch(/min-h-\[64px\]/)
+})
+
+it('replays the quiz locally from the 0-star result, without leaving the route', () => {
+  renderQuiz()
+  answerWrongThenRight()
+  expect(screen.getByText('Bé trả lời đúng 0/3')).toBeInTheDocument()
+
+  fireEvent.click(screen.getByRole('link', { name: 'Làm quiz lại' }))
+  expect(screen.getByText('Câu 1/3')).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: 'fox' })).toBeInTheDocument()
+})
+
+/* ---- Phase 14, round-3 brief §2 C3 / R26: phone row cards, iPad 4:3 cards, the image branch ---- */
 
 /** jsdom has no layout, so these pin *which breakpoint each rule is written at*; the pixel
  * geometry (three cards fully on screen at 390×844 and 375×667) is the browser's job. */
-it('stacks the three answers on a phone and keeps the wrapped row from md up', () => {
+it('answer cards are a phone row and a 4:3 iPad card', () => {
   const { container } = renderQuiz()
-  const deck = screen.getByRole('button', { name: 'cat' }).parentElement!
-  expect(deck).toHaveClass('flex', 'w-full', 'flex-1', 'flex-col')
-  expect(deck).toHaveClass('md:w-auto', 'md:flex-initial', 'md:flex-row', 'md:flex-wrap', 'md:gap-5')
-
-  for (const label of ['cat', 'fox', 'dog']) {
-    const card = screen.getByRole('button', { name: label })
-    // Sized by `flex-1` on a phone, so the same rule gives ~178 px at 844 and ~119 px at 667 —
-    // both comfortably over the 64 px tap floor, which `min-h-[96px]` guarantees outright.
-    expect(card).toHaveClass('w-full', 'flex-1', 'max-md:min-h-[96px]')
-    expect(card).toHaveClass('md:h-[270px]', 'md:w-[250px]', 'md:flex-initial')
-  }
+  const card = screen.getByRole('button', { name: 'fox' })
+  expect(card).toHaveClass('flex-row', 'max-md:min-h-[96px]', 'md:flex-col', 'md:aspect-[4/3]', 'md:max-w-[300px]', 'md:flex-1')
+  expect(card.className).not.toMatch(/md:h-\[270px\]|md:w-\[250px\]/)
+  expect(within(card).getByText('🦊')).toHaveClass('text-[56px]', 'md:text-[96px]')
+  expect(within(card).getByText('fox')).toHaveClass('text-[20px]')
   expect(container.querySelector('main')).toHaveClass('px-5', 'md:px-6')
+})
+
+/** Q14 (round-3 §3): data has no `image` on any option today, so this stubs `findStory` for the
+ * one test that needs one — the layout slot is real even though no story fills it yet. */
+it('an option with an image renders a 16:9 picture instead of the emoji', () => {
+  const withImage = {
+    ...story,
+    quiz: [
+      { ...story.quiz[0], options: story.quiz[0].options.map((o, i) => (i === 0 ? { ...o, image: '/art/fox.png' } : o)) },
+      ...story.quiz.slice(1),
+    ],
+  }
+  vi.spyOn(storiesModule, 'findStory').mockReturnValue(withImage)
+  renderQuiz()
+  const img = screen.getByRole('img', { name: withImage.quiz[0].options[0].label })
+  expect(img).toHaveClass('aspect-[16/9]', 'object-cover')
+  expect(img).toHaveAttribute('src', '/art/fox.png')
 })
 
 it('drops Foxy\'s bubble on a phone, where the banner at the foot already says it', () => {
