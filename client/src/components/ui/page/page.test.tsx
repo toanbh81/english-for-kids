@@ -44,6 +44,24 @@ describe('PageShell', () => {
     expect(screen.getByText('làm').parentElement).toHaveClass('md:min-h-[300px]', 'md:shrink-0', 'ipad:h-auto', 'ipad:max-h-full', 'ipad:w-[440px]', 'ipad:shrink-0')
   })
 
+  /** Fix round 2: below `md` neither split column may shrink below its own content — a shrunk
+   * column's overflow isn't clipped by its own box, so it visually lands on top of the other
+   * column (confirmed via `shots/short/practice-idle.png`: the act column's Foxy bubble drawn
+   * over the teach column's button row). Page-body's own `overflow-y-auto` handles content that
+   * doesn't fit on a phone; `md:`/`ipad:` restore the shrink-with-internal-scroll pairing once
+   * there is room for two columns (side by side on `ipad`, stacked-with-space at plain `md`). */
+  it('neither split column may shrink below its own content on a phone; both shrink with their own scroll from md up', () => {
+    wrap(<PageShell><PageBody split={{ teach: <p>dạy</p>, act: <p>làm</p> }} /></PageShell>)
+    const teachOuter = screen.getByText('dạy').parentElement!.parentElement!
+    expect(teachOuter).toHaveClass('flex-[1_0_auto]', 'md:min-h-0', 'md:flex-1', 'md:overflow-y-auto')
+    // The old unprefixed `min-h-0` (live on a phone too) is exactly what let the teach column
+    // shrink past its content there — gone from the base class list, `md:min-h-0` only.
+    expect(teachOuter.className.split(/\s+/)).not.toContain('min-h-0')
+
+    const act = screen.getByText('làm').parentElement!
+    expect(act).toHaveClass('shrink-0')
+  })
+
   it('both split columns scroll independently on ipad (the outer body stays overflow-visible)', () => {
     wrap(<PageShell><PageBody split={{ teach: <p>dạy</p>, act: <p>làm</p> }} /></PageShell>)
     // `dạy` sits inside PageBody's own `my-auto` centring wrapper (see below), one level under
