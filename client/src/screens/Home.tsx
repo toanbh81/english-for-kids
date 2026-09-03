@@ -128,17 +128,20 @@ const ISLANDS = TOPICS.map((topic, i) => ({ ...topic, ...SLOTS[i] }))
 /**
  * An island is two different things at two sizes.
  *
- * Below `ipad` it is one card of the M1b grid: a 128 px tile (160 from the tablet breakpoint, where
- * the grid has room to breathe) that stands on its own chunky shadow — no map, no trail, no
- * position. From `ipad` up every one of those card styles is unset again and the island goes
- * absolute at its slot, which is the curved map exactly as it has always been.
+ * Below `ipad` it is one card of the M1b grid: a 110 px tile on a phone (dropped from the old 128
+ * so a 2-column grid still shows two full rows under two banners — task 9 / design §2 A3) and
+ * 150 px from `md` up, where the grid also goes three columns and has room to breathe. It stands
+ * on its own chunky shadow — no map, no trail, no position. From `ipad` up (landscape only —
+ * `md:` also matches a real iPad, but the `ipad:` variant outranks it, see `tailwind.config.ts`)
+ * every one of those card styles is unset again and the island goes absolute at its slot, which is
+ * the curved map exactly as it has always been.
  *
  * `ipad:w-[15%]`: a percentage width, so an island's centre is a fixed fraction of the band on every
  * viewport and the trail below stays under the discs. The tighter `ipad:gap-1` is what buys the two
  * rows their clearance on the shortest screen the map now runs on (1194×834).
  */
-const ISLAND_BOX = 'flex h-32 flex-col items-center justify-center gap-1 rounded-xl3 px-2 text-center'
-  + ' md:h-40'
+const ISLAND_BOX = 'flex h-[110px] flex-col items-center justify-center gap-1 rounded-xl3 px-2 text-center'
+  + ' md:h-[150px]'
   + ' ipad:absolute ipad:h-auto ipad:w-[15%] ipad:justify-start ipad:gap-1 ipad:rounded-none'
   + ' ipad:bg-transparent ipad:px-0 ipad:shadow-none'
 
@@ -318,6 +321,36 @@ export function Home() {
     </Link>
   )
 
+  /**
+   * Task 9 / design decision 16: the streak week pill and the star total, which used to sit only in
+   * the body (a bare row on a phone, restyled into the map's chunky sun pill from `ipad` up), move
+   * into the header's right cell from `md` up — portrait AND landscape both, since `md:` matches a
+   * real iPad at either orientation. `parentButton` rides along unconditionally: it already lives in
+   * this cell at every width (see `right` below), so nothing about its own placement changes.
+   *
+   * The `hidden md:flex` wrapper is what keeps this pair off a phone header, where the two fixed
+   * 56 px side columns leave no room for them — the body keeps its own copy for a phone, marked
+   * `home-streak-row` + `md:hidden` below, so the two never show at once.
+   */
+  const headerCluster = (
+    <>
+      <div className="hidden items-center gap-2 md:flex">
+        <StreakWeek
+          dots={weekDots(now, events)}
+          streak={streak(now, events)}
+          longest={longestStreak(events)}
+          weekMinutes={weekMinutes}
+          stars={totalStars()}
+          minutes={minutesByDay}
+        />
+        <div className="inline-flex items-center gap-2 rounded-[18px] font-display text-lg font-extrabold text-sun-700 ipad:bg-sun-50 ipad:px-5 ipad:py-3 ipad:text-[22px] ipad:leading-normal ipad:shadow-chunky-sun">
+          ⭐ {totalStars()}
+        </div>
+      </div>
+      {parentButton}
+    </>
+  )
+
   return (
     <PageShell className="relative">
       {/* Soft background blobs of the handoff frame. They hang off every edge, so they are clipped
@@ -333,7 +366,7 @@ export function Home() {
       </div>
 
       {/* Home has no destination to walk back to. */}
-      <PageHeader back={null} right={parentButton}>
+      <PageHeader back={null} right={<div className="flex items-center gap-2 max-md:contents md:gap-3">{headerCluster}</div>}>
         <h1 className="sr-only">Speak Up!</h1>
         {/* The header's centre column sits between two fixed 56/64 px side columns — no room
           * there for Foxy and the full speech bubble below `md`, so the phone header shows a
@@ -380,7 +413,9 @@ export function Home() {
           />
         </div>
 
-        <div className="flex flex-wrap items-center gap-2 ipad:gap-3">
+        {/* The phone-only copy: from `md` up the same numbers live in the header's right cell
+          * instead (`headerCluster` above), so this row hides there rather than showing twice. */}
+        <div data-testid="home-streak-row" className="flex flex-wrap items-center gap-2 ipad:gap-3 md:hidden">
           <StreakWeek
             dots={weekDots(now, events)}
             streak={streak(now, events)}
@@ -407,7 +442,7 @@ export function Home() {
           * effect. The frame keeps the handoff's 1194×834 proportions but never grows past the
           * viewport, so on a short landscape iPad the whole map — mission card included — stays
           * on screen. */}
-        <div className="relative grid grid-cols-2 gap-2.5 md:gap-4 ipad:block ipad:aspect-[1194/834] ipad:max-h-[calc(100vh-260px)]">
+        <div className="relative grid grid-cols-2 gap-2.5 md:grid-cols-3 md:auto-rows-fr md:gap-3 ipad:block ipad:aspect-[1194/834] ipad:max-h-[calc(100vh-260px)]">
           {/* First in the grid, and so first under the greeting: on a phone the one thing the child
             * is here to do must not sit below the fold. It used to be last, which put "Bắt đầu" at
             * y≈1221 on an 844 px screen (design M1b). From `ipad` up it goes back to the bottom-left
@@ -419,12 +454,19 @@ export function Home() {
             * once Safari takes its tab and bookmark bars) the card reached past the centre and sat
             * under the Speak Lab button. A percentage cap keeps the gap proportional at every
             * iPad width instead of only at the one the design was drawn on. */}
-          <div className="col-span-2 ipad:absolute ipad:bottom-2 ipad:left-2 ipad:w-[min(380px,32%)]">
+          {/* `md:col-span-3`, not just `col-span-2`: task 9 makes the grid three columns from `md`
+            * up, and a 2-of-3 span no longer reaches the last column — CSS auto-placement then slid
+            * the first island into that leftover cell, on the SAME row as this card, instead of
+            * giving it (and the heading below) a clean row of their own. A full-width span is what
+            * lets the 8 islands + Speak Lab that follow start their own fresh 3×3 block: 9 items,
+            * 3 whole rows, no leftover cell for one of them to hide in. */}
+          <div className="col-span-2 md:col-span-3 ipad:absolute ipad:bottom-2 ipad:left-2 ipad:w-[min(380px,32%)]">
             <MissionCard status={lesson} />
           </div>
 
-          {/* The grid needs a heading; the map does not — the islands *are* the map. */}
-          <h2 className="col-span-2 font-display text-base font-extrabold text-ink-500 ipad:hidden">
+          {/* The grid needs a heading; the map does not — the islands *are* the map. Same
+            * full-width reasoning as the mission card above. */}
+          <h2 className="col-span-2 md:col-span-3 font-display text-base font-extrabold text-ink-500 ipad:hidden">
             🏝️ Đảo chủ đề
           </h2>
 
@@ -509,19 +551,39 @@ export function Home() {
             })}
           </div>
 
-          {/* One row along the foot of the grid on a phone — the wide way into Speak Lab and a
-            * 64 px square for the grown-ups — and, from `ipad` up, `contents` hands both links back
-            * to the map frame so their own corners of it still apply. */}
-          <div className="col-span-2 flex items-stretch gap-2.5 ipad:contents">
+          {/* One row along the foot of the grid on a phone — the wide way into Speak Lab, a 64 px
+            * square for the grown-ups — and, from `md` up, `contents` hands every link back to the
+            * grid/map frame so their own corners apply instead: Speak Lab becomes the 9th tile of
+            * the 3-column portrait grid (task 9 / design decision 16), and from `ipad` up its own
+            * `ipad:absolute` corner (unset by `ipad:flex-none`, same idea `ISLAND_BOX` uses) puts
+            * it back at the foot of the map exactly as before. */}
+          <div data-testid="home-foot" className="col-span-2 flex items-stretch gap-2.5 md:contents ipad:contents">
             {/* The way into Speak Lab. The islands are the topic map, so without this the staircase —
-              * and with it Nghe & chọn, Sentence Stars and Story Voice — would have no route in. */}
-            <div className="flex flex-1 ipad:absolute ipad:bottom-6 ipad:left-1/2 ipad:flex-none ipad:-translate-x-1/2 ipad:justify-center">
+              * and with it Nghe & chọn, Sentence Stars and Story Voice — would have no route in.
+              * `ipad:h-auto` cancels `md:h-[150px]` at landscape — the 150 is only for the 9th
+              * grid cell of the portrait layout; on the map this box has to keep shrinking to its
+              * child's own height (the `min-h-[64px]` teal button), same as before task 9, or its
+              * bottom-anchored (`ipad:bottom-6`) box grows upward and collides with the restore
+              * link floating above it. Same `ISLAND_BOX` trick, same reason. */}
+            <div className="flex flex-1 md:h-[150px] md:flex-none ipad:h-auto ipad:absolute ipad:bottom-6 ipad:left-1/2 ipad:flex-none ipad:-translate-x-1/2 ipad:justify-center">
               <Link
                 to="/levels"
-                className="inline-flex min-h-[64px] w-full items-center justify-center gap-2 rounded-xl2 bg-teal-500 px-7 font-display text-xl font-extrabold text-white shadow-chunky-teal active:translate-y-[2px] ipad:w-auto"
+                // `ipad:h-auto ipad:rounded-xl2 ipad:text-xl` restore the map's own button exactly —
+                // `md:h-full`/`md:rounded-r22`/`md:text-[19px]` are the portrait 9th-tile look and
+                // would otherwise leak into the landscape map too (ipad: outranks md:, but only for
+                // the properties it actually restates).
+                className="inline-flex min-h-[64px] w-full items-center justify-center gap-2 rounded-xl2 bg-teal-500 px-7 font-display text-xl font-extrabold text-white shadow-chunky-teal active:translate-y-[2px] md:h-full md:rounded-r22 md:text-[19px] ipad:h-auto ipad:w-auto ipad:rounded-xl2 ipad:text-xl"
               >
                 🗣️ Các bậc luyện nói
               </Link>
+            </div>
+
+            {/* The design's phone foot keeps its own 56–64 px parent square next to Speak Lab
+              * (§2 A3, "Hàng chân"); from `md` up the same button already lives in the header's
+              * right cell (`headerCluster` above), so this copy steps aside there rather than
+              * showing twice. */}
+            <div data-testid="home-foot-parent" className="flex items-center justify-center md:hidden">
+              {parentButton}
             </div>
 
             {/* Spec flows 3/4's other door, and it is only ever offered on a device that has
@@ -531,8 +593,17 @@ export function Home() {
               * months of progress, in front of a child, one tap from a screen that can hand this
               * iPad to a different account. */}
             {cloudAvailable && !hasHistory && (
-              <div className="flex items-center justify-center ipad:absolute ipad:bottom-[100px] ipad:left-1/2 ipad:-translate-x-1/2">
-                <Link to="/start" className="text-xs font-bold text-ink-500 underline ipad:text-sm">
+              // `md:hidden`: on a portrait iPad this link is `home-foot`'s only child without a
+              // `md:` span of its own, so from `md` up it would auto-place as a stray 10th cell in
+              // what has to stay a clean 8-island-plus-Speak-Lab 3×3 block (see the mission card
+              // comment above) — design §2 A3 wants it under MissionCard on a brand-new iPad
+              // portrait, a repositioning task 9 does not attempt; hiding it here keeps the grid
+              // honest in the meantime rather than leaving it to land wherever the grid has room.
+              // `ipad:flex` restores it at landscape — `ipad:` outranks `md:` on the shared
+              // `display` property, same trick `ISLAND_BOX` relies on, so the map keeps this link
+              // exactly as before rather than losing it to the portrait-only hide.
+              <div className="flex items-center justify-center md:hidden ipad:flex ipad:absolute ipad:bottom-[100px] ipad:left-1/2 ipad:-translate-x-1/2">
+                <Link to="/start" data-testid="home-foot-restore" className="text-xs font-bold text-ink-500 underline ipad:text-sm">
                   Đã dùng Speak Up rồi?
                 </Link>
               </div>

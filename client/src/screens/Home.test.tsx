@@ -217,7 +217,8 @@ it('shows a 3-day streak after three consecutive completed days', () => {
 
   renderHome()
 
-  expect(screen.getByText('🔥 3 ngày')).toBeInTheDocument()
+  // Task 9: the streak pill now renders twice (see `home-streak-row` above).
+  expect(screen.getAllByText('🔥 3 ngày').length).toBeGreaterThan(0)
 })
 
 /**
@@ -238,7 +239,9 @@ it('keys the streak panel\'s per-day minutes to the calendar date, not array pos
   seedDoneDayWithMinutes(wed, 10)
 
   renderHome()
-  fireEvent.click(screen.getByRole('button', { name: /Tuần này/ }))
+  // Task 9: the streak pill now renders twice — a phone-only copy (`home-streak-row`) and a
+  // `md:flex` copy in the header cluster — so the phone one has to be picked by hand.
+  fireEvent.click(within(screen.getByTestId('home-streak-row')).getByRole('button', { name: /Tuần này/ }))
 
   const dialog = screen.getByRole('dialog')
   const dots = within(dialog).getAllByTestId('streak-dot')
@@ -573,8 +576,9 @@ it('lays the islands out as a grid on a phone, with nothing positioned until the
 
   for (const id of ['animals', 'weather']) {
     const classes = Array.from(screen.getByTestId(`island-${id}`).classList)
-    // A card of the grid: sized, not placed.
-    expect(classes).toContain('h-32')
+    // A card of the grid: sized, not placed. 110 px on a phone (task 9: two rows survive two
+    // banners), 150 from `md` up.
+    expect(classes).toContain('h-[110px]')
     expect(classes).toContain('rounded-xl3')
     // `absolute` only ever appears behind the `ipad:` prefix — never on its own.
     expect(classes.filter(c => c.endsWith('absolute'))).toEqual(['ipad:absolute'])
@@ -643,7 +647,11 @@ it('puts the eight topic islands on the map, in unlock order, each linking to it
   ])
   expect(screen.getByRole('link', { name: /Động vật/ })).toHaveAttribute('href', '/topic/animals')
   expect(screen.getByRole('link', { name: /Đồ chơi/ })).toHaveAttribute('href', '/topic/toys')
-  expect(screen.getByRole('link', { name: /Phụ huynh/ })).toHaveAttribute('href', '/parent')
+  // Task 9: "Phụ huynh" now renders twice — the header cell (every width) and the phone-only
+  // `home-foot-parent` copy next to Speak Lab — so every one of them has to point home.
+  for (const link of screen.getAllByRole('link', { name: /Phụ huynh/ })) {
+    expect(link).toHaveAttribute('href', '/parent')
+  }
 })
 
 /** The map is the free-choice library beside the daily mission (spec §4), and every open island
@@ -758,7 +766,9 @@ it('refuses to build a map with more topics than island slots', async () => {
 it('restores the iPad leading, not just the size, on the star pill', () => {
   renderHome()
 
-  const pill = screen.getByText(/^⭐/)
+  // Task 9: the star pill now renders twice (see `home-streak-row` above) — the map-styled
+  // classes under test live on both copies, so the phone one is picked by hand.
+  const pill = within(screen.getByTestId('home-streak-row')).getByText(/^⭐/)
   expect(pill).toHaveClass('text-lg', 'ipad:text-[22px]', 'ipad:leading-normal')
 })
 
@@ -770,9 +780,44 @@ it('restores the iPad leading, not just the size, on the star pill', () => {
 it('spells the parent link out twice rather than growing the map corner by a gap', () => {
   renderHome()
 
-  const parent = screen.getByRole('link', { name: 'Phụ huynh' })
+  // Task 9: "Phụ huynh" now renders twice (header cell + phone-only `home-foot-parent`); this
+  // test is about the header's own corner button, so it is scoped there by hand.
+  const parent = within(screen.getByTestId('header-right')).getByRole('link', { name: 'Phụ huynh' })
   expect(parent.className).not.toContain('ipad:gap-')
   expect(parent.className).toContain('ipad:min-w-[64px]')
   expect(within(parent).getByText('👨‍👩‍👧')).toHaveClass('ipad:hidden')
   expect(within(parent).getByText('👨‍👩‍👧 Phụ huynh')).toHaveClass('hidden', 'ipad:inline')
+})
+
+// Task 9 / design decision 16: on iPad portrait the island grid goes three columns, Speak Lab
+// becomes the grid's 9th cell (8 islands + 1 = 3 full rows), and the streak/star/parent cluster
+// moves into the header's right cell — all from `md` up, so it applies on a real iPad in either
+// orientation. iPad landscape (the map) keeps its own `ipad:` layout untouched throughout.
+
+it('iPad portrait lays the islands out three to a row with equal rows', () => {
+  renderHome()
+  expect(screen.getByTestId('island-animals').parentElement?.parentElement)
+    .toHaveClass('grid-cols-2', 'md:grid-cols-3', 'md:auto-rows-fr', 'ipad:block')
+})
+
+it('phone islands drop to 110 so two rows survive two banners', () => {
+  renderHome()
+  expect(screen.getByTestId('island-animals')).toHaveClass('h-[110px]', 'md:h-[150px]')
+})
+
+it('Speak Lab is the ninth grid cell from md up and the parent button leaves the foot row', () => {
+  renderHome()
+  const lab = screen.getByRole('link', { name: '🗣️ Các bậc luyện nói' })
+  expect(lab.parentElement).toHaveClass('md:h-[150px]', 'ipad:absolute')
+  expect(screen.getByTestId('home-foot')).toHaveClass('md:contents', 'ipad:contents')
+  expect(screen.getByTestId('home-foot-parent')).toHaveClass('md:hidden')
+})
+
+it('streak, star total and the parent button move into the header from md up', () => {
+  renderHome()
+  const right = screen.getByTestId('header-right')
+  expect(right).toHaveTextContent('⭐')
+  expect(within(right).getByRole('button', { name: 'Tuần này của con' })).toBeInTheDocument()
+  expect(within(right).getByRole('link', { name: 'Phụ huynh' })).toBeInTheDocument()
+  expect(screen.getByTestId('home-streak-row')).toHaveClass('md:hidden')
 })

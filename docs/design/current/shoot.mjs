@@ -299,6 +299,19 @@ async function run(vpName, vp) {
   // ---------- special Home states ----------
   await seed(page, { overLimit: true })
   await S('home-over-limit', '/')
+  // Task 9: Home nhiều banner. Dev build không có env Supabase nên banner "mốc email" không thể
+  // bật headless — ảnh này là frame 2 banner (⚠️ hết giờ + ℹ️ A2HS). Dòng "+N" của NoticeStack
+  // được chứng minh bằng unit test (Task 8) và bằng hàng checklist iPad thật ở Task 16.
+  if (vpName === 'phone' && (!WANT || WANT.includes('home-3-banners'))) {
+    const ios2 = await browser.newContext({ ...vp, reducedMotion: 'reduce', locale: 'vi-VN',
+      userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1' })
+    const p3 = await ios2.newPage()
+    await seed(p3, { overLimit: true })
+    await go(p3, '/')
+    await shot(p3, dir, 'home-3-banners')
+    log('✓ phone/home-3-banners')
+    await ios2.close()
+  }
   await seed(page, { profiles: true })
   await S('profile-gate', '/')
   await S('parent-dashboard-profiles', '/parent', async () => {
