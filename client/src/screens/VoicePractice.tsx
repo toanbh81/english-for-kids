@@ -13,7 +13,7 @@ import { saveRecording } from '../progress/recordings'
 import { Confetti } from '../components/Confetti'
 import { BackButton, Button, Card, Chip, NotFound } from '../components/ui'
 import { PageShell, PageHeader, PageBody } from '../components/ui/page'
-import { MicButton, ResultCard, SpeakError } from '../components/speak'
+import { MicButton, ResultCard, SpeakError, SpeakPrompt } from '../components/speak'
 import { useSpeakingAttempt } from '../speaking/useSpeakingAttempt'
 import { useSpeakErrorAction } from '../speaking/useSpeakErrorAction'
 
@@ -64,13 +64,12 @@ const MOOD_TIPS: Record<VoicePassage['mood'], string[]> = {
  * line, and a ! that closes a quote or sits mid-sentence is not that instruction. "Sentence-final"
  * is "followed by a space or the end of the passage" — enough to tell `look!` from `"stop!"`.
  * The paragraph carries one aria-label so a screen reader hears the passage, not fragments. */
-export function Passage({ text }: { text: string }) {
-  const long = text.trim().split(/\s+/).length > 12
+export function Passage({ text, recording = false }: { text: string; recording?: boolean }) {
   return (
     <p
       aria-label={text}
       data-testid="voice-passage"
-      className={`max-w-3xl text-center font-display font-extrabold leading-snug text-ink-900 ${long ? 'text-[24px] md:text-[34px] lg:text-[30px]' : 'text-[24px] md:text-[34px]'}`}
+      className={`max-w-3xl text-center font-display font-extrabold leading-snug text-ink-900 short:text-[22px] md:max-w-[560px] md:text-[34px] ${recording ? 'text-[26px]' : 'text-[24px]'}`}
     >
       {text.split(/([!?](?=\s|$))/).map((part, i) =>
         part === '!' || part === '?' ? (
@@ -148,69 +147,97 @@ function VoiceRun({ passage }: { passage: VoicePassage }) {
 
   const onErrorAction = useSpeakErrorAction(a)
 
+  // Brief §1 "Tầng dạy gập": the teach column collapses to a tap-to-expand strip once a result
+  // lands, and reopens either on tap or on a fresh attempt (`a.reset()`) — a retry should not
+  // leave the child staring at yesterday's collapsed strip once they start reading again.
+  const [teachOpen, setTeachOpen] = useState(true)
+  useEffect(() => {
+    if (result) setTeachOpen(false)
+  }, [result])
+
   return (
     <PageShell gutter="20">
-      <PageHeader back={mission ? <BackButton to="/mission" label="Nhiệm vụ" /> : <BackButton to="/level/story-voice" label="Quay lại" />} engine={engine}>
-        {mission
-          ? <Chip tone="coral">{missionNoun(mission.pos, 'Thẻ')} {mission.pos.index}/{mission.pos.total}</Chip>
-          : <Chip tone="coral">Đoạn {index + 1}/{STORY_VOICE.length}</Chip>}
+      <PageHeader
+        back={mission ? <BackButton to="/mission" label="Nhiệm vụ" /> : <BackButton to="/level/story-voice" label="Quay lại" />}
+        engine={engine}
+        dimmed={recording}
+      >
+        {recording
+          ? <Chip tone="coral">● Đang ghi</Chip>
+          : mission
+            ? <Chip tone="coral">{missionNoun(mission.pos, 'Thẻ')} {mission.pos.index}/{mission.pos.total}</Chip>
+            : <Chip tone="teal">Đoạn {index + 1}/{STORY_VOICE.length}</Chip>}
       </PageHeader>
-      <PageBody split={{
-        teach: (
-          <div className={`flex w-full flex-col items-center gap-3 ${result ? 'max-md:hidden' : ''}`}>
-            <section className="flex flex-col items-center gap-1">
-              <span aria-hidden="true" data-testid="mood-emoji" className="text-[38px] leading-none md:text-[56px]">{passage.emoji}</span>
-              <p className="font-display text-lg font-extrabold text-ink-900 md:text-2xl">Đọc với giọng: {passage.moodVi}</p>
-            </section>
+      <PageBody
+        actGrow={!!result}
+        split={{
+          teach: (
+            <div className="flex w-full flex-col items-center gap-2.5 text-center md:gap-4">
+              <div className="flex items-center gap-2 md:gap-3">
+                <span aria-hidden="true" data-testid="mood-emoji" className="text-[34px] leading-none md:text-[48px]">{passage.emoji}</span>
+                <p className="font-display text-[16px] font-extrabold text-ink-500 md:text-[22px]">Đọc với giọng: <span className="text-coral-text">{passage.moodVi}</span></p>
+              </div>
 
-            <section className="flex w-full flex-col items-center gap-1.5 md:gap-2">
-              <Passage text={passage.text} />
-              <p className="max-w-2xl text-center text-sm font-bold leading-snug text-ink-500 md:text-lg md:leading-7">{passage.vi}</p>
-              <Button variant="outline" onClick={playSample}>🔊 Nghe mẫu</Button>
-              {audioMissing && <p className="text-sm font-bold text-ink-300 md:text-lg">Chưa có audio mẫu</p>}
-            </section>
+              <div className="flex w-full flex-col items-center gap-1.5 md:gap-2">
+                <Passage text={passage.text} recording={recording} />
+                <p className="text-center text-[13px] font-bold leading-snug text-ink-500 md:max-w-[520px] md:text-[17px]">{passage.vi}</p>
+                <Button variant="outline" onClick={playSample}>🔊 Nghe mẫu</Button>
+                {audioMissing && <p className="text-sm font-bold text-ink-300 md:text-lg">Chưa có audio mẫu</p>}
+              </div>
 
-            <Card className="flex w-full max-w-2xl flex-col gap-0.5 px-4 py-2 md:px-6 md:py-3">
-              <p className="font-display text-base font-extrabold text-ink-900 md:text-lg">🎭 Gợi ý giọng</p>
-              <ul className="flex flex-col">
-                {tips.map(tip => (
-                  <li key={tip} data-testid="mood-tip" className="text-[13px] font-bold leading-snug text-ink-500 md:text-[14px]">• {tip}</li>
-                ))}
-              </ul>
-            </Card>
-          </div>
-        ),
-        act: result && feedback && stars ? (
-          <>
-            {stars === 3 && <Confetti />}
-            <ResultCard
-              stars={stars}
-              praise={message}
-              score={result.overall}
-              prosody={{ score: prosody, engine }}
-              words={feedback.words}
-              bars={result}
-              hint={feedback.hint}
-              canReplay={!!a.lastBlob}
-              onReplay={() => playBlob(a.lastBlob!).catch(() => {})}
-              onSample={playSample}
-              onRetry={() => a.reset()}
-              primary={mission
-                ? { label: mission.label, onClick: mission.go }
-                : next
-                  ? { label: 'Tiếp theo →', to: `/voice/${next.id}` }
-                  : { label: 'Hoàn thành 🎉', to: '/level/story-voice' }}
-              animate={stars === 3}
-            />
-          </>
-        ) : (
-          <div className="flex flex-col items-center gap-3">
-            {!recording && <p className="text-[15px] font-bold text-ink-500">Đọc cả đoạn thật có hồn nhé!</p>}
-            {a.error && <SpeakError error={a.error} onAction={onErrorAction} onDismiss={a.dismissError} />}
-            <MicButton state={a.micState} level={a.level} onPress={a.onMic} secondsLeft={recording ? secondsLeft : undefined} />
-          </div>
-        ),
-      }} />
+              {!recording && (
+                <Card data-testid="mood-tips" className="w-full rounded-r16 bg-white px-3.5 py-2.5 text-left text-[12px] font-bold text-ink-500 shadow-card-xs short:hidden md:max-w-[520px] md:rounded-r18 md:px-4 md:py-3 md:text-[14px]">
+                  <p><span className="font-display font-extrabold text-ink-900">🎭 Gợi ý giọng</span></p>
+                  <ul className="flex flex-row flex-wrap md:flex-col">
+                    {tips.map((tip, i) => (
+                      <li key={tip} data-testid="mood-tip" className="inline leading-snug md:block">
+                        • {tip}{i < tips.length - 1 && <span aria-hidden="true" className="md:hidden"> · </span>}
+                      </li>
+                    ))}
+                  </ul>
+                </Card>
+              )}
+            </div>
+          ),
+          collapsed: result && !teachOpen ? { emoji: passage.emoji, label: passage.text, onExpand: () => setTeachOpen(true) } : undefined,
+          act: result && feedback && stars ? (
+            <>
+              {stars === 3 && <Confetti />}
+              <ResultCard
+                stars={stars}
+                praise={message}
+                score={result.overall}
+                prosody={{ score: prosody, engine }}
+                words={feedback.words}
+                bars={result}
+                hint={feedback.hint}
+                canReplay={!!a.lastBlob}
+                onReplay={() => playBlob(a.lastBlob!).catch(() => {})}
+                onSample={playSample}
+                onRetry={() => { a.reset(); setTeachOpen(true) }}
+                primary={mission
+                  ? { label: mission.label, onClick: mission.go }
+                  : next
+                    ? { label: 'Tiếp theo →', to: `/voice/${next.id}` }
+                    : { label: 'Hoàn thành 🎉', to: '/level/story-voice' }}
+                animate={stars === 3}
+                fox={{
+                  mood: stars === 3 ? 'cheer' : stars === 2 ? 'happy' : 'idle',
+                  say: stars === 3 ? 'Foxy: "Giọng vui thật đấy!"' : 'Foxy: "Thử lại lần nữa nhé!"',
+                }}
+              />
+            </>
+          ) : (
+            <>
+              {recording
+                ? <SpeakPrompt mood="listening" say="Foxy đang lắng nghe…" />
+                : <SpeakPrompt mood="idle" say="Đọc cả đoạn thật có hồn nhé!" seconds={COUNTDOWN_FROM} />}
+              {a.error && <SpeakError error={a.error} onAction={onErrorAction} onDismiss={a.dismissError} />}
+              <MicButton state={a.micState} level={a.level} onPress={a.onMic} secondsLeft={recording ? secondsLeft : undefined} countdownLayout="row" />
+            </>
+          ),
+        }}
+      />
     </PageShell>
   )
 }
