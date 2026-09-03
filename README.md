@@ -1518,8 +1518,8 @@ planned:
 | WordList (C6) | `StickyGroup`-grouped review deck (up to 64 tiles across 8 topic groups), review seed now unlocks all 8 topics so the worst case actually renders |
 | StoryList (C1) | `ListRow h=96` rows with a Foxy filler row when the list is short |
 | SentenceList (C8) | `ListRow h=64` rows in a sticky `StickyGroup`, 2-column `md:grid-cols-2` on iPad (whole groups side by side), subtitle now counts rendered rows instead of all sentences, `?topic=` carried into row hrefs |
-| LevelSelect — Word Pop (A10) | Word cards on the shared large-tile grid |
-| SoundLevel — Tập âm (A11) | 9 IPA tiles on the shared large-tile grid |
+| LevelSelect — Word Pop (A10) | Word cards on the shared small-tile grid |
+| SoundLevel — Tập âm (A11) | 9 IPA tiles on the shared small-tile grid |
 | PairLevel — Nghe & chọn (A12) | Large-tile grid, phone-length subtitle ("Nghe tinh, chọn đúng từ!") |
 | StarLevel — Sentence Stars (A13) | Large-tile grid, phone-length subtitle ("Nói cả câu, nhấn đúng chỗ!") |
 | VoiceLevel — Story Voice (A14) | Large-tile grid |
@@ -1639,10 +1639,23 @@ it) and not a product defect this task should fix.
 
 ### Việc để lại
 
-- `BAND_NAME` in `DailyMission` duplicates `LevelStairs.STEPS[].name` — a shared level-name source would
-  remove the drift risk between the two.
-- TopicHub's band negative margin hard-codes `1.25rem` instead of reading `var(--page-pad-top,1.25rem)`.
-- The subtitle star colour in TopicHub needs a proper `Stars`-owned tone rather than an ad hoc class.
+Fixed in the final-review fix wave (`.superpowers/sdd/2026-09-03-phase14-lists-nav/final-review.md`):
+the level-name duplication (now `content/levels.ts`'s single `BAND_STEPS`/`bandName`), TopicHub's
+hard-coded `1.25rem` band margin (now `var(--page-pad-top,1.25rem)`), and the ad hoc island-header
+star colour (now `Stars`' own `tone="band"`). Still open:
+
+- TopicHub's phone rows (brief §2 A8's `min-height:84`) wrap to a second line when the today-chip is
+  present — pre-existing (also present in Phase 13), and shorter this phase, not new. The cheapest
+  close: give `TodayChip` (`TopicHub.tsx`) its own `size="xs"` instead of `size="sm"` plus three
+  `max-md:` overrides — which would also remove one more className-vs-base-class pair from the app.
+- `Stars`' `'14'` mark (added so "5 màn cùng đọc bảng này") is never actually passed as a `size` —
+  every 14px star row reaches it via a `className` add-on instead (`Tile.tsx`, `ListRow.tsx`
+  `md:text-[14px]`, `LevelStairs.tsx` `ipad:text-[14px]`). It renders correctly today (a variant beats
+  the base), but the size table is half-bypassed and three files hard-code `text-[14px]`.
+- `shoot.mjs`'s `home-3-banners` scenario only captures 2 of 3 banners headless (the email-milestone
+  banner needs Supabase env the dev build doesn't have) — the "+N" behaviour is covered by
+  `NoticeStack`'s own unit tests and iPad checklist row 88, but a synthetic third `NoticeProps` seeded
+  into the shot script would let that row be photographed, not only asserted.
 - `useCountdown`/`useTeachCollapse` extraction (the countdown effect repeats 8×, the collapse block 6×
   across Phase 13's screens) — still deferred; Phase 14 didn't touch any speaking screen, so nothing
   forced the extraction.
