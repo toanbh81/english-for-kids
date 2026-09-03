@@ -6,6 +6,7 @@ import { WebSpeechScorer } from '../scoring/webSpeechScorer'
 import { getActivity, minutesToday } from '../progress/activity'
 import { getLimitMinutes } from '../progress/limit'
 import type { SpeakError } from './speakError'
+import { readResultFixture } from './fixture'
 
 /** The Web Speech engine listens on its own stream, so it needs an explicit start(). */
 type LiveScorer = PronunciationScorer & { start(): void }
@@ -87,6 +88,17 @@ export function useSpeakingAttempt(opts: {
       return
     }
     setError(null)
+
+    // Headless screenshots (docs/design/current/shoot.mjs) need to land straight on a result
+    // state with no mic and no real scorer. `import.meta.env.DEV` is inlined at build time, so a
+    // production bundle never evaluates (or even keeps) `readResultFixture` — see fixture.ts.
+    const fx = import.meta.env.DEV ? readResultFixture(window.location.search, opts.targetText) : null
+    if (fx) {
+      adoptScorer({ scorer: { score: async () => fx }, engine: fx.engine })
+      setResult(fx)
+      onResultRef.current?.(fx, null)
+      return
+    }
 
     // A token round trip outlives the card that asked for it — a child tapping through a deck
     // starts one per word — and the answers can come back out of order. Without this the slow

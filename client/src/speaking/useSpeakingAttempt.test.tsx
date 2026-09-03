@@ -7,6 +7,7 @@ const recorderControl = vi.hoisted(() => ({ shouldFailStart: false, start: vi.fn
 const scorerControl = vi.hoisted(() => ({
   queue: [] as { engine: string; scorer: unknown; fallbackReason?: 'offline' | 'token' }[],
   gate: null as Promise<void> | null,
+  calls: 0,
 }))
 
 vi.mock('../audio/recorder', () => ({
@@ -27,6 +28,7 @@ vi.mock('../audio/recorder', () => ({
 }))
 vi.mock('../scoring/createScorer', () => ({
   createScorer: async () => {
+    scorerControl.calls++
     // Claimed when the call is made, not when it answers: a gated call must still be handed the
     // bundle queued for *its* turn, or a test about out-of-order answers cannot say which is which.
     const bundle = scorerControl.queue.shift() ?? {
@@ -58,6 +60,7 @@ afterEach(() => {
   recorderControl.opts = undefined
   scorerControl.queue.length = 0
   scorerControl.gate = null
+  scorerControl.calls = 0
   delete (window as any).webkitSpeechRecognition
   delete (navigator as unknown as Record<string, unknown>).onLine
   if (origOnLine) Object.defineProperty(Navigator.prototype, 'onLine', origOnLine)
@@ -312,5 +315,53 @@ describe('typed errors, locked mic, fallback notice, not-ready timer', () => {
     const { result } = renderHook(() => useSpeakingAttempt({ targetText: 'cat' }))
     await waitFor(() => expect(result.current.micState).toBe('locked'))
     expect(result.current.error).toEqual({ kind: 'limit' })
+  })
+})
+
+/** DEV-only screenshot fixture (see speaking/fixture.ts): a `?fixture=` query param stands in for
+ * a real scored attempt, landing the hook straight on a result without a mic or a scorer. */
+describe('DEV result fixture', () => {
+  const origSearch = window.location.search
+
+  function setSearch(search: string) {
+    window.history.replaceState(null, '', window.location.pathname + search)
+  }
+
+  afterEach(() => {
+    setSearch(origSearch)
+    vi.unstubAllEnvs()
+  })
+
+  it('adopts the fixture result once per resetKey, without calling createScorer', async () => {
+    vi.stubEnv('DEV', true)
+    setSearch('?fixture=result3')
+    const onResult = vi.fn()
+    const { result } = renderHook(() => useSpeakingAttempt({ targetText: 'cat', onResult }))
+
+    await waitFor(() => expect(result.current.result?.overall).toBe(86))
+    expect(result.current.engine).toBe('azure')
+    expect(onResult).toHaveBeenCalledTimes(1)
+    expect(onResult).toHaveBeenCalledWith(expect.objectContaining({ overall: 86 }), null)
+    expect(scorerControl.calls).toBe(0)
+  })
+
+  it('adopts the Web-Speech-like fixture for ?fixture=result1', async () => {
+    vi.stubEnv('DEV', true)
+    setSearch('?fixture=result1')
+    const { result } = renderHook(() => useSpeakingAttempt({ targetText: 'cat' }))
+
+    await waitFor(() => expect(result.current.result?.overall).toBe(50))
+    expect(result.current.engine).toBe('webspeech')
+    expect(scorerControl.calls).toBe(0)
+  })
+
+  it('ignores the fixture param outside DEV and scores normally', async () => {
+    vi.stubEnv('DEV', false)
+    setSearch('?fixture=result3')
+    const { result } = renderHook(() => useSpeakingAttempt({ targetText: 'cat' }))
+
+    await waitFor(() => expect(result.current.micState).toBe('idle'))
+    expect(result.current.result).toBeNull()
+    expect(scorerControl.calls).toBe(1)
   })
 })

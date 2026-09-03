@@ -156,13 +156,21 @@ async function run(vpName, vp) {
   await S('level-voice', '/level/story-voice')
   await S('level-notfound', '/level/xyz')
   await S('practice-idle', '/practice/wp-cat')
+  await S('practice-result3', '/practice/wp-cat?fixture=result3')
   await S('practice-ipa-hidden', '/practice/wp-elephant')
   await S('sound-list', '/sound/th')
   await S('sound-practice-idle', '/sound/th/sz-th-three')
+  await S('sound-result3', '/sound/th/sz-th-three?fixture=result3')
   await S('pair-listen', '/pair/pair-ship-sheep')
   await S('pair-listen-armed', null, async () => { await page.getByRole('button', { name: /Nghe/ }).first().click(); await sleep(400) })
+  // Task 8 wires the "a fixture result present = speaking phase already done" skip into
+  // PairPractice; until then this lands on the listening phase, same as `pair-listen`.
+  await S('pair-result3', '/pair/pair-ship-sheep?fixture=result3')
   await S('star-idle', '/star/ss1')
+  await S('star-result3', '/star/ss1?fixture=result3')
   await S('voice-idle', '/voice/sv1')
+  await S('voice-result3', '/voice/sv1?fixture=result3')
+  await S('voice-result1', '/voice/sv1?fixture=result1')
   await S('stories', '/stories')
   await S('story-player', '/story/little-fox')
   await S('story-player-playing', null, async () => { await page.getByRole('button', { name: 'Phát' }).click(); await sleep(1200) })
@@ -175,6 +183,7 @@ async function run(vpName, vp) {
   await S('quiz-correct', null, async () => { await tapText(page, 'fox'); await sleep(150) })
   await S('quiz-result', null, async () => { await sleep(1200); await tapText(page, 'apple'); await sleep(1200); await tapText(page, 'bird'); await sleep(1200) })
   await S('retell-idle', '/story/little-fox/retell')
+  await S('retell-result3', '/story/little-fox/retell?fixture=result3')
   await S('words', '/words')
   await S('words-animals', '/words/animals')
   await S('words-review-empty', '/words/review')
@@ -183,6 +192,10 @@ async function run(vpName, vp) {
   await S('word-guess-correct', null, async () => { await tapText(page, 'con voi', { exact: false }) })
   await S('word-card-front', null, async () => { await tapText(page, 'Tiếp theo →', { exact: false }) })
   await S('word-card-back', null, async () => { await page.getByRole('button', { name: /lật|Lật|elephant/i }).first().click(); await sleep(900) })
+  // Task 10 wires WordCard's "skip the guess step when a fixture result is present" — until
+  // then this lands on the guess step, same as `word-guess`. Its own explicit route, so placed
+  // after the chained guess/flip shots above rather than between them.
+  await S('word-result3', '/words/animals/animals-elephant?fixture=result3')
   await S('sentences', '/sentences')
   await S('sentences-topic', '/sentences?topic=family')
   await S('sentence-empty', '/sentence/s12')
@@ -194,6 +207,9 @@ async function run(vpName, vp) {
     for (const w of ['My', 'sister', 'has', 'a', 'baby', 'doll.']) await tapText(page, w)
     await sleep(500)
   })
+  // Task 11 wires SentenceBuilder's "mark the tray correct when a fixture result is present" —
+  // until then this lands on the empty tray, same as `sentence-empty`.
+  await S('sentence-result3', '/sentence/s12?fixture=result3')
   await S('parent-gate', '/parent')
   await S('parent-gate-wrong', null, async () => { await page.fill('input', '7'); await page.keyboard.press('Enter') })
   await S('parent-dashboard', '/parent', async () => {
