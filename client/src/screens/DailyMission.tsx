@@ -31,6 +31,21 @@ function markCelebrated(day: string): void {
  * estimates, sized off the group: a story is a four-minute sit-down, everything else is about a
  * minute a card, so a lesson of any length still reads as a believable few minutes.
  */
+/** Fix round 1: the band chip/header sub must name the level too ("Bậc ⭐ 2 · Đọc từ"), not just
+ * the number — `docs/design/2026-09-03-round3-lists-nav-brief.md:127,129,130`. Copied verbatim
+ * from `LevelStairs.tsx`'s own `STEPS[].name`, in the same 1→5 order its doc comment on
+ * `progress/band.ts` already gives ("1 sounds → 2 word cards → 3 minimal pairs → 4 sentence stars
+ * → 5 story voice"), rather than re-deriving or inventing the copy here. Not imported from
+ * `LevelStairs.tsx` because `STEPS` is a local, unexported const there and this task's scope is
+ * `DailyMission.tsx` only. */
+const BAND_NAME: Record<number, string> = {
+  1: 'Tập âm',
+  2: 'Đọc từ',
+  3: 'Nghe & chọn',
+  4: 'Sentence Stars',
+  5: 'Story Voice',
+}
+
 const KIND: Record<LessonItemKind, {
   emoji: string
   tone: ChipTone
@@ -116,13 +131,13 @@ export function DailyMission() {
       <PageHeader
         back={<BackButton to="/" label="Về trang chủ" mdLabel="Về bản đồ" />}
         title="Nhiệm vụ hôm nay 🌞"
-        sub={groups.length === 0 ? `Bậc ⭐ ${band}` : '5 bước nhỏ — 15 phút thôi!'}
+        sub={groups.length === 0 ? `Bậc ⭐ ${band} · ${BAND_NAME[band]}` : '5 bước nhỏ — 15 phút thôi!'}
         right={
           // Task 10: the two chips move into the header's right cell, iPad-only — on a phone this
           // renders an empty (`hidden`) box rather than nothing, so there is no need for the
           // `right={null}` a screen with truly nothing there would pass (decision 8).
           <div className="hidden items-center gap-2 md:flex">
-            <Chip tone="sun" className="hidden text-[15px] rounded-r12 px-3.5 py-2 md:inline-flex">Bậc ⭐ {band}</Chip>
+            <Chip tone="sun" className="hidden text-[15px] rounded-r12 px-3.5 py-2 md:inline-flex">Bậc ⭐ {band} · {BAND_NAME[band]}</Chip>
             <Chip tone="teal" className="text-[15px] rounded-r12 px-3.5 py-2">{doneGroups}/{groups.length} nhóm xong</Chip>
           </div>
         }
@@ -200,15 +215,16 @@ export function DailyMission() {
               size="md"
               className="shrink-0 [&_svg]:h-[63px] [&_svg]:w-[66px] md:[&_svg]:h-[93px] md:[&_svg]:w-[96px] ipad:[&_svg]:h-[77px] ipad:[&_svg]:w-[80px]"
             />
+            {/* `ipad:flex-none` on both branches: `flex-[1.35]` sets a 0% flex-basis, which makes
+              * a flex item ignore its own `width` — a bare `ipad:w-[480px]` alongside it renders
+              * no different from the phone-width stretch (confirmed via
+              * `shots/ipad/mission.png`). Zeroing grow/shrink at `ipad:` first is what lets the
+              * fixed width actually take effect on the landscape footer row, on the done-revisit
+              * CTA (fix round 1) exactly as on the in-progress one below it. */}
             {status.done
-              ? <Button to="/" size="lg" variant="secondary" className="flex-[1.35]"><HomeLabel /></Button>
+              ? <Button to="/" size="lg" variant="secondary" className="flex-[1.35] ipad:w-[480px] ipad:flex-none"><HomeLabel /></Button>
               : currentIndex !== -1
                 ? (
-                  // `ipad:flex-none`: `flex-[1.35]` sets a 0% flex-basis, which makes a flex item
-                  // ignore its own `width` — a bare `ipad:w-[480px]` alongside it renders no
-                  // different from the phone-width stretch (confirmed via
-                  // `shots/ipad/mission.png`). Zeroing grow/shrink at `ipad:` first is what lets
-                  // the fixed width actually take effect on the landscape footer row.
                   <Button to={groups[currentIndex].route} state={MISSION_STATE} size="lg" className="flex-[1.35] ipad:w-[480px] ipad:flex-none">
                     {status.doneCount === 0 ? 'Bắt đầu ▸' : 'Tiếp tục ▸'}
                   </Button>

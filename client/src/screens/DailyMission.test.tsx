@@ -65,6 +65,16 @@ const MINUTES: Record<LessonItemKind, (n: number) => string> = {
   review: n => `≈ ${n}'`,
 }
 
+// Fix round 1: the band chip/header sub names the level too ("Bậc ⭐ 2 · Đọc từ") — mirrors
+// `DailyMission.tsx`'s own `BAND_NAME`, itself copied from `LevelStairs.tsx`'s `STEPS[].name`.
+const BAND_NAME: Record<number, string> = {
+  1: 'Tập âm',
+  2: 'Đọc từ',
+  3: 'Nghe & chọn',
+  4: 'Sentence Stars',
+  5: 'Story Voice',
+}
+
 const card = (kind: LessonItemKind) => screen.getByTestId(`group-${kind}`)
 
 /** The count/caption line of a card, read whole: `"{done}/{total} · bước N"`, or `"{done}/{total}
@@ -102,8 +112,9 @@ it('shows the hero empty state and a two-button footer when today has no items',
 
   expect(screen.queryByRole('link', { name: 'Bắt đầu ▸' })).not.toBeInTheDocument()
   // The header's sub line stands in for the removed body subtitle on the empty branch — it
-  // duplicates the (always-rendered, iPad-only) band chip, so there are two matches.
-  expect(screen.getAllByText('Bậc ⭐ 2').length).toBeGreaterThan(0)
+  // duplicates the (always-rendered, iPad-only) band chip, so there are two matches. Fix round 1:
+  // both name the level, not just the band number.
+  expect(screen.getAllByText(`Bậc ⭐ 2 · ${BAND_NAME[2]}`).length).toBeGreaterThan(0)
 })
 
 it('sits in the shared page frame', () => {
@@ -138,7 +149,8 @@ it('shows the band chip and the finished-groups count in the header', () => {
   renderMission()
 
   const right = screen.getByTestId('header-right')
-  expect(within(right).getByText(`Bậc ⭐ ${getBand().value}`)).toBeInTheDocument()
+  const band = getBand().value
+  expect(within(right).getByText(`Bậc ⭐ ${band} · ${BAND_NAME[band]}`)).toBeInTheDocument()
   expect(within(right).getByText(`1/${groups.length} nhóm xong`)).toBeInTheDocument()
 })
 
@@ -358,8 +370,8 @@ it('shows the band the lesson was built at, not a parent override made since', (
   setBandValue(5)
   renderMission()
 
-  expect(screen.getByText('Bậc ⭐ 2')).toBeInTheDocument()
-  expect(screen.queryByText('Bậc ⭐ 5')).not.toBeInTheDocument()
+  expect(screen.getByText(`Bậc ⭐ 2 · ${BAND_NAME[2]}`)).toBeInTheDocument()
+  expect(screen.queryByText(`Bậc ⭐ 5 · ${BAND_NAME[5]}`)).not.toBeInTheDocument()
 })
 
 // A long lesson is taller than an iPad screen, so a CTA that scrolled with the cards sat below the
@@ -383,7 +395,11 @@ it('shows the finish state on a revisit once every step is done', () => {
 
   expect(screen.queryByText('bắt đầu ở đây!')).not.toBeInTheDocument()
   expect(screen.getAllByText('✓ Xong')).toHaveLength(groupsOf(lesson).length)
-  expect(screen.getByRole('link', { name: /Về bản đồ 🏝️/ })).toHaveAttribute('href', '/')
+  const cta = screen.getByRole('link', { name: /Về bản đồ 🏝️/ })
+  expect(cta).toHaveAttribute('href', '/')
+  // Fix round 1: the done-revisit CTA gets the same fixed-480 pairing as the in-progress one —
+  // `flex-[1.35]`'s 0% flex-basis makes a bare `ipad:w-[480px]` inert without `ipad:flex-none`.
+  expect(cta).toHaveClass('ipad:w-[480px]', 'ipad:flex-none')
 })
 
 // Spec decision 1: Home drops the island map below the tablet breakpoint, so the way out of the
