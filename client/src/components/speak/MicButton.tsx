@@ -2,7 +2,7 @@ import { Countdown } from './Countdown'
 import { LevelBars } from './LevelBars'
 
 export type MicState = 'idle' | 'recording' | 'processing' | 'disabled' | 'locked'
-type Props = { state: MicState; level: number; onPress: () => void; secondsLeft?: number; countdownLayout?: 'row' | 'column' }
+type Props = { state: MicState; level: number; onPress: () => void; secondsLeft?: number; countdownLayout?: 'row' | 'column'; caption?: string }
 
 const LABEL: Record<MicState, string> = { idle: 'Bấm để nói', recording: 'Dừng', processing: 'Đang chấm…', disabled: 'Bấm để nói', locked: 'Hôm nay đã hết giờ' }
 const CAPTION: Record<MicState, string | null> = { idle: 'Chạm để nói nào!', recording: null, processing: 'Foxy đang chấm…', disabled: 'Đang chuẩn bị máy chấm…', locked: 'Mai gặp lại nhé 🌙' }
@@ -10,8 +10,13 @@ const CAPTION: Record<MicState, string | null> = { idle: 'Chạm để nói nào
 /** Brief §2.2. The block reserves 214 px (190 + 24 for the bars) at md so the mic grows in place
  * without moving the CTA; on a phone the recording mic is 150 inside halos that reach 190.
  * `countdownLayout` orders the level bars and the countdown badge: `row` (default) puts the
- * badge after the bars side by side; `column` stacks the badge above the bars. */
-export function MicButton({ state, level, onPress, secondsLeft, countdownLayout = 'row' }: Props) {
+ * badge after the bars side by side; `column` stacks the badge above the bars.
+ *
+ * `caption` overrides the per-state default (`CAPTION` above) — SentenceBuilder (round 2, C9)
+ * reuses `state="disabled"` for its own "sentence not built yet" mic, which needs "Xếp đúng câu
+ * trước nhé" rather than the scorer's "Đang chuẩn bị máy chấm…". Omitted, the table is unchanged,
+ * so every other screen keeps its existing caption. */
+export function MicButton({ state, level, onPress, secondsLeft, countdownLayout = 'row', caption }: Props) {
   const rec = state === 'recording'
   const off = state === 'disabled' || state === 'processing' || state === 'locked'
   return (
@@ -44,7 +49,7 @@ export function MicButton({ state, level, onPress, secondsLeft, countdownLayout 
           {countdownLayout === 'row' && secondsLeft !== undefined && <Countdown seconds={secondsLeft} />}
         </div>
       )}
-      {!rec && CAPTION[state] && <p className="text-[15px] font-bold text-ink-500 md:text-[18px]">{CAPTION[state]}</p>}
+      {!rec && (caption ?? CAPTION[state]) && <p className="text-[15px] font-bold text-ink-500 md:text-[18px]">{caption ?? CAPTION[state]}</p>}
     </div>
   )
 }

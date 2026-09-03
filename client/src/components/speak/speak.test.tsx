@@ -29,6 +29,11 @@ describe('MicButton', () => {
     expect(screen.getByRole('button', { name: 'Đang chấm…' })).toHaveTextContent('⏳')
     expect(screen.getByText('Foxy đang chấm…')).toBeInTheDocument()
   })
+  it('lets a screen override the disabled caption (SentenceBuilder\'s pre-correct mic)', () => {
+    render(<MicButton state="disabled" level={0} onPress={() => {}} caption="Xếp đúng câu trước nhé" />)
+    expect(screen.getByText('Xếp đúng câu trước nhé')).toBeInTheDocument()
+    expect(screen.queryByText('Đang chuẩn bị máy chấm…')).not.toBeInTheDocument()
+  })
   it('locked is disabled with the moon caption', () => {
     render(<MicButton state="locked" level={0} onPress={() => {}} />)
     expect(screen.getByRole('button', { name: 'Hôm nay đã hết giờ' })).toBeDisabled()

@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useEffect, useRef, useState } from 'react'
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import type { Sentence } from '../content'
 import { SENTENCES, findSentence } from '../content'
 import type { PronunciationResult } from '../scoring/types'
@@ -7,29 +7,33 @@ import { setStars } from '../progress/store'
 import { logActivity } from '../progress/activity'
 import { missionNoun, useMissionNext } from '../progress/missionNav'
 import { saveRecording } from '../progress/recordings'
-import { playUrl } from '../audio/player'
+import { playBlob, playUrl } from '../audio/player'
 import { toFeedback } from '../scoring/feedback'
 import { useSpeakingAttempt } from '../speaking/useSpeakingAttempt'
 import { useSpeakErrorAction } from '../speaking/useSpeakErrorAction'
-import { MicButton, ResultCard, SpeakError } from '../components/speak'
-import { Foxy } from '../components/Foxy'
-import type { FoxyMood } from '../components/Foxy'
+import { MicButton, ResultCard, SpeakError, SpeakPrompt } from '../components/speak'
+import { ScoredWords } from '../components/ScoredWords'
 import { BackButton, Button, Chip, NotFound } from '../components/ui'
 import { PageShell, PageHeader, PageBody } from '../components/ui/page'
 import { shuffleTiles } from '../content/shuffle'
 
 const SHAKE_MS = 400 // matches the .animate-shake keyframe duration in styles.css
+/** The hook stops the recording itself after this long; the countdown just mirrors it. */
+const AUTO_STOP_MS = 6000
+const COUNTDOWN_FROM = AUTO_STOP_MS / 1000
 
+/** Brief §2 C9, task 11: 44 min-width on a phone, 56 from md. */
 const TILE =
-  'flex min-h-[64px] min-w-[64px] items-center justify-center rounded-xl2 border-[3px] px-3 font-display text-[21px] font-extrabold text-ink-900 transition-transform active:scale-95 md:px-5 md:text-[26px]'
+  'flex h-11 min-w-[44px] items-center justify-center rounded-r12 border-[3px] px-3 font-display text-[17px] font-extrabold transition-transform active:scale-95 md:h-14 md:rounded-r14 md:px-5 md:text-[22px]'
 
 /** The three sentence roles, keyed by which third of the sentence a tile belongs to. Colours are
- * written out per role (never concatenated) so Tailwind keeps them in the build. */
+ * written out per role (never concatenated) so Tailwind keeps them in the build — verbatim from
+ * the brief, background/border/text together. */
 type Role = 'who' | 'doing' | 'thing'
 const ROLE_TILE: Record<Role, string> = {
-  who: 'bg-sky-400/30 border-sky-400',
-  doing: 'bg-peach-400/30 border-peach-400',
-  thing: 'bg-sun-400/40 border-sun-400',
+  who: 'bg-[#DDF0FB] border-[#7EC8F2] text-[#2E6F9E]',
+  doing: 'bg-[#FFE7D2] border-[#FF9A62] text-[#B85E2A]',
+  thing: 'bg-[#FFF1C9] border-[#FFC533] text-[#9A6B00]',
 }
 const LEGEND: { role: Role; label: string }[] = [
   { role: 'who', label: '🟦 Ai?' },
@@ -58,12 +62,18 @@ export function SentenceBuilder() {
 
 function SentenceBuilderInner({ sentence }: { sentence: Sentence }) {
   const nav = useNavigate()
+  const [searchParams] = useSearchParams()
+  // `?topic=<id>` only ever arrives from a topic's own sentence list — a child stepping through
+  // that list stays inside it: numbering, "Tiếp theo" and the way out all count inside the topic
+  // instead of the flat SENTENCES order (spec brief R20).
+  const topicParam = searchParams.get('topic')
   // Null unless the child arrived from the mission: only then is this sentence step "Câu 2/2" of
   // today's lesson rather than one sentence of a topic list (spec §3).
   const mission = useMissionNext()
   const [trayIndices, setTrayIndices] = useState<number[]>([])
   const [shaking, setShaking] = useState(false)
   const [audioMissing, setAudioMissing] = useState(false)
+  const [secondsLeft, setSecondsLeft] = useState(COUNTDOWN_FROM)
   const shakeTimerRef = useRef<number | null>(null)
 
   const target = sentence.words.join(' ')
@@ -73,10 +83,7 @@ function SentenceBuilderInner({ sentence }: { sentence: Sentence }) {
 
   // Tile display order is shuffled once per sentence, but tiles keep their identity as an index
   // into sentence.words — this is what lets the tray/pool logic tell duplicate words apart.
-  const order = useMemo(
-    () => shuffleTiles(sentence.words.map((_, i) => i), sentence.id),
-    [sentence.id, sentence.words],
-  )
+  const order = shuffleTiles(sentence.words.map((_, i) => i), sentence.id)
   const poolIndices = order.filter(i => !trayIndices.includes(i))
 
   useEffect(() => {
@@ -119,8 +126,36 @@ function SentenceBuilderInner({ sentence }: { sentence: Sentence }) {
 
   // Called unconditionally on every render regardless of tray state, so hooks stay unconditional —
   // the mic UI just stays hidden until `correct` is true.
-  const attempt = useSpeakingAttempt({ targetText: target, resetKey: sentence.id, onResult: handleResult })
+  const attempt = useSpeakingAttempt({ targetText: target, autoStopMs: AUTO_STOP_MS, resetKey: sentence.id, onResult: handleResult })
   const feedback = attempt.result ? toFeedback(attempt.result) : null
+
+  // `?fixture=result3`/`result1` (`useSpeakingAttempt`'s own DEV-only shortcut) can land a scored
+  // attempt before the tray was ever built by hand — a real result can never exist before the mic
+  // even renders (it only shows once `correct`), so this only ever fires for that shortcut. Without
+  // it the tray would keep showing its unbuilt tiles/pool/legend right next to a `ResultCard`
+  // nobody earned by building anything, which is exactly the mixed state a fixture must not produce.
+  useEffect(() => {
+    if (attempt.result && !correct) setTrayIndices(sentence.words.map((_, i) => i))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [attempt.result])
+
+  // The countdown only exists while the mic is open: it restarts on every recording and the
+  // interval is cleared the moment the state changes (or the screen unmounts).
+  const recording = attempt.micState === 'recording'
+  useEffect(() => {
+    if (!recording) return
+    setSecondsLeft(COUNTDOWN_FROM)
+    const id = window.setInterval(() => setSecondsLeft(s => (s > 1 ? s - 1 : 1)), 1000)
+    return () => clearInterval(id)
+  }, [recording])
+
+  // Brief §1 "Tầng dạy gập": the teach column collapses to a tap-to-expand strip once a result
+  // lands, and reopens either on tap or on a fresh attempt — a retry should not leave the child
+  // staring at yesterday's collapsed strip once they start building again.
+  const [teachOpen, setTeachOpen] = useState(true)
+  useEffect(() => {
+    if (attempt.result) setTeachOpen(false)
+  }, [attempt.result])
 
   function tapPool(idx: number) {
     if (wrong) return
@@ -134,117 +169,151 @@ function SentenceBuilderInner({ sentence }: { sentence: Sentence }) {
     playUrl(sentence.audio).then(() => setAudioMissing(false), () => setAudioMissing(true))
   }
 
-  const index = SENTENCES.findIndex(s => s.id === sentence.id)
-  const next = index >= 0 ? SENTENCES[index + 1] : undefined
+  const flatIndex = SENTENCES.findIndex(s => s.id === sentence.id)
+  const flatNext = flatIndex >= 0 ? SENTENCES[flatIndex + 1] : undefined
+  const topicList = SENTENCES.filter(s => s.topic === sentence.topic)
+  const topicIndex = topicList.findIndex(s => s.id === sentence.id)
+  const topicNext = topicList[topicIndex + 1]
   const total = sentence.words.length
   // Both ways out keep the topic: the unfiltered list only shows unlocked topics now, so dropping
   // the filter would land the child on a different topic's sentences than the one they came from.
   const listTo = `/sentences?topic=${sentence.topic}`
   /** In a lesson the list order is not the child's path — the next step of today's mission is,
-   * and the mission screen is where a finished lesson celebrates. */
+   * and the mission screen is where a finished lesson celebrates. Outside a lesson, a child who
+   * arrived from a topic's own list (`?topic=`) stays inside that topic; one who arrived from the
+   * flat index keeps stepping through it (spec brief R20). */
   function goNext() {
-    if (mission) mission.go()
-    else nav(next ? `/sentence/${next.id}` : listTo)
+    if (mission) { mission.go(); return }
+    if (topicParam) nav(topicNext ? `/sentence/${topicNext.id}?topic=${topicParam}` : listTo)
+    else nav(flatNext ? `/sentence/${flatNext.id}` : listTo)
   }
-
-  const mood: FoxyMood = correct ? 'cheer' : 'idle'
-  // The wrong-tray shake bubble — kept outside the mic entirely, since the mic is not even
-  // rendered until the sentence is built correctly.
-  const say = correct ? 'Đúng rồi! 🎉' : wrong ? 'Thử lại nhé' : undefined
 
   const onErrorAction = useSpeakErrorAction(attempt)
 
-  /** The building half of the screen — tray, legend, pool. Folded away on a phone once a score is
-   * in, where `ScoredWords` is already printing the same sentence. */
-  const built = correct && feedback ? 'max-md:hidden' : ''
-
   return (
     <PageShell gutter="20">
-      <PageHeader back={mission ? <BackButton to="/mission" label="Nhiệm vụ" /> : <BackButton to={listTo} label="Ghép câu" />} engine={attempt.engine}>
-        {mission && (
-          <Chip tone="teal">
-            {missionNoun(mission.pos, 'Câu')} {mission.pos.index}/{mission.pos.total}
-          </Chip>
-        )}
+      <PageHeader
+        back={mission ? <BackButton to="/mission" label="Nhiệm vụ" /> : <BackButton to={listTo} label="Ghép câu" />}
+        engine={attempt.engine}
+        dimmed={recording}
+      >
+        {recording
+          ? <Chip tone="coral">● Đang ghi</Chip>
+          : mission
+            ? <Chip tone="teal">{missionNoun(mission.pos, 'Câu')} {mission.pos.index}/{mission.pos.total}</Chip>
+            : <Chip tone="teal">Câu {(topicParam ? topicIndex : flatIndex) + 1}/{(topicParam ? topicList : SENTENCES).length}</Chip>}
       </PageHeader>
-      <PageBody split={{
-        teach: (
-          <div className="flex w-full flex-col items-center gap-2.5 md:gap-4">
-            <h1 className="font-display text-[24px] font-extrabold leading-tight text-ink-900 md:text-[28px]">Ghép câu nào! 🧱</h1>
-            <p className="text-center text-base font-bold text-ink-500 md:text-lg">{sentence.vi}</p>
-            {!correct && <p className="text-center text-[13px] font-bold text-ink-500 md:text-base">Chạm các khối từ để xếp vào khay câu</p>}
+      <PageBody
+        actGrow={!!feedback}
+        split={{
+          teach: (
+            <div className="flex w-full flex-col items-center gap-2.5 md:gap-4">
+              <p className="text-center text-[15px] font-bold text-ink-500 md:text-[22px]">{sentence.vi}</p>
+              {!correct && <p className="text-center text-[13px] font-bold text-ink-500 md:text-base">Chạm các khối từ để xếp vào khay câu</p>}
 
-            <div className={`relative w-full max-w-2xl ${built}`}>
               <div
                 data-testid="tray"
-                className={`flex min-h-[76px] flex-wrap items-center justify-center gap-2 rounded-[24px] border-[3px] border-dashed border-line-200 bg-white p-2.5 md:min-h-[88px] md:gap-3 md:p-4 ${shaking ? 'animate-shake' : ''}`}
+                className={`relative flex min-h-[76px] w-full flex-wrap items-center justify-center gap-2 rounded-r18 border-[3px] border-dashed border-line-200 bg-white p-2.5 md:min-h-[96px] md:max-w-[640px] md:gap-3 md:rounded-r22 md:p-4 ${shaking ? 'animate-shake border-fix-300' : ''}`}
               >
-                {trayIndices.map((idx, pos) => (
-                  <button
-                    key={pos}
-                    type="button"
-                    onClick={() => tapTray(pos)}
-                    className={`${TILE} ${ROLE_TILE[roleOf(idx, total)]}`}
-                  >
-                    {sentence.words[idx]}
-                  </button>
-                ))}
+                {feedback ? (
+                  <ScoredWords words={feedback.words} />
+                ) : (
+                  trayIndices.map((idx, pos) => (
+                    <button
+                      key={pos}
+                      type="button"
+                      onClick={() => tapTray(pos)}
+                      className={`${TILE} ${ROLE_TILE[roleOf(idx, total)]}`}
+                    >
+                      {sentence.words[idx]}
+                    </button>
+                  ))
+                )}
+                {trayIndices.length === 0 && !feedback && (
+                  <span className="pointer-events-none absolute inset-0 flex items-center justify-center font-display text-[13px] font-extrabold text-ink-300">
+                    thả vào đây
+                  </span>
+                )}
               </div>
-              {trayIndices.length === 0 && (
-                <span className="pointer-events-none absolute inset-0 flex items-center justify-center font-display text-base font-extrabold text-ink-300 md:text-xl">
-                  thả vào đây
-                </span>
+
+              {!correct && trayIndices.length > 0 && !full && (
+                <p className="text-center text-[13px] font-bold text-ink-500">Còn {total - trayIndices.length} ô nữa</p>
+              )}
+              {wrong && (
+                <p className="text-center text-[15px] font-bold text-fix-700">🦊 Chưa đúng — thử lại nhé</p>
+              )}
+
+              {!correct && (
+                <>
+                  <div className="flex flex-wrap justify-center gap-2 md:gap-3">
+                    {LEGEND.map(l => (
+                      <span key={l.role} className={`rounded-xl2 border-[3px] px-2.5 py-1 font-display text-[11px] font-extrabold md:px-4 md:text-sm ${ROLE_TILE[l.role]}`}>
+                        {l.label}
+                      </span>
+                    ))}
+                  </div>
+
+                  <div data-testid="pool" className="flex w-full max-w-2xl flex-wrap justify-center gap-2.5 md:gap-4">
+                    {poolIndices.map(idx => (
+                      <button
+                        key={idx}
+                        type="button"
+                        onClick={() => tapPool(idx)}
+                        className={`${TILE} ${ROLE_TILE[roleOf(idx, total)]}`}
+                      >
+                        {sentence.words[idx]}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
+
+              {correct && !feedback && (
+                <>
+                  <div className="flex w-full items-center justify-center gap-2 rounded-r12 bg-good-50 px-3.5 py-2 text-center text-[13px] font-bold text-good-700">
+                    Đúng rồi! 🎉 Giờ đọc câu lên nhé
+                  </div>
+                  <Button variant="outline" onClick={playSample}>🔊 Đọc câu cho bé nghe</Button>
+                  {audioMissing && <p className="text-sm font-bold text-ink-300 md:text-lg">Chưa có audio mẫu</p>}
+                </>
               )}
             </div>
-
-            <div className={`flex flex-wrap justify-center gap-2 md:gap-3 ${built}`}>
-              {LEGEND.map(l => (
-                <span key={l.role} className={`rounded-xl2 border-[3px] px-2.5 py-1 font-display text-[13px] font-extrabold text-ink-500 md:px-4 md:text-base ${ROLE_TILE[l.role]}`}>
-                  {l.label}
-                </span>
-              ))}
-            </div>
-
-            <div data-testid="pool" className={`flex w-full max-w-2xl flex-wrap justify-center gap-2.5 md:gap-4 ${built}`}>
-              {poolIndices.map(idx => (
-                <button
-                  key={idx}
-                  type="button"
-                  onClick={() => tapPool(idx)}
-                  className={`${TILE} ${ROLE_TILE[roleOf(idx, total)]}`}
-                >
-                  {sentence.words[idx]}
-                </button>
-              ))}
-            </div>
-          </div>
-        ),
-        act: correct ? (
-          feedback ? (
+          ),
+          collapsed: feedback && !teachOpen ? { emoji: '🧱', label: target, onExpand: () => setTeachOpen(true) } : undefined,
+          act: feedback ? (
             <ResultCard
               stars={feedback.stars}
               praise={feedback.message}
               score={attempt.result?.overall}
-              words={feedback.words}
               bars={attempt.result ?? undefined}
               hint={feedback.hint}
-              onRetry={() => attempt.reset()}
+              canReplay={!!attempt.lastBlob}
+              onReplay={() => playBlob(attempt.lastBlob!).catch(() => {})}
+              onSample={playSample}
+              onRetry={() => { attempt.reset(); setTeachOpen(true) }}
               primary={{ label: mission ? mission.label : 'Tiếp theo →', onClick: goNext }}
               animate={feedback.stars === 3}
+              fox={{
+                mood: feedback.stars === 3 ? 'cheer' : feedback.stars === 2 ? 'happy' : 'idle',
+                say: feedback.stars === 3 ? 'Foxy: "Ghép câu và đọc siêu đỉnh!"' : feedback.stars === 2 ? 'Foxy: "Gần chuẩn rồi đó!"' : 'Foxy: "Luyện thêm chút nữa nhé!"',
+              }}
             />
-          ) : (
-            <div className="flex flex-col items-center gap-3">
-              {audioMissing && <p className="text-sm font-bold text-ink-300 md:text-lg">Chưa có audio mẫu</p>}
-              <Button variant="outline" onClick={playSample}>🔊 Đọc câu cho bé nghe</Button>
+          ) : correct ? (
+            <>
+              <SpeakPrompt mood={recording ? 'listening' : 'cheer'} say={recording ? 'Foxy đang lắng nghe…' : 'Đúng rồi! Giờ đọc câu lên nhé'} />
               {attempt.error && <SpeakError error={attempt.error} onAction={onErrorAction} onDismiss={attempt.dismissError} />}
-              <MicButton state={attempt.micState} level={attempt.level} onPress={attempt.onMic} />
-              <Foxy mood={mood} size="sm" say={say} />
+              <MicButton state={attempt.micState} level={attempt.level} onPress={attempt.onMic} secondsLeft={recording ? secondsLeft : undefined} countdownLayout="row" />
+            </>
+          ) : (
+            // R19: on iPad the mic sits in the act column from the very start, disabled until the
+            // tray is correct — a phone shows nothing here (design does not draw it), matching the
+            // mic-only-after-`correct` behaviour it already had.
+            <div className="hidden md:flex md:flex-col md:items-center md:gap-2">
+              <MicButton state="disabled" level={0} onPress={() => {}} caption="Xếp đúng câu trước nhé" />
             </div>
-          )
-        ) : (
-          <Foxy mood={mood} size="sm" say={say} />
-        ),
-      }} />
+          ),
+        }}
+      />
     </PageShell>
   )
 }
