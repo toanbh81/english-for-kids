@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
-import { findSound } from '../content'
+import { findSound, SOUNDS } from '../content'
 import type { SoundGroup } from '../content/types'
 import type { PronunciationResult, WordTone } from '../scoring/types'
 import { playBlob, playUrl } from '../audio/player'
@@ -10,9 +10,9 @@ import { logActivity } from '../progress/activity'
 import { missionNoun, useMissionNext } from '../progress/missionNav'
 import { saveRecording } from '../progress/recordings'
 import { Confetti } from '../components/Confetti'
-import { BackButton, Button, Chip, NotFound } from '../components/ui'
+import { BackButton, Button, ChipPair, Chip, NotFound } from '../components/ui'
 import { PageShell, PageHeader, PageBody } from '../components/ui/page'
-import { MicButton, ResultCard, SpeakError, WordChip } from '../components/speak'
+import { MicButton, ResultCard, SoundTier, SpeakError, SpeakPrompt, WordChip } from '../components/speak'
 import { useSpeakingAttempt } from '../speaking/useSpeakingAttempt'
 import { useSpeakErrorAction } from '../speaking/useSpeakErrorAction'
 
@@ -76,6 +76,7 @@ export function SoundPractice() {
 
 function SoundWord({ sound, idx }: { sound: SoundGroup; idx: number }) {
   const { ph, ipa, cards } = sound
+  const soundIndex = SOUNDS.findIndex(s => s.ph === ph)
   // Null unless the child arrived from the mission: only then does this word know it is step
   // "Âm 2/4" of today's lesson rather than a card they picked off the sound's word list (spec §3).
   const mission = useMissionNext()
@@ -148,99 +149,91 @@ function SoundWord({ sound, idx }: { sound: SoundGroup; idx: number }) {
 
   const onErrorAction = useSpeakErrorAction(attempt)
 
+  // Brief §1 "Tầng dạy gập": the teach column collapses to a tap-to-expand strip once a result
+  // lands, and reopens either on tap or on a fresh attempt — a retry should not leave the child
+  // staring at yesterday's collapsed strip once they start reading again.
+  const [teachOpen, setTeachOpen] = useState(true)
+  useEffect(() => {
+    if (result) setTeachOpen(false)
+  }, [result])
+
   return (
     <PageShell gutter="20">
-      <PageHeader back={mission ? <BackButton to="/mission" label="Nhiệm vụ" /> : <BackButton to={`/sound/${ph}`} label="Quay lại" />} engine={attempt.engine}>
-        <div className="flex flex-col items-center gap-1.5">
-          {/* Both counters earn their place here: "Âm 2/4" is where the child is in the lesson,
-              "Từ 1/3" is which of the sound's words they are standing on. */}
-          {mission && (
-            <Chip tone="teal">
-              {missionNoun(mission.pos, 'Âm')} {mission.pos.index}/{mission.pos.total}
-            </Chip>
+      <PageHeader
+        back={mission ? <BackButton to="/mission" label="Nhiệm vụ" /> : <BackButton to={`/sound/${ph}`} label="Quay lại" />}
+        engine={attempt.engine}
+        dimmed={recording}
+      >
+        {recording
+          ? <Chip tone="coral">● Đang ghi</Chip>
+          : (
+            <ChipPair
+              left={mission ? `${missionNoun(mission.pos, 'Âm')} ${mission.pos.index}/${mission.pos.total}` : `Âm ${soundIndex + 1}/${SOUNDS.length}`}
+              right={`Từ ${idx + 1}/${cards.length}`}
+            />
           )}
-          <Chip tone="coral">Từ {idx + 1}/{cards.length}</Chip>
-          <div className="flex gap-2">
-            {cards.map((c, i) => (
-              <span
-                key={c.id}
-                aria-hidden="true"
-                className={`h-4 w-4 rounded-full ${i < idx ? 'bg-teal-500' : i === idx ? 'bg-coral-500' : 'bg-line-200'}`}
-              />
-            ))}
-          </div>
-        </div>
       </PageHeader>
-      <PageBody split={{
-        teach: (
-          <div className={`flex w-full flex-col items-center gap-3 ${result ? 'max-md:hidden' : ''}`}>
-            <div className="flex w-full flex-col rounded-[24px] bg-[#FFF1E6] px-4 py-3.5 shadow-[0_6px_0_#F2DFC9]">
-              <div className="flex w-full flex-wrap items-center gap-3.5">
-                <span data-testid="mouth-tile" aria-hidden="true" className="flex h-16 w-16 shrink-0 items-center justify-center rounded-[18px] bg-white text-[34px] leading-none">
-                  <span className="animate-wiggle">👄</span>
-                </span>
-                <div className="flex-1 font-display text-[40px] font-extrabold leading-none text-coral-text md:text-[56px]">/{ipa}/</div>
-                <Button
-                  variant="secondary"
-                  aria-label="Nghe âm lẻ"
-                  onClick={playIsolated}
-                >
-                  🔊 Nghe âm lẻ
-                </Button>
-                {soundMissing && <p className="w-full text-sm font-bold text-ink-300 md:w-auto md:text-lg">Chưa có audio âm này</p>}
-              </div>
-              <div className="flex w-full flex-col items-start gap-2 pt-2.5 text-left">
-                {tip && <p className="max-w-xl text-sm font-bold leading-relaxed text-ink-500 md:text-lg md:leading-7">{tip}</p>}
-                <span className="text-[13px] font-bold text-ink-300">👄 Khẩu hình miệng</span>
-              </div>
-            </div>
+      <PageBody
+        actGrow={!!result}
+        split={{
+          teach: (
+            <div className="flex w-full flex-col items-center gap-3">
+              <SoundTier ph={ph} ipa={ipa} tip={tip} onPlay={playIsolated} audioMissing={soundMissing} wiggle={recording} />
 
-            {!result && !recording && attempt.micState !== 'processing' && (
-              <div data-testid="word-tile" className="flex w-full flex-col items-center gap-2.5 rounded-xl3 bg-white px-4 py-5 shadow-card">
-                <span aria-hidden="true" className="text-[76px] leading-none md:text-[84px]">{card.emoji}</span>
-                <div className="font-display text-[42px] font-extrabold leading-none text-ink-900 md:text-[56px]">{card.text}</div>
-                <div className="text-base font-bold text-ink-300 md:text-[22px] md:leading-normal">{card.ipa}</div>
+              <div data-testid="word-tile" className="flex w-full flex-col items-center gap-2.5 rounded-r22 bg-white px-4 py-3.5 shadow-card md:h-[300px] md:w-[300px] md:justify-center">
+                <span aria-hidden="true" className="text-[60px] leading-none md:text-[96px]">{card.emoji}</span>
+                <div className="font-display text-[40px] font-extrabold leading-none text-ink-900 md:text-[56px]">{card.text}</div>
+                <div className="short:hidden text-[15px] font-bold text-sand-text md:text-[20px]">{card.ipa}</div>
                 <Button variant="outline" onClick={playSample}>🔊 Nghe mẫu</Button>
                 {sampleMissing && <p className="text-sm font-bold text-ink-300 md:text-lg">Chưa có audio mẫu</p>}
               </div>
-            )}
-          </div>
-        ),
-        act: result && earned ? (
-          <>
-            {earned === 3 && <Confetti />}
-            <ResultCard
-              stars={earned}
-              praise={earned === 3 ? 'Từ này tuyệt lắm!' : earned === 2 ? 'Gần được rồi, luyện thêm nhé!' : 'Nghe mẫu rồi thử lại nhé!'}
-              sub={`Từ ${card.text} · ${Math.round(result.overall)} điểm`}
-              extra={
-                <div className="flex flex-col items-center gap-2">
-                  <WordChip word={`/${ipa}/`} tone={tone ?? 'unknown'} />
-                  {score === null && (
-                    <p className="max-w-xl text-center text-sm font-bold leading-relaxed text-ink-500">
-                      {attempt.engine === 'webspeech' ? UNSCORED_SIMPLE : UNSCORED_UNHEARD}
-                    </p>
-                  )}
-                </div>
-              }
-              hint={tip && tone !== 'good' ? { word: card.text, phoneme: ph, tip } : undefined}
-              canReplay={!!attempt.lastBlob}
-              onReplay={() => playBlob(attempt.lastBlob!).catch(() => {})}
-              onSample={playSample}
-              onRetry={() => attempt.reset()}
-              primary={mission
-                ? { label: mission.label, onClick: mission.go }
-                : { label: isLast ? 'Hoàn thành 🎉' : 'Tiếp theo →', to: nextRoute }}
-              animate
-            />
-          </>
-        ) : (
-          <div className="flex flex-col items-center gap-3">
-            {attempt.error && <SpeakError error={attempt.error} onAction={onErrorAction} onDismiss={attempt.dismissError} />}
-            <MicButton state={attempt.micState} level={attempt.level} onPress={attempt.onMic} secondsLeft={recording ? secondsLeft : undefined} />
-          </div>
-        ),
-      }} />
+            </div>
+          ),
+          collapsed: result && !teachOpen ? { emoji: card.emoji, label: card.text, onExpand: () => setTeachOpen(true) } : undefined,
+          act: result && earned ? (
+            <>
+              {earned === 3 && <Confetti />}
+              <ResultCard
+                stars={earned}
+                praise={earned === 3 ? 'Từ này tuyệt lắm!' : earned === 2 ? 'Gần được rồi, luyện thêm nhé!' : 'Nghe mẫu rồi thử lại nhé!'}
+                extra={
+                  <div className="flex flex-col items-center gap-2">
+                    <WordChip word={`/${ipa}/`} tone={tone ?? 'unknown'} />
+                    <p className="text-[13px] font-bold text-ink-500">{`Từ ${card.text} · ${Math.round(result.overall)} điểm`}</p>
+                    {score === null && (
+                      <p className="max-w-xl text-center text-sm font-bold leading-relaxed text-ink-500">
+                        {attempt.engine === 'webspeech' ? UNSCORED_SIMPLE : UNSCORED_UNHEARD}
+                      </p>
+                    )}
+                  </div>
+                }
+                hint={tip && tone !== 'good' ? { word: card.text, phoneme: ph, tip } : undefined}
+                forceHint={tone !== null && tone !== 'good'}
+                canReplay={!!attempt.lastBlob}
+                onReplay={() => playBlob(attempt.lastBlob!).catch(() => {})}
+                onSample={playSample}
+                onRetry={() => { attempt.reset(); setTeachOpen(true) }}
+                primary={mission
+                  ? { label: mission.label, onClick: mission.go }
+                  : { label: isLast ? 'Hoàn thành 🎉' : 'Tiếp theo →', to: nextRoute }}
+                animate
+                fox={{
+                  mood: earned === 3 ? 'cheer' : earned === 2 ? 'happy' : 'idle',
+                  say: earned === 3 ? 'Foxy: "Âm chuẩn quá đi!"' : earned === 2 ? 'Foxy: "Gần chuẩn rồi đó!"' : 'Foxy: "Luyện thêm chút nữa nhé!"',
+                }}
+              />
+            </>
+          ) : (
+            <>
+              {recording
+                ? <SpeakPrompt mood="listening" say="Foxy đang lắng nghe…" />
+                : <SpeakPrompt mood="idle" say={`Chạm rồi đọc: "${card.text}"`} />}
+              {attempt.error && <SpeakError error={attempt.error} onAction={onErrorAction} onDismiss={attempt.dismissError} />}
+              <MicButton state={attempt.micState} level={attempt.level} onPress={attempt.onMic} secondsLeft={recording ? secondsLeft : undefined} countdownLayout="row" />
+            </>
+          ),
+        }}
+      />
     </PageShell>
   )
 }

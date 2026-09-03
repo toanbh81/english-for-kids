@@ -6,7 +6,7 @@ vi.mock('../audio/player', () => ({ playUrl: playerControl.playUrl }))
 
 import { SoundWordList } from './SoundWordList'
 import { PHONEME_TIPS } from '../scoring/feedback'
-import { findSound } from '../content'
+import { findSound, SOUNDS } from '../content'
 
 /** Where a tap landed, and whether it was still carrying `{ mission: true }` — the flag leaves no
  * trace in the DOM, so the probe is the only way to see it. */
@@ -38,10 +38,18 @@ it('sits in the shared page frame', () => {
   expect(screen.getByTestId('page-body')).toHaveClass('overflow-y-auto')
 })
 
-it('heads the list with the sound itself and its mouth tip', () => {
+/** Brief §2 B2: "chip 'Âm 2/9'" in the header — the sound's own place among the 9, same number
+ * SoundPractice counts against (`SOUNDS.length`), never the word list's own doing. */
+it('heads with the sound’s own place among the 9 sounds', () => {
+  renderList()
+  expect(screen.getByText(`Âm ${SOUNDS.findIndex(s => s.ph === 'th') + 1}/${SOUNDS.length}`)).toBeInTheDocument()
+})
+
+it('heads the list with the sound itself and its mouth tip, via the shared SoundTier', () => {
   renderList()
   expect(screen.getByText('/θ/')).toBeInTheDocument()
   expect(screen.getByText(PHONEME_TIPS.th)).toBeInTheDocument()
+  expect(screen.getByTestId('sound-tier')).toHaveClass('md:max-w-[640px]')
 })
 
 it('shows one card per word of the sound, each linking to its own drill', () => {
@@ -88,30 +96,28 @@ it('plays the sound on its own, and says so when that sample is missing', async 
   await screen.findByText('Chưa có audio âm này')
 })
 
-// --- the phone frame (phase 10) ---------------------------------------------------------------
+// --- round-2 grid + Foxy (brief §2 B2 + R21) ---------------------------------------------------
 
-/** The design draws no frame for this screen, so the check is that it follows the drill it feeds:
- * a row per word below 768, the three-column deck of tiles from 768 up. jsdom cannot measure
- * either, so it checks the breakpoint each rule is written at — see the drill's suite for why. */
-it('lays each word out as a row on a phone and as a tile from `md` up', () => {
+/** Always 3 columns — the phone deck and the iPad one are the same `grid-cols-3`, never swapped
+ * for a stretched `md:grid-cols-3` that would pull the tiles apart across the wider column. */
+it('lays the words out as a 3-column grid, not a stretched md:grid-cols-3 deck', () => {
   renderList()
 
   const link = screen.getByRole('link', { name: 'Từ three' })
-  expect(link.className).toContain('max-md:flex-row')
-  expect(link.className).toContain('min-h-[96px]')
-  expect(link.className).toContain('md:min-h-[184px]')
-  // The three-column deck is still the tablet layout and still starts at 768.
-  expect(link.parentElement!.className).toContain('md:grid-cols-3')
+  expect(link.className).toContain('min-h-[120px]')
+  expect(link.className).toContain('md:w-[200px]')
+  expect(link.className).toContain('md:min-h-[180px]')
+
+  const grid = link.parentElement!
+  expect(grid.className).toContain('grid-cols-3')
+  expect(grid.className).not.toMatch(/\bmd:grid-cols-3\b/)
 })
 
-/** The tip sits under the symbol on a phone and back between the symbol and the button from `md`
- * up — the order the landscape header has always read in. */
-it('keeps the landscape header order from `md` up', () => {
+it('prompts to pick a word with Foxy below the grid, and says which prize it earns', () => {
   renderList()
-
-  expect(screen.getByText(PHONEME_TIPS.th).className).toContain('md:order-2')
-  expect(screen.getByRole('button', { name: /nghe âm lẻ/i }).className).toContain('md:order-3')
-  expect(screen.getByText('/θ/').className).toContain('md:order-1')
+  expect(screen.getByText('Chọn một từ để luyện nhé!')).toBeInTheDocument()
+  expect(screen.getByText('Luyện đủ 3 từ để xanh cả âm!')).toBeInTheDocument()
+  expect(screen.getByTestId('foxy')).toBeInTheDocument()
 })
 
 it('goes back to the stairs', () => {
@@ -128,8 +134,9 @@ it('sends the child on to a word with no mission flag attached', () => {
 // --- reached from a lesson persisted before per-word steps existed ----------------------------
 
 /** A lesson saved yesterday still holds `/sound/<ph>` items, so a mission tap can still land here.
- * The list is not a step and shows no "Âm i/n" chip — but it must not be a dead end either: the
- * child gets their way back to the mission, and the flag rides on into the word they pick. */
+ * The list is not a step and shows no "Âm i/n" mission chip — but it must not be a dead end
+ * either: the child gets their way back to the mission, and the flag rides on into the word they
+ * pick. */
 it('offers the way back to the mission when a stale lesson step lands here', () => {
   renderList('th', true)
 

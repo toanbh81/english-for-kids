@@ -4,22 +4,37 @@ import { useEffect, useState } from 'react'
 import type { PronunciationResult } from '../scoring/types'
 
 /** The hook is mocked, not the recorder + scorer: these tests are about what SoundPractice does
- * with a result, and `useSpeakingAttempt` is covered by its own suite and PracticeCard.test. */
+ * with a result, and `useSpeakingAttempt` is covered by its own suite and PracticeCard.test.
+ * `micState` is now a real piece of state (not a hardcoded `'idle'`) because round-2's carrier
+ * behaviours — dimmed header, "● Đang ghi" chip, the collapsed strip — all key off `recording`,
+ * and the "processing is not recording" guard needs a screen already rendered mid-attempt. */
+type MicState = 'idle' | 'recording' | 'processing' | 'disabled' | 'locked'
 const mic = vi.hoisted(() => ({
-  push: (_r: PronunciationResult) => {},
+  push: (_r: PronunciationResult, _b: Blob | null = null) => {},
   engine: 'azure' as 'azure' | 'webspeech',
   error: null as { kind: string; detail?: string } | null,
+  dismissError: () => {},
+  setMicState: (_s: MicState) => {},
+  // Read once, on mount/reset, by the effect below — set before `renderWord()` so a screen can be
+  // rendered already mid-attempt (e.g. `processing`) with no post-render `act()` needed.
+  initialMicState: 'idle' as MicState,
 }))
 vi.mock('../speaking/useSpeakingAttempt', () => ({
   useSpeakingAttempt(opts: { resetKey?: string; onResult?: (r: PronunciationResult, b: Blob | null) => void }) {
-    const [result, setResult] = useState<PronunciationResult | null>(null)
+    const [state, setState] = useState<{ result: PronunciationResult | null; blob: Blob | null }>({ result: null, blob: null })
+    const [micState, setMicState] = useState<MicState>('idle')
     // The real hook drops the result whenever the reset key changes — here, on the next word.
-    useEffect(() => { setResult(null) }, [opts.resetKey])
-    mic.push = (r: PronunciationResult) => { setResult(r); opts.onResult?.(r, null) }
+    useEffect(() => { setState({ result: null, blob: null }); setMicState(mic.initialMicState) }, [opts.resetKey])
+    mic.push = (r: PronunciationResult, b: Blob | null = null) => {
+      setState({ result: r, blob: b })
+      opts.onResult?.(r, b)
+    }
+    mic.dismissError = () => {}
+    mic.setMicState = setMicState
     return {
-      micState: 'idle' as const, level: 0, engine: mic.engine,
-      result, error: mic.error, lastBlob: null,
-      onMic: () => {}, reset: () => setResult(null), dismissError: () => {},
+      micState, level: 0, engine: mic.engine,
+      result: state.result, error: mic.error, lastBlob: state.blob,
+      onMic: () => {}, reset: () => { setState({ result: null, blob: null }); setMicState('idle') }, dismissError: mic.dismissError,
     }
   },
 }))
@@ -28,6 +43,7 @@ vi.mock('../audio/player', () => ({ playUrl: playerControl.playUrl, playBlob: vi
 
 import { SoundPractice } from './SoundPractice'
 import { PHONEME_TIPS } from '../scoring/feedback'
+import { SOUNDS } from '../content'
 import { dayKey } from '../progress/activity'
 import { saveLesson } from '../progress/lessonStore'
 import type { LessonItem } from '../progress/lesson'
@@ -68,8 +84,16 @@ function ws(accuracy: number): PronunciationResult {
   }
 }
 
-function score(r: PronunciationResult) {
-  act(() => { mic.push(r) })
+const score = (r: PronunciationResult, blob: Blob | null = null) => act(() => { mic.push(r, blob) })
+const startRecording = () => act(() => { mic.setMicState('recording') })
+
+/** Walks up from `el` to the nearest ancestor carrying `cls` — used where the class under test
+ * sits on a wrapper `data-testid` doesn't reach (PageBody's own collapse wrapper). */
+function ancestorWithClass(el: Element, cls: string): HTMLElement {
+  let node: Element | null = el
+  while (node && !node.classList.contains(cls)) node = node.parentElement
+  if (!node) throw new Error(`no ancestor of ${el.outerHTML.slice(0, 80)} carries class "${cls}"`)
+  return node as HTMLElement
 }
 
 /** One word of one sound — the screen's whole job now. */
@@ -93,6 +117,7 @@ beforeEach(() => {
   localStorage.clear()
   mic.engine = 'azure'
   mic.error = null
+  mic.initialMicState = 'idle'
   playerControl.playUrl.mockReset().mockResolvedValue(undefined)
 })
 
@@ -118,20 +143,6 @@ it('lays the sound and the word tile out with their own listening buttons', () =
   expect(wordTile).toHaveTextContent('three')
 
   expect(screen.getByRole('button', { name: /nghe âm lẻ/i })).toBeInTheDocument()
-})
-
-/** Both counters still exist on a phone; only the teach column folds away. */
-it('folds the teach column away on a phone once a result lands, and only on a phone', () => {
-  renderWord()
-  const teach = screen.getByTestId('word-tile').parentElement!
-  expect(teach.className).not.toContain('max-md:hidden')
-
-  score(result(55))
-
-  expect(teach.className).toContain('max-md:hidden')
-  // The sound and its tip are not lost with it — the result card reprints the IPA chip and the tip.
-  expect(wordChip()).toHaveTextContent('/θ/')
-  expect(screen.getByText(PHONEME_TIPS.th)).toBeInTheDocument()
 })
 
 /** The frame is the shared `PageShell`: `overflow-hidden` on `main`, `page-body` the only
@@ -172,14 +183,16 @@ it('plays the sound on its own, and says so when that sample is missing', async 
   await screen.findByText('Chưa có audio âm này')
 })
 
-it('folds the word tile away once a result lands, and keeps the "Từ n/3" count in the header instead', () => {
+/** The word tile is not removed once a result lands — brief §1 "landscape never collapses":
+ * `PageBody`'s own strip covers it on a phone, but the teach column (word tile included) stays in
+ * the DOM for a real iPad landscape. The header's "Từ n/3" count is the same fact either way. */
+it('keeps the word tile and the "Từ n/3" count once a result lands', () => {
   renderWord()
   expect(screen.getByTestId('word-tile')).toBeInTheDocument()
 
   score(result(92))
 
-  expect(screen.queryByTestId('word-tile')).not.toBeInTheDocument()
-  // Still on screen exactly once — relocated, never lost.
+  expect(screen.getByTestId('word-tile')).toBeInTheDocument()
   expect(screen.getByText('Từ 1/3')).toBeInTheDocument()
 })
 
@@ -191,8 +204,8 @@ it('scores only the target sound: a good phoneme needs no tip', () => {
   expect(chip).toHaveAttribute('data-tone', 'good')
   expect(screen.getByText(/90 điểm/)).toBeInTheDocument()
   // The result card itself carries no hint at 3 stars — the teach column's own copy of the tip
-  // (now off-screen behind `max-md:hidden`, not removed) is a different element.
-  expect(within(screen.getByTestId('result-card')).queryByText(PHONEME_TIPS.th)).not.toBeInTheDocument()
+  // is a different element (it never leaves the DOM — see the "landscape never collapses" test).
+  expect(within(screen.getByTestId('result-card')).queryByText(/Sửa từ này/)).not.toBeInTheDocument()
 })
 
 it('turns a weak target sound into a fix chip plus the mouth tip', () => {
@@ -200,9 +213,23 @@ it('turns a weak target sound into a fix chip plus the mouth tip', () => {
   score(result(55))
 
   expect(wordChip()).toHaveAttribute('data-tone', 'fix')
-  expect(screen.getByText(PHONEME_TIPS.th)).toBeInTheDocument()
+  const card = screen.getByTestId('result-card')
+  expect(within(card).getByText(/Sửa từ này/)).toHaveTextContent(PHONEME_TIPS.th)
   // The word is still shown, but small and only as context for the sound.
   expect(screen.getByText(/90 điểm/)).toBeInTheDocument()
+})
+
+/** Brief §4 R11: the hint is forced to show whenever the sound itself was not good — not merely
+ * below 2 stars. A word can land exactly on 2 stars (ceiling from an unmeasured sound, or a
+ * middling "ok" phoneme) and still owe the child the mouth tip. */
+it('forces the hint to show at 2 stars whenever the sound itself was not "good"', () => {
+  renderWord()
+  score(result(65))
+
+  expect(screen.getAllByTestId('star-filled')).toHaveLength(2)
+  expect(wordChip()).toHaveAttribute('data-tone', 'ok')
+  const card = screen.getByTestId('result-card')
+  expect(within(card).getByText(/Sửa từ này/)).toHaveTextContent(PHONEME_TIPS.th)
 })
 
 /** The word's accuracy is not the sound's score: "three" said as "tree" can still be 90 % accurate
@@ -369,7 +396,7 @@ it('numbers the word inside the lesson and keeps its place in the sound', () => 
   renderWord('th', 'sz-th-three', true)
 
   expect(screen.getByText('Âm 1/2')).toBeInTheDocument()
-  // Two different facts, so both chips stay.
+  // Two different facts, so both chip halves stay.
   expect(screen.getByText('Từ 1/3')).toBeInTheDocument()
   expect(screen.getByRole('link', { name: 'Nhiệm vụ' })).toHaveAttribute('href', '/mission')
 })
@@ -403,12 +430,132 @@ it('ends at the mission screen when it is the last step of the lesson', () => {
 })
 
 /** Today's lesson may well list this very word — but a child who walked in from the word list did
- * not arrive carrying the flag, and nothing about the screen may change for them. */
+ * not arrive carrying the flag, and nothing about the screen may change for them (beyond the
+ * sound's own free-play place among the 9, which is always there — see the ChipPair test below). */
 it('stays free play without the flag, lesson or no lesson', () => {
   seedLesson(WORD_STEP, NEXT_STEP)
   renderWord()
 
-  expect(screen.queryByText(/^Âm \d/)).not.toBeInTheDocument()
+  expect(screen.getByText(`Âm 1/${SOUNDS.length}`)).toBeInTheDocument()
   expect(screen.getByText('Từ 1/3')).toBeInTheDocument()
   expect(screen.getByRole('link', { name: 'Quay lại' })).toHaveAttribute('href', '/sound/th')
+})
+
+// --- round-2 carrier: header ChipPair, SoundTier, the collapsed strip -------------------------
+
+/** Brief §0 Q8: the two counts are always one `ChipPair`, teal "Âm n/9" + coral "Từ n/3" — never
+ * the old two loose chips plus a row of progress dots. */
+it('shows the sound/word ChipPair at idle and keeps it after a result, with no progress dots', () => {
+  renderWord()
+  const pair = screen.getByTestId('chip-pair')
+  expect(pair).toHaveTextContent(`Âm 1/${SOUNDS.length}Từ 1/3`)
+  // The old three-dot progress row was a bare `h-4 w-4 rounded-full` span per word — gone (Q8).
+  expect(document.querySelectorAll('.h-4.w-4.rounded-full')).toHaveLength(0)
+
+  score(result(92))
+  expect(screen.getByTestId('chip-pair')).toHaveTextContent(`Âm 1/${SOUNDS.length}Từ 1/3`)
+})
+
+it('lays out the round-2 teach column: the word at 40/56px, its own IPA hidden on the short fold', () => {
+  renderWord()
+  expect(screen.getByText('three')).toHaveClass('text-[40px]', 'md:text-[56px]')
+  expect(screen.getByText('/θriː/')).toHaveClass('short:hidden')
+  expect(screen.getByTestId('sound-tier')).toBeInTheDocument()
+})
+
+/** Brief §2 B3: "Ghi: tầng âm giữ … ô khẩu hình wiggle" — the tier and the word tile both stay up
+ * while recording; only the mouth tile animates. */
+it('dims the header, swaps the chip and wiggles the mouth tile while recording', () => {
+  renderWord()
+  startRecording()
+
+  const backCell = screen.getByRole('link', { name: 'Quay lại' }).closest('div')!
+  expect(backCell).toHaveClass('opacity-40', 'pointer-events-none')
+  const rightCell = screen.getByTestId('header-right')
+  expect(rightCell).toHaveClass('opacity-40', 'pointer-events-none')
+
+  const chip = screen.getByText('● Đang ghi')
+  expect(chip).toHaveClass('bg-coral-50', 'text-coral-text')
+  expect(screen.queryByText(/^Âm \d/)).not.toBeInTheDocument()
+  expect(screen.queryByText(/^Từ \d/)).not.toBeInTheDocument()
+
+  expect(screen.getByTestId('mouth-tile').querySelector('span')).toHaveClass('animate-wiggle')
+  expect(screen.getByText('three')).toBeInTheDocument()
+  expect(screen.getByTestId('countdown-row')).toBeInTheDocument()
+})
+
+/** Brief §2 B3: "Chạm rồi đọc: '<word>'" — no seconds badge, unlike the voice bậc's passage. */
+it('prompts to say the word with the mic ready, at idle, with no seconds badge', () => {
+  renderWord()
+  expect(screen.getByText('Chạm rồi đọc: "three"')).toBeInTheDocument()
+  expect(screen.queryByText(/giây/)).not.toBeInTheDocument()
+  expect(screen.getByRole('button', { name: /bấm để nói/i })).toBeInTheDocument()
+})
+
+/** Brief §1 "Tầng dạy gập": once a result lands the teach column collapses to a tap-to-expand
+ * strip (PageBody's `collapsed`) instead of the old `max-md:hidden`; tapping it reopens the full
+ * column. */
+it('collapses the teach column to a tap-to-expand strip once a result lands, and reopens on tap', () => {
+  renderWord()
+  score(result(92))
+
+  const strip = screen.getByRole('button', { name: /mở/i })
+  expect(strip).toHaveTextContent('three')
+  const hiddenWrap = ancestorWithClass(screen.getByTestId('sound-tier'), 'hidden')
+  expect(hiddenWrap).toHaveClass('ipad:flex')
+
+  const card = screen.getByTestId('result-card')
+  expect(within(card).getByTestId('foxy')).toBeInTheDocument()
+  expect(within(card).getByText('Foxy: "Âm chuẩn quá đi!"')).toBeInTheDocument()
+
+  fireEvent.click(strip)
+  expect(screen.queryByRole('button', { name: /mở/i })).not.toBeInTheDocument()
+})
+
+/** Reviewer minor (StarPractice precedent): scoring via "Thử lại" nulls `result` on its own, so a
+ * test that only clicks retry and checks the strip is gone would pass whether or not
+ * `setTeachOpen(true)` ever ran. Tap the strip open with no retry (`result` stays the SAME weak
+ * attempt), confirm the full column is back, then push a fresh result over top and confirm the
+ * strip collapses again — this only passes if the `teachOpen` effect re-fires on a genuinely new
+ * `result`. */
+it('reopens the teach column on tap, and collapses again once a fresh result lands', () => {
+  renderWord()
+  score(result(40))
+  expect(screen.getByRole('button', { name: /mở/i })).toBeInTheDocument()
+
+  fireEvent.click(screen.getByRole('button', { name: /mở/i }))
+  expect(screen.queryByRole('button', { name: /mở/i })).not.toBeInTheDocument()
+
+  score(result(95))
+  expect(screen.getByRole('button', { name: /mở/i })).toBeInTheDocument()
+})
+
+/** Spec decision 17 (brief R23 "Đang chấm"): `processing` reads as an idle mic with an hourglass
+ * and nothing else may react to it — no dimmed header, no "Đang ghi" chip, no collapsed strip, no
+ * mouth wiggle. Rendered already in `processing` via `mic.initialMicState`, no post-mount `act()`. */
+it('holds the teach column still while scoring — processing is not recording', () => {
+  mic.initialMicState = 'processing'
+  renderWord()
+
+  expect(screen.getByTestId('mouth-tile').querySelector('span')).not.toHaveClass('animate-wiggle')
+  expect(screen.getByText('three')).toBeInTheDocument()
+
+  const backCell = screen.getByRole('link', { name: 'Quay lại' }).closest('div')!
+  expect(backCell).not.toHaveClass('opacity-40')
+  expect(screen.getByTestId('header-right')).not.toHaveClass('opacity-40')
+  expect(screen.getByText('Từ 1/3')).toBeInTheDocument()
+  expect(screen.queryByText('● Đang ghi')).not.toBeInTheDocument()
+
+  expect(screen.queryByRole('button', { name: /mở/i })).not.toBeInTheDocument()
+  expect(screen.getByRole('button', { name: /đang chấm/i })).toBeInTheDocument()
+})
+
+it('places the SoundChip and the score line in the extra row, right after the head', () => {
+  renderWord()
+  score(result(92))
+
+  const card = screen.getByTestId('result-card')
+  const rows = Array.from(card.children).map(c => c.getAttribute('data-row'))
+  expect(rows).toEqual(['head', 'extra', 'listen', 'fox', 'cta'])
+  expect(within(card).getByText('Từ three · 90 điểm')).toBeInTheDocument()
 })
