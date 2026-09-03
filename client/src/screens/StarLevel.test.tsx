@@ -20,7 +20,7 @@ it('shows one card per sentence, with its Vietnamese meaning', () => {
   renderLevel()
 
   expect(screen.getByRole('heading', { name: /Sentence Stars/ })).toBeInTheDocument()
-  expect(screen.getByText('Nói cả câu — nhấn đúng chỗ, nối âm mượt!')).toBeInTheDocument()
+  expect(screen.getByText('Nói cả câu, nhấn đúng chỗ!')).toBeInTheDocument()
   expect(SENTENCE_STARS).toHaveLength(10)
 
   const cards = screen.getAllByRole('link', { name: /^Câu \d/ })

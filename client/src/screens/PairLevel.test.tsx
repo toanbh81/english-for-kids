@@ -20,7 +20,7 @@ it('shows one card per pair, with both words and the contrast', () => {
   renderLevel()
 
   expect(screen.getByRole('heading', { name: /Nghe & chọn/ })).toBeInTheDocument()
-  expect(screen.getByText('Nghe rồi chọn từ đúng — tai tinh, miệng chuẩn!')).toBeInTheDocument()
+  expect(screen.getByText('Nghe tinh, chọn đúng từ!')).toBeInTheDocument()
   expect(PAIRS).toHaveLength(8)
 
   const cards = screen.getAllByRole('link', { name: /^Cặp / })

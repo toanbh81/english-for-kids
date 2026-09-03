@@ -11,7 +11,7 @@ export function StarLevel() {
       <PageHeader
         back={<BackButton to="/levels" label="Các bậc" />}
         title="Sentence Stars ⭐"
-        sub="Nói cả câu — nhấn đúng chỗ, nối âm mượt!"
+        sub="Nói cả câu, nhấn đúng chỗ!"
       />
       <PageBody fade gap={10}>
         <ListGrid size="lg">

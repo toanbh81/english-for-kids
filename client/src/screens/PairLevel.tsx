@@ -13,7 +13,7 @@ export function PairLevel() {
       <PageHeader
         back={<BackButton to="/levels" label="Các bậc" />}
         title="Nghe & chọn 👯"
-        sub="Nghe rồi chọn từ đúng — tai tinh, miệng chuẩn!"
+        sub="Nghe tinh, chọn đúng từ!"
       />
       <PageBody fade gap={10}>
         <ListGrid size="lg">
