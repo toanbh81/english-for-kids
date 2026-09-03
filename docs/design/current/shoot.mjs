@@ -164,6 +164,25 @@ async function run(vpName, vp) {
   await S('home-streak-panel', null, async () => { await page.getByRole('button', { name: /Tuần này/ }).click(); await sleep(300) })
   await S('mission', '/mission')
   await S('mission-done', '/mission/done')
+  // Task 10: today's empty mission. `getLesson` only ever generates when there is no record yet
+  // for the day, so the only headless way into this state is to write a valid, already-empty
+  // `lesson.<day>` record ourselves before navigating — then clean it up so a later `mission` shot
+  // in the same run is not left looking at an empty lesson too.
+  if (!WANT || WANT.includes('mission-empty')) {
+    await page.evaluate(() => {
+      const id = localStorage.getItem('speakup.profile')
+      const pre = id ? `speakup.${id}.` : 'speakup.'
+      const d = new Date()
+      const day = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+      localStorage.setItem(`${pre}lesson.${day}`, JSON.stringify({ v: 1, day, created: Date.now(), band: 2, items: [] }))
+    })
+    await S('mission-empty', '/mission')
+    await page.evaluate(() => {
+      const id = localStorage.getItem('speakup.profile')
+      const pre = id ? `speakup.${id}.` : 'speakup.'
+      for (const k of Object.keys(localStorage)) if (k.startsWith(pre + 'lesson.')) localStorage.removeItem(k)
+    })
+  }
   await S('topic-animals', '/topic/animals')
   await S('topic-locked', '/topic/toys')
   await S('levels', '/levels')

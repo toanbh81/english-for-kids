@@ -72,6 +72,9 @@ const GROUP_CARD = [
   'flex h-[76px] min-w-0 items-center gap-3 rounded-xl2 bg-white px-4 text-left shadow-card-sm',
   'transition-transform active:scale-95',
   'md:h-auto md:flex-col md:justify-center md:gap-2 md:rounded-xl3 md:p-5 md:text-center md:shadow-card',
+  // Task 10: the iPad-landscape worst case is 5 columns in 834px tall — `md:h-auto` stays for iPad
+  // portrait (2 columns), `ipad:` outranks it so landscape gets the fixed 240 the brief measured.
+  'ipad:h-[240px]',
 ].join(' ')
 
 /** Today's lesson as a handful of steps rather than a flat list: one card per kind ("Nghe 1
@@ -96,6 +99,7 @@ export function DailyMission() {
   // -1 once every group is done — and for an empty lesson, which is why the finished branch below
   // reads `status.done` (it already guards `items.length > 0`) rather than this index.
   const currentIndex = groups.findIndex(group => !group.done)
+  const doneGroups = groups.filter(g => g.done).length
 
   // Decided once per mount and then remembered in storage by the effect, exactly as on Home: a
   // child who finishes their last step and lands back here gets the celebration screen, and a
@@ -109,30 +113,29 @@ export function DailyMission() {
 
   return (
     <PageShell>
-      <PageHeader back={<BackButton to="/" label="Về trang chủ" mdLabel="Về bản đồ" />}>
-        <h1 className="font-display text-[22px] font-extrabold leading-tight text-ink-900 md:text-[32px]">
-          Nhiệm vụ hôm nay 🌞
-        </h1>
-      </PageHeader>
-      <PageBody center={groups.length === 0}>
+      <PageHeader
+        back={<BackButton to="/" label="Về trang chủ" mdLabel="Về bản đồ" />}
+        title="Nhiệm vụ hôm nay 🌞"
+        sub={groups.length === 0 ? `Bậc ⭐ ${band}` : '5 bước nhỏ — 15 phút thôi!'}
+        right={
+          // Task 10: the two chips move into the header's right cell, iPad-only — on a phone this
+          // renders an empty (`hidden`) box rather than nothing, so there is no need for the
+          // `right={null}` a screen with truly nothing there would pass (decision 8).
+          <div className="hidden items-center gap-2 md:flex">
+            <Chip tone="sun" className="hidden text-[15px] rounded-r12 px-3.5 py-2 md:inline-flex">Bậc ⭐ {band}</Chip>
+            <Chip tone="teal" className="text-[15px] rounded-r12 px-3.5 py-2">{doneGroups}/{groups.length} nhóm xong</Chip>
+          </div>
+        }
+      />
+      <PageBody>
         {groups.length === 0 ? (
           <EmptyState
-            emoji="🌞"
+            size="hero"
             title="Hôm nay chưa có nhiệm vụ"
-            sub="Bé có thể luyện tự do bất kỳ đảo nào."
-            cta={{ label: 'Luyện tự do →', to: '/' }}
+            sub="Bé có thể luyện tự do ở bất kỳ đảo nào — hoặc leo các bậc luyện nói."
           />
         ) : (
           <>
-            <p className="text-center text-[15px] font-bold text-ink-500 md:text-lg">
-              5 bước nhỏ — 15 phút thôi!
-            </p>
-
-            <div className="mt-2.5 flex w-full items-center justify-center gap-2 ipad:gap-3">
-              <Chip tone="sun" className="text-sm ipad:text-lg">Bậc ⭐ {band}</Chip>
-              <Chip tone="teal" className="text-sm ipad:text-lg">{status.doneCount}/{status.total}</Chip>
-            </div>
-
             <div className={`mt-2.5 grid grow content-center gap-2.5 md:mt-4 md:grow-0 ipad:gap-3 ${COLUMNS[Math.min(groups.length, MAX_GROUPS)]}`}>
               {groups.map((group, i) => {
                 const kind = KIND[group.kind]
@@ -157,14 +160,11 @@ export function DailyMission() {
                       <div className="truncate font-display text-[17px] font-extrabold text-ink-900 md:overflow-visible md:whitespace-normal md:text-2xl">
                         {kind.title(group.items.length)}
                       </div>
-                      <div className="flex min-w-0 items-baseline gap-1.5 md:contents">
-                        <div className="font-display text-xs font-extrabold text-teal-600 md:text-xl">
-                          {group.doneCount}/{group.items.length}
-                        </div>
-                        <div className="truncate font-display text-xs font-extrabold text-ink-500 md:overflow-visible md:whitespace-normal md:text-base">
-                          Bước {i + 1}
-                          {isCurrent && <span className="text-teal-600"> · bắt đầu ở đây!</span>}
-                        </div>
+                      {/* Task 10: one line, count-first, instead of a separate teal count block —
+                        * the invitation on the ringed card now replaces the step number rather
+                        * than trailing after it. */}
+                      <div className="truncate font-display text-xs font-extrabold text-ink-500 md:overflow-visible md:whitespace-normal md:text-base">
+                        {group.doneCount}/{group.items.length} · {isCurrent ? <span className="text-teal-600">bắt đầu ở đây!</span> : `bước ${i + 1}`}
                       </div>
                     </div>
                     {group.done
@@ -173,7 +173,7 @@ export function DailyMission() {
                           ✓ Xong
                         </span>
                       )
-                      : <Chip tone={kind.tone} className="shrink-0 text-sm md:text-lg">≈ {kind.minutes(group.items.length)} phút</Chip>}
+                      : <Chip tone={kind.tone} className="shrink-0 text-sm md:text-lg">≈ {kind.minutes(group.items.length)}'</Chip>}
                   </Link>
                 )
               })}
@@ -182,24 +182,40 @@ export function DailyMission() {
         )}
       </PageBody>
       <PageFooter>
-        {/* 66 px beside the CTA on a phone (design M2), the 96 px mascot from the tablet
-          * breakpoint up: the SVG carries its size as an attribute, which only CSS can bend. */}
-        <Foxy
-          mood="cheer"
-          size="md"
-          className="shrink-0 [&_svg]:h-[63px] [&_svg]:w-[66px] md:[&_svg]:h-[93px] md:[&_svg]:w-[96px]"
-        />
-        {status.done
-          ? <Button to="/" size="lg" variant="secondary" className="flex-[1.35]"><HomeLabel /></Button>
-          : currentIndex !== -1
-            ? (
-              <Button to={groups[currentIndex].route} state={MISSION_STATE} size="lg" className="flex-[1.35]">
-                {status.doneCount === 0 ? 'Bắt đầu ▸' : 'Tiếp tục ▸'}
-              </Button>
-            )
-            // An empty lesson (nothing generated yet) has no step to point at and nothing to
-            // celebrate either — the grid above renders empty and there is simply no CTA.
-            : null}
+        {groups.length === 0 ? (
+          // Task 10: the hero empty state gets its own two-button footer instead of the single
+          // CTA `EmptyState`'s own `cta` used to draw — Foxy sits out this branch, the mascot
+          // already lives inside the hero card above.
+          <>
+            <Button to="/" className="flex-1">Luyện tự do →</Button>
+            <Button to="/" variant="outline" className="flex-1"><HomeLabel /></Button>
+          </>
+        ) : (
+          <>
+            {/* 66 px beside the CTA on a phone (design M2), the 96 px mascot from the tablet
+              * breakpoint up, 80 px from ipad landscape: the SVG carries its size as an
+              * attribute, which only CSS can bend. */}
+            <Foxy
+              mood="cheer"
+              size="md"
+              className="shrink-0 [&_svg]:h-[63px] [&_svg]:w-[66px] md:[&_svg]:h-[93px] md:[&_svg]:w-[96px] ipad:[&_svg]:h-[77px] ipad:[&_svg]:w-[80px]"
+            />
+            {status.done
+              ? <Button to="/" size="lg" variant="secondary" className="flex-[1.35]"><HomeLabel /></Button>
+              : currentIndex !== -1
+                ? (
+                  // `ipad:flex-none`: `flex-[1.35]` sets a 0% flex-basis, which makes a flex item
+                  // ignore its own `width` — a bare `ipad:w-[480px]` alongside it renders no
+                  // different from the phone-width stretch (confirmed via
+                  // `shots/ipad/mission.png`). Zeroing grow/shrink at `ipad:` first is what lets
+                  // the fixed width actually take effect on the landscape footer row.
+                  <Button to={groups[currentIndex].route} state={MISSION_STATE} size="lg" className="flex-[1.35] ipad:w-[480px] ipad:flex-none">
+                    {status.doneCount === 0 ? 'Bắt đầu ▸' : 'Tiếp tục ▸'}
+                  </Button>
+                )
+                : null}
+          </>
+        )}
       </PageFooter>
     </PageShell>
   )

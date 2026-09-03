@@ -34,43 +34,65 @@ describe('Foxy', () => {
   })
 })
 
+// Task 10 (spec decisions 18/19): a fixed 300×128 tile with a 48px nowrap CTA and four states —
+// empty ("—", never happened yet), untouched ("0/n"), in progress ("n/total"), done ("✓ n/n").
 describe('MissionCard', () => {
   function renderCard(status: { doneCount: number; total: number; done: boolean }) {
     render(<MemoryRouter><MissionCard status={status} /></MemoryRouter>)
   }
 
-  it('shows how far through today lesson the child is, and the way into it', () => {
-    renderCard({ doneCount: 3, total: 10, done: false })
+  it('is a fixed 300×128 card with the design tokens for radius, border and shadow', () => {
+    renderCard({ doneCount: 3, total: 11, done: false })
+    const card = screen.getByTestId('mission-card')
+    expect(card).toHaveClass(
+      'h-[128px]', 'w-full', 'max-w-[300px]', 'rounded-r22', 'px-4', 'py-3.5',
+      'shadow-[0_6px_0_#EFE2CC]', 'border-2', 'border-[#F1E7D4]',
+    )
     expect(screen.getByText('🌞 Nhiệm vụ hôm nay')).toBeInTheDocument()
-    expect(screen.getByText('3/10')).toBeInTheDocument()
-    expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '30')
-    expect(screen.getByRole('link', { name: 'Tiếp tục ▸' })).toHaveAttribute('href', '/mission')
+  })
+
+  it('shows the in-progress count in teal and a 48px nowrap Tiếp tục CTA', () => {
+    renderCard({ doneCount: 3, total: 11, done: false })
+    expect(screen.getByText('3/11')).toHaveClass('text-teal-600')
+    expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '27')
+    const cta = screen.getByRole('link', { name: 'Tiếp tục ▸' })
+    expect(cta).toHaveClass('min-h-[48px]', 'rounded-r16', 'text-[17px]', 'whitespace-nowrap')
+    expect(cta).toHaveAttribute('href', '/mission')
   })
 
   // "Bắt đầu" is a promise about the lesson, not about the tap: a child who has already done two
-  // steps is carrying on, and the card must say so (spec §2).
-  it('says Bắt đầu on an untouched lesson and Tiếp tục once a step is done', () => {
-    const { unmount } = render(<MemoryRouter><MissionCard status={{ doneCount: 0, total: 10, done: false }} /></MemoryRouter>)
-    expect(screen.getByRole('link', { name: 'Bắt đầu ▸' })).toHaveAttribute('href', '/mission')
-    unmount()
-
-    renderCard({ doneCount: 1, total: 10, done: false })
-    expect(screen.getByRole('link', { name: 'Tiếp tục ▸' })).toBeInTheDocument()
-    expect(screen.queryByRole('link', { name: 'Bắt đầu ▸' })).not.toBeInTheDocument()
+  // steps is carrying on, and the card must say so (spec §2). The untouched count reads dimmer
+  // (ink-500) than an in-progress one (teal-600).
+  it('says Bắt đầu with a coral CTA on an untouched lesson', () => {
+    renderCard({ doneCount: 0, total: 11, done: false })
+    expect(screen.getByText('0/11')).toHaveClass('text-ink-500')
+    const cta = screen.getByRole('link', { name: 'Bắt đầu ▸' })
+    expect(cta).toHaveClass('bg-coral-500')
+    expect(cta).toHaveAttribute('href', '/mission')
   })
 
-  it('celebrates when the whole lesson is done and offers a replay', () => {
-    renderCard({ doneCount: 10, total: 10, done: true })
-    expect(screen.getByText(/Hoàn thành! 🎉/)).toBeInTheDocument()
+  // The standalone "Hoàn thành! 🎉" line is gone (spec decision 18) — the ✓ count and the teal
+  // "Chơi lại 🎉" CTA carry the celebration on their own.
+  it('celebrates a finished lesson with a ✓ count and a teal Chơi lại CTA, no separate banner', () => {
+    renderCard({ doneCount: 11, total: 11, done: true })
+    expect(screen.getByText('✓ 11/11')).toHaveClass('text-good-700')
     expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '100')
-    expect(screen.getByRole('link', { name: /Chơi lại/ })).toHaveAttribute('href', '/mission')
+    const cta = screen.getByRole('link', { name: 'Chơi lại 🎉' })
+    expect(cta).toHaveClass('bg-teal-500')
+    expect(cta).toHaveAttribute('href', '/mission')
+    expect(screen.queryByText('Hoàn thành! 🎉')).toBeNull()
   })
 
-  // A lesson can be empty only if generation found nothing at all; the bar must not go NaN.
-  it('shows an empty bar rather than NaN when there is no lesson', () => {
+  // A lesson can be empty only if generation found nothing at all: the fourth state, distinct from
+  // "untouched" — the count reads "—" instead of "0/0", and the CTA offers free practice on the
+  // map rather than a lesson with nothing in it.
+  it('shows an empty dash and an outline free-practice CTA when there is no lesson yet', () => {
     renderCard({ doneCount: 0, total: 0, done: false })
-    expect(screen.getByText('0/0')).toBeInTheDocument()
+    expect(screen.getByText('—')).toHaveClass('text-ink-300')
     expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '0')
+    const cta = screen.getByRole('link', { name: 'Luyện tự do →' })
+    expect(cta).toHaveClass('border-teal-line')
+    expect(cta).toHaveAttribute('href', '/')
   })
 })
 

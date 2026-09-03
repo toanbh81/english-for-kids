@@ -171,7 +171,7 @@ it('offers a replay CTA once the lesson is done and already celebrated', () => {
 
   for (const foxy of screen.getAllByTestId('foxy')) expect(foxy).toHaveAttribute('data-mood', 'cheer')
   expect(screen.getAllByText('Hoàn thành nhiệm vụ rồi! 🎉').length).toBeGreaterThan(0)
-  expect(screen.getByRole('link', { name: 'Hoàn thành rồi! 🎉 Chơi lại?' })).toHaveAttribute('href', '/mission')
+  expect(screen.getByRole('link', { name: 'Chơi lại 🎉' })).toHaveAttribute('href', '/mission')
 })
 
 it('sends the child to the celebration screen when the lesson is finished', () => {

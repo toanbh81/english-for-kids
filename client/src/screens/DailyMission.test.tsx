@@ -56,20 +56,22 @@ const TITLE: Record<LessonItemKind, (n: number) => string> = {
   review: n => `${n} bài ôn tập`,
 }
 
+// Task 10: an apostrophe instead of "phút" ("≈ 5'" rather than "≈ 5 phút").
 const MINUTES: Record<LessonItemKind, (n: number) => string> = {
-  listen: n => `≈ ${4 * n} phút`,
-  speak: n => `≈ ${n} phút`,
-  word: n => `≈ ${n} phút`,
-  sentence: n => `≈ ${n} phút`,
-  review: n => `≈ ${n} phút`,
+  listen: n => `≈ ${4 * n}'`,
+  speak: n => `≈ ${n}'`,
+  word: n => `≈ ${n}'`,
+  sentence: n => `≈ ${n}'`,
+  review: n => `≈ ${n}'`,
 }
 
 const card = (kind: LessonItemKind) => screen.getByTestId(`group-${kind}`)
 
-/** The step caption of a card, read whole: the ringed card colours the invitation with a nested
- * span, which text matching would otherwise treat as a separate element. */
+/** The count/caption line of a card, read whole: `"{done}/{total} · bước N"`, or `"{done}/{total}
+ * · bắt đầu ở đây!"` on the ringed card, where the invitation lives in a nested span the text
+ * matcher would otherwise treat as a separate element (Task 10 — count-first, one line). */
 const caption = (kind: LessonItemKind) =>
-  within(card(kind)).getByText(/^Bước/).textContent
+  within(card(kind)).getByText(/\d+\/\d+/).textContent
 
 beforeEach(() => {
   localStorage.clear()
@@ -80,14 +82,28 @@ afterEach(() => {
   vi.useRealTimers()
 })
 
-it('shows the empty-lesson state and no footer CTA when today has no items', () => {
-  saveLesson({ day: dayKey(NOW), created: NOW, band: 1, items: [] })
+it('shows the hero empty state and a two-button footer when today has no items', () => {
+  saveLesson({ day: dayKey(NOW), created: NOW, band: 2, items: [] })
   renderMission()
 
   expect(screen.getByText('Hôm nay chưa có nhiệm vụ')).toBeInTheDocument()
-  expect(screen.getByRole('link', { name: 'Luyện tự do →' })).toHaveAttribute('href', '/')
+  expect(screen.getByTestId('empty-state')).toHaveClass('flex-1')
+
+  const footer = screen.getByRole('contentinfo')
+  const practiceLink = screen.getByRole('link', { name: 'Luyện tự do →' })
+  expect(footer).toContainElement(practiceLink)
+  expect(practiceLink).toHaveAttribute('href', '/')
+  expect(practiceLink.className).toContain('min-h-[56px]')
+
+  const homeLink = screen.getByRole('link', { name: 'Về trang chủ 🏠Về bản đồ 🏝️' })
+  expect(footer).toContainElement(homeLink)
+  expect(homeLink).toHaveAttribute('href', '/')
+  expect(homeLink).toHaveClass('border-teal-line')
+
   expect(screen.queryByRole('link', { name: 'Bắt đầu ▸' })).not.toBeInTheDocument()
-  expect(screen.getByRole('contentinfo')).not.toContainElement(screen.getByRole('link', { name: 'Luyện tự do →' }))
+  // The header's sub line stands in for the removed body subtitle on the empty branch — it
+  // duplicates the (always-rendered, iPad-only) band chip, so there are two matches.
+  expect(screen.getAllByText('Bậc ⭐ 2').length).toBeGreaterThan(0)
 })
 
 it('sits in the shared page frame', () => {
@@ -99,6 +115,31 @@ it('sits in the shared page frame', () => {
   const cta = screen.getByRole('link', { name: 'Bắt đầu ▸' })
   expect(screen.getByRole('contentinfo')).toContainElement(cta)
   expect(document.querySelector('.sticky')).toBeNull()
+})
+
+// Task 10: the subtitle and the band/group-count chips move off the body and into the header —
+// the subtitle as PageHeader's own `sub` (a single `<p>` in the banner), the chips into the
+// header's right cell (iPad-only; a phone gets the same, `hidden`, box rather than nothing).
+it('moves the subtitle and the two chips into the header', () => {
+  renderMission()
+
+  expect(screen.getByText('5 bước nhỏ — 15 phút thôi!')).toBe(screen.getByRole('banner').querySelector('p'))
+
+  const right = screen.getByTestId('header-right')
+  expect(within(right).getByText(/^Bậc ⭐/)).toHaveClass('hidden', 'md:inline-flex')
+})
+
+it('shows the band chip and the finished-groups count in the header', () => {
+  const lesson = getLesson(NOW)
+  const groups = groupsOf(lesson)
+  const [first] = groups
+  complete(lesson, first.items) // finishes exactly one whole group
+
+  renderMission()
+
+  const right = screen.getByTestId('header-right')
+  expect(within(right).getByText(`Bậc ⭐ ${getBand().value}`)).toBeInTheDocument()
+  expect(within(right).getByText(`1/${groups.length} nhóm xong`)).toBeInTheDocument()
 })
 
 it('shows one card per kind of step, in lesson order, titled with its real count', () => {
@@ -113,10 +154,10 @@ it('shows one card per kind of step, in lesson order, titled with its real count
   groups.forEach((group, i) => {
     const el = card(group.kind)
     expect(within(el).getByText(TITLE[group.kind](group.items.length))).toBeInTheDocument()
-    expect(within(el).getByText(`0/${group.items.length}`)).toBeInTheDocument()
     expect(within(el).getByText(MINUTES[group.kind](group.items.length))).toBeInTheDocument()
-    // Every card is numbered; only the ringed one adds the invitation.
-    expect(caption(group.kind)).toBe(i === 0 ? 'Bước 1 · bắt đầu ở đây!' : `Bước ${i + 1}`)
+    // Every card is numbered; only the ringed one (the first, on a fresh lesson) swaps the step
+    // number for the invitation instead of trailing it.
+    expect(caption(group.kind)).toBe(i === 0 ? `0/${group.items.length} · bắt đầu ở đây!` : `0/${group.items.length} · bước ${i + 1}`)
   })
 })
 
@@ -131,7 +172,7 @@ it('shows the sentence card in lesson order, after the new words', () => {
   const el = card('sentence')
   expect(within(el).getByText('🧱')).toBeInTheDocument()
   expect(within(el).getByText(`${sentences.length} câu ghép`)).toBeInTheDocument()
-  expect(within(el).getByText(`≈ ${sentences.length} phút`)).toBeInTheDocument()
+  expect(within(el).getByText(`≈ ${sentences.length}'`)).toBeInTheDocument()
   expect(el).toHaveAttribute('href', sentences[0].route)
 
   const order = screen.getAllByTestId(/^group-/).map(el => el.getAttribute('data-testid'))
@@ -151,16 +192,16 @@ it('draws each step as a row on a phone and as a column from the tablet breakpoi
     // The phone default: a row of fixed height, laid out left to right.
     expect(el).toHaveClass('flex', 'h-[76px]', 'items-center', 'text-left')
     expect(el).not.toHaveClass('flex-col')
-    // …and the column card from `md` up.
-    expect(el).toHaveClass('md:flex-col', 'md:h-auto', 'md:text-center', 'md:p-5')
+    // …and the column card from `md` up, fixed to 240 tall from `ipad` landscape.
+    expect(el).toHaveClass('md:flex-col', 'md:h-auto', 'md:text-center', 'md:p-5', 'ipad:h-[240px]')
   }
 
-  // The two text wrappers the row needs dissolve again on the tablet, so the card is the same four
-  // stacked children it has always been on the iPad.
+  // The title and the caption dissolve their shared wrapper again on the tablet, so the card is
+  // the same stacked children it has always been on the iPad.
   const first = groups[0]
   expect(within(card(first.kind)).getByText(TITLE[first.kind](first.items.length)).parentElement)
     .toHaveClass('md:contents')
-  expect(within(card(first.kind)).getByText(/^Bước/).parentElement).toHaveClass('md:contents')
+  expect(within(card(first.kind)).getByText(/\d+\/\d+/).parentElement).toHaveClass('md:contents')
 })
 
 /** Five groups since 🧱 joined them, and the grid has to hold all five side by side: a row that
@@ -174,6 +215,19 @@ it('keeps all five groups on a single row from ipad up', () => {
   const grid = card('listen').parentElement
   expect(grid).toHaveClass('grid', 'ipad:grid-cols-5')
   expect(within(grid!).getAllByTestId(/^group-/)).toHaveLength(5)
+})
+
+// Task 10: the iPad-landscape worst case is 5 groups × 240 tall + the footer, inside an 834 px
+// screen (the old Phase 12 `mission-full.png` overflowed a 1189 px one).
+it('gives every group card the 240px iPad-landscape height, and the footer CTA the 480px width', () => {
+  const lesson = getLesson(NOW)
+  const groups = groupsOf(lesson)
+  complete(lesson, [lesson.items[0]]) // one step done, so the footer says "Tiếp tục" not "Bắt đầu"
+
+  renderMission()
+
+  for (const group of groups) expect(card(group.kind)).toHaveClass('ipad:h-[240px]')
+  expect(screen.getByRole('link', { name: /Tiếp tục/ })).toHaveClass('ipad:w-[480px]')
 })
 
 // The child asked for a mission that mixes islands; naming the islands on the card would put the
@@ -196,11 +250,8 @@ it('counts the finished items inside each group', () => {
 
   renderMission()
 
-  expect(within(card(first.kind)).getByText(`${first.items.length}/${first.items.length}`))
-    .toBeInTheDocument()
-  expect(within(card(second.kind)).getByText(`1/${second.items.length}`)).toBeInTheDocument()
-  // The header keeps the whole-lesson fraction.
-  expect(screen.getByText(`${first.items.length + 1}/${lesson.items.length}`)).toBeInTheDocument()
+  expect(caption(first.kind)).toBe(`${first.items.length}/${first.items.length} · bước 1`)
+  expect(caption(second.kind)).toBe(`1/${second.items.length} · bắt đầu ở đây!`)
 })
 
 it('rings the first group that still has something to do, and only that one', () => {
@@ -210,9 +261,9 @@ it('rings the first group that still has something to do, and only that one', ()
 
   renderMission()
 
-  expect(caption(second.kind)).toBe('Bước 2 · bắt đầu ở đây!')
-  expect(caption(first.kind)).toBe('Bước 1')
-  expect(screen.getAllByText(/bắt đầu ở đây!/)).toHaveLength(1)
+  expect(caption(second.kind)).toBe(`0/${second.items.length} · bắt đầu ở đây!`)
+  expect(caption(first.kind)).toBe(`${first.items.length}/${first.items.length} · bước 1`)
+  expect(screen.getAllByText('bắt đầu ở đây!')).toHaveLength(1)
   expect(card(second.kind).className).toContain('border-teal-500')
   expect(card(first.kind).className).not.toContain('border-teal-500')
 })
@@ -226,7 +277,7 @@ it('shows ✓ Xong instead of the minute chip on a finished group', () => {
 
   const el = card(first.kind)
   expect(within(el).getByText('✓ Xong')).toBeInTheDocument()
-  expect(within(el).queryByText(/phút/)).not.toBeInTheDocument()
+  expect(within(el).queryByText(/'/)).not.toBeInTheDocument()
   expect(screen.getAllByText('✓ Xong')).toHaveLength(1)
 })
 
@@ -298,16 +349,6 @@ it('says Bắt đầu on an untouched lesson and Tiếp tục once a step is don
   expect(screen.queryByRole('link', { name: 'Bắt đầu ▸' })).not.toBeInTheDocument()
 })
 
-it('shows the band chip and the done count', () => {
-  const lesson = getLesson(NOW)
-  complete(lesson, lesson.items.slice(0, 2))
-
-  renderMission()
-
-  expect(screen.getByText(`Bậc ⭐ ${getBand().value}`)).toBeInTheDocument()
-  expect(screen.getByText(`2/${lesson.items.length}`)).toBeInTheDocument()
-})
-
 // The cards label the items on screen, and those were chosen when the lesson was generated. A
 // parent raising the difficulty at lunchtime changes tomorrow's lesson, not today's.
 it('shows the band the lesson was built at, not a parent override made since', () => {
@@ -340,7 +381,7 @@ it('shows the finish state on a revisit once every step is done', () => {
 
   renderMission()
 
-  expect(screen.queryByText(/bắt đầu ở đây!/)).not.toBeInTheDocument()
+  expect(screen.queryByText('bắt đầu ở đây!')).not.toBeInTheDocument()
   expect(screen.getAllByText('✓ Xong')).toHaveLength(groupsOf(lesson).length)
   expect(screen.getByRole('link', { name: /Về bản đồ 🏝️/ })).toHaveAttribute('href', '/')
 })
