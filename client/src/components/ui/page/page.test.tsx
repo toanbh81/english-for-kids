@@ -50,10 +50,12 @@ describe('PageShell', () => {
     expect(screen.getByText('làm').parentElement).toHaveClass('ipad:min-h-0', 'ipad:overflow-y-auto')
   })
 
-  it('collapsed split body shows the strip instead of the teach column and expands on tap', () => {
+  it('collapsed split body shows the strip on a phone/portrait and keeps the teach column CSS-visible on iPad landscape', () => {
     const onExpand = vi.fn()
     wrap(<PageShell><PageBody split={{ teach: <p>dạy</p>, act: <p>làm</p>, collapsed: { emoji: '😊', label: 'I love my dog!', onExpand } }} /></PageShell>)
-    expect(screen.queryByText('dạy')).toBeNull()
+    // Both the strip and the teach column render — CSS (not JS) decides which one shows, since a
+    // screen has no way to detect the compound `ipad` landscape variant at runtime.
+    expect(screen.getByText('dạy').parentElement).toHaveClass('hidden', 'ipad:flex')
     const strip = screen.getByRole('button', { name: /mở/ })
     expect(strip).toHaveClass('h-8', 'text-[15px]', 'text-[#D9C9AE]', 'md:h-16', 'md:bg-white', 'ipad:hidden')
     fireEvent.click(strip)
