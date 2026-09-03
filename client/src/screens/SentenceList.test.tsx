@@ -69,6 +69,28 @@ it('shows only one topic — and names it — when the topic hub links in with ?
   expect(screen.queryByText('Đồ ăn')).not.toBeInTheDocument()
 })
 
+/** Fix round 1, D2: SentenceBuilder's "Tiếp theo" only stays inside a topic when the route it
+ * lands on already carries `?topic=` — so a row reached through a topic-filtered list has to hand
+ * that topic on, or R20's in-topic navigation is dead code with nothing in the real app that ever
+ * triggers it. */
+it('carries ?topic= on each row link when the list is topic-filtered', () => {
+  renderList('/sentences?topic=animals')
+  const animals = SENTENCES.filter(s => s.topic === 'animals')
+  rowLinks().forEach(link => {
+    const id = animals.find(s => link.getAttribute('href') === `/sentence/${s.id}?topic=animals`)?.id
+    expect(id, `${link.getAttribute('href')} should carry ?topic=animals`).toBeDefined()
+  })
+})
+
+// An unfiltered row has no topic of its own to carry — this is the existing behaviour the test
+// above ("renders a row for every sentence… linking to /sentence/<id>") already pins with exact
+// hrefs; this just names the contrast explicitly.
+it('drops ?topic= from every row link when the list is not filtered', () => {
+  openEveryTopic()
+  renderList()
+  rowLinks().forEach(link => expect(link.getAttribute('href')).not.toContain('?topic='))
+})
+
 it('falls back to the full list for a topic id that no longer exists', () => {
   openEveryTopic()
   renderList('/sentences?topic=dinosaurs')

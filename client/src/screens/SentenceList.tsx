@@ -46,7 +46,10 @@ export function SentenceList() {
               )}
               <div className="flex flex-col gap-4">
                 {SENTENCES.filter(s => s.topic === t.id).map(s => (
-                  <Link key={s.id} to={`/sentence/${s.id}`} className={ROW}>
+                  // Fix round 1, D2: a topic-filtered row hands the topic on so SentenceBuilder's
+                  // "Tiếp theo" can stay inside it (spec brief R20) — an unfiltered row has no
+                  // topic of its own to carry, so it keeps stepping through the flat list instead.
+                  <Link key={s.id} to={topic ? `/sentence/${s.id}?topic=${topic.id}` : `/sentence/${s.id}`} className={ROW}>
                     <span className="font-display text-[24px] font-extrabold text-ink-900">{s.vi}</span>
                     <StarRow value={getStars(`sentence:${s.id}`)} />
                   </Link>

@@ -149,14 +149,6 @@ function SentenceBuilderInner({ sentence }: { sentence: Sentence }) {
     return () => clearInterval(id)
   }, [recording])
 
-  // Brief §1 "Tầng dạy gập": the teach column collapses to a tap-to-expand strip once a result
-  // lands, and reopens either on tap or on a fresh attempt — a retry should not leave the child
-  // staring at yesterday's collapsed strip once they start building again.
-  const [teachOpen, setTeachOpen] = useState(true)
-  useEffect(() => {
-    if (attempt.result) setTeachOpen(false)
-  }, [attempt.result])
-
   function tapPool(idx: number) {
     if (wrong) return
     setTrayIndices(prev => [...prev, idx])
@@ -279,7 +271,6 @@ function SentenceBuilderInner({ sentence }: { sentence: Sentence }) {
               )}
             </div>
           ),
-          collapsed: feedback && !teachOpen ? { emoji: '🧱', label: target, onExpand: () => setTeachOpen(true) } : undefined,
           act: feedback ? (
             <ResultCard
               stars={feedback.stars}
@@ -290,7 +281,7 @@ function SentenceBuilderInner({ sentence }: { sentence: Sentence }) {
               canReplay={!!attempt.lastBlob}
               onReplay={() => playBlob(attempt.lastBlob!).catch(() => {})}
               onSample={playSample}
-              onRetry={() => { attempt.reset(); setTeachOpen(true) }}
+              onRetry={() => attempt.reset()}
               primary={{ label: mission ? mission.label : 'Tiếp theo →', onClick: goNext }}
               animate={feedback.stars === 3}
               fox={{

@@ -7,8 +7,8 @@ import { shuffleTiles } from '../content/shuffle'
 
 /** The hook is mocked, not the recorder + scorer — same shape as `PairPractice.test.tsx` /
  * `StarPractice.test.tsx`: `micState` is real state (not a hardcoded `'idle'`) because round-2's
- * carrier behaviours — dimmed header, "● Đang ghi" chip, the collapsed strip, `processing` — all
- * key off it. */
+ * carrier behaviours — dimmed header, "● Đang ghi" chip, `processing` — all key off it. (C9 never
+ * collapses its teach column to a strip — see the "never a collapsed strip" test below.) */
 type MicState = 'idle' | 'recording' | 'processing' | 'disabled' | 'locked'
 const mic = vi.hoisted(() => ({
   push: (_r: PronunciationResult, _b: Blob | null = null) => {},
@@ -315,7 +315,7 @@ it('holds the teach column still while scoring — processing is not recording',
   expect(screen.getByRole('button', { name: /đang chấm/i })).toBeInTheDocument()
 })
 
-// --- result: ScoredWords in the tray, no words on ResultCard, four bars, hint, strip -----------
+// --- result: ScoredWords in the tray (never a strip), no words on ResultCard, four bars, hint ---
 
 it('a spoken score of 85 shows 3 filled stars, stores sentence:s1 = 3, and logs a sentence activity event', async () => {
   renderBuilder('s1')
@@ -391,41 +391,37 @@ it('treats an attempt that already has a result as the tray already built (DEV f
   expect(screen.queryByText('🟦 Ai?')).not.toBeInTheDocument()
 })
 
-it('"Thử lại" resets the spoken attempt', async () => {
+/** Fix round 1, D1: unlike every other round-2 screen, `ScoredWords` lives *inside* the teach
+ * column (the tray), not `ResultCard` — so C9 must never collapse the teach column to a
+ * tap-to-expand strip the way Pair/Star do, or the only place the scored words render would be
+ * hidden behind a tap on phone/short/iPad-portrait. The correct-banner and the sample button are
+ * the other half of the teach column and stay hidden once a result exists — the ResultCard's own
+ * listen row covers listening from here on. */
+it('keeps ScoredWords visible on the default render once a result lands — never a collapsed strip', async () => {
+  renderBuilder('s1')
+  await tapInCorrectOrder('s1')
+  score(result85, null)
+
+  const tray = screen.getByTestId('tray')
+  expect(within(tray).getAllByTestId('word-chip')).toHaveLength(S1_WORDS.length)
+  expect(screen.queryByRole('button', { name: /mở/i })).not.toBeInTheDocument()
+  expect(screen.queryByText('Đúng rồi! 🎉 Giờ đọc câu lên nhé')).not.toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: '🔊 Đọc câu cho bé nghe' })).not.toBeInTheDocument()
+})
+
+it('"Thử lại" resets the spoken attempt and brings the correct tray, the banner and the sample button back', async () => {
   renderBuilder('s1')
   await tapInCorrectOrder('s1')
   score(result85, null)
 
   fireEvent.click(screen.getByRole('button', { name: /Thử lại/ }))
+
   expect(screen.getByRole('button', { name: 'Bấm để nói' })).toBeInTheDocument()
-})
-
-/** Brief §1 "Tầng dạy gập": once a result lands the teach column collapses to a tap-to-expand
- * strip (PageBody's `collapsed`) instead of the old `max-md:hidden`; tapping it reopens the full
- * column, and a fresh result collapses it again. */
-it('collapses the teach column to a tap-to-expand strip once a result lands, and reopens on tap', async () => {
-  renderBuilder('s1')
-  await tapInCorrectOrder('s1')
-  score(result85, null)
-
-  const strip = screen.getByRole('button', { name: /mở/i })
-  expect(strip).toHaveTextContent('I eat an apple.')
-
-  fireEvent.click(strip)
-  expect(screen.queryByRole('button', { name: /mở/i })).not.toBeInTheDocument()
-})
-
-it('reopens the teach column on tap, and collapses again once a fresh result lands', async () => {
-  renderBuilder('s1')
-  await tapInCorrectOrder('s1')
-  score(resultFor(S1_WORDS, 40), null)
-  expect(screen.getByRole('button', { name: /mở/i })).toBeInTheDocument()
-
-  fireEvent.click(screen.getByRole('button', { name: /mở/i }))
-  expect(screen.queryByRole('button', { name: /mở/i })).not.toBeInTheDocument()
-
-  score(resultFor(S1_WORDS, 95), null)
-  expect(screen.getByRole('button', { name: /mở/i })).toBeInTheDocument()
+  expect(screen.getByText('Đúng rồi! 🎉 Giờ đọc câu lên nhé')).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: '🔊 Đọc câu cho bé nghe' })).toBeInTheDocument()
+  const tray = screen.getByTestId('tray')
+  expect(within(tray).getAllByRole('button')).toHaveLength(S1_WORDS.length)
+  expect(within(tray).queryAllByTestId('word-chip')).toHaveLength(0)
 })
 
 // --- "Tiếp theo" — flat list vs. inside a topic (R20) -------------------------------------------
