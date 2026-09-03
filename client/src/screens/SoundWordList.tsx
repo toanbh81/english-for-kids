@@ -1,12 +1,12 @@
 import { useState } from 'react'
-import { Link, useLocation, useParams } from 'react-router-dom'
+import { useLocation, useParams } from 'react-router-dom'
 import { findSound, SOUNDS } from '../content'
 import type { SoundGroup } from '../content/types'
 import { playUrl } from '../audio/player'
 import { PHONEME_TIPS } from '../scoring/feedback'
 import { getStars } from '../progress/store'
 import { MISSION_STATE } from '../progress/missionNav'
-import { BackButton, Chip, NotFound, StarRow } from '../components/ui'
+import { BackButton, Chip, NotFound, Tile } from '../components/ui'
 import { PageShell, PageHeader, PageBody } from '../components/ui/page'
 import { SoundTier, SpeakPrompt } from '../components/speak'
 
@@ -68,18 +68,18 @@ function WordList({ sound }: { sound: SoundGroup }) {
               as a small centred group rather than three tiles pulled apart across 640px. */}
           <div className="grid w-full grid-cols-3 gap-2.5 md:w-auto md:grid-cols-[repeat(3,200px)] md:justify-center md:gap-5">
             {cards.map(c => (
-              <Link
+              <Tile
                 key={c.id}
                 to={`/sound/${ph}/${c.id}`}
                 state={mission ? MISSION_STATE : undefined}
-                aria-label={`Từ ${c.text}`}
-                className="flex min-h-[120px] flex-col items-center justify-center gap-1 rounded-r18 bg-white px-2 py-3 text-center shadow-[0_5px_0_#EFE2CC] md:w-[200px] md:min-h-[180px]"
-              >
-                <span aria-hidden="true" className="text-[40px] leading-none">{c.emoji}</span>
-                <span className="font-display text-[17px] font-extrabold text-ink-900">{c.text}</span>
-                <span className="text-[12px] font-bold text-sand-text">{c.ipa}</span>
-                <StarRow value={getStars(`sword:${c.id}`)} size="xs" />
-              </Link>
+                ariaLabel={`Từ ${c.text}`}
+                emoji={c.emoji}
+                title={c.text}
+                sub={c.ipa}
+                subTone="sand"
+                stars={getStars(`sword:${c.id}`)}
+                className="md:h-[180px] md:w-[200px]"
+              />
             ))}
           </div>
 

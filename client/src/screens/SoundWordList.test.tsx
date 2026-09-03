@@ -104,13 +104,29 @@ it('lays the words out as a 3-column grid, not a stretched md:grid-cols-3 deck',
   renderList()
 
   const link = screen.getByRole('link', { name: 'Từ three' })
-  expect(link.className).toContain('min-h-[120px]')
+  expect(link.className).toContain('md:h-[180px]')
   expect(link.className).toContain('md:w-[200px]')
-  expect(link.className).toContain('md:min-h-[180px]')
 
   const grid = link.parentElement!
   expect(grid.className).toContain('grid-cols-3')
   expect(grid.className).not.toMatch(/\bmd:grid-cols-3\b/)
+})
+
+/** Round 3 (Phase 14 task 7): the three word tiles are the standard small `Tile`, not a
+ * bespoke card — 110 tall on a phone, 200×180 on iPad, word 15/19px, stars 13px. */
+it('the three word tiles are the standard small tile, 110 on a phone', () => {
+  renderList()
+  const tiles = screen.getAllByTestId('tile')
+  expect(tiles).toHaveLength(3)
+  expect(tiles[0]).toHaveClass('h-[110px]', 'md:h-[180px]', 'md:w-[200px]')
+  expect(screen.getByText('three')).toHaveClass('text-[15px]', 'md:text-[19px]')
+  expect(screen.getAllByTestId('stars')[0]).toHaveClass('text-[13px]')
+})
+
+it('the centre header keeps its Phase 13 chip, not a title/sub header', () => {
+  renderList()
+  expect(screen.getByText(`Âm ${SOUNDS.findIndex(s => s.ph === 'th') + 1}/${SOUNDS.length}`)).toBeInTheDocument()
+  expect(screen.queryByRole('heading', { level: 1 })).toBeNull()
 })
 
 it('prompts to pick a word with Foxy below the grid, and says which prize it earns', () => {
