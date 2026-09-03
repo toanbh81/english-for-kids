@@ -1321,12 +1321,14 @@ half — Foxy, mic, error, `ResultCard`, CTA. Implemented 2026-09-03 on branch `
   and the header's right slot drop to `opacity-40 pointer-events-none` — and each screen feeds a coral
   "● Đang ghi" chip into the header's center slot while `recording` is true.
 - **Chip đôi (`ChipPair`).** A joined two-part pill, teal on the left with a left radius, coral on the
-  right with a right radius. Used by Tập âm ("Âm i/N · Từ i/N", always shown now — the old 3-dot
-  indicator is gone) and Nghe & chọn ("Cặp i/N · ɪ/iː").
-- **Đếm ngược cùng hàng (countdown same row).** `MicButton` gained `countdownLayout: 'row' | 'column'`.
-  Every Phase 13 screen keeps `row` (tick mark + number sharing one row, number `min-w-[56px]` phone /
-  `min-w-[70px]` iPad) — the design's iPad-portrait `column` variant is parked for the final review
-  (Ruling, not responsive without a media-query hook or a `MicButton` `order` rework).
+  right with a right radius, the two halves butted together with no separator glyph between them
+  (colour is the only divider). Used by Tập âm ("Âm i/N" | "Từ i/N", always shown now — the old 3-dot
+  indicator is gone) and Nghe & chọn ("Cặp i/N" | "ɪ/iː").
+- **Đếm ngược cùng hàng (countdown same row).** `MicButton`'s level bars and countdown badge lay out
+  responsively, no prop: a row (tick marks + number sharing one row, number `min-w-[56px]` phone /
+  `min-w-[70px]` iPad) on a phone and on real iPad landscape (`ipad:`); a column with the number above
+  the bars on iPad portrait (`md:` without `ipad:`) — spec decision 5, satisfied once the `ipad:`
+  specificity fix (below) let `ipad:flex-row` beat `md:flex-col` on the same element.
 - **Foxy nhắc (`SpeakPrompt`).** A new component — Foxy at 60 px (phone) / 72 px (iPad) plus a speech
   bubble, with the seconds-to-record in coral — sits before `MicButton` in the act column. Every screen
   supplies its own `say` copy (e.g. PracticeCard's "Nói to, rõ trong 5 giây nhé!", VoicePractice's "Đọc
@@ -1338,9 +1340,10 @@ half — Foxy, mic, error, `ResultCard`, CTA. Implemented 2026-09-03 on branch `
 
 Two carrier fixes landed alongside the six behaviours, both discovered by screenshot review mid-branch
 rather than planned up front:
-- **Tailwind `ipad:` variant specificity.** Compiling `ipad` as a plain `screen` variant put it before
-  `md` in Tailwind 3's variant order, so every `md:` utility silently beat its `ipad:` counterpart on
-  the same property regardless of which the JSX wrote last (`md:flex-row` > `ipad:flex-col`, `md:h-
+- **Tailwind `ipad:` variant specificity.** `ipad` was already a plugin-registered variant
+  (`addVariant` in `tailwind.config.ts`), not a `screen` — but Tailwind 3 emits plugin-registered
+  variants before the core `screens` breakpoints, so `md:` came later in source and won the (0,1,0)
+  specificity tie regardless of which the JSX wrote last (`md:flex-row` > `ipad:flex-col`, `md:h-
   [300px]` > `ipad:h-auto`) — invisible to a test that only asserts class names. Fixed by registering
   the variant as `'@media (…) { &:is(&) }'`, so every `ipad:` rule compiles to `.ipad\:x:is(.ipad\:x)`
   (specificity 0,2,0), beating any single-class `md:` rule outright. This incidentally fixed four other
@@ -1356,13 +1359,13 @@ rather than planned up front:
 | Screen | What changed |
 |---|---|
 | PracticeCard (B1, Word Pop) | `MouthPanel` toggle behind a "👄 Khẩu hình" button (140×140 phone inline / 220×220 iPad under the button row); header chip "Thẻ i/N · ● ○" streak dots (hidden at `short:`) |
-| SoundWordList (B2, Tập âm word list) | `SoundTier` + `SpeakPrompt` Foxy hint ("Luyện đủ 3 từ để xanh cả âm!") under a 3-card grid; iPad is 1 column, 200×180 cells, centered |
-| SoundPractice (B3) | `ChipPair` "Âm i/N · Từ i/N" always visible; `SoundTier`; `ResultCard.forceHint` shows the 👅 tip whenever tone isn't "good", not just on a low score |
-| PairPractice (B4) | `ChipPair` "Cặp i/N · ɪ/iː"; listen phase collapses its wrong-pick feedback to one line ("🙈 Nghe lại rồi chọn nhé"); the result phase replaces the old summary `Card` with a single-line green chip |
+| SoundWordList (B2, Tập âm word list) | `SoundTier` + `SpeakPrompt` Foxy hint ("Luyện đủ 3 từ để xanh cả âm!") under a 3-card grid; the page is 1 column on iPad too, the grid itself is `md:grid-cols-[repeat(3,200px)]`, 200×180 cells, centered |
+| SoundPractice (B3) | `ChipPair` "Âm i/N" \| "Từ i/N" always visible; `SoundTier`; `ResultCard.forceHint` shows the 👅 tip whenever tone isn't "good", not just on a low score |
+| PairPractice (B4) | `ChipPair` "Cặp i/N" \| "ɪ/iː"; listen phase collapses its wrong-pick feedback to one line ("🙈 Nghe lại rồi chọn nhé"); the result phase replaces the old summary `Card` with a single-line green chip |
 | StarPractice (B5) | Rhythm card grows to 480 px on iPad; the old reserved 112 px spacer is gone; `ResultCard.sub` carries the "Nhịp: …" line |
-| VoicePractice (B6) | The carrier's reference screen — demonstrates all six behaviours above; mood badge + tips card still precede the mic (unchanged from Phase 9); `ResultCard.fox` row follows the score bars |
+| VoicePractice (B6) | The carrier's reference screen — demonstrates all six behaviours above; mood badge + tips card still precede the mic (unchanged from Phase 9); `ResultCard.fox` row follows the listen row |
 | StoryRetell (C4) | Header chip "Kể lại · cảnh i/N" replaces the H1; no progress bar; CTA is one primary button + "Thử lại" |
-| WordCard (C7) | `ResultCard.compact` overlays just the score/hint under the card instead of replacing it; the card never resizes; the pre-flip peek animation (6 s) and its 🔄 hint dim instead of disappearing once a result is scored |
+| WordCard (C7) | `ResultCard.compact` drops the words, bars and listen rows, leaving the star head, the hint and the CTA — it is the act column in normal flow, not an overlay, and the card never resizes; the pre-flip peek animation and its 🔄 hint both stop (hidden, not dimmed) once the card is flipped, a recording starts, or a result lands |
 | SentenceBuilder (C9) | Result state keeps the tray in place and lays `ScoredWords` chips where the tiles were (does **not** collapse into a strip, unlike the other eight — a Ruling below explains why); on iPad the mic stays disabled with caption "Xếp đúng câu trước nhé" until the sentence is correctly assembled; "Tiếp theo →" stays inside the current topic when the screen was opened with `?topic=` |
 
 ### Result-state measurements at 1194×834 (iPad landscape)
@@ -1442,6 +1445,8 @@ implementation, not silently picked:
 - `SentenceList` row links now carry `?topic=<id>` when the list is filtered by topic, so
   SentenceBuilder's "stay in topic" behaviour (R20) is actually reachable — a one-line change outside
   the task's file list; Phase 14 redraws the list anyway.
+- Phase 14 follow-up: extract `useCountdown` and `useTeachCollapse` (the countdown effect is repeated
+  8×, the collapse block 6×).
 
 Parked for the phase's final review (not fixed in Task 12, since Task 12 makes no product-code
 changes): on phone, `ResultCard`'s `fox` row (44 px) lets Foxy's face overlap the CTA row below it on
@@ -1454,8 +1459,8 @@ Continuing the numbering from the table above.
 
 | # | Step | Expected result | Result |
 |---|------|------------------|--------|
-| 82 (chip đôi) | Tập âm or Nghe & chọn → open a practice card | Header shows a joined two-part pill — teal left half, coral right half — reading "Âm i/N · Từ i/N" or "Cặp i/N · ɪ/iː"; no separate 3-dot indicator anywhere | ⏳ pending |
-| 83 (dải gập) | Any of the 9 speak/word/sentence screens → the teach half collapses into a strip once idle/result state settles → tap the strip | The teach column reopens in place (phone: 32 px strip "▾ mở"; iPad portrait: 64 px white strip); iPad landscape never shows a strip at all | ⏳ pending |
+| 82 (chip đôi) | Tập âm or Nghe & chọn → open a practice card | Header shows a joined two-part pill — teal left half, coral right half, no separator glyph between them — reading "Âm i/N" \| "Từ i/N" or "Cặp i/N" \| "ɪ/iː"; no separate 3-dot indicator anywhere | ⏳ pending |
+| 83 (dải gập) | Any of the six collapsing screens (Word Pop, Tập âm, Nghe & chọn, Câu sao, Đọc diễn cảm, Kể lại) → the teach half collapses into a strip once idle/result state settles → tap the strip | The teach column reopens in place (phone: 32 px strip "▾ mở"; iPad portrait: 64 px white strip); iPad landscape never shows a strip at all — WordCard and SentenceBuilder intentionally do not collapse, so skip them for this row | ⏳ pending |
 | 84 (khẩu hình bật/tắt) | Word Pop (PracticeCard) → tap "👄 Khẩu hình" | A mouth-shape panel opens (140×140 phone inline / 220×220 iPad under the buttons) and tapping again closes it | ⏳ pending |
 | 85 (header mờ khi ghi) | Any speaking screen → tap the mic to start recording | Header's back button and right-side slot dim to ~40% opacity and stop responding to taps; a coral "● Đang ghi" chip appears in the header center until recording stops | ⏳ pending |
 
