@@ -147,7 +147,11 @@ it('opens on the two options, locked and dim until the child has listened', () =
   expect(ship.className).toContain('w-24')
   expect(ship.className).toContain('md:h-[200px]')
   expect(ship.className).toContain('md:w-[200px]')
-  expect(ship.className).toContain('disabled:opacity-45')
+  // Fix round 1: the pre-listen dim is a plain `opacity-45` class, NOT `disabled:opacity-45` —
+  // the latter would also dim the answered tile's celebratory/miss ring, since both states share
+  // the `disabled` attribute.
+  expect(ship.className).toContain('opacity-45')
+  expect(ship.className).not.toContain('disabled:opacity-45')
   expect(screen.getByText('Bấm 🔊 trước nhé')).toBeInTheDocument()
   expect(screen.getByText(caption(false, false))).toBeInTheDocument()
   expect(screen.getByRole('link', { name: 'Quay lại' })).toHaveAttribute('href', '/level/minimal-pairs')
@@ -181,7 +185,13 @@ it('cheers the matching card in one line and locks up again after it', async () 
   pick(played(0))
   expect(screen.getByText('✅ Đúng rồi! 🎉')).toBeInTheDocument()
   expect(screen.getByText(ticks(played(0)))).toBeInTheDocument()
-  expect(screen.getByRole('button', { name: played(0) }).className).toContain('shadow-[0_6px_0_#7ED99A,0_0_0_4px_#B9ECC8]')
+  const cheered = screen.getByRole('button', { name: played(0) })
+  expect(cheered.className).toContain('shadow-[0_6px_0_#7ED99A,0_0_0_4px_#B9ECC8]')
+  // Fix round 1: the tile the child actually tapped is locked (disabled) but its ring must read at
+  // full opacity — it is the round's whole celebratory signal, not the "nothing played yet" dim.
+  expect(cheered).toBeDisabled()
+  expect(cheered.className).not.toContain('opacity-45')
+  expect(cheered.className).not.toContain('disabled:opacity-45')
   // A finished round locks the cards again until the next 🔊.
   expect(screen.getByRole('button', { name: 'ship' })).toBeDisabled()
   expect(screen.getByRole('button', { name: 'sheep' })).toBeDisabled()
@@ -196,7 +206,10 @@ it('gives the wrong pick one line of feedback and costs a fresh listen', async (
   const wrongWord = other(played(0))
   pick(wrongWord)
   expect(screen.getByText('🙈 Nghe lại rồi chọn nhé')).toBeInTheDocument()
-  expect(screen.getByRole('button', { name: wrongWord }).className).toContain('shadow-[0_6px_0_#F8A3AE,0_0_0_4px_#FFD4DA]')
+  const missed = screen.getByRole('button', { name: wrongWord })
+  expect(missed.className).toContain('shadow-[0_6px_0_#F8A3AE,0_0_0_4px_#FFD4DA]')
+  // Fix round 1: same full-opacity rule for the miss ring as the hit ring above.
+  expect(missed.className).not.toContain('opacity-45')
   expect(screen.getByText(caption(false, false))).toBeInTheDocument()
 
   // The other card is locked too, so tapping it changes nothing.

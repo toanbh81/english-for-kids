@@ -35,12 +35,15 @@ function targetFor(pair: PairItem, listens: number): Side {
 }
 
 /** Round-2 (brief §2 B4) phase-1 option tile: 96 px on a phone, 200 on iPad — no IPA, the tick
- * line under the pair already carries each word's own name. `disabled:opacity-45` is the "not
- * playable yet" state (before any 🔊, or right after either answer locks the round); the ring
- * marks whichever card the child actually tapped, green for a hit and pink for a miss — the OTHER
- * card stays plain even on a wrong pick, since only the tapped one was the child's answer. */
+ * line under the pair already carries each word's own name. The tile is `disabled` in two very
+ * different states — genuinely unplayable (before any 🔊) and merely locked-till-the-next-🔊
+ * (right after an answer, while its ring is the whole point) — so opacity is NOT tied to
+ * `disabled:` (fix round 1): only the former dims to .45 (`option()`'s own `dimmed` class), the
+ * ring on an answered tile always paints at full opacity. Green for a hit and pink for a miss —
+ * the OTHER card stays plain even on a wrong pick, since only the tapped one was the child's
+ * answer. */
 const OPTION = 'flex h-24 w-24 flex-col items-center justify-center gap-1 rounded-r18 bg-white p-2 shadow-card'
-  + ' transition-transform active:translate-y-[2px] disabled:opacity-45 disabled:active:translate-y-0'
+  + ' transition-transform active:translate-y-[2px] disabled:active:translate-y-0'
   + ' md:h-[200px] md:w-[200px] md:gap-2.5'
 
 const RING = {
@@ -133,6 +136,9 @@ function PairRun({ pair }: { pair: PairItem }) {
   const listening = !(done.a && done.b)
   /** "ship ✓ · sheep ○" — which word the child still owes, in one line. */
   const ticks = `${pair.a.word} ${done.a ? '✓' : '○'} · ${pair.b.word} ${done.b ? '✓' : '○'}`
+  // Nothing played yet at all (not merely "locked until the next 🔊 after an answer") — the
+  // speaker's pulse ring and the option tiles' dimming both key off exactly this.
+  const unplayed = target === null && answer === null
 
   /** Sample audio is generated locally and may simply not be there yet — say so, never throw. */
   function listen() {
@@ -169,6 +175,10 @@ function PairRun({ pair }: { pair: PairItem }) {
   function option(side: Side) {
     const w = pair[side]
     const ring = answer && lastPick === side ? RING[answer] : ''
+    // Fix round 1: dimming is "not yet playable at all" — the same condition the speaker's own
+    // pulse ring uses below — never "locked because an answer just landed", or the celebratory /
+    // miss ring would fade to 45% opacity right when it is supposed to be the clearest signal.
+    const dimmed = unplayed ? 'opacity-45' : ''
     return (
       <button
         key={side}
@@ -176,7 +186,7 @@ function PairRun({ pair }: { pair: PairItem }) {
         onClick={() => choose(side)}
         disabled={target === null}
         aria-label={w.word}
-        className={`${OPTION} ${ring}`}
+        className={`${OPTION} ${dimmed} ${ring}`}
       >
         <span aria-hidden="true" className="text-[32px] leading-none md:text-[80px]">{w.emoji}</span>
         <span className="font-display text-[15px] font-extrabold leading-none text-ink-900 md:text-[36px]">{w.word}</span>
@@ -225,7 +235,7 @@ function PairRun({ pair }: { pair: PairItem }) {
                 className={[
                   'flex h-14 w-14 items-center justify-center rounded-full bg-teal-500 text-[22px] leading-none text-white shadow-chunky-teal transition-transform active:translate-y-[2px]',
                   'md:h-16 md:w-16 md:text-[26px]',
-                  target === null && answer === null ? 'outline outline-4 outline-teal-line animate-pulse-soft' : '',
+                  unplayed ? 'outline outline-4 outline-teal-line animate-pulse-soft' : '',
                 ].join(' ')}
               >
                 🔊
@@ -286,7 +296,7 @@ function PairRun({ pair }: { pair: PairItem }) {
             </p>
           ) : (
             <>
-              <SpeakPrompt mood={recording ? 'listening' : 'idle'} say={recording ? 'Foxy đang lắng nghe…' : `Nói cả hai từ: ${pair.a.word}, ${pair.b.word}`} />
+              <SpeakPrompt mood={recording ? 'listening' : 'idle'} say={recording ? 'Foxy đang lắng nghe…' : `Nói cả hai từ: ${targetText}`} />
               {attempt.error && <SpeakError error={attempt.error} onAction={onErrorAction} onDismiss={attempt.dismissError} />}
               <MicButton state={attempt.micState} level={attempt.level} onPress={attempt.onMic} secondsLeft={recording ? secondsLeft : undefined} countdownLayout="row" />
             </>
