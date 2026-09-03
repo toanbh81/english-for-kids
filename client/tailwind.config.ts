@@ -24,7 +24,10 @@ export default {
         line: { 200: '#EFE2CC' },
         coral: { DEFAULT: '#FF7A59', 500: '#FF7A59', 600: '#E05A3A', 50: '#FFE9DF', text: '#F2603D' },
         teal: { DEFAULT: '#2EC4B6', 500: '#2EC4B6', 600: '#1FA396', 50: '#E2F6F1' },
-        star: { DEFAULT: '#FFB020', empty: '#E2D5C0' },   // replaces `star: '#FFC533'`
+        // `band`: the island-header subtitle's star tone (Phase 14 fix wave, P3) — pale yellow on
+        // teal, both filled and empty, instead of the app-default gold/tan pair which read as the
+        // lowest-contrast text on that band.
+        star: { DEFAULT: '#FFB020', empty: '#E2D5C0', band: '#FFE59E' },   // replaces `star: '#FFC533'`
         sun: { 400: '#FFC533', 50: '#FFF1C9', 700: '#9A6B00' },
         good: { DEFAULT: '#2E8B4A', 700: '#2E8B4A', 50: '#E3F6E8', 300: '#7ED99A' },
         ok: { DEFAULT: '#9A6B00', 700: '#9A6B00', 50: '#FFF3D6', 300: '#FFD97E' },

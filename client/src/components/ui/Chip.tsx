@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 
 export type ChipTone = 'teal' | 'coral' | 'sun' | 'neutral' | 'coralSolid' | 'sand'
-export type ChipSize = 'xs' | 'sm' | 'md'
+export type ChipSize = 'xs' | 'header' | 'sm' | 'md'
 
 const TONE: Record<ChipTone, string> = {
   teal: 'bg-teal-50 text-teal-600',
@@ -26,6 +26,12 @@ const SIZE: Record<ChipSize, string> = {
   // ~110px wide, so `whitespace-nowrap` keeps a two-word label ("Chưa có từ ôn") on one line
   // instead of wrapping into the tile's fixed height.
   xs: 'text-[11px] leading-tight rounded-[9px] px-2 py-0.5 whitespace-nowrap md:text-[13px]',
+  // The 15px header chip (brief §2 A6 DailyMission's band/group chips, §2 C2 StoryPlayer's scene
+  // chip): radius 12, padding 7-8×14. Fix wave I2/P6: three call sites tried to shrink the `md`
+  // pill with a fighting `className` override and always lost the same way `Tile`'s `xs` chip did
+  // (task-5 review, Important #1) — Tailwind's *stylesheet* order, not JSX order, decides the
+  // cascade, so the size now travels with the chip instead of fighting it after the fact.
+  header: 'text-[15px] rounded-r12 px-3.5 py-[7px]',
   sm: 'text-base rounded-full px-4 py-2',
   md: 'text-lg rounded-full px-4 py-2',
 }

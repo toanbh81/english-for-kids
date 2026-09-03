@@ -1,5 +1,6 @@
 import { useParams } from 'react-router-dom'
 import { LEVELS } from '../content'
+import { BAND_STEPS } from '../content/levels'
 import { getStars } from '../progress/store'
 import { BackButton, ListGrid, NotFound, Tile } from '../components/ui'
 import { PageShell, PageHeader, PageBody } from '../components/ui/page'
@@ -12,12 +13,16 @@ export function LevelSelect() {
   if (levelId === 'sound-zoo') return <SoundLevel />
   const level = LEVELS.find(l => l.id === levelId)
   if (!level) return <NotFound what="bậc" />
+  // Fix wave P1: the header takes its name from the single band table instead of the level's own
+  // `title` — `word-pop.json`'s `"title": "Word Pop"` was a fourth, already-divergent source for
+  // the same bậc the stairs and the mission chip both call "Đọc từ".
+  const title = BAND_STEPS.find(s => s.key === levelId)?.name ?? level.title
   return (
     <PageShell>
       {/* Back goes to the stairs, the entry point every level was reached from. */}
       <PageHeader
         back={<BackButton to="/levels" label="Các bậc" />}
-        title={level.title}
+        title={title}
         sub="Chạm vào một thẻ để luyện nói nhé!"
       />
       <PageBody fade gap={10}>

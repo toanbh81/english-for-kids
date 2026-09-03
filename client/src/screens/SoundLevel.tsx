@@ -13,7 +13,7 @@ export function SoundLevel() {
       <PageHeader
         back={<BackButton to="/levels" label="Các bậc" />}
         title="Tập âm 🦁"
-        sub="Mỗi ô là một âm — luyện đến khi cả 3 từ đều xanh!"
+        sub="Mỗi âm luyện đủ 3 từ nhé!"
       />
       <PageBody fade gap={10}>
         <ListGrid size="sm">

@@ -24,7 +24,10 @@ export function PageHeader({ back, right, engine, dimmed, title, sub, align, onB
   const gapStart = start ? 'gap-2.5' : 'gap-2'
   const gapMd = start ? 'md:gap-3.5' : 'md:gap-3'
   // R19 / quyết định 5: ngoại lệ CÓ TÊN với luật "header luôn trên cream" — chỉ TopicHub dùng.
-  const band = onBand ? ' bg-transparent [&>div:first-child>a]:bg-white/[.92] [&>div:first-child>a]:text-teal-600' : ''
+  // Fix wave M1: the white-back-button rule used to also live here, duplicating the cell-level one
+  // below (`[&>a]:bg-white/[.92] [&>a]:text-teal-600`, line ~30) on the very same anchor — dropped
+  // here since the cell-level rule is the more local, cheaper selector.
+  const band = onBand ? ' bg-transparent' : ''
   return (
     <header className={`grid h-14 grid-cols-[56px_1fr_56px] items-center ${gapStart} md:h-16 md:grid-cols-[64px_1fr_minmax(64px,auto)] ${gapMd}${band}`}>
       <div className={`justify-self-start ${onBand ? '[&>a]:bg-white/[.92] [&>a]:text-teal-600' : ''} ${dim}`}>{back}</div>

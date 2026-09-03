@@ -371,21 +371,14 @@ export function Home() {
       {/* Home has no destination to walk back to. */}
       <PageHeader back={null} right={<div className="flex items-center gap-2 max-md:contents md:gap-3">{headerCluster}</div>}>
         <h1 className="sr-only">Speak Up!</h1>
-        {/* The header's centre column sits between two fixed side columns — no room there for
-          * Foxy and the full speech bubble below `ipad` landscape (fix round 1 / Important #2:
-          * portrait now reads the same as a phone, not just below `md`, so this line and the
-          * header cluster in `right` above don't fight the same 64 px row for space), so the
-          * portrait/phone header shows a single truncated greeting line instead; Foxy and the
-          * full bubble move to the body's first row (see below), which is not squeezed by the
-          * header's side columns. */}
-        {/* `block max-w-[190px]`: `PageHeader`'s centre cell is `justify-self-center` — a
-          * shrink-to-fit box, not stretched to the grid track — so `truncate` alone on a bare
-          * `<span>` has no bounded width to clip against and just overflows past the column. A
-          * fixed cap (comfortably inside the ~260 px a 390 px phone's `1fr` column leaves after
-          * the two 56 px side columns) gives it one regardless of ancestor sizing. */}
-        <span className="block max-w-[190px] truncate font-display text-[17px] font-extrabold text-coral-text ipad:hidden">
-          {say}
-        </span>
+        {/* Fix wave I1/P4: the header used to also print `{say}` here, below `ipad` — the same
+          * sentence the Foxy bubble prints a second time in the body just below (fix round 1's
+          * comment there claimed otherwise; it was wrong, and `docs/design/…/shots/phone/home.png`
+          * / `ipadp/home.png` both showed it doubled, ~180-200px apart). The design (brief §2 A3,
+          * both frames) prints the greeting once. The header's centre column below `ipad` now has
+          * nothing of its own — same empty state the right cell already has there
+          * (`headerCluster` is `hidden md:flex` + `max-md:hidden`) — so the bubble in the body
+          * (below) is the sentence's one and only home. */}
         <div className="hidden items-center gap-3 ipad:flex">
           <Foxy mood={mood} size="md" className="animate-bob" />
           <SpeechBubble
@@ -402,14 +395,15 @@ export function Home() {
           * the header regardless of scroll position. */}
         <NoticeStack items={noticeItems} />
 
-        {/* Foxy and the full greeting, phone AND iPad portrait — restored here because the header
-          * has no room for them below `ipad` landscape (fix round 1 / Important #2; see above).
-          * M1b prints the greeting as plain text: the bubble is M1a's, and its white panel,
-          * padding and shadow cost height the grid below needs more. Only the chrome goes — the
-          * two lines themselves are the same element at every width, so the greeting is never in
-          * the page twice below `ipad`. `max-md:` (unchanged) because every one of these classes
-          * is `SpeechBubble`'s own; it only ever matters below `md`, since this block still shows
-          * unstyled-chrome-and-all through the `md`-and-up portrait range too. */}
+        {/* Foxy and the full greeting, phone AND iPad portrait — the header has no room for them
+          * below `ipad` landscape (fix round 1 / Important #2; see above), and since fix wave
+          * I1/P4 this is the sentence's ONLY home below `ipad` — the header used to print `{say}`
+          * a second time in its own centre column; that was a real duplicate, not a false alarm
+          * (see the header above). M1b prints the greeting as plain text on a phone: the bubble is
+          * M1a's, and its white panel, padding and shadow cost height the grid below needs more —
+          * only the chrome goes there, via `max-md:` (unchanged, `SpeechBubble`'s own classes, so
+          * it only ever matters below `md`; this block still shows unstyled-chrome-and-all through
+          * the `md`-and-up portrait range too). */}
         <div className="flex items-center gap-3 ipad:hidden">
           <Foxy mood={mood} size="md" className="animate-bob" />
           <SpeechBubble
@@ -589,8 +583,13 @@ export function Home() {
                 // `ipad:h-auto ipad:rounded-xl2 ipad:text-xl` restore the map's own button exactly —
                 // `md:h-full`/`md:rounded-r22`/`md:text-[19px]` are the portrait 9th-tile look and
                 // would otherwise leak into the landscape map too (ipad: outranks md:, but only for
-                // the properties it actually restates).
-                className="inline-flex min-h-[64px] w-full items-center justify-center gap-2 rounded-xl2 bg-teal-500 px-7 font-display text-xl font-extrabold text-white shadow-chunky-teal active:translate-y-[2px] md:h-full md:rounded-r22 md:text-[19px] ipad:h-auto ipad:w-auto ipad:rounded-xl2 ipad:text-xl"
+                // the properties it actually restates). Fix wave I6: the portrait geometry restore
+                // never restored the portrait *surface* — brief §2 A3 draws the 9th tile white with
+                // teal text, matching the eight island cards beside it, not the map's own solid-teal
+                // button — so `md:bg-white md:text-teal-600 md:shadow-card` joins the geometry pair,
+                // with `ipad:bg-teal-500 ipad:text-white ipad:shadow-chunky-teal` restoring the map
+                // button's own look at landscape exactly as the rest of this line already does.
+                className="inline-flex min-h-[64px] w-full items-center justify-center gap-2 rounded-xl2 bg-teal-500 px-7 font-display text-xl font-extrabold text-white shadow-chunky-teal active:translate-y-[2px] md:h-full md:rounded-r22 md:bg-white md:text-teal-600 md:shadow-card md:text-[19px] ipad:h-auto ipad:w-auto ipad:rounded-xl2 ipad:bg-teal-500 ipad:text-white ipad:shadow-chunky-teal ipad:text-xl"
               >
                 🗣️ Các bậc luyện nói
               </Link>

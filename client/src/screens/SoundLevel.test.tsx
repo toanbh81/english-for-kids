@@ -64,7 +64,8 @@ it('goes back to the stairs, the bậc Tập âm belongs to', () => {
 it('9 IPA tiles: 36px #C08457 glyph, example word 14px, stars', () => {
   renderLevel()
   expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Tập âm 🦁')
-  expect(screen.getByText('Mỗi ô là một âm — luyện đến khi cả 3 từ đều xanh!')).toBeInTheDocument()
+  // Fix wave I4: shortened to ≤30 chars (was 48) — PageHeader's subtitle truncated on a phone.
+  expect(screen.getByText('Mỗi âm luyện đủ 3 từ nhé!')).toBeInTheDocument()
   expect(screen.getAllByTestId('tile')).toHaveLength(9)
   expect(screen.getByText('/θ/')).toHaveClass('text-[36px]', 'text-[#C08457]')
   expect(screen.getByText('three')).toHaveClass('text-[14px]', 'text-ink-500')

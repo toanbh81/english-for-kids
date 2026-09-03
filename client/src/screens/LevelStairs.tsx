@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import { LEVELS, PAIRS, SENTENCE_STARS, SOUNDS, STORY_VOICE } from '../content'
+import { BAND_STEPS } from '../content/levels'
 import { getStars, soundStars as starsForSound } from '../progress/store'
 import { Foxy } from '../components/Foxy'
 import { BackButton, Button, Chip, StarRow } from '../components/ui'
@@ -11,14 +12,10 @@ type Stars = 0 | 1 | 2 | 3
 type Step = { key: string; emoji: string; name: string; to?: string }
 
 /** Bottom-left to top-right: each step sits a little higher than the one before, so the five
- * games read as a staircase the child climbs. */
-const STEPS: Step[] = [
-  { key: 'sound-zoo', emoji: '🦁', name: 'Tập âm', to: '/level/sound-zoo' },
-  { key: 'word-pop', emoji: '🎈', name: 'Đọc từ', to: '/level/word-pop' },
-  { key: 'minimal-pairs', emoji: '👯', name: 'Nghe & chọn', to: '/level/minimal-pairs' },
-  { key: 'sentence-stars', emoji: '⭐', name: 'Sentence Stars', to: '/level/sentence-stars' },
-  { key: 'story-voice', emoji: '🎭', name: 'Story Voice', to: '/level/story-voice' },
-]
+ * games read as a staircase the child climbs. The five steps themselves are a projection of the
+ * single band table (fix wave P1, `content/levels.ts`) — this screen's own `Step` keeps `to`
+ * optional for a future locked step, which `BandStep` never needs. */
+const STEPS: Step[] = BAND_STEPS.map(({ key, emoji, name, to }) => ({ key, emoji, name, to }))
 
 /**
  * Phase 14, §2 A9 (design round 3, R21/R22). **The staircase is still two layouts of one DOM**,

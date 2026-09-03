@@ -82,7 +82,13 @@ it('the header carries the scene chip over the story name, above the picture', (
   renderPlayer()
   const story = findStory('little-fox')!
   const banner = screen.getByRole('banner')
-  expect(within(banner).getByText(`Cảnh 1/${story.scenes.length}`)).toBeInTheDocument()
+  const sceneChip = within(banner).getByText(`Cảnh 1/${story.scenes.length}`)
+  expect(sceneChip).toBeInTheDocument()
+  // Fix wave I2/P6: a real `Chip size="header"` — 15px, radius 12, padding 7×14 (brief §2 C2) —
+  // instead of the `className` override that always lost to the default `md` pill (18px,
+  // radius-full, 16px padding; task-5 review, Important #1).
+  expect(sceneChip).toHaveClass('text-[15px]', 'rounded-r12', 'px-3.5', 'py-[7px]')
+  expect(sceneChip).not.toHaveClass('text-lg', 'px-4', 'py-2', 'rounded-full')
   expect(within(banner).getByText('🦊 The Little Fox')).toHaveClass('text-[11px]', 'text-ink-300')
   expect(screen.queryByTestId('story-title')).toBeNull()
   expect(banner.compareDocumentPosition(screen.getByTestId('story-art')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()

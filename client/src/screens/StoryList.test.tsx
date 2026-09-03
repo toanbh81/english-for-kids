@@ -33,12 +33,15 @@ it('phone: three 96px rows with a coloured disc, then Foxy filling the slack', (
   expect(within(filler).getByTestId('foxy')).toBeInTheDocument()
 })
 
-it('every row links to its story with title, sub and stars', () => {
+// Fix wave M2: the Vietnamese title leads (row title), the English name and the scene count are
+// the sub — matching TopicHub's own story rows, which this fix wave rules the two screens agree on.
+it('every row links to its story with the Vietnamese title, an English/scene-count sub, and stars', () => {
   render(<MemoryRouter><StoryList /></MemoryRouter>)
   const rows = screen.getAllByTestId('list-row')
   STORIES.forEach((s, i) => {
     expect(rows[i]).toHaveAttribute('href', `/story/${s.id}`)
-    expect(within(rows[i]).getByText(`${s.titleVi} · ${s.scenes.length} cảnh`)).toBeInTheDocument()
+    expect(within(rows[i]).getByText(s.titleVi)).toBeInTheDocument()
+    expect(within(rows[i]).getByText(`${s.title} · ${s.scenes.length} cảnh`)).toBeInTheDocument()
   })
 })
 

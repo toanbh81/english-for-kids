@@ -191,7 +191,7 @@ function TopicHubInner({ topic }: { topic: Topic }) {
           old `main`-relative band). */}
       <div
         data-testid="island-header"
-        className="relative isolate w-screen ml-[calc(50%-50vw)] -mt-[max(1.25rem,calc(env(safe-area-inset-top)_+_8px))] md:mb-[-8px] ipad:mb-[-8px]"
+        className="relative isolate w-screen ml-[calc(50%-50vw)] -mt-[max(var(--page-pad-top,1.25rem),calc(env(safe-area-inset-top)_+_8px))] md:mb-[-8px] ipad:mb-[-8px]"
       >
         <div
           aria-hidden="true"
@@ -222,7 +222,7 @@ function TopicHubInner({ topic }: { topic: Topic }) {
             <div className="flex min-w-0 flex-col gap-1">
               <h1 className="truncate font-display text-[28px] font-extrabold leading-tight text-white md:text-[35px] ipad:text-[35px]">{topic.name}</h1>
               <div className="flex items-center gap-1.5">
-                <Stars value={wordsStars} size="13" />
+                <Stars value={wordsStars} size="13" tone="band" />
                 <span className="text-[13px] font-bold text-[#D3F1EC] md:text-[16px] ipad:text-[16px]">Đảo số {islandNo} · Luyện thêm nhé!</span>
               </div>
             </div>
@@ -272,7 +272,7 @@ function TopicHubInner({ topic }: { topic: Topic }) {
                 <span aria-hidden="true" className={`${SECTION_EMOJI} grayscale`}>🎧</span>
                 <span className="flex min-w-0 flex-col gap-1">
                   <span className={SECTION_TITLE_EMPTY}>Truyện</span>
-                  <span className="text-[12px] font-bold text-ink-500">
+                  <span className="text-[12px] font-bold text-ink-500 md:text-[15px] ipad:text-[15px]">
                     {`Đảo này chưa có truyện — nghe truyện ở ${TOPICS_WITH_STORY} đảo khác nhé`}
                   </span>
                 </span>

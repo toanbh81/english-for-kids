@@ -1,5 +1,6 @@
 import { fireEvent, render, screen, within } from '@testing-library/react'
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
+import { bandName } from '../content/levels'
 import { dayKey, logActivity } from '../progress/activity'
 import { getBand, setBandValue } from '../progress/band'
 import { getLesson } from '../progress/lesson'
@@ -65,16 +66,6 @@ const MINUTES: Record<LessonItemKind, (n: number) => string> = {
   review: n => `≈ ${n}'`,
 }
 
-// Fix round 1: the band chip/header sub names the level too ("Bậc ⭐ 2 · Đọc từ") — mirrors
-// `DailyMission.tsx`'s own `BAND_NAME`, itself copied from `LevelStairs.tsx`'s `STEPS[].name`.
-const BAND_NAME: Record<number, string> = {
-  1: 'Tập âm',
-  2: 'Đọc từ',
-  3: 'Nghe & chọn',
-  4: 'Sentence Stars',
-  5: 'Story Voice',
-}
-
 const card = (kind: LessonItemKind) => screen.getByTestId(`group-${kind}`)
 
 /** The count/caption line of a card, read whole: `"{done}/{total} · bước N"`, or `"{done}/{total}
@@ -114,7 +105,7 @@ it('shows the hero empty state and a two-button footer when today has no items',
   // The header's sub line stands in for the removed body subtitle on the empty branch — it
   // duplicates the (always-rendered, iPad-only) band chip, so there are two matches. Fix round 1:
   // both name the level, not just the band number.
-  expect(screen.getAllByText(`Bậc ⭐ 2 · ${BAND_NAME[2]}`).length).toBeGreaterThan(0)
+  expect(screen.getAllByText(`Bậc ⭐ 2 · ${bandName(2)}`).length).toBeGreaterThan(0)
 })
 
 it('sits in the shared page frame', () => {
@@ -137,10 +128,13 @@ it('moves the subtitle and the two chips into the header', () => {
   expect(screen.getByText('5 bước nhỏ — 15 phút thôi!')).toBe(screen.getByRole('banner').querySelector('p'))
 
   const right = screen.getByTestId('header-right')
-  expect(within(right).getByText(/^Bậc ⭐/)).toHaveClass('hidden', 'md:inline-flex')
+  expect(within(right).getByText(/^Bậc ⭐/).parentElement).toHaveClass('hidden', 'items-center', 'gap-2', 'md:flex')
 })
 
-it('shows the band chip and the finished-groups count in the header', () => {
+// Fix wave I2/P6/M5: a real `Chip size="header"` — 15px, radius 12, padding 7×14 — instead of the
+// `className` override that always lost to the default `md` pill (18px, radius-full, 16px padding;
+// task-5 review, Important #1). The negative assertion is the one that would have caught that.
+it('shows the band chip and the finished-groups count in the header, at the 15px header-chip size', () => {
   const lesson = getLesson(NOW)
   const groups = groupsOf(lesson)
   const [first] = groups
@@ -150,8 +144,12 @@ it('shows the band chip and the finished-groups count in the header', () => {
 
   const right = screen.getByTestId('header-right')
   const band = getBand().value
-  expect(within(right).getByText(`Bậc ⭐ ${band} · ${BAND_NAME[band]}`)).toBeInTheDocument()
-  expect(within(right).getByText(`1/${groups.length} nhóm xong`)).toBeInTheDocument()
+  const bandChip = within(right).getByText(`Bậc ⭐ ${band} · ${bandName(band)}`)
+  const countChip = within(right).getByText(`1/${groups.length} nhóm xong`)
+  for (const chip of [bandChip, countChip]) {
+    expect(chip).toHaveClass('text-[15px]', 'rounded-r12', 'px-3.5', 'py-[7px]')
+    expect(chip).not.toHaveClass('text-lg', 'px-4', 'py-2', 'rounded-full')
+  }
 })
 
 it('shows one card per kind of step, in lesson order, titled with its real count', () => {
@@ -340,14 +338,30 @@ it('points the CTA at the ringed group first undone item, and flags it too', () 
 
   renderMission()
 
-  const cta = screen.getByRole('link', { name: 'Tiếp tục ▸' })
+  // Fix wave I5: "Tiếp tục ▸" became "Tiếp tục: <group name> <emoji>" — the prefix is what this
+  // test cares about, not the exact group (whichever group is current here depends on whether
+  // completing `first.items[0]` also finished `first` outright).
+  const cta = screen.getByRole('link', { name: /^Tiếp tục:/ })
   expect(cta).toHaveAttribute('href', next.route)
 
   fireEvent.click(cta)
   expect(screen.getByTestId('probe')).toHaveTextContent(`${next.route} {"mission":true}`)
 })
 
-it('says Bắt đầu on an untouched lesson and Tiếp tục once a step is done', () => {
+// Fix wave I5 (brief §0.4 / §2 A6): the pinned CTA names the group it resumes, the same
+// convention TopicHub's "Học tiếp: …" and LevelStairs' "Luyện bậc n: …" already follow.
+it('names the current group on the CTA once a step is done, exactly like the group cards', () => {
+  const lesson = getLesson(NOW)
+  const [first, second] = groupsOf(lesson)
+  complete(lesson, first.items) // finishes the whole first group — the second is now current
+
+  renderMission()
+
+  const cta = screen.getByRole('link', { name: new RegExp(`^Tiếp tục: ${TITLE[second.kind](second.items.length)}`) })
+  expect(cta).toHaveAttribute('href', second.items[0].route)
+})
+
+it('says Bắt đầu on an untouched lesson and names the current group once a step is done', () => {
   const lesson = getLesson(NOW)
 
   const { unmount } = renderMission()
@@ -357,7 +371,9 @@ it('says Bắt đầu on an untouched lesson and Tiếp tục once a step is don
 
   complete(lesson, [lesson.items[0]])
   renderMission()
-  expect(screen.getByRole('link', { name: 'Tiếp tục ▸' })).toBeInTheDocument()
+  // Fix wave I5: the CTA names the group it resumes (brief §0.4's unified pinned-CTA convention),
+  // rather than a bare "Tiếp tục ▸" that named nothing.
+  expect(screen.getByRole('link', { name: /^Tiếp tục:/ })).toBeInTheDocument()
   expect(screen.queryByRole('link', { name: 'Bắt đầu ▸' })).not.toBeInTheDocument()
 })
 
@@ -370,8 +386,8 @@ it('shows the band the lesson was built at, not a parent override made since', (
   setBandValue(5)
   renderMission()
 
-  expect(screen.getByText(`Bậc ⭐ 2 · ${BAND_NAME[2]}`)).toBeInTheDocument()
-  expect(screen.queryByText(`Bậc ⭐ 5 · ${BAND_NAME[5]}`)).not.toBeInTheDocument()
+  expect(screen.getByText(`Bậc ⭐ 2 · ${bandName(2)}`)).toBeInTheDocument()
+  expect(screen.queryByText(`Bậc ⭐ 5 · ${bandName(5)}`)).not.toBeInTheDocument()
 })
 
 // A long lesson is taller than an iPad screen, so a CTA that scrolled with the cards sat below the

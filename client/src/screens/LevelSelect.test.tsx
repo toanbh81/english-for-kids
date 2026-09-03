@@ -21,9 +21,13 @@ it('sits in the shared page frame', () => {
   expect(screen.getByTestId('page-body')).toHaveClass('overflow-y-auto')
 })
 
-it('shows the level title and one card per practice card', () => {
+// Fix wave P1: the header now names the bậc from the single band table, not the level content's
+// own (English) `title` — "Word Pop" used to be a fourth, divergent source for the same bậc the
+// stairs and the mission chip already call "Đọc từ".
+it('shows the band name (not the level content title) and one card per practice card', () => {
   renderLevel()
-  expect(screen.getByRole('heading', { name: /Word Pop/ })).toBeInTheDocument()
+  expect(screen.getByRole('heading', { name: 'Đọc từ' })).toBeInTheDocument()
+  expect(screen.queryByRole('heading', { name: /Word Pop/ })).not.toBeInTheDocument()
   expect(screen.getByRole('link', { name: /cat/ })).toHaveAttribute('href', '/practice/wp-cat')
 })
 

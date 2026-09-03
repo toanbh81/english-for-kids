@@ -206,6 +206,16 @@ describe('Chip', () => {
     expect(chip).not.toHaveClass('px-4', 'py-2', 'text-base', 'rounded-full')
   })
 
+  // Fix wave I2/P6/M5: same lesson, reapplied — three call sites (DailyMission's band/group
+  // chips, StoryPlayer's scene chip) tried to shrink the `md` pill with a `className` override and
+  // always lost the same way `Tile`'s chip did above.
+  it('header is the 15px band/scene chip — radius 12, padding 7×14 — not the sm/md pill', () => {
+    render(<Chip size="header">Cảnh 2/7</Chip>)
+    const chip = screen.getByText('Cảnh 2/7')
+    expect(chip).toHaveClass('text-[15px]', 'rounded-r12', 'px-3.5', 'py-[7px]')
+    expect(chip).not.toHaveClass('px-4', 'py-2', 'text-lg', 'rounded-full')
+  })
+
   it('coralSolid is solid coral with white text', () => {
     render(<Chip tone="coralSolid">12 từ hôm nay</Chip>)
     expect(screen.getByText('12 từ hôm nay')).toHaveClass('bg-coral-500', 'text-white')
@@ -260,6 +270,21 @@ describe('Stars', () => {
     rerender(<Stars value={2} size="14" />); expect(screen.getByTestId('stars')).toHaveClass('text-[14px]')
     rerender(<Stars value={2} size="xs" />); expect(screen.getByTestId('stars')).toHaveClass('text-[12px]')
     rerender(<Stars value={2} />); expect(screen.getByTestId('stars')).toHaveClass('text-[28px]')
+  })
+
+  // Fix wave P3: `tone="band"` reads both the filled and the empty stars as pale yellow on teal
+  // (TopicHub's island header), never the app-default gold/tan pair — and never changes a size.
+  it('tone="band" reads pale-yellow filled and empty stars; tone="default" (the default) is unchanged', () => {
+    const { rerender } = render(<Stars value={2} size="13" tone="band" />)
+    expect(screen.getByTestId('stars')).toHaveClass('text-[13px]')
+    expect(screen.getAllByTestId('star-filled')[0]).toHaveClass('text-star-band')
+    expect(screen.getByTestId('star-empty')).toHaveClass('text-star-band/50')
+    expect(screen.getAllByTestId('star-filled')[0]).not.toHaveClass('text-star')
+    expect(screen.getByTestId('star-empty')).not.toHaveClass('text-star-empty')
+
+    rerender(<Stars value={2} size="13" />)
+    expect(screen.getAllByTestId('star-filled')[0]).toHaveClass('text-star')
+    expect(screen.getByTestId('star-empty')).toHaveClass('text-star-empty')
   })
 })
 

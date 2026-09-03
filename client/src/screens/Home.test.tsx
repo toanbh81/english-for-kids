@@ -121,10 +121,14 @@ it('shows how much of today lesson is done and a happy Foxy', () => {
   renderHome()
 
   expect(screen.getByText(`2/${lesson.items.length}`)).toBeInTheDocument()
-  // Foxy and the greeting each render twice now — once for the `md:hidden` phone header line /
-  // body row, once for the `hidden md:flex` header row from `md` up — always in sync.
+  // Foxy and the bubble each render twice in the DOM — the header's landscape-only bubble
+  // (`hidden ipad:flex`) and the body's phone/portrait-only one (`ipad:hidden`) — always in sync,
+  // and mutually exclusive by breakpoint so only one is ever visible at once. Fix wave I1/P4: a
+  // THIRD element used to also carry this text below `ipad` — a plain span in the header centre,
+  // visible at the same breakpoint as the body bubble — which is the real duplicate `toHaveLength`
+  // now guards against; `toBeGreaterThan(0)` could not have failed on it.
   for (const foxy of screen.getAllByTestId('foxy')) expect(foxy).toHaveAttribute('data-mood', 'happy')
-  expect(screen.getAllByText('Giỏi lắm, tiếp tục nhé!').length).toBeGreaterThan(0)
+  expect(screen.getAllByText('Giỏi lắm, tiếp tục nhé!')).toHaveLength(2)
   // Two items in: the card carries on rather than starting over (spec §2).
   expect(screen.getByRole('link', { name: 'Tiếp tục ▸' })).toHaveAttribute('href', '/mission')
 })
@@ -146,8 +150,10 @@ it('shows an idle Foxy greeting with no activity yet', () => {
   renderHome()
 
   for (const foxy of screen.getAllByTestId('foxy')) expect(foxy).toHaveAttribute('data-mood', 'idle')
-  expect(screen.getAllByText('Chào bé! 👋').length).toBeGreaterThan(0)
-  expect(screen.getAllByText('Hôm nay mình luyện nói nhé!').length).toBeGreaterThan(0)
+  // Fix wave I1/P4: exactly the header's landscape-only bubble and the body's phone/portrait-only
+  // one (see the comment above) — not a third, always-visible-below-`ipad` copy any more.
+  expect(screen.getAllByText('Chào bé! 👋')).toHaveLength(2)
+  expect(screen.getAllByText('Hôm nay mình luyện nói nhé!')).toHaveLength(2)
 })
 
 // Design §3: M1b prints the greeting as plain text — the speech bubble is M1a's. Only the chrome
@@ -521,7 +527,9 @@ describe('Phase 11: "Đã dùng Speak Up rồi?"', () => {
     // Yesterday's work is history, not this morning's greeting: the mood question and the
     // restore-door question are different questions and no longer share an answer.
     for (const foxy of screen.getAllByTestId('foxy')) expect(foxy).toHaveAttribute('data-mood', 'idle')
-    expect(screen.getAllByText('Hôm nay mình luyện nói nhé!').length).toBeGreaterThan(0)
+    // Fix wave I1/P4: the header's landscape-only bubble and the body's phone/portrait-only one —
+    // see the comment on the earlier "idle Foxy greeting" test.
+    expect(screen.getAllByText('Hôm nay mình luyện nói nhé!')).toHaveLength(2)
   })
 })
 
@@ -842,6 +850,17 @@ it('Speak Lab is the ninth grid cell from md up and the parent button leaves the
   expect(lab.parentElement).toHaveClass('md:h-[150px]', 'ipad:absolute')
   expect(screen.getByTestId('home-foot')).toHaveClass('md:contents', 'ipad:contents')
   expect(screen.getByTestId('home-foot-parent')).toHaveClass('md:hidden')
+})
+
+// Fix wave I6: the phone/map button (bg-teal-500/text-white) is what portrait's own 9th grid tile
+// should NOT keep — brief §2 A3 draws it white with teal text there, matching the eight island
+// cards beside it; landscape (the map's own button) must come back unchanged.
+it('Speak Lab is teal on the phone map button, white-with-teal-text on iPad portrait, teal again on landscape', () => {
+  renderHome()
+  const lab = screen.getByRole('link', { name: '🗣️ Các bậc luyện nói' })
+  expect(lab).toHaveClass('bg-teal-500', 'text-white', 'shadow-chunky-teal')
+  expect(lab).toHaveClass('md:bg-white', 'md:text-teal-600', 'md:shadow-card')
+  expect(lab).toHaveClass('ipad:bg-teal-500', 'ipad:text-white', 'ipad:shadow-chunky-teal')
 })
 
 it('streak, star total and the parent button move into the header from md up', () => {

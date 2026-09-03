@@ -27,11 +27,14 @@ export function StoryList() {
               to={`/story/${s.id}`}
               h={96}
               disc={{ emoji: s.emoji, bg: DISC[s.id] ?? 'bg-cream-50' }}
-              title={s.title}
-              sub={`${s.titleVi} · ${s.scenes.length} cảnh`}
+              // Fix wave M2: Vietnamese title first, English second — matches TopicHub's own story
+              // rows (brief §2 A8's artboard), which is what this fix wave rules the two screens
+              // should agree on.
+              title={s.titleVi}
+              sub={`${s.title} · ${s.scenes.length} cảnh`}
               stars={getStars(`story:${s.id}`)}
               chevron
-              ariaLabel={s.title}
+              ariaLabel={s.titleVi}
             />
           ))}
         </div>

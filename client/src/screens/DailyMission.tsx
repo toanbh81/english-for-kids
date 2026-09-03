@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+import { bandName } from '../content/levels'
 import { dayKey, getActivity } from '../progress/activity'
 import { getLesson, lessonStatus } from '../progress/lesson'
 import type { LessonItemKind } from '../progress/lesson'
@@ -31,21 +32,6 @@ function markCelebrated(day: string): void {
  * estimates, sized off the group: a story is a four-minute sit-down, everything else is about a
  * minute a card, so a lesson of any length still reads as a believable few minutes.
  */
-/** Fix round 1: the band chip/header sub must name the level too ("Bậc ⭐ 2 · Đọc từ"), not just
- * the number — `docs/design/2026-09-03-round3-lists-nav-brief.md:127,129,130`. Copied verbatim
- * from `LevelStairs.tsx`'s own `STEPS[].name`, in the same 1→5 order its doc comment on
- * `progress/band.ts` already gives ("1 sounds → 2 word cards → 3 minimal pairs → 4 sentence stars
- * → 5 story voice"), rather than re-deriving or inventing the copy here. Not imported from
- * `LevelStairs.tsx` because `STEPS` is a local, unexported const there and this task's scope is
- * `DailyMission.tsx` only. */
-const BAND_NAME: Record<number, string> = {
-  1: 'Tập âm',
-  2: 'Đọc từ',
-  3: 'Nghe & chọn',
-  4: 'Sentence Stars',
-  5: 'Story Voice',
-}
-
 const KIND: Record<LessonItemKind, {
   emoji: string
   tone: ChipTone
@@ -114,6 +100,9 @@ export function DailyMission() {
   // -1 once every group is done — and for an empty lesson, which is why the finished branch below
   // reads `status.done` (it already guards `items.length > 0`) rather than this index.
   const currentIndex = groups.findIndex(group => !group.done)
+  // The group the pinned CTA offers (I5, fix wave): the CTA names it once a step is done, the
+  // same way TopicHub's and LevelStairs' own pinned CTAs already name their next stop.
+  const currentGroup = currentIndex === -1 ? null : groups[currentIndex]
   const doneGroups = groups.filter(g => g.done).length
 
   // Decided once per mount and then remembered in storage by the effect, exactly as on Home: a
@@ -131,14 +120,18 @@ export function DailyMission() {
       <PageHeader
         back={<BackButton to="/" label="Về trang chủ" mdLabel="Về bản đồ" />}
         title="Nhiệm vụ hôm nay 🌞"
-        sub={groups.length === 0 ? `Bậc ⭐ ${band} · ${BAND_NAME[band]}` : '5 bước nhỏ — 15 phút thôi!'}
+        sub={groups.length === 0 ? `Bậc ⭐ ${band} · ${bandName(band)}` : '5 bước nhỏ — 15 phút thôi!'}
         right={
           // Task 10: the two chips move into the header's right cell, iPad-only — on a phone this
           // renders an empty (`hidden`) box rather than nothing, so there is no need for the
-          // `right={null}` a screen with truly nothing there would pass (decision 8).
+          // `right={null}` a screen with truly nothing there would pass (decision 8). Fix wave
+          // I2/P6/M5: a real `Chip size="header"` instead of a `className` override that always
+          // lost to the default `md` pill — and no more dead `hidden … md:inline-flex` pair on the
+          // band chip, which could never do anything inside a wrapper that is already `hidden …
+          // md:flex`.
           <div className="hidden items-center gap-2 md:flex">
-            <Chip tone="sun" className="hidden text-[15px] rounded-r12 px-3.5 py-2 md:inline-flex">Bậc ⭐ {band} · {BAND_NAME[band]}</Chip>
-            <Chip tone="teal" className="text-[15px] rounded-r12 px-3.5 py-2">{doneGroups}/{groups.length} nhóm xong</Chip>
+            <Chip tone="sun" size="header">Bậc ⭐ {band} · {bandName(band)}</Chip>
+            <Chip tone="teal" size="header">{doneGroups}/{groups.length} nhóm xong</Chip>
           </div>
         }
       />
@@ -223,10 +216,17 @@ export function DailyMission() {
               * CTA (fix round 1) exactly as on the in-progress one below it. */}
             {status.done
               ? <Button to="/" size="lg" variant="secondary" className="flex-[1.35] ipad:w-[480px] ipad:flex-none"><HomeLabel /></Button>
-              : currentIndex !== -1
+              : currentGroup
                 ? (
-                  <Button to={groups[currentIndex].route} state={MISSION_STATE} size="lg" className="flex-[1.35] ipad:w-[480px] ipad:flex-none">
-                    {status.doneCount === 0 ? 'Bắt đầu ▸' : 'Tiếp tục ▸'}
+                  <Button to={currentGroup.route} state={MISSION_STATE} size="lg" className="flex-[1.35] ipad:w-[480px] ipad:flex-none">
+                    {/* I5, fix wave: the CTA names the group it resumes, the way TopicHub's
+                      * "Học tiếp: …" and LevelStairs' "Luyện bậc n: …" already name theirs (brief
+                      * §0.4's unified pinned-CTA convention) — "Bắt đầu ▸" stays bare, since the
+                      * brief only spells the *resumed* case out (§2 A6: "Tiếp tục: 5 thẻ phát âm
+                      * 🗣️"). */}
+                    {status.doneCount === 0
+                      ? 'Bắt đầu ▸'
+                      : `Tiếp tục: ${KIND[currentGroup.kind].title(currentGroup.items.length)} ${KIND[currentGroup.kind].emoji}`}
                   </Button>
                 )
                 : null}

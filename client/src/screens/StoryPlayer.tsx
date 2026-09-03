@@ -51,7 +51,7 @@ function StoryPlayerInner({ story, id, mission }: { story: Story; id: string; mi
             the story's own name underneath it, both inside the header. There is no longer a
             separate title block in the body, so the name has exactly one home. */}
         <div className="flex flex-col items-center">
-          <Chip tone="teal" className="rounded-r12 px-3.5 py-[7px] text-[15px]">Cảnh {p.sceneIndex + 1}/{story.scenes.length}</Chip>
+          <Chip tone="teal" size="header">Cảnh {p.sceneIndex + 1}/{story.scenes.length}</Chip>
           <span className="text-[11px] font-bold text-ink-300">{story.emoji} {story.title}</span>
         </div>
         {/* Decorative, and it disappears below `md` — the chip above already spells the position

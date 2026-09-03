@@ -176,6 +176,21 @@ it('the header sits inside the teal band, centred on the island-star chip', () =
   expect(screen.getByText('Động vật')).toHaveClass('text-[28px]', 'text-white')
 })
 
+// Fix wave P3: the island header's own star row reads pale-yellow (not the app-default gold/tan
+// pair) on the teal band — `Stars`' `tone="band"`.
+it('the island header star row reads pale-yellow on the teal band', () => {
+  unlockWords('animals', 8) // topicStars === 3, DECK_SIZE — so both filled and empty are exercised
+  renderHub('animals')
+
+  const band = screen.getByTestId('island-header')
+  const stars = within(band).getByTestId('stars')
+  expect(within(stars).getAllByTestId('star-filled')).toHaveLength(3)
+  for (const star of within(stars).getAllByTestId('star-filled')) {
+    expect(star).toHaveClass('text-star-band')
+    expect(star).not.toHaveClass('text-star')
+  }
+})
+
 it('the star chip denominator is 3 × the number of scored sections', () => {
   renderHub('animals') // words + sentences + (2) stories, collapsed to one scored section each
   expect(screen.getByText(/sao đảo$/)).toHaveTextContent('/9 sao đảo')
