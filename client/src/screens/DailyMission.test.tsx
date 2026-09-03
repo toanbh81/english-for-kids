@@ -356,8 +356,8 @@ it('offers the map on a tablet and the home screen on a phone', () => {
 
   const back = screen.getByRole('link', { name: /Về bản đồ 🏝️/ })
   expect(back).toHaveAttribute('href', '/')
-  expect(within(back).getByText('Về trang chủ 🏠')).toHaveClass('md:hidden')
-  expect(within(back).getByText('Về bản đồ 🏝️')).toHaveClass('hidden', 'md:inline')
+  expect(within(back).getByText('Về trang chủ 🏠')).toHaveClass('ipad:hidden')
+  expect(within(back).getByText('Về bản đồ 🏝️')).toHaveClass('hidden', 'ipad:inline')
 })
 
 it('sends the child to the celebration screen when the last step lands here', () => {

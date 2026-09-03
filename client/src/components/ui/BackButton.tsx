@@ -13,20 +13,21 @@ const VARIANT: Record<BackVariant, string> = {
 
 /** 56/64/44/48 px "←", the exact circle or pill picked by `variant` (brief §2.12). The visible
  * glyph is decorative for `child`/`onArt`, so the destination is named for screen readers instead
- * — by `aria-label`, or by `mdLabel` when the destination is called something else on a phone.
+ * — by `aria-label`, or by `mdLabel` when the destination is called something else on iPad landscape.
  *
- * **`mdLabel`** is `HomeLabel`'s rule for a control whose label is never visible. An `aria-label`
- * is one string and cannot follow a breakpoint, so a button that says "Về bản đồ" to a screen
- * reader kept promising the island map on a phone, where spec decision 1 has just removed it. Two
- * `sr-only` spans can follow it: `hidden` takes the wrong one out of the accessibility tree at each
- * width, exactly as `HomeLabel` does for a visible one, and the `aria-label` steps aside so the
- * element's own content is what names it.
+ * **`mdLabel`** is `HomeLabel`'s rule for a control whose label is never visible (the prop name
+ * predates the round-3 breakpoint move and stays as-is). An `aria-label` is one string and cannot
+ * follow a breakpoint, so a button that says "Về bản đồ" to a screen reader kept promising the
+ * island map off iPad landscape, where spec decision 3 says Home is not a map. Two `sr-only` spans
+ * can follow it: `hidden` takes the wrong one out of the accessibility tree at each width, exactly
+ * as `HomeLabel` does for a visible one, and the `aria-label` steps aside so the element's own
+ * content is what names it.
  */
 export function BackButton({ to, label = 'Quay lại', mdLabel, variant = 'child', state, className = '' }: {
   to: string
-  /** The accessible name. Below the tablet breakpoint when `mdLabel` is given; at every width otherwise. */
+  /** The accessible name. Off iPad landscape when `mdLabel` is given; at every width otherwise. */
   label?: string
-  /** The accessible name from the tablet breakpoint up, when it differs from `label`. */
+  /** The accessible name on iPad landscape, when it differs from `label`. */
   mdLabel?: string
   variant?: BackVariant
   /** Router state to carry along, e.g. `MISSION_STATE` — a screen inside a lesson step that hands
@@ -50,8 +51,8 @@ export function BackButton({ to, label = 'Quay lại', mdLabel, variant = 'child
       {visibleLabel && <span>{label}</span>}
       {mdLabel !== undefined && (
         <>
-          <span className="sr-only md:hidden">{label}</span>
-          <span className="sr-only hidden md:inline">{mdLabel}</span>
+          <span className="sr-only ipad:hidden">{label}</span>
+          <span className="sr-only hidden ipad:inline">{mdLabel}</span>
         </>
       )}
     </Link>

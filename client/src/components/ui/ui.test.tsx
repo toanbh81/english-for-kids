@@ -5,7 +5,9 @@ import { BackButton } from './BackButton'
 import { Button } from './Button'
 import { Chip } from './Chip'
 import { ChipPair } from './ChipPair'
+import { DialogProvider } from './DialogProvider'
 import { EmptyState } from './EmptyState'
+import { HomeLabel } from './HomeLabel'
 import { NotFound } from './NotFound'
 import { Notice } from './Notice'
 import { NoticeStack } from './NoticeStack'
@@ -129,6 +131,12 @@ describe('BackButton', () => {
     expect(a.className).not.toMatch(/66px/)
   })
 
+  it('mdLabel follows the same iPad-landscape breakpoint as HomeLabel', () => {
+    router(<BackButton to="/" label="Về trang chủ" mdLabel="Về bản đồ" />)
+    expect(screen.getByText('Về trang chủ')).toHaveClass('sr-only', 'ipad:hidden')
+    expect(screen.getByText('Về bản đồ')).toHaveClass('sr-only', 'hidden', 'ipad:inline')
+  })
+
   it('adult variant is 44 with a visible label', () => {
     router(<BackButton to="/" label="Về nhà" variant="adult" />)
     const a = screen.getByRole('link', { name: 'Về nhà' })
@@ -139,6 +147,14 @@ describe('BackButton', () => {
   it('onArt variant is 48 on a translucent white disc', () => {
     router(<BackButton to="/stories" label="Truyện" variant="onArt" />)
     expect(screen.getByRole('link')).toHaveClass('h-12', 'w-12', 'bg-white/[.94]', 'after:-inset-2')
+  })
+})
+
+describe('HomeLabel', () => {
+  it('promises the map only on iPad landscape', () => {
+    render(<HomeLabel />)
+    expect(screen.getByText('Về trang chủ 🏠')).toHaveClass('ipad:hidden')
+    expect(screen.getByText('Về bản đồ 🏝️')).toHaveClass('hidden', 'ipad:inline')
   })
 })
 
@@ -406,11 +422,40 @@ describe('Notice', () => {
 })
 
 describe('NoticeStack', () => {
-  it('orders by priority and folds the third', () => {
+  it('orders by priority and folds the third into a button naming it', () => {
     render(<NoticeStack items={[{ kind: 'info', title: 'A' }, { kind: 'error', title: 'B' }, { kind: 'warn', title: 'C' }]} />)
     const titles = screen.getAllByRole('status').map(n => n.textContent)
     expect(titles[0]).toContain('B'); expect(titles[1]).toContain('C')
-    expect(screen.getByText('+1 thông báo')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '+1 thông báo (A) ▸' })).toBeInTheDocument()
+  })
+
+  it('the "+N" row is a 44px button naming the first hidden banner, and opens a dialog listing the rest', async () => {
+    render(<DialogProvider><NoticeStack items={[
+      { kind: 'warn', title: 'Hôm nay bé học đủ rồi 🦊 Mai gặp lại nhé!' },
+      { kind: 'info', title: 'Liên kết email để giữ tiến độ của bé' },
+      { kind: 'info', title: 'Thêm vào Màn hình chính' },
+    ]} /></DialogProvider>)
+    const more = screen.getByRole('button', { name: '+1 thông báo (Thêm vào Màn hình chính) ▸' })
+    expect(more).toHaveClass('min-h-[44px]', 'text-[12px]', 'font-extrabold', 'text-ink-500')
+    fireEvent.click(more)
+    expect(await screen.findByRole('dialog')).toHaveTextContent('Thêm vào Màn hình chính')
+  })
+
+  it('the "+N" button still renders with no DialogProvider, as a no-op', () => {
+    render(<NoticeStack items={[
+      { kind: 'warn', title: 'A' },
+      { kind: 'info', title: 'B' },
+      { kind: 'info', title: 'C' },
+    ]} />)
+    const more = screen.getByRole('button', { name: '+1 thông báo (C) ▸' })
+    expect(() => fireEvent.click(more)).not.toThrow()
+    expect(screen.queryByRole('dialog')).toBeNull()
+  })
+
+  it('no "+N" row at or under max, and the priority order is unchanged', () => {
+    render(<NoticeStack items={[{ kind: 'info', title: 'a' }, { kind: 'error', title: 'b' }]} />)
+    expect(screen.queryByRole('button', { name: /thông báo/ })).toBeNull()
+    expect(screen.getAllByRole('status')[0]).toHaveTextContent('b')
   })
 })
 
