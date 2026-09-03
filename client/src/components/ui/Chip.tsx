@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 
-export type ChipTone = 'teal' | 'coral' | 'sun' | 'neutral'
+export type ChipTone = 'teal' | 'coral' | 'sun' | 'neutral' | 'coralSolid'
 export type ChipSize = 'sm' | 'md'
 
 const TONE: Record<ChipTone, string> = {
@@ -8,6 +8,7 @@ const TONE: Record<ChipTone, string> = {
   coral: 'bg-coral-50 text-coral-text',
   sun: 'bg-sun-50 text-sun-700',
   neutral: 'bg-cream-50 text-ink-500',
+  coralSolid: 'bg-coral-500 text-white',
 }
 
 const SIZE: Record<ChipSize, string> = {

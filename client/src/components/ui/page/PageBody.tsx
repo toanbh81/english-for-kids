@@ -40,7 +40,13 @@ type Split = { teach: ReactNode; act: ReactNode; collapsed?: { emoji: string; la
  * `shrink-0` on act. `md:`/`ipad:` still shrink each column with its own internal scroll, exactly
  * as before — that pairing (a fixed-height act column, a teach column that gives way and scrolls)
  * only ever made sense once there was room for two side-by-side or stacked-with-space columns. */
-export function PageBody({ center, split, actGrow, className = '', children }: { center?: boolean; split?: Split; actGrow?: boolean; className?: string; children?: ReactNode }) {
+const GAP = { 8: 'gap-2', 10: 'gap-2.5', 12: 'gap-3' } as const
+// R11: fade 50px của vùng cuộn khi màn KHÔNG có PageFooter (footer đã tự vẽ fade 40 của nó).
+// `sticky bottom-0` + margin âm: pseudo-element là một flex item, dính đáy khung cuộn thay vì
+// dính cuối nội dung, nên nó phủ đúng 50px cuối của viewport ở mọi vị trí cuộn.
+const FADE = "after:pointer-events-none after:sticky after:bottom-0 after:-mt-[50px] after:block after:h-[50px] after:shrink-0 after:bg-gradient-to-b after:from-transparent after:to-cream-50 after:content-['']"
+
+export function PageBody({ center, split, actGrow, fade, gap, className = '', children }: { center?: boolean; split?: Split; actGrow?: boolean; fade?: boolean; gap?: 8 | 10 | 12; className?: string; children?: ReactNode }) {
   if (split) {
     return (
       <div data-testid="page-body" className={`mt-2.5 flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto md:mt-4 ipad:flex-row ipad:gap-6 ipad:overflow-visible ${className}`}>
@@ -70,7 +76,7 @@ export function PageBody({ center, split, actGrow, className = '', children }: {
     )
   }
   return (
-    <div data-testid="page-body" className={`mt-2.5 flex min-h-0 flex-1 flex-col overflow-y-auto md:mt-4 ${center ? 'justify-center' : ''} ${className}`}>
+    <div data-testid="page-body" className={`mt-2.5 flex min-h-0 flex-1 flex-col overflow-y-auto md:mt-4 ${gap ? GAP[gap] : ''} ${fade ? FADE : ''} ${center ? 'justify-center' : ''} ${className}`}>
       {children}
     </div>
   )

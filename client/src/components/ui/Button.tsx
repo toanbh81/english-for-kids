@@ -3,8 +3,10 @@ import { Link } from 'react-router-dom'
 
 export type ButtonVariant = 'primary' | 'secondary' | 'outline' | 'ghost'
 /** `md` and `lg` are responsive (brief §1: phone 56, iPad 64; lg one step up). `adult` is the
- * parent area's fixed 44 (brief §2.1). */
-export type ButtonSize = 'md' | 'lg' | 'adult'
+ * parent area's fixed 44 (brief §2.1). `sm` is the 48px mission CTA — 48 already clears the 44px
+ * tap-target floor and the MissionCard it lives in has no room for the usual 4px hit band, so it
+ * skips `HIT` unlike `md`. */
+export type ButtonSize = 'sm' | 'md' | 'lg' | 'adult'
 
 // The press sinks the button into its own shadow: the offset halves as the face moves down 2 px,
 // so the button looks pushed rather than just nudged. Shadowless variants only move.
@@ -20,6 +22,7 @@ const VARIANT: Record<ButtonVariant, string> = {
 const HIT = "relative after:absolute after:-top-1 after:-bottom-1 after:left-0 after:right-0 after:content-['']"
 
 const SIZE: Record<ButtonSize, string> = {
+  sm: 'min-h-[48px] px-4 text-[17px] rounded-r16',
   md: `min-h-[56px] px-5 text-[18px] rounded-r18 md:min-h-[64px] md:px-7 md:text-[22px] md:rounded-r20 ${HIT} md:after:hidden`,
   lg: `min-h-[64px] px-7 text-[22px] rounded-r20 md:min-h-[72px] md:px-9 md:text-[26px] md:rounded-r24`,
   adult: 'min-h-[44px] px-4 text-[14px] rounded-r12',

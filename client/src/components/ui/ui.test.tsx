@@ -102,6 +102,11 @@ describe('Button', () => {
     render(<Button pulse>Bắt đầu ▸</Button>)
     expect(screen.getByRole('button')).toHaveClass('animate-pulse-coral')
   })
+
+  it('size sm is the 48px mission CTA', () => {
+    render(<Button size="sm">Chơi lại 🎉</Button>)
+    expect(screen.getByRole('button')).toHaveClass('min-h-[48px]', 'px-4', 'text-[17px]', 'rounded-r16', 'whitespace-nowrap')
+  })
 })
 
 describe('BackButton', () => {
@@ -171,6 +176,11 @@ describe('Chip', () => {
     expect(screen.getByText('Sắp có')).toHaveClass('text-base')
     expect(screen.getByText('Sắp có')).not.toHaveClass('text-lg')
   })
+
+  it('coralSolid is solid coral with white text', () => {
+    render(<Chip tone="coralSolid">12 từ hôm nay</Chip>)
+    expect(screen.getByText('12 từ hôm nay')).toHaveClass('bg-coral-500', 'text-white')
+  })
 })
 
 describe('ChipPair', () => {
@@ -208,6 +218,14 @@ describe('Stars', () => {
     rerender(<Stars value={3} size="lg" animate />)
     expect(screen.getByTestId('stars')).toHaveClass('text-[44px]')
     expect(screen.getAllByTestId('star-filled')[2]).toHaveStyle({ animationDelay: '0.36s' })
+  })
+
+  it('gains the 13 and 14 marks without moving the old four', () => {
+    const { rerender } = render(<Stars value={2} size="13" />)
+    expect(screen.getByTestId('stars')).toHaveClass('text-[13px]', 'tracking-[2px]')
+    rerender(<Stars value={2} size="14" />); expect(screen.getByTestId('stars')).toHaveClass('text-[14px]')
+    rerender(<Stars value={2} size="xs" />); expect(screen.getByTestId('stars')).toHaveClass('text-[12px]')
+    rerender(<Stars value={2} />); expect(screen.getByTestId('stars')).toHaveClass('text-[28px]')
   })
 })
 
@@ -321,6 +339,15 @@ describe('EmptyState', () => {
   it('adult variant is smaller', () => {
     render(<EmptyState adult emoji="🎙️" title="Chưa có bản ghi nào" sub="Bản ghi xuất hiện sau khi bé luyện nói." />)
     expect(screen.getByText('Chưa có bản ghi nào')).toHaveClass('text-[14px]')
+  })
+
+  it('hero swaps the emoji for a 120px Foxy and grows the type', () => {
+    render(<EmptyState size="hero" title="Hôm nay chưa có nhiệm vụ" sub="Bé có thể luyện tự do ở bất kỳ đảo nào — hoặc leo các bậc luyện nói." />)
+    const box = screen.getByTestId('empty-state')
+    expect(box).toHaveClass('flex-1', 'justify-center', 'gap-3', 'bg-transparent')
+    expect(screen.getByTestId('foxy')).toBeInTheDocument()
+    expect(screen.getByText('Hôm nay chưa có nhiệm vụ')).toHaveClass('text-[22px]')
+    expect(screen.getByText(/luyện tự do/)).toHaveClass('text-[14px]')
   })
 })
 

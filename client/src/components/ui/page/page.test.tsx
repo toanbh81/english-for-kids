@@ -140,3 +140,36 @@ describe('LessonChip in the header', () => {
     vi.restoreAllMocks()
   })
 })
+
+describe('PageHeader title/sub/align/onBand (Phase 14)', () => {
+  it('header keeps the Phase 12/13 centred layout byte-for-byte when no title is given', () => {
+    wrap(<PageShell><PageHeader back={<BackButton to="/" label="Về nhà" />}><span>chip</span></PageHeader><PageBody>x</PageBody></PageShell>)
+    expect(screen.getByRole('banner')).toHaveClass('grid', 'h-14', 'grid-cols-[56px_1fr_56px]', 'gap-2', 'md:h-16', 'md:gap-3')
+    expect(screen.getByText('chip').parentElement?.parentElement)
+      .toHaveClass('items-center', 'justify-self-center', 'gap-[3px]', 'md:flex-row', 'md:gap-2.5')
+  })
+  it('title/sub render a left-aligned one-row header', () => {
+    wrap(<PageShell><PageHeader back={<BackButton to="/words" label="Từ vựng" />} title="📚 Ôn tập hôm nay" sub="64 từ · chạm để ôn" /><PageBody>x</PageBody></PageShell>)
+    expect(screen.getByRole('banner')).toHaveClass('gap-2.5', 'md:gap-3.5')
+    const h1 = screen.getByRole('heading', { level: 1 })
+    expect(h1).toHaveClass('truncate', 'font-display', 'text-[22px]', 'leading-[1.1]', 'md:text-[28px]')
+    expect(screen.getByText('64 từ · chạm để ôn')).toHaveClass('truncate', 'text-[13px]', 'font-bold', 'text-ink-500', 'md:text-[15px]')
+    expect(h1.parentElement?.parentElement).toHaveClass('min-w-0', 'flex-1', 'justify-self-stretch', 'text-left')
+  })
+  it('onBand makes the header transparent and turns the back disc white-on-teal', () => {
+    wrap(<PageShell><PageHeader onBand back={<BackButton to="/" label="Về nhà" />} title="Động vật" /><PageBody>x</PageBody></PageShell>)
+    expect(screen.getByRole('banner')).toHaveClass('bg-transparent')
+    expect(screen.getByRole('link', { name: 'Về nhà' }).parentElement)
+      .toHaveClass('[&>a]:bg-white/[.92]', '[&>a]:text-teal-600')
+  })
+})
+
+describe('PageBody fade/gap (Phase 14)', () => {
+  it('are opt-in and absent by default', () => {
+    const { rerender } = wrap(<PageShell><PageBody>x</PageBody></PageShell>)
+    expect(screen.getByTestId('page-body')).toHaveClass('mt-2.5', 'flex', 'min-h-0', 'flex-1', 'flex-col', 'overflow-y-auto', 'md:mt-4')
+    expect(screen.getByTestId('page-body').className).not.toMatch(/after:|gap-/)
+    rerender(<PageShell><PageBody fade gap={10}>x</PageBody></PageShell>)
+    expect(screen.getByTestId('page-body')).toHaveClass('gap-2.5', 'after:sticky', 'after:bottom-0', 'after:h-[50px]', 'after:to-cream-50')
+  })
+})
