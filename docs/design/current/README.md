@@ -45,6 +45,15 @@ Trong sheet, ô nào tràn có dòng đỏ "⚠ tràn" ngay dưới ảnh.
 cd docs/design/current && npm i playwright-core@1.47.2 && node shoot.mjs        # tất cả frame
 SHOTS=home,mission node shoot.mjs phone                                          # chỉ vài ảnh
 VIEWPORTS=short SHOTS=practice-idle node shoot.mjs                               # spot-check 375×667 (tailwind `short:`), opt-in — mặc định vẫn chỉ phone,ipad,ipadp
+SHOTS_DIR=../current-phase14/shots node shoot.mjs                                # Phase 14 before/after set (10 kịch bản mới — xem README.md §Phase 14)
 node sheet.mjs                                                                   # ghép sheet
 ```
 Cần Edge cài sẵn (`channel: 'msedge'`), không tải browser.
+
+## Phase 14 (2026-09-04)
+10 kịch bản chụp mới, không có trong danh sách 58 tên file ở trên: `words-review` (seed 64 từ đến hạn ôn
+tập), `stories`, `sentences-topic` (`?topic=family`), `mission-empty`, `mission-done-zero`,
+`topic-no-story` (`/topic/weather`), `quiz-result-zero` (chọn sai rồi đúng cả 3 câu), `story-player-no-
+audio` (mp3 bị chặn để bắt trạng thái lỗi), `home-3-banners` (chỉ 2 banner hiện được ở dev, xem README.md
+§Phase 14), và `levels` được thêm vào tập `ipadp` (`IPADP_ONLY`). Chi tiết: README.md §"Phase 14 — Danh
+sách và điều hướng (vòng 3)".

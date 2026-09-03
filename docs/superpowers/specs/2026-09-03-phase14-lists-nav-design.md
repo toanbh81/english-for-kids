@@ -76,4 +76,4 @@ Phase 12 dựng khung trang (`PageShell/PageHeader/PageBody/PageFooter`, `Button
 - Mỗi task: tests + lint + typecheck; chụp màn liên quan ở 3 frame (+`VIEWPORTS=short` cho C6 và A9); probe `PageBody` phải hạ các mốc `phone/words-animals-full.png`, `phone/words-full.png`, `phone/sentences-full.png`, 5 file `phone/level-*-full.png`, `ipad|ipadp/sentences-full.png`.
 - Cuối phase: sheet trước/sau (`current-phase13/shots` → `current-phase14`); README "Phase 14"; checklist iPad 5 hàng: số cột lưới đúng theo từng frame (3/5/6 và 2/3/4) · H2 nhóm dính khi cuộn C6/C8 · nút "+1 thông báo" ở Home mở sheet · header TopicHub nằm **trong** dải teal · header StoryPlayer **trên** tranh, không đè · quiz 0/3 hiện 0★ và không lưu sao.
 
-Trạng thái: chưa triển khai — dòng này sẽ được cập nhật khi Phase 14 xong (nhánh, tasks, sai lệch ghi ở README §Phase 14).
+Trạng thái: đã triển khai 2026-09-04 (nhánh `phase14-lists-nav`, tasks 1–16); sai lệch ghi ở README §Phase 14.

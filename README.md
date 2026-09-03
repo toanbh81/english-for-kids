@@ -1466,6 +1466,200 @@ Continuing the numbering from the table above.
 | 84 (khẩu hình bật/tắt) | Word Pop (PracticeCard) → tap "👄 Khẩu hình" | A mouth-shape panel opens (140×140 phone inline / 220×220 iPad under the buttons) and tapping again closes it | ⏳ pending |
 | 85 (header mờ khi ghi) | Any speaking screen → tap the mic to start recording | Header's back button and right-side slot dim to ~40% opacity and stop responding to taps; a coral "● Đang ghi" chip appears in the header center until recording stops | ⏳ pending |
 
+## Phase 14 — Danh sách và điều hướng (vòng 3)
+
+Round 3 of the redesign (`docs/design/round-2026-09/README.md`) rebuilds the **list frame** shared by
+ten screens and fixes **navigation** — Home's banners, the "Về bản đồ" copy, pinned CTAs, and
+StoryPlayer's header — on top of Phase 12's page shell and Phase 13's practice frame. Implemented
+2026-09-04 on branch `phase14-lists-nav` (tasks 1–16); every "làm theo đề xuất"/"Ruling" decision is
+recorded in `.superpowers/sdd/2026-09-03-phase14-lists-nav/progress.md`, sourced from
+`docs/superpowers/specs/2026-09-03-phase14-lists-nav-design.md` and
+`docs/design/2026-09-03-round3-lists-nav-brief.md`. Round 3 builds the **list frame** and fixes
+**navigation**; it does not touch the nine speaking/word/sentence screens Phase 13 already owns.
+
+- **List frame.** New `client/src/components/ui/list/`: `ListGrid` (`size='sm'|'lg'`, no `lg:`
+  breakpoint of its own — column counts are baked in per size/frame), `Tile` (`size`/`variant`/`emoji`/
+  `ipa`/`title`/`titleSize`/`sub`/`subTone`/`chip`/`stars`/`ariaLabel`), `ListRow` (`h=64|96`, `disc`,
+  `chevron`), `StickyGroup` (`emoji`/`name`/`count`/`pad`, the sticky H2 for grouped lists). Replaces
+  seven screens' own hand-rolled grids and deletes `components/ui/cardLink.ts`.
+- **Header, one row, left-aligned.** `PageHeader` gains `title`/`sub`/`align`/`onBand` — `align='start'`
+  puts H1 22/`md:28` + a 13/15px subtitle in a left-aligned column; the default stays today's centred
+  layout so Phase 13's nine screens (chip, `ChipPair`, "● Đang ghi") render pixel-identical. `onBand` is
+  a **named exception** to Phase 12's "header always sits on cream" rule — a transparent header on a
+  colour band, white .92 Back glyph — used only by TopicHub.
+- **Four small additions.** `PageBody` gets `fade`/`gap`; `Button` gets `size='sm'` (48px, radius 16,
+  MissionCard's CTA); `EmptyState` gets `size='hero'` (Foxy 120, 22px title, 14px sub); `Chip` gets tone
+  `coralSolid` and size `xs` (11/13px — added mid-branch once base `Chip` classes turned out to beat
+  `Tile`'s override attempt); `Stars` gets size milestones `'13'`/`'14'` instead of widening the whole
+  scale to arbitrary numbers.
+- **The six default classes and prop shapes are unchanged** — all 33 pre-Phase-14 screens render the
+  same bytes they did before this branch; only the ten list screens and the six navigation/nav-adjacent
+  screens below opt into the new props.
+
+Two carrier lessons re-applied from Phase 13 mid-branch, both found by screenshot review rather than
+planned:
+- **`Chip` base classes beat `Tile`'s override.** `Tile`'s attempt to shrink the chip to 11px via
+  className lost to `Chip`'s own base classes (same specificity, later in source) — sixteen-pixel pills
+  showed up in tile grids instead. Fixed by giving `Chip` a real `size='xs'` variant instead of trying
+  to override it from outside.
+- **`PageBody fade`'s `after:mt-auto`.** The fade pseudo-element originally sat right after the content,
+  so on a short list it painted across the last row instead of the container's true bottom edge; `after:
+  mt-auto` pins it to the bottom of the flex column regardless of content length (reviewer-verified
+  live, cost if wrong: 50px of extra scroll at the end of long lists).
+- **`ipad:` vs `md:` specificity, re-applied.** Phase 13 fixed `ipad:` to always outrank a single-class
+  `md:` rule; Phase 14 leaned on that fix again for TopicHub's and LevelStairs' ×1.25 iPad sizing and
+  DailyMission's landscape CTA pairing, and needed no new carrier work.
+
+### 17 screens
+
+| Screen | What changed |
+|---|---|
+| WordTopics (C5) | Moved onto the shared `ListGrid`/`Tile` frame |
+| WordList (C6) | `StickyGroup`-grouped review deck (up to 64 tiles across 8 topic groups), review seed now unlocks all 8 topics so the worst case actually renders |
+| StoryList (C1) | `ListRow h=96` rows with a Foxy filler row when the list is short |
+| SentenceList (C8) | `ListRow h=64` rows in a sticky `StickyGroup`, 2-column `md:grid-cols-2` on iPad (whole groups side by side), subtitle now counts rendered rows instead of all sentences, `?topic=` carried into row hrefs |
+| LevelSelect — Word Pop (A10) | Word cards on the shared large-tile grid |
+| SoundLevel — Tập âm (A11) | 9 IPA tiles on the shared large-tile grid |
+| PairLevel — Nghe & chọn (A12) | Large-tile grid, phone-length subtitle ("Nghe tinh, chọn đúng từ!") |
+| StarLevel — Sentence Stars (A13) | Large-tile grid, phone-length subtitle ("Nói cả câu, nhấn đúng chỗ!") |
+| VoiceLevel — Story Voice (A14) | Large-tile grid |
+| SoundWordList (B2) | Tiles resized onto the standard `Tile` size (header/`Chip` unchanged); `CARD_LINK` deleted |
+| Home (A3) | iPad portrait: 3-column island grid, Speak Lab as the 9th tile, header cluster moved to a compact row beside the greeting; "Về bản đồ" copy switched from `md:` to `ipad:`; NoticeStack's "+N" line opens a `Dialog` listing the rest |
+| DailyMission (A6) | Fixed 300×128 `MissionCard` with an `empty` state, hero `EmptyState` for an empty mission, iPad landscape column layout, band chip now names the level, done CTA sized like the start CTA on landscape |
+| MissionComplete (A7) | 0-star / 0-streak branch on the celebration screen |
+| TopicHub (A8) | `PageHeader onBand` — teal band becomes the header + name-block background, header centre shows an "⭐ n/m sao đảo" chip, `PageFooter` CTA pinned ("Học tiếp: {mục dở đầu tiên} ▸"), empty-story row grayscaled with an "n đảo khác" count read from `STORIES` |
+| LevelStairs (A9) | Percentage-diagonal layout on landscape, CTA present at every frame, phone gets a real scrollable region, single-line step name/tag |
+| StoryPlayer (C2) | Header moved above the picture (was 3 overlays on the art), 2 audio states become a `Notice` with a working `retry()`, `Karaoke` hit target dropped to 44×44 (a named exception to the 64px child-target floor — karaoke words are a secondary target, not a primary action) |
+| StoryQuiz (C3) | Answer cards in a 4:3 row grid with an image branch, 0/3 result renders 0★ without writing to the star store |
+
+### Mốc `-full.png` đã hạ
+
+Pixel numbers below are from the Task 16 full run (`SHOTS_DIR=docs/design/current-phase14/shots`, all
+screens, no `SHOTS` filter — full log in `.superpowers/sdd/2026-09-03-phase14-lists-nav/task-16-report.md`);
+"before" is Phase-12-era from `docs/design/current/README.md`. "Fits" means the probe's own overflow
+test (`scrollHeight > clientHeight + 8`) no longer trips, so `shoot.mjs` no longer writes a `-full.png`
+for that screen at all.
+
+| Screen (frame) | Before | After |
+|---|---|---|
+| phone/words-animals-full.png | 946px | **gone** — fits |
+| phone/words-full.png | 946px | **gone** — fits |
+| phone/sentences-full.png | 2192px | **still present, 1729px** — allowed to remain (32-sentence single-column phone list genuinely exceeds the fold; see Ruling) |
+| phone/level-word-pop-full.png | 1244–2420px band | **gone** — fits |
+| phone/level-sound-zoo-full.png | 1244–2420px band | **gone** — fits |
+| phone/level-pairs-full.png | 1244–2420px band | **gone** — fits |
+| phone/level-stars-full.png | 1244–2420px band | **gone** — fits |
+| phone/level-voice-full.png | 1244–2420px band | **gone** — fits |
+| ipad/sentences-full.png | 1964px | **still present, 1077px** — see Ruling below (not eliminated, contrary to the spec's "Kiểm chứng" wording) |
+| ipadp/sentences-full.png | (no iPad-portrait frame existed pre-Phase-14) | **gone** — fits (portrait's taller `PageBody`, ~1070px, accommodates the same 16-rows/column layout that overflows landscape's 710px) |
+| ipad/mission-full.png (Phase 12 milestone) | 1189px | **gone** — fits |
+| ipad/levels-full.png (Phase 12 milestone) | 1496px | **gone** — fits |
+
+Bonus, not required by the brief's 10+2 milestones but confirmed by the same run: `ipad/level-stars`
+(was 1020px) and `ipad/level-voice` (was 971px) also fit now — no `-full.png`.
+
+**`ipad/sentences-full.png` is not fully eliminated** — this is a real finding, not a clean pass. The
+spec's "Kiểm chứng" section named it alongside the others as a milestone to bring to zero, but the
+Task 4 Ruling accepted iPad SentenceList's `md:grid-cols-2` layout as "16 hàng/cột" (16 rows per
+column) — and 16 × 64px = 1024px of content alone already exceeds the 710px `PageBody` available on
+iPad landscape (834 − header/footer), before any header or gap overhead. Going to zero overflow there
+would need fewer rows per column or a third column, neither of which the brief or the Ruling
+authorized. It is down from 1964px to 1077px (45% shorter) and the layout genuinely gained a second
+column exactly as the design brief specified in prose — but the milestone is reduced, not gone. Not a
+BLOCKED code defect (nothing here contradicts an accepted Ruling), but flagged here rather than quietly
+counted as a pass.
+
+### Mọi `-full.png` còn lại sau lần chạy đủ (Step 1), phân loại
+
+| File | px | Phân loại |
+|---|---|---|
+| phone/home-fresh-full.png | 918 | Pre-existing, out of Phase 14 scope (fresh-install Home content) |
+| phone/home-full.png | 896 | Pre-existing, out of Phase 14 scope (seeded Home content) |
+| phone/voice-recording-full.png | 747 | Pre-existing 9px graze, already an accepted Phase 13 Ruling; unrelated to this phase |
+| phone/words-review-full.png | 3220 | Expected — Task 3's own worst case (64 review tiles across 8 `StickyGroup`s) |
+| phone/sentences-full.png | 1729 | Expected scroll — see Ruling above (down from 2192) |
+| phone/parent-dashboard-full.png | 1781 | Pre-existing, Phase 15 (parent zone) scope |
+| phone/home-over-limit-full.png | 953 | Pre-existing Home banner state, out of Phase 14 scope |
+| phone/home-3-banners-full.png | 1060 | Expected — new Phase 14 scenario, 3 banners + content stacked deliberately |
+| ipad/words-review-full.png | 2808 | Expected — same worst case as phone |
+| ipad/sentences-full.png | 1077 | Reduced, not eliminated — see Ruling above (down from 1964) |
+| ipad/parent-dashboard-full.png | 1827 | Pre-existing, Phase 15 scope |
+| ipadp/words-review-full.png | 2808 | Expected — same worst case |
+| ipadp/parent-dashboard-full.png | 2399 | Pre-existing, Phase 15 scope |
+
+`VIEWPORTS=short SHOTS=words-review,levels,quiz-result-zero,story-player` spot-check (375×667): only
+`short/words-review-full.png` (3220px, same expected worst case) — `levels`, `quiz-result-zero` and
+`story-player` all fit the short fold.
+
+One unrelated script failure at all three viewports: `parent-dashboard-profiles` times out
+(`locator.textContent: Timeout 30000ms exceeded`) — a pre-existing shoot-script flake in the
+ProfilePicker flow, outside Phase 14's scope (Parent Dashboard is untouched this phase; Phase 15 owns
+it) and not a product defect this task should fix.
+
+### Sai lệch so với brief (Ruling)
+
+- `PageHeader.onBand` is a **named exception** to the Phase 12 rule "header always sits on cream" —
+  used only by TopicHub, transparent header on the teal band.
+- `Karaoke`'s 44×44 hit target is a **named exception** to the 64px child-target floor (decision Q11) —
+  a karaoke word is a secondary target (re-listen to one word), the 64px floor is reserved for primary
+  actions (play, mic, CTA, answer tiles).
+- Home's "+N" banner line opens Phase 12's existing `Dialog` rather than a dedicated bottom sheet, so
+  it stays two controls (the banner button + the dialog) instead of one new surface.
+- `home-3-banners` only captures **2** banners in this dev build (over-limit + A2HS) — the "email
+  milestone" banner needs Supabase env that dev doesn't have; proven instead by the Task 8 unit test and
+  the iPad checklist row.
+- Three copy strings are **proposals** (the design left them unspecified): C1's Foxy filler-row line,
+  C6's topic-list subtitle "n từ · chạm để học", and A6's empty-band subtitle "Bậc ⭐ n" — flagged here
+  rather than silently picked.
+- `Stars` gained size milestones `'13'` and `'14'` rather than widening the whole size scale to numeric
+  px values.
+- `progress/store.setStars`'s signature is **unchanged** — it only ever increases a star count, so a
+  0-star StoryQuiz result simply never calls it (still logs the attempt via `logActivity`).
+- same workspace policy as Phases 12–13 — branch worked in the main tree, no separate worktree.
+- Tile requires `title` or `ariaLabel` at the type level (a JSX title alone would leak star glyphs into
+  the link's accessible name); a string `title` was narrowed in on purpose since it is what gives the
+  link its name — a future caller passing JSX would need `ariaLabel` too.
+- Locked tiles get a new `Chip` tone `'sand'` (`bg-[#EFE2CC] text-sand-text`) — the plan's neutral-tone
+  text yielded to the design's own colour.
+- iPad SentenceList (C8) lays whole `StickyGroup`s side by side in `md:grid-cols-2` — the design brief
+  only had prose ("2 cột hàng, 16 hàng/cột, H2 vẫn dính") and the arithmetic holds, but the exact column
+  fill order was never drawn.
+- The spec's "Kiểm chứng" section named `ipad|ipadp/sentences-full.png` as a milestone to eliminate
+  entirely; `ipadp/sentences-full.png` (portrait) is gone, but `ipad/sentences-full.png` (landscape)
+  is only reduced (1964px → 1077px), because 16 rows/column × 64px already exceeds landscape's 710px
+  `PageBody` before any other content — a direct, unavoidable consequence of the accepted "16 hàng/cột"
+  Ruling above, not a defect introduced by this phase.
+- A12/A13's subtitles were shortened to ≤30 chars after review flagged the original sentences as body
+  copy, not header copy.
+- TopicHub applies the ×1.25 iPad inference rule (decision 15, for screens without an artboard) to its
+  band/name/rows and a 1080px landscape width; its band height is content-driven (wraps header + name
+  block) rather than a fixed constant, matching the (undrawn) artboard's own invariant.
+- StoryPlayer's `retry()` is a `loadAttempt` state bump the scene-load effect already depends on, not a
+  bespoke reload path.
+
+### Việc để lại
+
+- `BAND_NAME` in `DailyMission` duplicates `LevelStairs.STEPS[].name` — a shared level-name source would
+  remove the drift risk between the two.
+- TopicHub's band negative margin hard-codes `1.25rem` instead of reading `var(--page-pad-top,1.25rem)`.
+- The subtitle star colour in TopicHub needs a proper `Stars`-owned tone rather than an ad hoc class.
+- `useCountdown`/`useTeachCollapse` extraction (the countdown effect repeats 8×, the collapse block 6×
+  across Phase 13's screens) — still deferred; Phase 14 didn't touch any speaking screen, so nothing
+  forced the extraction.
+
+### Checklist iPad (6 hàng)
+
+Continuing the numbering from the table above.
+
+| # | Step | Expected result | Result |
+|---|------|------------------|--------|
+| 86 (số cột lưới) | Open each list-frame screen at all 3 frames | Grid columns match the frame: small tiles 3/5/6 (phone/iPad landscape/iPad portrait-inferred), large tiles 2/3/4 | ⏳ pending |
+| 87 (H2 dính) | WordList `/words/review` and SentenceList `/sentences` → scroll | The `StickyGroup` H2 header stays pinned to the top of the scroll area while its tiles/rows scroll underneath | ⏳ pending |
+| 88 ("+N" mở dialog) | Home with 2+ hidden banners → tap "+N thông báo" | Opens the Phase 12 `Dialog` listing the remaining banners | ⏳ pending |
+| 89 (header TopicHub trong dải) | TopicHub `/topic/animals` at all 3 frames | The header (title + "⭐ n/m sao đảo" chip) sits visually inside the teal band, not on cream above it | ⏳ pending |
+| 90 (header StoryPlayer trên tranh) | StoryPlayer `/story/little-fox` | The header row sits above the picture, not overlaid on it | ⏳ pending |
+| 91 (quiz 0/3 không lưu sao) | StoryQuiz — answer every question wrong once | Shows 0★ with an idle Foxy; checking `speakup.*.stars` in devtools afterward shows no entry written for that quiz | ⏳ pending |
+
 ## Architecture
 
 ```
