@@ -12,8 +12,9 @@ describe('StressedSentence', () => {
 
     expect(screen.getByText('have')).toHaveClass('text-coral-text', 'text-[32px]', 'md:text-[48px]')
     expect(screen.getByText('apple.')).toHaveClass('text-coral-text', 'text-[32px]', 'md:text-[48px]')
-    expect(screen.getByText('I')).toHaveClass('text-ink-900', 'text-[27px]', 'md:text-[40px]')
-    expect(screen.getByText('a')).toHaveClass('text-ink-900', 'text-[27px]', 'md:text-[40px]')
+    expect(screen.getByText('I')).toHaveClass('text-ink-900', 'text-[26px]', 'md:text-[40px]')
+    expect(screen.getByText('a')).toHaveClass('text-ink-900', 'text-[26px]', 'md:text-[40px]')
+    expect(screen.getByText('I').closest('p')).toHaveClass('md:max-w-[560px]')
   })
 
   it('draws one ‿ between each linked pair, hidden from screen readers', () => {

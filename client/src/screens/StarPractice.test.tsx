@@ -4,20 +4,36 @@ import { useEffect, useState } from 'react'
 import type { PronunciationResult } from '../scoring/types'
 
 /** The hook is mocked, not the recorder + scorer: these tests are about what StarPractice does
- * with a result, and `useSpeakingAttempt` is covered by its own suite and PracticeCard.test. */
-const mic = vi.hoisted(() => ({ push: (_r: PronunciationResult, _b: Blob | null = null) => {} }))
+ * with a result, and `useSpeakingAttempt` is covered by its own suite and PracticeCard.test.
+ * `micState` is now a real piece of state (not a hardcoded `'idle'`) because round-2's carrier
+ * behaviours — dimmed header, "● Đang ghi" chip, the collapsed strip — all key off `recording`,
+ * and the "processing is not recording" guard needs a screen already rendered mid-attempt. */
+type MicState = 'idle' | 'recording' | 'processing' | 'disabled' | 'locked'
+const mic = vi.hoisted(() => ({
+  push: (_r: PronunciationResult, _b: Blob | null = null) => {},
+  engine: 'azure' as 'azure' | 'webspeech',
+  error: null as { kind: string; detail?: string } | null,
+  dismissError: () => {},
+  setMicState: (_s: MicState) => {},
+  // Read once, on mount/reset, by the effect below — set before `renderStar()` so a screen can be
+  // rendered already mid-attempt (e.g. `processing`) with no post-render `act()` needed.
+  initialMicState: 'idle' as MicState,
+}))
 vi.mock('../speaking/useSpeakingAttempt', () => ({
   useSpeakingAttempt(opts: { resetKey?: string; onResult?: (r: PronunciationResult, b: Blob | null) => void }) {
     const [state, setState] = useState<{ result: PronunciationResult | null; blob: Blob | null }>({ result: null, blob: null })
-    useEffect(() => { setState({ result: null, blob: null }) }, [opts.resetKey])
+    const [micState, setMicState] = useState<MicState>('idle')
+    useEffect(() => { setState({ result: null, blob: null }); setMicState(mic.initialMicState) }, [opts.resetKey])
     mic.push = (r: PronunciationResult, b: Blob | null = null) => {
       setState({ result: r, blob: b })
       opts.onResult?.(r, b)
     }
+    mic.dismissError = () => {}
+    mic.setMicState = setMicState
     return {
-      micState: 'idle' as const, level: 0, engine: 'azure' as const,
-      result: state.result, error: null, lastBlob: state.blob,
-      onMic: () => {}, reset: () => setState({ result: null, blob: null }),
+      micState, level: 0, engine: mic.engine,
+      result: state.result, error: mic.error, lastBlob: state.blob,
+      onMic: () => {}, reset: () => { setState({ result: null, blob: null }); setMicState('idle') }, dismissError: mic.dismissError,
     }
   },
 }))
@@ -84,6 +100,16 @@ function result(accuracy: number, fluency: number, completeness = 100): Pronunci
 }
 
 const score = (r: PronunciationResult, blob: Blob | null = null) => act(() => { mic.push(r, blob) })
+const startRecording = () => act(() => { mic.setMicState('recording') })
+
+/** Walks up from `el` to the nearest ancestor carrying `cls` — used where the class under test
+ * sits on a wrapper `data-testid` doesn't reach (PageBody's own collapse wrapper). */
+function ancestorWithClass(el: Element, cls: string): HTMLElement {
+  let node: Element | null = el
+  while (node && !node.classList.contains(cls)) node = node.parentElement
+  if (!node) throw new Error(`no ancestor of ${el.outerHTML.slice(0, 80)} carries class "${cls}"`)
+  return node as HTMLElement
+}
 
 function renderStar(id = SS1.id, mission = false) {
   render(
@@ -101,6 +127,9 @@ beforeEach(() => {
   localStorage.clear()
   FakeAudio.instances.length = 0
   vi.stubGlobal('Audio', FakeAudio)
+  mic.engine = 'azure'
+  mic.error = null
+  mic.initialMicState = 'idle'
   playerControl.playUrl.mockReset().mockResolvedValue(undefined)
   playerControl.playBlob.mockReset().mockResolvedValue(undefined)
   playerControl.stopCurrentAudio.mockReset()
@@ -389,16 +418,113 @@ it('carries the safe-area shell at its own resting padding', () => {
   expect(shell).toContain('md:px-6')
 })
 
-/** The sentence and its rhythm card fold away on a phone once a result lands: `ScoredWords`
- * reprints every word with its own score, so the pair would only repeat itself over the room the
- * CTA row needs. From `md` up both stay exactly where they were. */
-it('folds the teach column away on a phone result only', () => {
+/** Brief §1 "Tầng dạy gập": once a result lands the teach column collapses to a tap-to-expand
+ * strip (PageBody's `collapsed`) instead of the old `max-md:hidden`; tapping it reopens the full
+ * column, legend included. */
+it('collapses the teach column to a tap-to-expand strip once a result lands, and reopens on tap', () => {
   renderStar()
-  const teach = () => screen.getByText('Chữ cam = nhấn mạnh · ‿ = nối âm').closest('section')!.parentElement!
-  expect(teach().className).not.toContain('max-md:hidden')
-
   score(result(85, 85, 100), new Blob(['x']))
-  expect(teach().className).toContain('max-md:hidden')
+
+  const strip = screen.getByRole('button', { name: /mở/i })
+  expect(strip).toHaveTextContent(SS1.text)
+  const hiddenWrap = ancestorWithClass(screen.getAllByTestId('rhythm-dot')[0], 'hidden')
+  expect(hiddenWrap).toHaveClass('ipad:flex')
+
+  const card = screen.getByTestId('result-card')
+  expect(within(card).getByTestId('foxy')).toBeInTheDocument()
+  expect(within(card).getByText('Foxy: "Nói liền mạch quá đã!"')).toBeInTheDocument()
+
+  fireEvent.click(strip)
+  expect(screen.queryByRole('button', { name: /mở/i })).not.toBeInTheDocument()
+  expect(screen.getByText('Chữ cam = nhấn mạnh · ‿ = nối âm')).toBeInTheDocument()
+})
+
+/** Retrying from the collapsed result must also reopen the strip — a retry should not leave the
+ * child staring at yesterday's collapsed strip once they start reading again. */
+it('reopens the teach column on retry', () => {
+  renderStar()
+  score(result(40, 40, 40))
+  expect(screen.getByRole('button', { name: /mở/i })).toBeInTheDocument()
+
+  fireEvent.click(screen.getByRole('button', { name: /thử lại/i }))
+  expect(screen.queryByRole('button', { name: /mở/i })).not.toBeInTheDocument()
+})
+
+/** Brief §1 "Header không đè" + "Đang ghi": Back/LessonChip mute, the centre chip becomes
+ * "● Đang ghi" coral, and the legend disappears — the stressed sentence keeps its size and
+ * colour, no growth like the voice bậc's passage. */
+it('dims the header, swaps the chip and hides the legend while recording, keeping the sentence colours', () => {
+  renderStar()
+  startRecording()
+
+  const backCell = screen.getByRole('link', { name: 'Quay lại' }).closest('div')!
+  expect(backCell).toHaveClass('opacity-40', 'pointer-events-none')
+  const rightCell = screen.getByTestId('header-right')
+  expect(rightCell).toHaveClass('opacity-40', 'pointer-events-none')
+
+  const chip = screen.getByText('● Đang ghi')
+  expect(chip).toHaveClass('bg-coral-50', 'text-coral-text')
+  expect(screen.queryByText(/^Câu \d/)).not.toBeInTheDocument()
+
+  expect(screen.getByText('have')).toHaveClass('text-coral-text', 'text-[32px]', 'md:text-[48px]')
+  expect(screen.queryByText('Chữ cam = nhấn mạnh · ‿ = nối âm')).not.toBeInTheDocument()
+  expect(screen.getByTestId('countdown-row')).toBeInTheDocument()
+})
+
+/** Brief §2 B5 idle: stressed 32/26 px growing to 48/40 on iPad, capped at 560 px; gloss 14/20;
+ * legend 12/14 and hidden on the short 375×667 fold; rhythm card widens to 480 on iPad with its
+ * dots unchanged (24/12); and no `min-h-[112px]` reserve — the bong bóng Foxy stands in for it
+ * from the act column instead. */
+it('lays out the round-2 teach column at idle', () => {
+  renderStar()
+
+  const sentence = screen.getByText('I').closest('p')!
+  expect(sentence).toHaveClass('md:max-w-[560px]')
+  expect(screen.getByText('have')).toHaveClass('text-[32px]', 'md:text-[48px]')
+  expect(screen.getByText('I')).toHaveClass('text-[26px]', 'md:text-[40px]')
+
+  expect(screen.getByText(SS1.vi)).toHaveClass('text-[14px]', 'md:text-[20px]')
+
+  const legend = screen.getByText('Chữ cam = nhấn mạnh · ‿ = nối âm')
+  expect(legend).toHaveClass('text-[12px]', 'md:text-[14px]', 'short:hidden')
+
+  const rhythmCard = screen.getByRole('button', { name: 'Nghe nhịp của câu' }).closest('div')!
+  expect(rhythmCard).toHaveClass('md:w-[480px]')
+  const dots = screen.getAllByTestId('rhythm-dot')
+  expect(dots.find(d => d.getAttribute('data-stress') === 'on')).toHaveClass('h-6', 'w-6')
+  expect(dots.find(d => d.getAttribute('data-stress') === 'off')).toHaveClass('h-3', 'w-3')
+
+  expect(document.querySelector('main')!.innerHTML).not.toContain('min-h-[112px]')
+})
+
+/** Brief §2 B5 say + §1 B6 pattern: the act column opens with Foxy's own prompt naming the
+ * sentence — no seconds badge, unlike the voice bậc's 13-second passage. */
+it('prompts to say the sentence with the mic ready, at idle, with no seconds badge', () => {
+  renderStar()
+
+  expect(screen.getByText('Nói cả câu một hơi nhé!')).toBeInTheDocument()
+  expect(screen.queryByText(/giây/)).not.toBeInTheDocument()
+  expect(screen.getByRole('button', { name: /bấm để nói/i })).toBeInTheDocument()
+})
+
+/** Spec decision 17 (brief R23 "Đang chấm"): `processing` reads as an idle mic with an hourglass
+ * and nothing else may react to it — no dimmed header, no "Đang ghi" chip, no collapsed strip, no
+ * hidden legend. Rendered already in `processing` via `mic.initialMicState`, no post-mount `act()`. */
+it('holds the teach column still while scoring — processing is not recording', () => {
+  mic.initialMicState = 'processing'
+  renderStar()
+
+  expect(screen.getByText('have')).toHaveClass('text-[32px]', 'md:text-[48px]')
+  expect(screen.getByText('Chữ cam = nhấn mạnh · ‿ = nối âm')).toBeInTheDocument()
+
+  const backCell = screen.getByRole('link', { name: 'Quay lại' }).closest('div')!
+  expect(backCell).not.toHaveClass('opacity-40')
+  expect(screen.getByTestId('header-right')).not.toHaveClass('opacity-40')
+  expect(screen.getByText('Câu 1/10')).toBeInTheDocument()
+  expect(screen.queryByText('● Đang ghi')).not.toBeInTheDocument()
+
+  expect(screen.queryByRole('button', { name: /mở/i })).not.toBeInTheDocument()
+  expect(screen.getByRole('button', { name: /đang chấm/i })).toBeInTheDocument()
 })
 
 /** The frame is the shared `PageShell`: `overflow-hidden` on `main`, `page-body` the only

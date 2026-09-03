@@ -14,7 +14,7 @@ import { Confetti } from '../components/Confetti'
 import { StressedSentence } from '../components/StressedSentence'
 import { BackButton, Button, Card, Chip, NotFound } from '../components/ui'
 import { PageShell, PageHeader, PageBody } from '../components/ui/page'
-import { MicButton, ResultCard, SpeakError } from '../components/speak'
+import { MicButton, ResultCard, SpeakError, SpeakPrompt } from '../components/speak'
 import { useSpeakingAttempt } from '../speaking/useSpeakingAttempt'
 import { useSpeakErrorAction } from '../speaking/useSpeakErrorAction'
 
@@ -158,82 +158,108 @@ function StarRun({ star }: { star: SentenceStar }) {
 
   const onErrorAction = useSpeakErrorAction(attempt)
 
+  // Brief §1 "Tầng dạy gập": the teach column collapses to a tap-to-expand strip once a result
+  // lands, and reopens either on tap or on a fresh attempt (`attempt.reset()`) — a retry should
+  // not leave the child staring at yesterday's collapsed strip once they start reading again.
+  const [teachOpen, setTeachOpen] = useState(true)
+  useEffect(() => {
+    if (result) setTeachOpen(false)
+  }, [result])
+
   return (
     <PageShell gutter="20">
-      <PageHeader back={mission ? <BackButton to="/mission" label="Nhiệm vụ" /> : <BackButton to="/level/sentence-stars" label="Quay lại" />} engine={attempt.engine}>
-        {mission
-          ? <Chip tone="coral">{missionNoun(mission.pos, 'Thẻ')} {mission.pos.index}/{mission.pos.total}</Chip>
-          : <Chip tone="coral">Câu {index + 1}/{SENTENCE_STARS.length}</Chip>}
+      <PageHeader
+        back={mission ? <BackButton to="/mission" label="Nhiệm vụ" /> : <BackButton to="/level/sentence-stars" label="Quay lại" />}
+        engine={attempt.engine}
+        dimmed={recording}
+      >
+        {recording
+          ? <Chip tone="coral">● Đang ghi</Chip>
+          : mission
+            ? <Chip tone="coral">{missionNoun(mission.pos, 'Thẻ')} {mission.pos.index}/{mission.pos.total}</Chip>
+            : <Chip tone="teal">Câu {index + 1}/{SENTENCE_STARS.length}</Chip>}
       </PageHeader>
-      <PageBody split={{
-        teach: (
-          <div className={`flex w-full flex-col items-center gap-3 ${result ? 'max-md:hidden' : ''}`}>
-            <section className="flex w-full flex-col items-center gap-1.5 md:gap-2">
-              <StressedSentence words={star.words} stress={star.stress} link={star.link} />
-              <p className="text-center text-sm font-bold leading-snug text-ink-500 md:text-lg md:leading-7">{star.vi}</p>
-              <p className="text-center text-[13px] font-bold text-ink-300 md:text-base">Chữ cam = nhấn mạnh · ‿ = nối âm</p>
-              <Button variant="outline" onClick={playSample}>🔊 Nghe mẫu</Button>
-              {audioMissing && <p className="text-sm font-bold text-ink-300 md:text-lg">Chưa có audio mẫu</p>}
-            </section>
+      <PageBody
+        actGrow={!!result}
+        split={{
+          teach: (
+            <div className="flex w-full flex-col items-center gap-3">
+              <section className="flex w-full flex-col items-center gap-1.5 md:gap-2">
+                <StressedSentence words={star.words} stress={star.stress} link={star.link} />
+                <p className="text-center text-[14px] font-bold leading-snug text-ink-500 md:text-[20px] md:leading-7">{star.vi}</p>
+                {!recording && (
+                  <p className="text-center text-[12px] font-bold text-ink-300 short:hidden md:text-[14px]">Chữ cam = nhấn mạnh · ‿ = nối âm</p>
+                )}
+                <Button variant="outline" onClick={playSample}>🔊 Nghe mẫu</Button>
+                {audioMissing && <p className="text-sm font-bold text-ink-300 md:text-lg">Chưa có audio mẫu</p>}
+              </section>
 
-            <Card className="flex w-full max-w-2xl flex-col items-center gap-1 px-4 py-2 md:px-6 md:py-3">
-              <button
-                type="button"
-                onClick={playSample}
-                aria-label="Nghe nhịp của câu"
-                style={{ '--beat': `${Math.round(beatMs)}ms` } as React.CSSProperties}
-                className="flex min-h-[64px] w-full items-center justify-center gap-4 transition-transform active:translate-y-[2px]"
-              >
-                {star.words.map((_w, i) => (
-                  <span
-                    key={`${run}:${Math.round(beatMs)}:${i}`}
-                    data-testid="rhythm-dot"
-                    data-stress={stressed.has(i) ? 'on' : 'off'}
-                    aria-hidden="true"
-                    className={`shrink-0 rounded-full ${stressed.has(i) ? 'h-6 w-6 bg-coral-500' : 'h-3 w-3 bg-teal-500'} ${playing ? 'animate-beat' : ''}`}
-                    style={playing ? {
-                      animationDelay: `${Math.round(i * beatMs)}ms`,
-                      animationDuration: `${Math.round(beatMs * POP_FRACTION)}ms`,
-                      animationIterationCount: 1,
-                    } : undefined}
-                  />
-                ))}
-              </button>
-              <span className="text-[13px] font-bold text-ink-300 md:text-base">Nhịp của câu — chạm để nghe lại</span>
-            </Card>
-          </div>
-        ),
-        act: result && feedback && stars ? (
-          <>
-            {stars === 3 && <Confetti />}
-            <ResultCard
-              stars={stars}
-              praise={message}
-              score={result.overall}
-              sub={rhythmLine(result.fluency)}
-              words={feedback.words}
-              bars={result}
-              hint={feedback.hint}
-              canReplay={!!attempt.lastBlob}
-              onReplay={() => playBlob(attempt.lastBlob!).catch(() => {})}
-              onSample={playSample}
-              onRetry={() => attempt.reset()}
-              primary={mission
-                ? { label: mission.label, onClick: mission.go }
-                : next
-                  ? { label: 'Tiếp theo →', to: `/star/${next.id}` }
-                  : { label: 'Hoàn thành 🎉', to: '/level/sentence-stars' }}
-              animate={stars === 3}
-            />
-          </>
-        ) : (
-          <div className="flex flex-col items-center gap-3">
-            {!recording && <p className="font-display text-base font-extrabold text-ink-900 md:text-xl">Nói cả câu một hơi nhé!</p>}
-            {attempt.error && <SpeakError error={attempt.error} onAction={onErrorAction} onDismiss={attempt.dismissError} />}
-            <MicButton state={attempt.micState} level={attempt.level} onPress={attempt.onMic} secondsLeft={recording ? secondsLeft : undefined} />
-          </div>
-        ),
-      }} />
+              <Card className="flex w-full max-w-2xl flex-col items-center gap-1 px-4 py-2 md:w-[480px] md:px-6 md:py-3">
+                <button
+                  type="button"
+                  onClick={playSample}
+                  aria-label="Nghe nhịp của câu"
+                  style={{ '--beat': `${Math.round(beatMs)}ms` } as React.CSSProperties}
+                  className="flex min-h-[64px] w-full items-center justify-center gap-4 transition-transform active:translate-y-[2px]"
+                >
+                  {star.words.map((_w, i) => (
+                    <span
+                      key={`${run}:${Math.round(beatMs)}:${i}`}
+                      data-testid="rhythm-dot"
+                      data-stress={stressed.has(i) ? 'on' : 'off'}
+                      aria-hidden="true"
+                      className={`shrink-0 rounded-full ${stressed.has(i) ? 'h-6 w-6 bg-coral-500' : 'h-3 w-3 bg-teal-500'} ${playing ? 'animate-beat' : ''}`}
+                      style={playing ? {
+                        animationDelay: `${Math.round(i * beatMs)}ms`,
+                        animationDuration: `${Math.round(beatMs * POP_FRACTION)}ms`,
+                        animationIterationCount: 1,
+                      } : undefined}
+                    />
+                  ))}
+                </button>
+                <span className="text-[13px] font-bold text-ink-300 md:text-base">Nhịp của câu — chạm để nghe lại</span>
+              </Card>
+            </div>
+          ),
+          collapsed: result && !teachOpen ? { emoji: '⭐', label: star.text, onExpand: () => setTeachOpen(true) } : undefined,
+          act: result && feedback && stars ? (
+            <>
+              {stars === 3 && <Confetti />}
+              <ResultCard
+                stars={stars}
+                praise={message}
+                score={result.overall}
+                sub={rhythmLine(result.fluency)}
+                words={feedback.words}
+                bars={result}
+                hint={feedback.hint}
+                canReplay={!!attempt.lastBlob}
+                onReplay={() => playBlob(attempt.lastBlob!).catch(() => {})}
+                onSample={playSample}
+                onRetry={() => { attempt.reset(); setTeachOpen(true) }}
+                primary={mission
+                  ? { label: mission.label, onClick: mission.go }
+                  : next
+                    ? { label: 'Tiếp theo →', to: `/star/${next.id}` }
+                    : { label: 'Hoàn thành 🎉', to: '/level/sentence-stars' }}
+                animate={stars === 3}
+                fox={{
+                  mood: stars === 3 ? 'cheer' : stars === 2 ? 'happy' : 'idle',
+                  say: stars === 3 ? 'Foxy: "Nói liền mạch quá đã!"' : 'Foxy: "Thử lại lần nữa nhé!"',
+                }}
+              />
+            </>
+          ) : (
+            <>
+              {recording
+                ? <SpeakPrompt mood="listening" say="Foxy đang lắng nghe…" />
+                : <SpeakPrompt mood="idle" say="Nói cả câu một hơi nhé!" />}
+              {attempt.error && <SpeakError error={attempt.error} onAction={onErrorAction} onDismiss={attempt.dismissError} />}
+              <MicButton state={attempt.micState} level={attempt.level} onPress={attempt.onMic} secondsLeft={recording ? secondsLeft : undefined} countdownLayout="row" />
+            </>
+          ),
+        }}
+      />
     </PageShell>
   )
 }

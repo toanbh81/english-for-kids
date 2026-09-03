@@ -22,7 +22,7 @@ export function StressedSentence({ words, stress, link = [] }: {
       // a five-word sentence at 48/40 px wraps to four lines in a 350 px column and takes the
       // room the mic needs. `md:` puts the landscape numbers back exactly, so 1194×834 is
       // untouched. `leading-tight` is unprefixed here, so no `text-*` step can reset it.
-      className="flex flex-wrap items-baseline justify-center gap-x-2 gap-y-1 text-center font-display font-extrabold leading-tight md:gap-x-3"
+      className="flex flex-wrap items-baseline justify-center gap-x-2 gap-y-1 text-center font-display font-extrabold leading-tight md:max-w-[560px] md:gap-x-3"
     >
       {words.map((w, i) => (
         <span key={i} className="inline-flex items-baseline">
@@ -30,7 +30,7 @@ export function StressedSentence({ words, stress, link = [] }: {
             data-testid="star-word"
             className={stressed.has(i)
               ? 'font-display text-[32px] text-coral-text md:text-[48px]'
-              : 'font-display text-[27px] text-ink-900 md:text-[40px]'}
+              : 'font-display text-[26px] text-ink-900 md:text-[40px]'}
           >
             {w}
           </span>
