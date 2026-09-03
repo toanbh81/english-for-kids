@@ -1,6 +1,6 @@
 import { render, screen, fireEvent } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
-import { MicButton, Countdown, LevelBars, ResultCard, SpeakError, WordChip } from './index'
+import { MicButton, Countdown, LevelBars, ResultCard, SpeakError, SpeakPrompt, WordChip } from './index'
 import { ScoredWords } from '../ScoredWords'
 import { ScoreBars } from '../ScoreBars'
 
@@ -33,14 +33,31 @@ describe('MicButton', () => {
     render(<MicButton state="locked" level={0} onPress={() => {}} />)
     expect(screen.getByRole('button', { name: 'Hôm nay đã hết giờ' })).toBeDisabled()
   })
+  it('lays the level bars and countdown in one row by default, column when asked', () => {
+    const { rerender } = render(<MicButton state="recording" level={0.5} onPress={() => {}} secondsLeft={13} />)
+    expect(screen.getByTestId('countdown-row')).toHaveClass('flex-row', 'gap-3.5')
+    expect(screen.getByTestId('countdown')).toHaveClass('min-w-[56px]', 'md:min-w-[70px]')
+    rerender(<MicButton state="recording" level={0.5} onPress={() => {}} secondsLeft={13} countdownLayout="column" />)
+    expect(screen.getByTestId('countdown-row')).toHaveClass('flex-col')
+  })
 })
 
 describe('Countdown', () => {
-  it('is a 96px disc; two digits tighten the letter-spacing', () => {
+  it('is a badge; two digits tighten the letter-spacing', () => {
     const { rerender } = render(<Countdown seconds={6} />)
-    expect(screen.getByTestId('countdown')).toHaveClass('h-24', 'w-24', 'text-[44px]', 'bg-peach-50')
+    const el = screen.getByTestId('countdown')
+    expect(el).toHaveClass('min-w-[56px]', 'text-[44px]', 'bg-peach-50', 'md:min-w-[70px]', 'md:text-[56px]')
+    expect(el).toHaveAttribute('aria-live', 'polite')
     rerender(<Countdown seconds={13} />)
     expect(screen.getByTestId('countdown')).toHaveClass('tracking-[-2px]')
+  })
+})
+
+describe('SpeakPrompt', () => {
+  it('shows Foxy and the seconds in coral', () => {
+    render(<SpeakPrompt mood="idle" say="Đọc cả đoạn thật có hồn nhé!" seconds={13} />)
+    expect(screen.getByTestId('foxy')).toHaveAttribute('data-mood', 'idle')
+    expect(screen.getByText('13 giây')).toHaveClass('text-coral-text')
   })
 })
 
@@ -102,6 +119,14 @@ describe('ResultCard', () => {
   it('prosody pill reads the engine', () => {
     render(<MemoryRouter><ResultCard {...base} prosody={{ score: null, engine: 'webspeech' }} /></MemoryRouter>)
     expect(screen.getByTestId('prosody-chip')).toHaveTextContent('— ngữ điệu')
+  })
+  it('fox row sits after the listen row; compact keeps only head, hint and cta; forceHint shows the hint at 2 stars', () => {
+    render(<MemoryRouter><ResultCard stars={2} praise="x" hint={{ word: 'w', tip: 't' }} forceHint fox={{ mood: 'cheer', say: 'Giọng vui thật đấy!' }} onSample={() => {}} onRetry={() => {}} /></MemoryRouter>)
+    const rows = Array.from(screen.getByTestId('result-card').children).map(c => c.getAttribute('data-row'))
+    expect(rows).toEqual(['head', 'hint', 'listen', 'fox', 'cta'])
+    render(<MemoryRouter><ResultCard compact stars={1} praise="y" words={[{ word: 'a', tone: 'fix' }]} bars={{ accuracy: 1, fluency: 1, completeness: 1 } as never} hint={{ word: 'w', tip: 't' }} onRetry={() => {}} /></MemoryRouter>)
+    const rows2 = Array.from(screen.getAllByTestId('result-card')[1].children).map(c => c.getAttribute('data-row'))
+    expect(rows2).toEqual(['head', 'hint', 'cta'])
   })
 })
 

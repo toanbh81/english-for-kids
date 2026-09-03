@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen, fireEvent } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { PageShell, PageHeader, PageBody, PageFooter } from './index'
 import { BackButton } from '../BackButton'
@@ -48,6 +48,32 @@ describe('PageShell', () => {
     wrap(<PageShell><PageBody split={{ teach: <p>dạy</p>, act: <p>làm</p> }} /></PageShell>)
     expect(screen.getByText('dạy').parentElement).toHaveClass('ipad:min-h-0', 'ipad:overflow-y-auto')
     expect(screen.getByText('làm').parentElement).toHaveClass('ipad:min-h-0', 'ipad:overflow-y-auto')
+  })
+
+  it('collapsed split body shows the strip instead of the teach column and expands on tap', () => {
+    const onExpand = vi.fn()
+    wrap(<PageShell><PageBody split={{ teach: <p>dạy</p>, act: <p>làm</p>, collapsed: { emoji: '😊', label: 'I love my dog!', onExpand } }} /></PageShell>)
+    expect(screen.queryByText('dạy')).toBeNull()
+    const strip = screen.getByRole('button', { name: /mở/ })
+    expect(strip).toHaveClass('h-8', 'text-[15px]', 'text-[#D9C9AE]', 'md:h-16', 'md:bg-white', 'ipad:hidden')
+    fireEvent.click(strip)
+    expect(onExpand).toHaveBeenCalled()
+  })
+
+  it('act column is a row on iPad portrait and a column on landscape', () => {
+    wrap(<PageShell><PageBody split={{ teach: <p>dạy</p>, act: <p>làm</p> }} /></PageShell>)
+    expect(screen.getByText('làm').parentElement).toHaveClass('md:flex-row', 'md:gap-10', 'ipad:flex-col')
+  })
+
+  it('actGrow swaps the fixed 300px act column for one that fills the remaining height', () => {
+    wrap(<PageShell><PageBody split={{ teach: <p>dạy</p>, act: <p>làm</p> }} /></PageShell>)
+    expect(screen.getByText('làm').parentElement).toHaveClass('md:h-[300px]', 'md:shrink-0')
+    expect(screen.getByText('làm').parentElement).not.toHaveClass('md:flex-1')
+
+    wrap(<PageShell><PageBody actGrow split={{ teach: <p>dạy 2</p>, act: <p>làm 2</p> }} /></PageShell>)
+    const grownAct = screen.getByText('làm 2').parentElement!
+    expect(grownAct).toHaveClass('md:flex-1', 'md:min-h-0')
+    expect(grownAct.className).not.toMatch(/md:h-\[300px\]/)
   })
 })
 

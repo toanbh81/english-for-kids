@@ -2,14 +2,16 @@ import { Countdown } from './Countdown'
 import { LevelBars } from './LevelBars'
 
 export type MicState = 'idle' | 'recording' | 'processing' | 'disabled' | 'locked'
-type Props = { state: MicState; level: number; onPress: () => void; secondsLeft?: number }
+type Props = { state: MicState; level: number; onPress: () => void; secondsLeft?: number; countdownLayout?: 'row' | 'column' }
 
 const LABEL: Record<MicState, string> = { idle: 'Bấm để nói', recording: 'Dừng', processing: 'Đang chấm…', disabled: 'Bấm để nói', locked: 'Hôm nay đã hết giờ' }
 const CAPTION: Record<MicState, string | null> = { idle: 'Chạm để nói nào!', recording: null, processing: 'Foxy đang chấm…', disabled: 'Đang chuẩn bị máy chấm…', locked: 'Mai gặp lại nhé 🌙' }
 
 /** Brief §2.2. The block reserves 214 px (190 + 24 for the bars) at md so the mic grows in place
- * without moving the CTA; on a phone the recording mic is 150 inside halos that reach 190. */
-export function MicButton({ state, level, onPress, secondsLeft }: Props) {
+ * without moving the CTA; on a phone the recording mic is 150 inside halos that reach 190.
+ * `countdownLayout` orders the level bars and the countdown badge: `row` (default) puts the
+ * badge after the bars side by side; `column` stacks the badge above the bars. */
+export function MicButton({ state, level, onPress, secondsLeft, countdownLayout = 'row' }: Props) {
   const rec = state === 'recording'
   const off = state === 'disabled' || state === 'processing' || state === 'locked'
   return (
@@ -35,8 +37,14 @@ export function MicButton({ state, level, onPress, secondsLeft }: Props) {
           </span>
         </button>
       </div>
-      {rec && <LevelBars level={level} />}
-      {rec && secondsLeft !== undefined ? <Countdown seconds={secondsLeft} /> : CAPTION[state] && <p className="text-[15px] font-bold text-ink-500">{CAPTION[state]}</p>}
+      {rec && (
+        <div data-testid="countdown-row" className={`flex items-center ${countdownLayout === 'row' ? 'flex-row gap-3.5 md:gap-4' : 'flex-col gap-3'}`}>
+          {countdownLayout === 'column' && secondsLeft !== undefined && <Countdown seconds={secondsLeft} />}
+          <LevelBars level={level} />
+          {countdownLayout === 'row' && secondsLeft !== undefined && <Countdown seconds={secondsLeft} />}
+        </div>
+      )}
+      {!rec && CAPTION[state] && <p className="text-[15px] font-bold text-ink-500 md:text-[18px]">{CAPTION[state]}</p>}
     </div>
   )
 }
