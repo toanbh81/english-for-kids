@@ -275,6 +275,25 @@ it('wraps the header and name block, sized by their own content — no fixed ban
   expect(screen.getByRole('link', { name: /Về nhà/ })).toHaveClass('h-14', 'w-14', 'md:h-16', 'md:w-16')
 })
 
+/** Fix round 3: the band's own background must reach the true viewport edges, even on a
+ * landscape iPad wider than `PageShell`'s own 1080px content cap — only the header/name-block
+ * *content* inside it is capped and centred like every list screen's rows. */
+it('bleeds full width past the shell\'s own 1080px content cap; only its content is capped', () => {
+  renderHub('animals')
+
+  const band = screen.getByTestId('island-header')
+  // No max-width (nor a fixed width) on the band element itself.
+  expect(Array.from(band.classList).some(c => c.includes('max-w'))).toBe(false)
+  expect(band).toHaveClass('w-screen')
+
+  // The inner column — the one holding the header and the name block — is what's capped/centred.
+  const content = band.querySelector('[class*="max-w-[1080px]"]')
+  expect(content).not.toBeNull()
+  expect(content).toHaveClass('mx-auto', 'max-w-[1080px]')
+  expect(within(content as HTMLElement).getByRole('banner')).toBeInTheDocument()
+  expect(within(content as HTMLElement).getByText('Động vật')).toBeInTheDocument()
+})
+
 it('sizes the section rows for a phone and restores the landscape card from md up', () => {
   unlockWords('animals', 6)
 

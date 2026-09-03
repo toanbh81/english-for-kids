@@ -172,18 +172,26 @@ function TopicHubInner({ topic }: { topic: Topic }) {
           either block's own natural size doesn't match the guess (round 1's re-review found the
           first row riding 10–58px into the band because the guess was short); dropping the height
           entirely and letting the band size itself to its two real children removes the guess.
-          `-mx-4 md:-mx-6 ipad:-mx-6` + the negative top margin (`PageShell`'s own top-padding
-          formula, copied verbatim from `pageShell.ts`) bleed the *background* out to the shell's
-          true edges the same way `PageFooter`'s fade does (`page/PageFooter.tsx`); the inner content
-          column below restores that same padding on the *content* so the header/name block sit
-          exactly where they always have, just with the teal now reaching further than they do.
+          `w-screen ml-[calc(50%-50vw)]` + the negative top margin (`PageShell`'s own top-padding
+          formula, copied verbatim from `pageShell.ts`) bleed the *background* out to the true
+          viewport edges the same way `PageFooter`'s fade bleeds past the shell's own gutter
+          (`page/PageFooter.tsx`) — but a fixed negative margin like that fade's only cancels the
+          shell's own *padding*, not the shell's separate `max-w-[1080px]` wrapper (`PageShell.tsx`)
+          a landscape iPad is wider than: fix round 3's re-review caught the band confined to that
+          1080px column, cream on both sides, on `ipad`. `w-screen`/`ml-[calc(50%-50vw)]` is the
+          standard "full-bleed inside a centred max-width layout" recipe — it sizes and re-centres
+          on the *viewport* directly, so it reaches the true edges at any width regardless of how
+          narrow an ancestor's own max-width is, no per-breakpoint pixel guess needed. The inner
+          content column below restores the shell's own padding *and* its own `max-w-[1080px]`
+          cap, so the header/name block sit exactly where they always have — capped and centred
+          like every list screen's rows — with only the teal now reaching further than they do.
           `relative isolate` keeps the fill's `-z-10` scoped to this box (a bare `relative` doesn't
           establish a stacking context, so a `-z-10` child would otherwise escape to the next
           ancestor that does, painting behind the whole app — the exact bug round 1 fixed for the
           old `main`-relative band). */}
       <div
         data-testid="island-header"
-        className="relative isolate -mx-4 -mt-[max(1.25rem,calc(env(safe-area-inset-top)_+_8px))] md:-mx-6 md:mb-[-8px] ipad:-mx-6 ipad:mb-[-8px]"
+        className="relative isolate w-screen ml-[calc(50%-50vw)] -mt-[max(1.25rem,calc(env(safe-area-inset-top)_+_8px))] md:mb-[-8px] ipad:mb-[-8px]"
       >
         <div
           aria-hidden="true"
