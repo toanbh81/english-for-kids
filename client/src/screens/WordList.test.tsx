@@ -30,6 +30,7 @@ it('a word tile shows emoji, word and the lock chip, never stars', () => {
   renderList('food')
   const tile = screen.getByRole('link', { name: /apple/ })
   expect(tile).toHaveClass('h-[110px]', 'md:h-[136px]')
+  expect(tile).toHaveAttribute('href', '/words/food/food-apple')
   expect(screen.getAllByText('🔓')).toHaveLength(1)
   expect(screen.getAllByText('🔒')).toHaveLength(7)
   expect(screen.queryByTestId('stars')).toBeNull()
@@ -48,6 +49,7 @@ it('the review deck groups due words by topic in TOPICS order, with sticky H2s',
   const groups = screen.getAllByTestId('sticky-group')
   expect(groups.map(h => h.textContent)).toEqual(['🐘Động vật· 2 từ', '🍎Đồ ăn· 1 từ'])
   expect(groups[0]).toHaveClass('sticky', 'top-0', 'bg-cream-50')
+  expect(screen.getByRole('link', { name: /apple/ })).toHaveAttribute('href', '/words/review/food-apple')
 })
 
 it('the empty state exists only on the review deck', () => {

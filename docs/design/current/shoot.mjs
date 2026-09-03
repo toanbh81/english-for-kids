@@ -214,12 +214,25 @@ async function run(vpName, vp) {
   await S('words-animals', '/words/animals')
   await S('words-review-empty', '/words/review')
   // Task 3: trường hợp xấu nhất của cả khung danh sách — 64 ô ôn tập, 8 nhóm H2 dính. Id từ được
-  // thu từ chính app (href của 8 màn chủ đề) thay vì hard-code, để danh sách không mục ruỗng khi
-  // content đổi.
+  // thu từ chính app thay vì hard-code, để danh sách không mục ruỗng khi content đổi.
+  //
+  // Fix round 1 (task-3-review.md Important #1): topic-id discovery must not depend on which
+  // islands are already unlocked. `/words` (WordTopics) only links topics `topicUnlocked()` has
+  // opened (`topicProgress.ts:39-45`) — the seeded profile only auto-opens the first 4 — so
+  // harvesting topic ids from its rendered links under-seeds the deck (32/64 words, 4/8 groups).
+  // Home renders a `data-testid="island-<id>"` marker for every topic regardless of lock state
+  // (`Home.tsx:459,483`: the locked branch is a `<div>`, the open branch a `<Link>`, but both
+  // carry the same testid), so that is the harvest source instead — still read from the app
+  // itself, never hard-coded. `/words/:topic` (WordList) itself never gates on `topicUnlocked` —
+  // it renders whatever `content/words` knows about — so the per-topic word-id loop below already
+  // reaches locked topics unchanged; only the topic-id source needed to change.
   async function seedReviewDeck() {
-    await go(page, '/words')
-    const topics = await page.$$eval('a[href^="/words/"]', as => as
-      .map(a => a.getAttribute('href').split('/')[2]).filter(t => t && t !== 'review'))
+    await go(page, '/')
+    const topics = await page.$$eval('[data-testid^="island-"]', as => as
+      .map(a => a.getAttribute('data-testid').slice('island-'.length)))
+    if (topics.length < 8) {
+      throw new Error(`seedReviewDeck: expected 8 topic islands on '/', found ${topics.length} (${topics.join(',')})`)
+    }
     const ids = []
     for (const t of topics) {
       await go(page, `/words/${t}`)
