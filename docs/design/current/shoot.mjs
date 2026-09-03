@@ -201,6 +201,23 @@ async function run(vpName, vp) {
   }
   await S('topic-animals', '/topic/animals')
   await S('topic-locked', '/topic/toys')
+  // Task 12 (A8): the empty-story row needs an unlocked island with no story yet. Weather is the
+  // 5th island (`OPEN_FROM_START = 4`, so it is locked by default) and unlocks once the 4th
+  // island's deck (family) has `UNLOCK_AT = 6` words in Leitner — seeded here with a future `due`
+  // so the shot does not also leave 6 words sitting in the review deck for a later shot.
+  if (!WANT || WANT.includes('topic-no-story')) {
+    await go(page, '/words/family')
+    const fam = await page.$$eval('a[href^="/words/family/"]', as => as.map(a => a.getAttribute('href').split('/')[3]))
+    await page.evaluate(ids => {
+      const id = localStorage.getItem('speakup.profile')
+      const pre = id ? `speakup.${id}.` : 'speakup.'
+      const due = Date.now() + 7 * 24 * 3600e3
+      const m = JSON.parse(localStorage.getItem(pre + 'leitner') ?? '{}')
+      for (const w of ids.slice(0, 6)) m[w] = { box: 1, due }
+      localStorage.setItem(pre + 'leitner', JSON.stringify(m))
+    }, fam)
+    await S('topic-no-story', '/topic/weather')
+  }
   await S('levels', '/levels')
   await S('level-word-pop', '/level/word-pop')
   await S('level-sound-zoo', '/level/sound-zoo')
