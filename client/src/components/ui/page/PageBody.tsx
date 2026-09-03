@@ -44,7 +44,16 @@ const GAP = { 8: 'gap-2', 10: 'gap-2.5', 12: 'gap-3' } as const
 // R11: fade 50px của vùng cuộn khi màn KHÔNG có PageFooter (footer đã tự vẽ fade 40 của nó).
 // `sticky bottom-0` + margin âm: pseudo-element là một flex item, dính đáy khung cuộn thay vì
 // dính cuối nội dung, nên nó phủ đúng 50px cuối của viewport ở mọi vị trí cuộn.
-const FADE = "after:pointer-events-none after:sticky after:bottom-0 after:-mt-[50px] after:block after:h-[50px] after:shrink-0 after:bg-gradient-to-b after:from-transparent after:to-cream-50 after:content-['']"
+//
+// Fix round 1 (task-5 review, Important #2): `-mt-[50px]` only sits at the scroll frame's true
+// bottom edge once the content actually overflows it — a short screen (WordTopics' 5 tiles,
+// SoundLevel's 9) has `scrollHeight === clientHeight`, so the negative margin pulled the fade up
+// onto the last content row instead, painting over it. `mt-auto` lets the flex item consume the
+// container's own leftover slack (any, down to zero) before pinning to `bottom-0`: on short
+// content it sits flush below the last row with no overlap; once content overflows there is no
+// slack left to consume, so it collapses to the same "always covers the last 50px while
+// scrolling" sticky behaviour as before.
+const FADE = "after:pointer-events-none after:sticky after:bottom-0 after:mt-auto after:block after:h-[50px] after:shrink-0 after:bg-gradient-to-b after:from-transparent after:to-cream-50 after:content-['']"
 
 export function PageBody({ center, split, actGrow, fade, gap, className = '', children }: { center?: boolean; split?: Split; actGrow?: boolean; fade?: boolean; gap?: 8 | 10 | 12; className?: string; children?: ReactNode }) {
   if (split) {

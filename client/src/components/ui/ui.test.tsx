@@ -177,6 +177,19 @@ describe('Chip', () => {
     expect(screen.getByText('Sắp có')).not.toHaveClass('text-lg')
   })
 
+  // Fix round 1 (task-5 review, Important #1): `xs` is a real size variant, not a `className`
+  // override fighting Chip's own base classes — a `className` override never won the cascade
+  // (Tailwind's generated stylesheet order beats JSX class order), which is how the list `Tile`
+  // chip shipped at 16px/pill instead of the spec's 11px/radius-9. The negative assertions here
+  // are the ones that matter: they'd catch a regression back to the old shared
+  // `rounded-full px-4 py-2 text-base` base classes leaking onto `xs`.
+  it('xs is the list-tile chip size — 11/13px, radius 9, padding 2×8, one line — not the sm/md pill', () => {
+    render(<Chip size="xs">Chưa có từ ôn</Chip>)
+    const chip = screen.getByText('Chưa có từ ôn')
+    expect(chip).toHaveClass('text-[11px]', 'md:text-[13px]', 'px-2', 'py-0.5', 'rounded-[9px]', 'whitespace-nowrap')
+    expect(chip).not.toHaveClass('px-4', 'py-2', 'text-base', 'rounded-full')
+  })
+
   it('coralSolid is solid coral with white text', () => {
     render(<Chip tone="coralSolid">12 từ hôm nay</Chip>)
     expect(screen.getByText('12 từ hôm nay')).toHaveClass('bg-coral-500', 'text-white')

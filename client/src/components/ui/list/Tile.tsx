@@ -89,11 +89,10 @@ export function Tile({
       )}
       {sub && <span className={SUB[subTone ?? 'ink']}>{sub}</span>}
       {chip && (
-        <Chip
-          tone={chip.tone ?? (variant === 'locked' ? 'sand' : 'neutral')}
-          size="sm"
-          className="rounded-[9px] px-2 py-0.5 text-[11px] leading-tight md:text-[13px]"
-        >
+        // `size="xs"` (not a fighting `className` override — task-5 review, Important #1):
+        // `Chip`'s own base classes always win the cascade over anything passed via `className`,
+        // so the 11/13px radius-9 padding-2×8 shape has to come from a real `Chip` size.
+        <Chip tone={chip.tone ?? (variant === 'locked' ? 'sand' : 'neutral')} size="xs">
           {chip.label}
         </Chip>
       )}

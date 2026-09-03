@@ -97,6 +97,12 @@ it('a topic tile carries a "n/8 mở" sun chip and the subtitle moved into the h
   renderTopics()
   expect(screen.getByText(/^\d+ chủ đề đã mở · chạm để học$/)).toBeInTheDocument()
   expect(screen.queryByText('Chạm thẻ để lật — nói đúng để mở khoá!')).toBeNull()
-  expect(screen.getAllByText('0/8 mở')[0]).toHaveClass('text-[11px]', 'md:text-[13px]')
+  // Fix round 1 (task-5 review, Important #1 / Minor #3): `toHaveClass` alone only checks the
+  // `class` attribute string, not which rule wins the real cascade — it passed here even while
+  // the chip actually rendered at Chip's 16px/pill defaults. The negative assertion is the one
+  // that pins the fix (`Chip`'s `xs` size, not a fighting `className`).
+  const topicChip = screen.getAllByText('0/8 mở')[0]
+  expect(topicChip).toHaveClass('text-[11px]', 'md:text-[13px]')
+  expect(topicChip).not.toHaveClass('text-base', 'px-4', 'py-2', 'rounded-full')
   expect(screen.getByTestId('list-grid')).toHaveClass('grid-cols-3', 'md:grid-cols-5', 'ipad:grid-cols-6')
 })

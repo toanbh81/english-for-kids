@@ -191,6 +191,14 @@ describe('PageBody fade/gap (Phase 14)', () => {
     expect(screen.getByTestId('page-body').className).not.toMatch(/after:|gap-/)
     rerender(<PageShell><PageBody fade gap={10}>x</PageBody></PageShell>)
     expect(screen.getByTestId('page-body')).toHaveClass('gap-2.5', 'after:sticky', 'after:bottom-0', 'after:h-[50px]', 'after:to-cream-50')
+    // Fix round 1 (task-5 review, Important #2): `after:-mt-[50px]` pulled the fade up onto the
+    // last content row whenever the body doesn't overflow (jsdom can't reproduce the real-layout
+    // overlap the review caught — this only pins the class, not the rendered position — but it
+    // guards against reverting to the old, confirmed-broken value). `after:mt-auto` lets the fade
+    // consume the container's own leftover space instead, so it sits flush at the bottom on short
+    // content and keeps its old sticky-while-scrolling behaviour once content overflows.
+    expect(screen.getByTestId('page-body')).toHaveClass('after:mt-auto')
+    expect(screen.getByTestId('page-body').className).not.toMatch(/after:-mt-/)
   })
   // Fix round 1 #3: 8 and 12 were only implemented, never asserted — a typo in either GAP entry
   // (e.g. `12: 'gap-4'`) would have passed the suite.

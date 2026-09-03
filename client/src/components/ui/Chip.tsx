@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 
 export type ChipTone = 'teal' | 'coral' | 'sun' | 'neutral' | 'coralSolid' | 'sand'
-export type ChipSize = 'sm' | 'md'
+export type ChipSize = 'xs' | 'sm' | 'md'
 
 const TONE: Record<ChipTone, string> = {
   teal: 'bg-teal-50 text-teal-600',
@@ -15,9 +15,19 @@ const TONE: Record<ChipTone, string> = {
   sand: 'bg-line-200 text-sand-text',
 }
 
+// `rounded-full px-4 py-2` used to live on the shared span below, outside this map — a `Tile`
+// chip tried to shrink it with a fighting `className` override (`rounded-[9px] px-2 py-0.5
+// text-[11px]`), which never won: Tailwind's generated stylesheet order, not JSX class order,
+// decides the cascade, so the base literal classes always beat a later `className` (task-5
+// review, Important #1). Radius and padding now travel with font-size in each size's own entry
+// instead, so there is nothing left to fight — `sm`/`md` are byte-identical to their old output.
 const SIZE: Record<ChipSize, string> = {
-  sm: 'text-base',
-  md: 'text-lg',
+  // The list `Tile`'s chip (brief §1 "ô nhỏ" chip: 11/13px, radius 9, padding 2×8) — a tile is
+  // ~110px wide, so `whitespace-nowrap` keeps a two-word label ("Chưa có từ ôn") on one line
+  // instead of wrapping into the tile's fixed height.
+  xs: 'text-[11px] leading-tight rounded-[9px] px-2 py-0.5 whitespace-nowrap md:text-[13px]',
+  sm: 'text-base rounded-full px-4 py-2',
+  md: 'text-lg rounded-full px-4 py-2',
 }
 
 /** Small pill label — speed, counts, "Nghe mẫu", scene hints. */
@@ -28,7 +38,7 @@ export function Chip({ tone = 'neutral', size = 'md', className = '', children }
   children?: ReactNode
 }) {
   return (
-    <span className={`inline-flex items-center gap-2 rounded-full px-4 py-2 font-display font-extrabold ${SIZE[size]} ${TONE[tone]} ${className}`}>
+    <span className={`inline-flex items-center gap-2 font-display font-extrabold ${SIZE[size]} ${TONE[tone]} ${className}`}>
       {children}
     </span>
   )

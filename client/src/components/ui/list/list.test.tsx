@@ -21,7 +21,12 @@ describe('list frame', () => {
     expect(tile).toHaveClass('h-[110px]', 'gap-[5px]', 'rounded-r18', 'bg-white', 'shadow-card-sm', 'px-1.5', 'py-2', 'md:h-[136px]')
     expect(screen.getByText('🐘')).toHaveClass('text-[40px]', 'md:text-[56px]')
     expect(screen.getByText('elephant')).toHaveClass('font-display', 'text-[15px]', 'leading-[1.1]', 'md:text-[19px]')
+    // Fix round 1 (task-5 review, Important #1): the chip must render at `Chip`'s own `xs` size
+    // classes, not the `sm`/`md` pill it fell back to when `Tile` fought the cascade with a
+    // `className` override instead of a real `size` prop — the negative assertion is the one
+    // that would have caught that regression.
     expect(screen.getByText('🔓')).toHaveClass('rounded-[9px]', 'px-2', 'py-0.5', 'text-[11px]', 'md:text-[13px]')
+    expect(screen.getByText('🔓')).not.toHaveClass('rounded-full', 'px-4', 'py-2', 'text-base')
     expect(screen.getByTestId('stars')).toHaveClass('text-[13px]')
   })
 
