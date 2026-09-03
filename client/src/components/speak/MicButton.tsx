@@ -2,21 +2,23 @@ import { Countdown } from './Countdown'
 import { LevelBars } from './LevelBars'
 
 export type MicState = 'idle' | 'recording' | 'processing' | 'disabled' | 'locked'
-type Props = { state: MicState; level: number; onPress: () => void; secondsLeft?: number; countdownLayout?: 'row' | 'column'; caption?: string }
+type Props = { state: MicState; level: number; onPress: () => void; secondsLeft?: number; caption?: string }
 
 const LABEL: Record<MicState, string> = { idle: 'Bấm để nói', recording: 'Dừng', processing: 'Đang chấm…', disabled: 'Bấm để nói', locked: 'Hôm nay đã hết giờ' }
 const CAPTION: Record<MicState, string | null> = { idle: 'Chạm để nói nào!', recording: null, processing: 'Foxy đang chấm…', disabled: 'Đang chuẩn bị máy chấm…', locked: 'Mai gặp lại nhé 🌙' }
 
 /** Brief §2.2. The block reserves 214 px (190 + 24 for the bars) at md so the mic grows in place
  * without moving the CTA; on a phone the recording mic is 150 inside halos that reach 190.
- * `countdownLayout` orders the level bars and the countdown badge: `row` (default) puts the
- * badge after the bars side by side; `column` stacks the badge above the bars.
+ * The level bars and the countdown badge lay out responsively (spec decision 5): a row on a
+ * phone and on real iPad landscape (`ipad:`), a column with the badge above the bars on iPad
+ * portrait (`md:` without `ipad:` — the same idiom `PageBody` uses for this split, which works
+ * here because `ipad:` now outranks `md:` on specificity, see tailwind.config.ts).
  *
  * `caption` overrides the per-state default (`CAPTION` above) — SentenceBuilder (round 2, C9)
  * reuses `state="disabled"` for its own "sentence not built yet" mic, which needs "Xếp đúng câu
  * trước nhé" rather than the scorer's "Đang chuẩn bị máy chấm…". Omitted, the table is unchanged,
  * so every other screen keeps its existing caption. */
-export function MicButton({ state, level, onPress, secondsLeft, countdownLayout = 'row', caption }: Props) {
+export function MicButton({ state, level, onPress, secondsLeft, caption }: Props) {
   const rec = state === 'recording'
   const off = state === 'disabled' || state === 'processing' || state === 'locked'
   return (
@@ -43,10 +45,9 @@ export function MicButton({ state, level, onPress, secondsLeft, countdownLayout 
         </button>
       </div>
       {rec && (
-        <div data-testid="countdown-row" className={`flex items-center ${countdownLayout === 'row' ? 'flex-row gap-3.5 md:gap-4' : 'flex-col gap-3'}`}>
-          {countdownLayout === 'column' && secondsLeft !== undefined && <Countdown seconds={secondsLeft} />}
+        <div data-testid="countdown-row" className="flex items-center flex-row gap-3.5 md:flex-col md:gap-3 ipad:flex-row ipad:gap-4">
           <LevelBars level={level} />
-          {countdownLayout === 'row' && secondsLeft !== undefined && <Countdown seconds={secondsLeft} />}
+          {secondsLeft !== undefined && <span className="md:order-first ipad:order-none"><Countdown seconds={secondsLeft} /></span>}
         </div>
       )}
       {!rec && (caption ?? CAPTION[state]) && <p className="text-[15px] font-bold text-ink-500 md:text-[18px]">{caption ?? CAPTION[state]}</p>}

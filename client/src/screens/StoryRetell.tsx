@@ -171,7 +171,7 @@ function StoryRetellInner({ story, id, inMission }: { story: Story; id: string; 
                 ? <SpeakPrompt mood="listening" say="Foxy đang lắng nghe…" />
                 : <SpeakPrompt mood="idle" say="Bé kể lại câu này nhé" seconds={COUNTDOWN_FROM} />}
               {a.error && <SpeakError error={a.error} onAction={onErrorAction} onDismiss={a.dismissError} />}
-              <MicButton state={a.micState} level={a.level} onPress={a.onMic} secondsLeft={recording ? secondsLeft : undefined} countdownLayout="row" />
+              <MicButton state={a.micState} level={a.level} onPress={a.onMic} secondsLeft={recording ? secondsLeft : undefined} />
             </>
           ),
         }}

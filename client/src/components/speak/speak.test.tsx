@@ -38,12 +38,17 @@ describe('MicButton', () => {
     render(<MicButton state="locked" level={0} onPress={() => {}} />)
     expect(screen.getByRole('button', { name: 'Hôm nay đã hết giờ' })).toBeDisabled()
   })
-  it('lays the level bars and countdown in one row by default, column when asked', () => {
-    const { rerender } = render(<MicButton state="recording" level={0.5} onPress={() => {}} secondsLeft={13} />)
-    expect(screen.getByTestId('countdown-row')).toHaveClass('flex-row', 'gap-3.5')
-    expect(screen.getByTestId('countdown')).toHaveClass('min-w-[56px]', 'md:min-w-[70px]')
-    rerender(<MicButton state="recording" level={0.5} onPress={() => {}} secondsLeft={13} countdownLayout="column" />)
-    expect(screen.getByTestId('countdown-row')).toHaveClass('flex-col')
+  it('lays the level bars and countdown in a row on phone and iPad landscape, a column on iPad portrait', () => {
+    render(<MicButton state="recording" level={0.5} onPress={() => {}} secondsLeft={13} />)
+    // Phone (unprefixed) and real iPad landscape (`ipad:`) are both rows; iPad portrait (`md:`
+    // without `ipad:`) is a column — the same idiom `PageBody` uses for this split, which works
+    // here because `ipad:` now outranks `md:` on specificity (see tailwind.config.ts).
+    expect(screen.getByTestId('countdown-row')).toHaveClass('flex-row', 'gap-3.5', 'md:flex-col', 'md:gap-3', 'ipad:flex-row', 'ipad:gap-4')
+    const badge = screen.getByTestId('countdown')
+    expect(badge).toHaveClass('min-w-[56px]', 'md:min-w-[70px]')
+    // The badge itself reorders above the bars at `md` (iPad portrait) and back to its normal
+    // place at `ipad` (iPad landscape) — the bars stay first in document order throughout.
+    expect(badge.parentElement).toHaveClass('md:order-first', 'ipad:order-none')
   })
 })
 
@@ -63,6 +68,9 @@ describe('SpeakPrompt', () => {
     render(<SpeakPrompt mood="idle" say="Đọc cả đoạn thật có hồn nhé!" seconds={13} />)
     expect(screen.getByTestId('foxy')).toHaveAttribute('data-mood', 'idle')
     expect(screen.getByText('13 giây')).toHaveClass('text-coral-text')
+    // C1: constrain Foxy's unsized SVG to the wrapper box, or it overflows into the bubble.
+    const foxWrap = screen.getByTestId('foxy').parentElement!.parentElement!
+    expect(foxWrap).toHaveClass('[&_svg]:h-full', '[&_svg]:w-full')
   })
 
   /** Fix round 1: the bubble was breaking one word per line once it had to share a wrapped
@@ -121,7 +129,7 @@ describe('ResultCard', () => {
     const listenBtn = screen.getByRole('button', { name: '🎧 Nghe mình' })
     expect(listenBtn).toBeInTheDocument()
     expect(listenBtn).toHaveClass('h-12', 'relative')
-    expect(listenBtn.className).toMatch(/after:-inset-2\b/)
+    expect(listenBtn.className).toMatch(/after:-inset-y-2\b/)
     expect(listenBtn.className).toMatch(/after:content-\[['"]{2}\]/)
   })
   it('shows the hint below 2 stars and drops "Nghe mình" without a blob', () => {
@@ -130,7 +138,7 @@ describe('ResultCard', () => {
     expect(screen.queryByRole('button', { name: '🎧 Nghe mình' })).toBeNull()
     const sampleBtn = screen.getByRole('button', { name: '🔊 Nghe mẫu' })
     expect(sampleBtn).toHaveClass('flex-1', 'h-12', 'relative')
-    expect(sampleBtn.className).toMatch(/after:-inset-2\b/)
+    expect(sampleBtn.className).toMatch(/after:-inset-y-2\b/)
     expect(sampleBtn.className).toMatch(/after:content-\[['"]{2}\]/)
   })
   it('prosody pill reads the engine', () => {
@@ -141,6 +149,10 @@ describe('ResultCard', () => {
     render(<MemoryRouter><ResultCard stars={2} praise="x" hint={{ word: 'w', tip: 't' }} forceHint fox={{ mood: 'cheer', say: 'Giọng vui thật đấy!' }} onSample={() => {}} onRetry={() => {}} /></MemoryRouter>)
     const rows = Array.from(screen.getByTestId('result-card').children).map(c => c.getAttribute('data-row'))
     expect(rows).toEqual(['head', 'hint', 'listen', 'fox', 'cta'])
+    // C1: Foxy's SVG has no intrinsic CSS sizing, so the wrapper must constrain it or it overflows
+    // the box and paints over neighbouring rows (worst case, the CTA below).
+    const foxWrap = screen.getByTestId('result-card').querySelector('[data-row="fox"]')!.firstElementChild!
+    expect(foxWrap).toHaveClass('[&_svg]:h-full', '[&_svg]:w-full')
     render(<MemoryRouter><ResultCard compact stars={1} praise="y" words={[{ word: 'a', tone: 'fix' }]} bars={{ accuracy: 1, fluency: 1, completeness: 1 } as never} hint={{ word: 'w', tip: 't' }} onRetry={() => {}} /></MemoryRouter>)
     const rows2 = Array.from(screen.getAllByTestId('result-card')[1].children).map(c => c.getAttribute('data-row'))
     expect(rows2).toEqual(['head', 'hint', 'cta'])

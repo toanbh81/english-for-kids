@@ -229,7 +229,7 @@ function SoundWord({ sound, idx }: { sound: SoundGroup; idx: number }) {
                 ? <SpeakPrompt mood="listening" say="Foxy đang lắng nghe…" />
                 : <SpeakPrompt mood="idle" say={`Chạm rồi đọc: "${card.text}"`} />}
               {attempt.error && <SpeakError error={attempt.error} onAction={onErrorAction} onDismiss={attempt.dismissError} />}
-              <MicButton state={attempt.micState} level={attempt.level} onPress={attempt.onMic} secondsLeft={recording ? secondsLeft : undefined} countdownLayout="row" />
+              <MicButton state={attempt.micState} level={attempt.level} onPress={attempt.onMic} secondsLeft={recording ? secondsLeft : undefined} />
             </>
           ),
         }}

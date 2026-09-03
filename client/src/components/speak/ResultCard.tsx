@@ -65,13 +65,13 @@ export function ResultCard(p: ResultCardProps) {
       {showHint && p.hint && <div data-row="hint"><HintCard hint={p.hint} /></div>}
       {listen && (
         <div data-row="listen" className="flex gap-2">
-          {p.canReplay && p.onReplay && <button type="button" onClick={p.onReplay} className="relative flex h-12 flex-1 items-center justify-center gap-1.5 rounded-r14 border-[3px] border-teal-line bg-white font-display text-[15px] font-extrabold text-teal-600 after:absolute after:-inset-2 after:content-['']">🎧 Nghe mình</button>}
-          {p.onSample && <button type="button" onClick={p.onSample} className="relative flex h-12 flex-1 items-center justify-center gap-1.5 rounded-r14 border-[3px] border-teal-line bg-white font-display text-[15px] font-extrabold text-teal-600 after:absolute after:-inset-2 after:content-['']">🔊 Nghe mẫu</button>}
+          {p.canReplay && p.onReplay && <button type="button" onClick={p.onReplay} className="relative flex h-12 flex-1 items-center justify-center gap-1.5 rounded-r14 border-[3px] border-teal-line bg-white font-display text-[15px] font-extrabold text-teal-600 after:absolute after:-inset-y-2 after:content-['']">🎧 Nghe mình</button>}
+          {p.onSample && <button type="button" onClick={p.onSample} className="relative flex h-12 flex-1 items-center justify-center gap-1.5 rounded-r14 border-[3px] border-teal-line bg-white font-display text-[15px] font-extrabold text-teal-600 after:absolute after:-inset-y-2 after:content-['']">🔊 Nghe mẫu</button>}
         </div>
       )}
       {p.fox && (
         <div data-row="fox" className="flex items-center justify-center gap-2 ipad:mt-auto md:gap-2.5">
-          <div className="h-[42px] w-[44px] md:h-[93px] md:w-[96px] ipad:h-[50px] ipad:w-[52px]"><Foxy mood={p.fox.mood} size="sm" /></div>
+          <div className="h-[42px] w-[44px] md:h-[93px] md:w-[96px] ipad:h-[50px] ipad:w-[52px] [&_svg]:h-full [&_svg]:w-full"><Foxy mood={p.fox.mood} size="sm" /></div>
           <p className="text-[13px] font-bold text-ink-500 md:rounded-r16 md:rounded-bl-[6px] md:bg-white md:px-4 md:py-2.5 md:font-display md:text-[17px] md:font-extrabold md:text-ink-900 md:shadow-card-xs ipad:bg-transparent ipad:p-0 ipad:font-sans ipad:text-[14px] ipad:font-bold ipad:text-ink-500 ipad:shadow-none">{p.fox.say}</p>
         </div>
       )}

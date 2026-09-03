@@ -246,7 +246,7 @@ it('a correct order shows the green banner, plays the sample audio, and reveals 
   const sentence = findSentence('s1')!
   await tapInCorrectOrder('s1')
 
-  expect(screen.getByText('Đúng rồi! 🎉 Giờ đọc câu lên nhé')).toBeInTheDocument()
+  expect(screen.getByText('Đúng rồi! 🎉')).toBeInTheDocument()
   await waitFor(() => expect(playerMock.playUrl).toHaveBeenCalledWith(sentence.audio))
   expect(screen.getByRole('button', { name: 'Bấm để nói' })).toBeInTheDocument()
   expect(screen.getByRole('button', { name: '🔊 Đọc câu cho bé nghe' })).toBeInTheDocument()
@@ -306,7 +306,7 @@ it('holds the teach column still while scoring — processing is not recording',
   renderBuilder('s1')
   await tapInCorrectOrder('s1')
 
-  expect(screen.getByText('Đúng rồi! 🎉 Giờ đọc câu lên nhé')).toBeInTheDocument()
+  expect(screen.getByText('Đúng rồi! 🎉')).toBeInTheDocument()
   const backCell = screen.getByRole('link', { name: 'Ghép câu' }).closest('div')!
   expect(backCell).not.toHaveClass('opacity-40')
   expect(screen.getByTestId('header-right')).not.toHaveClass('opacity-40')
@@ -405,7 +405,7 @@ it('keeps ScoredWords visible on the default render once a result lands — neve
   const tray = screen.getByTestId('tray')
   expect(within(tray).getAllByTestId('word-chip')).toHaveLength(S1_WORDS.length)
   expect(screen.queryByRole('button', { name: /mở/i })).not.toBeInTheDocument()
-  expect(screen.queryByText('Đúng rồi! 🎉 Giờ đọc câu lên nhé')).not.toBeInTheDocument()
+  expect(screen.queryByText('Đúng rồi! 🎉')).not.toBeInTheDocument()
   expect(screen.queryByRole('button', { name: '🔊 Đọc câu cho bé nghe' })).not.toBeInTheDocument()
 })
 
@@ -417,7 +417,7 @@ it('"Thử lại" resets the spoken attempt and brings the correct tray, the ban
   fireEvent.click(screen.getByRole('button', { name: /Thử lại/ }))
 
   expect(screen.getByRole('button', { name: 'Bấm để nói' })).toBeInTheDocument()
-  expect(screen.getByText('Đúng rồi! 🎉 Giờ đọc câu lên nhé')).toBeInTheDocument()
+  expect(screen.getByText('Đúng rồi! 🎉')).toBeInTheDocument()
   expect(screen.getByRole('button', { name: '🔊 Đọc câu cho bé nghe' })).toBeInTheDocument()
   const tray = screen.getByTestId('tray')
   expect(within(tray).getAllByRole('button')).toHaveLength(S1_WORDS.length)

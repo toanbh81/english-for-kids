@@ -223,7 +223,7 @@ function VoiceRun({ passage }: { passage: VoicePassage }) {
                 animate={stars === 3}
                 fox={{
                   mood: stars === 3 ? 'cheer' : stars === 2 ? 'happy' : 'idle',
-                  say: stars === 3 ? 'Foxy: "Giọng vui thật đấy!"' : 'Foxy: "Thử lại lần nữa nhé!"',
+                  say: stars === 3 ? 'Foxy: "Giọng vui thật đấy!"' : stars === 2 ? 'Foxy: "Gần chuẩn rồi đó!"' : 'Foxy: "Thử lại lần nữa nhé!"',
                 }}
               />
             </>
@@ -233,7 +233,7 @@ function VoiceRun({ passage }: { passage: VoicePassage }) {
                 ? <SpeakPrompt mood="listening" say="Foxy đang lắng nghe…" />
                 : <SpeakPrompt mood="idle" say="Đọc cả đoạn thật có hồn nhé!" seconds={COUNTDOWN_FROM} />}
               {a.error && <SpeakError error={a.error} onAction={onErrorAction} onDismiss={a.dismissError} />}
-              <MicButton state={a.micState} level={a.level} onPress={a.onMic} secondsLeft={recording ? secondsLeft : undefined} countdownLayout="row" />
+              <MicButton state={a.micState} level={a.level} onPress={a.onMic} secondsLeft={recording ? secondsLeft : undefined} />
             </>
           ),
         }}

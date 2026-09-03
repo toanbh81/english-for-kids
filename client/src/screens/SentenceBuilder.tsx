@@ -263,7 +263,7 @@ function SentenceBuilderInner({ sentence }: { sentence: Sentence }) {
               {correct && !feedback && (
                 <>
                   <div className="flex w-full items-center justify-center gap-2 rounded-r12 bg-good-50 px-3.5 py-2 text-center text-[13px] font-bold text-good-700">
-                    Đúng rồi! 🎉 Giờ đọc câu lên nhé
+                    Đúng rồi! 🎉
                   </div>
                   <Button variant="outline" onClick={playSample}>🔊 Đọc câu cho bé nghe</Button>
                   {audioMissing && <p className="text-sm font-bold text-ink-300 md:text-lg">Chưa có audio mẫu</p>}
@@ -293,7 +293,7 @@ function SentenceBuilderInner({ sentence }: { sentence: Sentence }) {
             <>
               <SpeakPrompt mood={recording ? 'listening' : 'cheer'} say={recording ? 'Foxy đang lắng nghe…' : 'Đúng rồi! Giờ đọc câu lên nhé'} />
               {attempt.error && <SpeakError error={attempt.error} onAction={onErrorAction} onDismiss={attempt.dismissError} />}
-              <MicButton state={attempt.micState} level={attempt.level} onPress={attempt.onMic} secondsLeft={recording ? secondsLeft : undefined} countdownLayout="row" />
+              <MicButton state={attempt.micState} level={attempt.level} onPress={attempt.onMic} secondsLeft={recording ? secondsLeft : undefined} />
             </>
           ) : (
             // R19: on iPad the mic sits in the act column from the very start, disabled until the

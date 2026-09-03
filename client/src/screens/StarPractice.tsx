@@ -217,7 +217,7 @@ function StarRun({ star }: { star: SentenceStar }) {
                     />
                   ))}
                 </button>
-                <span className="text-[13px] font-bold text-ink-300 md:text-base">Nhịp của câu — chạm để nghe lại</span>
+                <span className="text-[13px] font-bold text-ink-300 md:text-base">Nhịp của câu — chạm 🔊 để nghe lại</span>
               </Card>
             </div>
           ),
@@ -245,7 +245,7 @@ function StarRun({ star }: { star: SentenceStar }) {
                 animate={stars === 3}
                 fox={{
                   mood: stars === 3 ? 'cheer' : stars === 2 ? 'happy' : 'idle',
-                  say: stars === 3 ? 'Foxy: "Nói liền mạch quá đã!"' : 'Foxy: "Thử lại lần nữa nhé!"',
+                  say: stars === 3 ? 'Foxy: "Nói liền mạch quá đã!"' : stars === 2 ? 'Foxy: "Gần chuẩn rồi đó!"' : 'Foxy: "Thử lại lần nữa nhé!"',
                 }}
               />
             </>
@@ -255,7 +255,7 @@ function StarRun({ star }: { star: SentenceStar }) {
                 ? <SpeakPrompt mood="listening" say="Foxy đang lắng nghe…" />
                 : <SpeakPrompt mood="idle" say="Nói cả câu một hơi nhé!" />}
               {attempt.error && <SpeakError error={attempt.error} onAction={onErrorAction} onDismiss={attempt.dismissError} />}
-              <MicButton state={attempt.micState} level={attempt.level} onPress={attempt.onMic} secondsLeft={recording ? secondsLeft : undefined} countdownLayout="row" />
+              <MicButton state={attempt.micState} level={attempt.level} onPress={attempt.onMic} secondsLeft={recording ? secondsLeft : undefined} />
             </>
           ),
         }}

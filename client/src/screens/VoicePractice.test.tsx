@@ -266,6 +266,16 @@ it('collapses the teach column to a tap-to-expand strip once a result lands, and
   expect(screen.getAllByTestId('mood-tip').length).toBeGreaterThan(0)
 })
 
+/** I1: at 2★ — the most common outcome band — Foxy should not grin and say "try again"; he gets
+ * his own middle line, matching the ladder every other screen already carries. */
+it('gives 2★ its own happy-but-not-perfect fox line, not the 3★ or the retry copy', () => {
+  renderVoice()
+  score(result({ accuracy: 75, prosody: 65 }), new Blob(['x']))
+
+  const card = screen.getByTestId('result-card')
+  expect(within(card).getByText('Foxy: "Gần chuẩn rồi đó!"')).toBeInTheDocument()
+})
+
 /** Reviewer minor (also applied to StarPractice.test.tsx): a test that only retries and checks
  * the strip is gone would pass whether or not `setTeachOpen(true)` ever ran, since a null `result`
  * alone already makes the strip's condition false. This drives `teachOpen` itself — tap the strip

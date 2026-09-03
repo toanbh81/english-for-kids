@@ -381,14 +381,14 @@ function WordCardInner({ word, topic, isReview, list }: { word: Word; topic: str
               {/* R16: the mic is redundant next to "Thử lại" on a phone (no room for both), but on
                   an iPad it rides alongside the CTA so a re-record needs no extra tap. */}
               <div className="max-md:hidden">
-                <MicButton state={attempt.micState} level={attempt.level} onPress={attempt.onMic} secondsLeft={recording ? secondsLeft : undefined} countdownLayout="row" />
+                <MicButton state={attempt.micState} level={attempt.level} onPress={attempt.onMic} secondsLeft={recording ? secondsLeft : undefined} />
               </div>
             </>
           ) : (
             <>
               <SpeakPrompt mood={recording ? 'listening' : 'idle'} say={recording ? 'Foxy đang lắng nghe…' : 'Đọc to từ trên thẻ nhé!'} />
               {attempt.error && <SpeakError error={attempt.error} onAction={onErrorAction} onDismiss={attempt.dismissError} />}
-              <MicButton state={attempt.micState} level={attempt.level} onPress={attempt.onMic} secondsLeft={recording ? secondsLeft : undefined} countdownLayout="row" />
+              <MicButton state={attempt.micState} level={attempt.level} onPress={attempt.onMic} secondsLeft={recording ? secondsLeft : undefined} />
             </>
           ),
         }} />

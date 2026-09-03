@@ -439,6 +439,16 @@ it('collapses the teach column to a tap-to-expand strip once a result lands, and
   expect(screen.getByText('Chữ cam = nhấn mạnh · ‿ = nối âm')).toBeInTheDocument()
 })
 
+/** I1: at 2★ — the most common outcome band — Foxy should not grin and say "try again"; he gets
+ * his own middle line, matching the ladder every other screen already carries. */
+it('gives 2★ its own happy-but-not-perfect fox line, not the 3★ or the retry copy', () => {
+  renderStar()
+  score(result(70, 50, 70), new Blob(['x']))
+
+  const card = screen.getByTestId('result-card')
+  expect(within(card).getByText('Foxy: "Gần chuẩn rồi đó!"')).toBeInTheDocument()
+})
+
 /** Retrying from the collapsed result must also reopen the strip — a retry should not leave the
  * child staring at yesterday's collapsed strip once they start reading again. */
 /** Reviewer minor: scoring via "Thử lại" nulls `result` on its own, so a test that only clicks

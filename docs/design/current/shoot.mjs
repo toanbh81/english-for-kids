@@ -243,8 +243,7 @@ async function run(vpName, vp) {
     for (const w of ['My', 'sister', 'has', 'a', 'baby', 'doll.']) await tapText(page, w)
     await sleep(500)
   })
-  // Task 11 wires SentenceBuilder's "mark the tray correct when a fixture result is present" —
-  // until then this lands on the empty tray, same as `sentence-empty`.
+  // Task 11 wires SentenceBuilder's "mark the tray correct when a fixture result is present".
   await S('sentence-result3', '/sentence/s12?fixture=result3')
   await S('parent-gate', '/parent')
   await S('parent-gate-wrong', null, async () => { await page.fill('input', '7'); await page.keyboard.press('Enter') })

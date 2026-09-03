@@ -57,6 +57,9 @@ describe('PageShell', () => {
     // The old unprefixed `min-h-0` (live on a phone too) is exactly what let the teach column
     // shrink past its content there — gone from the base class list, `md:min-h-0` only.
     expect(teachOuter.className.split(/\s+/)).not.toContain('min-h-0')
+    // `flex-1` is `flex: 1 1 0%` — the shrink this rule exists to forbid. `toHaveClass` is a subset
+    // check, so it must be denied explicitly, exactly like `min-h-0` above.
+    expect(teachOuter.className.split(/\s+/)).not.toContain('flex-1')
 
     const act = screen.getByText('làm').parentElement!
     expect(act).toHaveClass('shrink-0')
