@@ -32,7 +32,7 @@ export function PageBody({ center, split, actGrow, className = '', children }: {
         ) : (
           <div className="flex min-h-0 flex-1 flex-col items-center justify-center ipad:min-h-0 ipad:overflow-y-auto">{split.teach}</div>
         )}
-        <div className={`flex flex-col items-center justify-center md:flex-row md:gap-10 ${actGrow ? 'md:flex-1 md:min-h-0' : 'md:h-[300px] md:shrink-0'} ipad:h-auto ipad:max-h-full ipad:w-[440px] ipad:shrink-0 ipad:min-h-0 ipad:flex-col ipad:gap-4 ipad:overflow-y-auto`}>{split.act}</div>
+        <div className={`flex flex-col items-center justify-center md:flex-row md:flex-wrap md:gap-10 ${actGrow ? 'md:flex-1 md:min-h-0' : 'md:h-[300px] md:shrink-0'} ipad:h-auto ipad:max-h-full ipad:w-[440px] ipad:shrink-0 ipad:min-h-0 ipad:flex-col ipad:flex-nowrap ipad:gap-4 ipad:overflow-y-auto`}>{split.act}</div>
       </div>
     )
   }

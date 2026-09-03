@@ -59,6 +59,18 @@ describe('SpeakPrompt', () => {
     expect(screen.getByTestId('foxy')).toHaveAttribute('data-mood', 'idle')
     expect(screen.getByText('13 giây')).toHaveClass('text-coral-text')
   })
+
+  /** Fix round 1: the bubble was breaking one word per line once it had to share a wrapped
+   * iPad-portrait row with the error banner. Capping its own width (rather than the row
+   * squeezing it) keeps it wrapping at word boundaries across two lines instead of one word each;
+   * the outer row stays `shrink-0` so the row-level flex-wrap (PageBody's act container) is what
+   * gives way, not this component. */
+  it('caps the bubble width and refuses to shrink the row below it', () => {
+    render(<SpeakPrompt mood="idle" say="Đọc cả đoạn thật có hồn nhé!" seconds={13} />)
+    const bubble = screen.getByText(/Đọc cả đoạn/).closest('div')!
+    expect(bubble).toHaveClass('max-w-[240px]', 'md:max-w-[300px]')
+    expect(bubble.parentElement).toHaveClass('shrink-0')
+  })
 })
 
 describe('LevelBars', () => {
@@ -141,5 +153,23 @@ describe('SpeakError', () => {
     expect(actionBtn.className).toMatch(/after:content-\[['"]{2}\]/)
     fireEvent.click(actionBtn)
     expect(onAction).toHaveBeenCalledWith('limit')
+  })
+
+  /** Fix round 1: on iPad portrait (`md:` without `ipad:`) the banner reorders ahead of the
+   * prompt/mic instead of squeezing them onto one line; real iPad landscape (`ipad:`) and phone
+   * (unprefixed) keep document order — prompt → error → mic. `ipad:order-none` needs `!important`
+   * here: both `md:` (min-width:768) and `ipad:` (min-width:1024 + landscape + min-height:692)
+   * match simultaneously on a real iPad landscape, and this build emits `ipad:` rules *before*
+   * `md:` in the stylesheet — confirmed live via `getComputedStyle(...).order` at 1194×834, which
+   * read `-9999` (order-first still winning) until `!` was added, then `0`. Every other `ipad:`
+   * override elsewhere in the carrier (PageBody's `md:flex-row ipad:flex-col`, etc.) never hit
+   * this because those pairs don't share a plain Tailwind screen name AND a custom variant that
+   * both match the same viewport with a utility whose last-writer changes the rendered box the
+   * same way — this is the first one that does. */
+  it('reorders ahead of the rest on iPad portrait, and stays in place on landscape', () => {
+    render(<SpeakError error={{ kind: 'limit' }} onAction={() => {}} onDismiss={() => {}} />)
+    expect(screen.getByRole('alert')).toHaveClass('md:order-first', 'md:mx-auto', 'ipad:!order-none')
+    // The max width from before is untouched — only centred, never widened past it.
+    expect(screen.getByRole('alert')).toHaveClass('w-full', 'max-w-[440px]')
   })
 })

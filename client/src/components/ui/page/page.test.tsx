@@ -67,6 +67,14 @@ describe('PageShell', () => {
     expect(screen.getByText('làm').parentElement).toHaveClass('md:flex-row', 'md:gap-10', 'ipad:flex-col')
   })
 
+  /** Fix round 1: on iPad portrait an error banner (`md:order-first`, SpeakError.tsx) needs to
+   * wrap onto its own row above the prompt+mic rather than squeezing them sideways — landscape
+   * (`ipad:`) stays a non-wrapping row so the three sit side by side as before. */
+  it('act row wraps on iPad portrait and stays a single line on iPad landscape', () => {
+    wrap(<PageShell><PageBody split={{ teach: <p>dạy</p>, act: <p>làm</p> }} /></PageShell>)
+    expect(screen.getByText('làm').parentElement).toHaveClass('md:flex-wrap', 'ipad:flex-nowrap')
+  })
+
   it('actGrow swaps the fixed 300px act column for one that fills the remaining height', () => {
     wrap(<PageShell><PageBody split={{ teach: <p>dạy</p>, act: <p>làm</p> }} /></PageShell>)
     expect(screen.getByText('làm').parentElement).toHaveClass('md:h-[300px]', 'md:shrink-0')
