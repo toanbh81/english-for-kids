@@ -18,12 +18,15 @@ export function PageHeader({ back, right, engine, dimmed, title, sub, align, onB
 }) {
   const dim = dimmed ? 'opacity-40 pointer-events-none' : ''
   const start = (align ?? (title !== undefined ? 'start' : 'center')) === 'start'
-  // brief §1: header căn trái dùng gap 10/14; header căn giữa giữ 8/12 của Phase 12.
-  const gap = start ? 'gap-2.5 md:gap-3.5' : 'gap-2 md:gap-3'
+  // brief §1: header căn trái dùng gap 10/14; header căn giữa giữ 8/12 của Phase 12. Split into the
+  // two tokens that sit either side of `md:h-16 md:grid-cols-...` below so the default (no title,
+  // no onBand) header className stays the exact pre-Task-1 string, not just an equivalent one.
+  const gapStart = start ? 'gap-2.5' : 'gap-2'
+  const gapMd = start ? 'md:gap-3.5' : 'md:gap-3'
   // R19 / quyết định 5: ngoại lệ CÓ TÊN với luật "header luôn trên cream" — chỉ TopicHub dùng.
-  const band = onBand ? 'bg-transparent [&>div:first-child>a]:bg-white/[.92] [&>div:first-child>a]:text-teal-600' : ''
+  const band = onBand ? ' bg-transparent [&>div:first-child>a]:bg-white/[.92] [&>div:first-child>a]:text-teal-600' : ''
   return (
-    <header className={`grid h-14 grid-cols-[56px_1fr_56px] items-center ${gap} md:h-16 md:grid-cols-[64px_1fr_minmax(64px,auto)] ${band}`}>
+    <header className={`grid h-14 grid-cols-[56px_1fr_56px] items-center ${gapStart} md:h-16 md:grid-cols-[64px_1fr_minmax(64px,auto)] ${gapMd}${band}`}>
       <div className={`justify-self-start ${onBand ? '[&>a]:bg-white/[.92] [&>a]:text-teal-600' : ''} ${dim}`}>{back}</div>
       <div className={start
         ? 'flex min-w-0 flex-1 items-center justify-self-stretch gap-2.5 text-left'

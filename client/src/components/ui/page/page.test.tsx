@@ -144,7 +144,10 @@ describe('LessonChip in the header', () => {
 describe('PageHeader title/sub/align/onBand (Phase 14)', () => {
   it('header keeps the Phase 12/13 centred layout byte-for-byte when no title is given', () => {
     wrap(<PageShell><PageHeader back={<BackButton to="/" label="Về nhà" />}><span>chip</span></PageHeader><PageBody>x</PageBody></PageShell>)
-    expect(screen.getByRole('banner')).toHaveClass('grid', 'h-14', 'grid-cols-[56px_1fr_56px]', 'gap-2', 'md:h-16', 'md:gap-3')
+    // `toBe` on the raw string, not `toHaveClass`: the brief's "byte-identical defaults" guarantee
+    // means this exact literal, not just a superset of these tokens in any order (fix round 1 #1).
+    expect(screen.getByRole('banner').className)
+      .toBe('grid h-14 grid-cols-[56px_1fr_56px] items-center gap-2 md:h-16 md:grid-cols-[64px_1fr_minmax(64px,auto)] md:gap-3')
     expect(screen.getByText('chip').parentElement?.parentElement)
       .toHaveClass('items-center', 'justify-self-center', 'gap-[3px]', 'md:flex-row', 'md:gap-2.5')
   })
@@ -162,6 +165,23 @@ describe('PageHeader title/sub/align/onBand (Phase 14)', () => {
     expect(screen.getByRole('link', { name: 'Về nhà' }).parentElement)
       .toHaveClass('[&>a]:bg-white/[.92]', '[&>a]:text-teal-600')
   })
+  // Fix round 1 #2: an explicit `align` must win over the title-driven default in both directions
+  // — otherwise an inverted or deleted `align ?? (...)` fallback slips past every other test here.
+  it('an explicit align overrides the title-driven default in both directions', () => {
+    // Two separate `wrap()` calls (not `rerender`): each render needs its own `MemoryRouter`, and
+    // `back` here is a `BackButton` `Link` — `rerender`ing bare JSX would drop the router context.
+    wrap(<PageShell><PageHeader back={<BackButton to="/" label="Về nhà" />} title="Có tiêu đề" align="center" /><PageBody>x</PageBody></PageShell>)
+    expect(screen.getByRole('heading', { level: 1 }).parentElement?.parentElement)
+      .toHaveClass('flex-col', 'items-center', 'justify-self-center', 'gap-[3px]', 'md:flex-row', 'md:gap-2.5')
+    expect(screen.getByRole('heading', { level: 1 }).parentElement?.parentElement)
+      .not.toHaveClass('flex-1', 'justify-self-stretch', 'text-left')
+
+    wrap(<PageShell><PageHeader back={<BackButton to="/" label="Về nhà" />} align="start"><span>chip</span></PageHeader><PageBody>x</PageBody></PageShell>)
+    expect(screen.getByText('chip').parentElement?.parentElement)
+      .toHaveClass('min-w-0', 'flex-1', 'items-center', 'justify-self-stretch', 'gap-2.5', 'text-left')
+    expect(screen.getByText('chip').parentElement?.parentElement)
+      .not.toHaveClass('flex-col', 'justify-self-center')
+  })
 })
 
 describe('PageBody fade/gap (Phase 14)', () => {
@@ -171,5 +191,16 @@ describe('PageBody fade/gap (Phase 14)', () => {
     expect(screen.getByTestId('page-body').className).not.toMatch(/after:|gap-/)
     rerender(<PageShell><PageBody fade gap={10}>x</PageBody></PageShell>)
     expect(screen.getByTestId('page-body')).toHaveClass('gap-2.5', 'after:sticky', 'after:bottom-0', 'after:h-[50px]', 'after:to-cream-50')
+  })
+  // Fix round 1 #3: 8 and 12 were only implemented, never asserted — a typo in either GAP entry
+  // (e.g. `12: 'gap-4'`) would have passed the suite.
+  it('maps 8 and 12 to gap-2 and gap-3', () => {
+    const { rerender } = wrap(<PageShell><PageBody gap={8}>x</PageBody></PageShell>)
+    expect(screen.getByTestId('page-body')).toHaveClass('gap-2')
+    expect(screen.getByTestId('page-body')).not.toHaveClass('gap-2.5', 'gap-3')
+
+    rerender(<PageShell><PageBody gap={12}>x</PageBody></PageShell>)
+    expect(screen.getByTestId('page-body')).toHaveClass('gap-3')
+    expect(screen.getByTestId('page-body')).not.toHaveClass('gap-2', 'gap-2.5')
   })
 })
