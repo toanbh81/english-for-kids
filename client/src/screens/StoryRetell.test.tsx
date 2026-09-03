@@ -95,6 +95,19 @@ function withoutRetellTimings<T>(fn: () => T): T {
   }
 }
 
+/** Swaps the retell sentence for one that appears in none of the story's scenes, the same way
+ * `withoutRetellTimings` above mutates the loaded fixture in place, so `findRetellScene` returns
+ * `undefined` and the screen's own "no scene matched" fallback is what's under test. */
+function withRetellTextMatchingNoScene<T>(fn: () => T): T {
+  const saved = STORY.retell.text
+  STORY.retell.text = 'Zzyzx, an unrelated sentence no scene narrates.'
+  try {
+    return fn()
+  } finally {
+    STORY.retell.text = saved
+  }
+}
+
 function renderRetell(id = 'little-fox', mission = false) {
   render(
     <MemoryRouter initialEntries={[{ pathname: `/story/${id}/retell`, state: mission ? { mission: true } : null }]}>
@@ -149,6 +162,17 @@ it('shows the retell sentence, its translation and no more H1 — the chip repla
   expect(screen.getByText('He wants an apple.')).toBeInTheDocument()
   expect(screen.getByText('Cậu ấy muốn một quả táo.')).toBeInTheDocument()
   expect(screen.getByText(`🦊 ${STORY.title} · cảnh ${SCENE_N}/${SCENE_M}`)).toBeInTheDocument()
+})
+
+it('falls back to a plain "Kể lại" chip and no scene number when no scene matches the retell sentence', () => {
+  withRetellTextMatchingNoScene(() => {
+    renderRetell()
+
+    expect(screen.getByText('Kể lại')).toBeInTheDocument()
+    expect(screen.queryByText(/^Kể lại ·/)).not.toBeInTheDocument()
+    expect(screen.getByText(`🦊 ${STORY.title}`)).toBeInTheDocument()
+    expect(screen.queryByText(/cảnh \d/)).not.toBeInTheDocument()
+  })
 })
 
 it('shows a lenient pass of 2 stars and saves progress once', () => {
