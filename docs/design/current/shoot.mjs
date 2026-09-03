@@ -181,8 +181,6 @@ async function run(vpName, vp) {
   await S('sound-result3', '/sound/th/sz-th-three?fixture=result3')
   await S('pair-listen', '/pair/pair-ship-sheep')
   await S('pair-listen-armed', null, async () => { await page.getByRole('button', { name: /Nghe/ }).first().click(); await sleep(400) })
-  // Task 8 wires the "a fixture result present = speaking phase already done" skip into
-  // PairPractice; until then this lands on the listening phase, same as `pair-listen`.
   await S('pair-result3', '/pair/pair-ship-sheep?fixture=result3')
   await S('star-idle', '/star/ss1')
   await S('star-result3', '/star/ss1?fixture=result3')

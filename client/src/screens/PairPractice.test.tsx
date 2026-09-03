@@ -1,20 +1,42 @@
-import { render, screen, fireEvent, act, cleanup } from '@testing-library/react'
+import { render, screen, fireEvent, act, cleanup, within } from '@testing-library/react'
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import { useEffect, useState } from 'react'
 import type { PronunciationResult } from '../scoring/types'
 
 /** The hook is mocked, not the recorder + scorer: these tests are about what PairPractice does
- * with a result, and `useSpeakingAttempt` is covered by its own suite and PracticeCard.test. */
-const mic = vi.hoisted(() => ({ push: (_r: PronunciationResult) => {} }))
+ * with a result, and `useSpeakingAttempt` is covered by its own suite and PracticeCard.test.
+ * `micState` is real state (not a hardcoded `'idle'`) because round-2's carrier behaviours —
+ * dimmed header, "● Đang ghi" chip, the collapsed strip, `processing` — all key off it. */
+type MicState = 'idle' | 'recording' | 'processing' | 'disabled' | 'locked'
+const mic = vi.hoisted(() => ({
+  push: (_r: PronunciationResult, _b: Blob | null = null) => {},
+  engine: 'azure' as 'azure' | 'webspeech',
+  error: null as { kind: string; detail?: string } | null,
+  dismissError: () => {},
+  setMicState: (_s: MicState) => {},
+  // Read once, on mount/reset, by the effect below — set before `renderPair()` so a screen can be
+  // rendered already mid-attempt (e.g. `processing`) with no post-render `act()` needed.
+  initialMicState: 'idle' as MicState,
+  // Stands in for `?fixture=result3` landing a result before the listening game ever ran — the
+  // real fixture lives inside the real `useSpeakingAttempt` (speaking/fixture.ts), out of reach of
+  // this mock, so the DEV-only "skip to phase 2" wiring in PairPractice is exercised this way.
+  initialResult: null as PronunciationResult | null,
+}))
 vi.mock('../speaking/useSpeakingAttempt', () => ({
   useSpeakingAttempt(opts: { resetKey?: string; onResult?: (r: PronunciationResult, b: Blob | null) => void }) {
-    const [result, setResult] = useState<PronunciationResult | null>(null)
-    useEffect(() => { setResult(null) }, [opts.resetKey])
-    mic.push = (r: PronunciationResult) => { setResult(r); opts.onResult?.(r, null) }
+    const [state, setState] = useState<{ result: PronunciationResult | null; blob: Blob | null }>({ result: mic.initialResult, blob: null })
+    const [micState, setMicState] = useState<MicState>('idle')
+    useEffect(() => { setState({ result: mic.initialResult, blob: null }); setMicState(mic.initialMicState) }, [opts.resetKey])
+    mic.push = (r: PronunciationResult, b: Blob | null = null) => {
+      setState({ result: r, blob: b })
+      opts.onResult?.(r, b)
+    }
+    mic.dismissError = () => {}
+    mic.setMicState = setMicState
     return {
-      micState: 'idle' as const, level: 0, engine: 'azure' as const,
-      result, error: null, lastBlob: null,
-      onMic: () => {}, reset: () => setResult(null),
+      micState, level: 0, engine: mic.engine,
+      result: state.result, error: mic.error, lastBlob: state.blob,
+      onMic: () => {}, reset: () => { setState({ result: null, blob: null }); setMicState('idle') }, dismissError: mic.dismissError,
     }
   },
 }))
@@ -72,9 +94,8 @@ function result(overall = 85): PronunciationResult {
   }
 }
 
-function score(r: PronunciationResult) {
-  act(() => { mic.push(r) })
-}
+const score = (r: PronunciationResult, blob: Blob | null = null) => act(() => { mic.push(r, blob) })
+const startRecording = () => act(() => { mic.setMicState('recording') })
 
 function renderPair(id = 'pair-ship-sheep', mission = false) {
   render(
@@ -91,23 +112,56 @@ function renderPair(id = 'pair-ship-sheep', mission = false) {
 /** The 🔊 tap starts a `playUrl` whose promise settles into `setAudioMissing`, so the click has to
  * be awaited inside act() — otherwise that state update lands after the test body. */
 const listen = async () => {
-  await act(async () => { fireEvent.click(screen.getByRole('button', { name: /nghe/i })) })
+  await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Nghe' })) })
 }
 const pick = (word: string) => fireEvent.click(screen.getByRole('button', { name: word }))
 
+/** Walks up from `el` to the nearest ancestor carrying `cls` — used where the class under test
+ * sits on a wrapper `data-testid` doesn't reach (PageBody's own collapse wrapper). */
+function ancestorWithClass(el: Element, cls: string): HTMLElement {
+  let node: Element | null = el
+  while (node && !node.classList.contains(cls)) node = node.parentElement
+  if (!node) throw new Error(`no ancestor of ${el.outerHTML.slice(0, 80)} carries class "${cls}"`)
+  return node as HTMLElement
+}
+
 beforeEach(() => {
   localStorage.clear()
+  mic.engine = 'azure'
+  mic.error = null
+  mic.initialMicState = 'idle'
+  mic.initialResult = null
   playerControl.playUrl.mockReset().mockResolvedValue(undefined)
 })
 
-it('opens on the two options, locked until the child has listened', () => {
+// --- phase 1: listen & pick, no mic at all -----------------------------------------------------
+
+it('opens on the two options, locked and dim until the child has listened', () => {
   renderPair()
 
   expect(screen.getByText('Cặp 1/8')).toBeInTheDocument()
-  expect(screen.getByRole('button', { name: 'ship' })).toBeDisabled()
+  const ship = screen.getByRole('button', { name: 'ship' })
+  expect(ship).toBeDisabled()
   expect(screen.getByRole('button', { name: 'sheep' })).toBeDisabled()
+  expect(ship.className).toContain('h-24')
+  expect(ship.className).toContain('w-24')
+  expect(ship.className).toContain('md:h-[200px]')
+  expect(ship.className).toContain('md:w-[200px]')
+  expect(ship.className).toContain('disabled:opacity-45')
   expect(screen.getByText('Bấm 🔊 trước nhé')).toBeInTheDocument()
+  expect(screen.getByText(caption(false, false))).toBeInTheDocument()
   expect(screen.getByRole('link', { name: 'Quay lại' })).toHaveAttribute('href', '/level/minimal-pairs')
+})
+
+/** Brief §2 B4: "loa 56 teal outline:4px #C4E8E1" while nothing has been played yet — the ring
+ * disappears the moment the child taps it, whether or not the round is a hit. */
+it('rings the speaker teal until the first listen, then drops the ring', async () => {
+  renderPair()
+  expect(screen.getByRole('button', { name: 'Nghe' }).className).toContain('outline-4')
+  expect(screen.getByRole('button', { name: 'Nghe' }).className).toContain('outline-teal-line')
+
+  await listen()
+  expect(screen.getByRole('button', { name: 'Nghe' }).className).not.toContain('outline-teal-line')
 })
 
 /** The order is a PRNG stream seeded by the pair id, so it is the same every run. */
@@ -120,40 +174,42 @@ it('plays one of the two words and unlocks the cards', async () => {
   expect(screen.getByRole('button', { name: 'sheep' })).toBeEnabled()
 })
 
-it('cheers the matching card and locks up again after it', async () => {
+it('cheers the matching card in one line and locks up again after it', async () => {
   renderPair()
 
   await listen()
   pick(played(0))
-  expect(screen.getByText('Đúng rồi! 🎉')).toBeInTheDocument()
+  expect(screen.getByText('✅ Đúng rồi! 🎉')).toBeInTheDocument()
   expect(screen.getByText(ticks(played(0)))).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: played(0) }).className).toContain('shadow-[0_6px_0_#7ED99A,0_0_0_4px_#B9ECC8]')
   // A finished round locks the cards again until the next 🔊.
   expect(screen.getByRole('button', { name: 'ship' })).toBeDisabled()
   expect(screen.getByRole('button', { name: 'sheep' })).toBeDisabled()
 })
 
-/** With only two cards, "not that one" would otherwise be a free win, so a miss ends the round
- * and the child has to listen again before they may answer. */
-it('makes a wrong pick cost a listen instead of handing over the answer', async () => {
+/** Brief §4 R12: the old two-line "🙈 …" + "Bấm 🔊 nghe lại nhé" is now one line only. With only
+ * two cards a miss still costs a fresh listen instead of handing over the answer. */
+it('gives the wrong pick one line of feedback and costs a fresh listen', async () => {
   renderPair()
 
   await listen()
-  pick(other(played(0)))
-  expect(screen.getByText('Nghe lại nhé')).toBeInTheDocument()
-  expect(screen.getByText('Bấm 🔊 nghe lại nhé')).toBeInTheDocument()
+  const wrongWord = other(played(0))
+  pick(wrongWord)
+  expect(screen.getByText('🙈 Nghe lại rồi chọn nhé')).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: wrongWord }).className).toContain('shadow-[0_6px_0_#F8A3AE,0_0_0_4px_#FFD4DA]')
   expect(screen.getByText(caption(false, false))).toBeInTheDocument()
 
-  // The other card is locked, so tapping it changes nothing.
+  // The other card is locked too, so tapping it changes nothing.
   expect(screen.getByRole('button', { name: played(0) })).toBeDisabled()
   pick(played(0))
   expect(screen.getByText(caption(false, false))).toBeInTheDocument()
-  expect(screen.queryByText('Đúng rồi! 🎉')).not.toBeInTheDocument()
+  expect(screen.queryByText('✅ Đúng rồi! 🎉')).not.toBeInTheDocument()
 
   // A fresh listen moves on to the next draw of the pair's seeded stream.
   await listen()
   expect(playerControl.playUrl).toHaveBeenLastCalledWith(`/audio/pairs/${played(1)}.mp3`)
   pick(played(1))
-  expect(screen.getByText('Đúng rồi! 🎉')).toBeInTheDocument()
+  expect(screen.getByText('✅ Đúng rồi! 🎉')).toBeInTheDocument()
   expect(screen.getByText(ticks(played(1)))).toBeInTheDocument()
 })
 
@@ -223,28 +279,117 @@ it('does not open the mic until each word has been picked correctly once', async
   expect(screen.queryByRole('button', { name: /bấm để nói/i })).not.toBeInTheDocument()
 })
 
-it('opens the mic step once both words have been picked correctly', async () => {
-  await reachMic()
-
-  expect(screen.getByText('Giờ đọc cả hai từ nào!')).toBeInTheDocument()
-  expect(screen.getByText('ship, sheep')).toBeInTheDocument()
-  expect(screen.getByRole('button', { name: /bấm để nói/i })).toBeInTheDocument()
-  // The listening game collapses into a one-line summary.
-  expect(screen.getByText('Nghe & chọn: ship ✓ · sheep ✓')).toBeInTheDocument()
-  expect(screen.queryByText('Bấm 🔊 trước nhé')).not.toBeInTheDocument()
-})
+// --- phase 2: speak both words -------------------------------------------------------------
 
 /** Listens and picks correctly until the gate opens — how many turns that takes depends on the
  * pair's own draw order, which is exactly what the screen decides. */
 async function reachMic(mission = false) {
   renderPair('pair-ship-sheep', mission)
-  for (let n = 0; n < 8 && !screen.queryByText('Giờ đọc cả hai từ nào!'); n++) {
+  for (let n = 0; n < 8 && !screen.queryByText('Giờ nói cả hai từ nhé'); n++) {
     await listen()
     pick(played(n))
   }
 }
 
-it('turns a good attempt into 3 stars stored on the pair key', async () => {
+it('opens phase 2 with a green summary chip, two word cards and a sample button — no more mic-less game', async () => {
+  await reachMic()
+
+  expect(screen.getByText('✓ Nghe & chọn xong: ship ✓ · sheep ✓')).toBeInTheDocument()
+  expect(screen.getByText('Giờ nói cả hai từ nhé')).toBeInTheDocument()
+
+  const shipCard = screen.getByTestId('pair-word-a')
+  expect(shipCard.className).toContain('w-[150px]')
+  expect(shipCard.className).toContain('md:w-[220px]')
+  expect(within(shipCard).getByText('ship')).toBeInTheDocument()
+  expect(within(screen.getByTestId('pair-word-b')).getByText('sheep')).toBeInTheDocument()
+
+  expect(screen.getByText('Nói cả hai từ: ship, sheep')).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: /nghe mẫu/i })).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: /bấm để nói/i })).toBeInTheDocument()
+
+  // The listening game is gone entirely, not merely hidden behind an old summary Card.
+  expect(screen.queryByText('Bấm 🔊 trước nhé')).not.toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: 'Nghe' })).not.toBeInTheDocument()
+})
+
+/** `docs/design/current/shoot.mjs`'s `pair-result3` lands on `?fixture=result3`, which
+ * `useSpeakingAttempt` turns into a scored result with no listening game ever played — this mock
+ * stands that in with `initialResult`. The screen must treat an already-scored attempt as "the
+ * listening phase is done", not strand it showing the phase-1 game under a result nobody earned by
+ * picking anything. */
+it('treats an attempt that already has a result as phase 2 already done, backfilling the ticks', () => {
+  mic.initialResult = result(85)
+  renderPair()
+
+  expect(screen.getByTestId('result-card')).toBeInTheDocument()
+  const strip = screen.getByRole('button', { name: /mở/i })
+  expect(strip).toHaveTextContent('ship, sheep')
+  fireEvent.click(strip)
+  expect(screen.getByText('✓ Nghe & chọn xong: ship ✓ · sheep ✓')).toBeInTheDocument()
+})
+
+it('plays both words back to back on the phase-2 sample button', async () => {
+  await reachMic()
+  playerControl.playUrl.mockClear()
+
+  await act(async () => { fireEvent.click(screen.getByRole('button', { name: /nghe mẫu/i })) })
+
+  expect(playerControl.playUrl).toHaveBeenNthCalledWith(1, '/audio/pairs/ship.mp3')
+  expect(playerControl.playUrl).toHaveBeenNthCalledWith(2, '/audio/pairs/sheep.mp3')
+})
+
+it('says so when the phase-2 sample audio is missing', async () => {
+  await reachMic()
+  playerControl.playUrl.mockRejectedValue(new Error('audio failed'))
+
+  await act(async () => { fireEvent.click(screen.getByRole('button', { name: /nghe mẫu/i })) })
+  await screen.findByText('Chưa có audio mẫu')
+})
+
+/** Brief §0 Q3 / carrier: dimmed header, "● Đang ghi" chip, countdown row — same as every other
+ * speaking screen, only reachable once phase 2 has opened the mic. */
+it('dims the header and swaps the chip while recording', async () => {
+  await reachMic()
+  startRecording()
+
+  const backCell = screen.getByRole('link', { name: 'Quay lại' }).closest('div')!
+  expect(backCell).toHaveClass('opacity-40', 'pointer-events-none')
+  expect(screen.getByTestId('header-right')).toHaveClass('opacity-40', 'pointer-events-none')
+
+  const chip = screen.getByText('● Đang ghi')
+  expect(chip).toHaveClass('bg-coral-50', 'text-coral-text')
+  expect(screen.queryByText(/^Cặp \d/)).not.toBeInTheDocument()
+  expect(screen.getByTestId('countdown-row')).toBeInTheDocument()
+})
+
+it('shows the speak error banner and lets the daily-limit dismiss send the child home', async () => {
+  mic.error = { kind: 'limit' }
+  await reachMic()
+
+  expect(screen.getByRole('alert')).toHaveTextContent('Hôm nay bé học đủ rồi! Mai gặp lại nhé')
+  fireEvent.click(screen.getByRole('button', { name: 'Về nhà' }))
+  expect(screen.getByTestId('probe')).toHaveTextContent('/')
+})
+
+/** Spec decision (brief R23 "Đang chấm"): `processing` reads as an idle mic with an hourglass and
+ * nothing else may react to it — no dimmed header, no "Đang ghi" chip, no collapsed strip.
+ * Rendered already in `processing` via `mic.initialMicState`, no post-mount `act()`. */
+it('holds the teach column still while scoring — processing is not recording', async () => {
+  mic.initialMicState = 'processing'
+  await reachMic()
+
+  expect(screen.getByText('Giờ nói cả hai từ nhé')).toBeInTheDocument()
+  const backCell = screen.getByRole('link', { name: 'Quay lại' }).closest('div')!
+  expect(backCell).not.toHaveClass('opacity-40')
+  expect(screen.getByTestId('header-right')).not.toHaveClass('opacity-40')
+  expect(screen.queryByText('● Đang ghi')).not.toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: /mở/i })).not.toBeInTheDocument()
+  expect(screen.getByRole('button', { name: /đang chấm/i })).toBeInTheDocument()
+})
+
+// --- result: two chips, four bars, Foxy, CTA never gated ---------------------------------------
+
+it('turns a good attempt into 3 stars, with both words as chips and Foxy after the listen row', async () => {
   await reachMic()
   score(result(85))
 
@@ -254,22 +399,32 @@ it('turns a good attempt into 3 stars stored on the pair key', async () => {
   expect(JSON.parse(localStorage.getItem('speakup.stars') ?? '{}')).toMatchObject({ 'pair:pair-ship-sheep': 3 })
   expect(JSON.parse(localStorage.getItem('speakup.activity') ?? '[]'))
     .toContainEqual(expect.objectContaining({ kind: 'speak', id: 'pair-ship-sheep' }))
-  // Both words are shown back with their own tone.
-  const chips = screen.getAllByTestId('word-chip')
+
+  const card = screen.getByTestId('result-card')
+  const chips = within(card).getAllByTestId('word-chip')
   expect(chips.find(c => c.textContent?.includes('ship'))).toHaveAttribute('aria-label', 'ship đúng')
   expect(chips.find(c => c.textContent?.includes('sheep'))).toHaveAttribute('aria-label', 'sheep đúng')
+
+  expect(within(card).getByTestId('foxy')).toBeInTheDocument()
+  expect(within(card).getByText('Foxy: "Nghe rõ cả hai từ luôn!"')).toBeInTheDocument()
+
+  const rows = Array.from(card.children).map(c => c.getAttribute('data-row'))
+  expect(rows).toEqual(['head', 'words', 'bars', 'listen', 'fox', 'cta'])
 })
 
-it('offers a hint and a retry when the attempt was weak', async () => {
+it('offers a hint and a retry when the attempt was weak, and never gates the CTA to retry-only', async () => {
   await reachMic()
   score(result(50))
 
   expect(screen.getAllByTestId('star-filled')).toHaveLength(1)
   expect(screen.getByText(/Sửa từ này/)).toBeInTheDocument()
   expect(screen.queryByTestId('confetti')).not.toBeInTheDocument()
+  // Unlike Word Pop's PracticeCard, the pair's CTA is always both buttons — no attempts gate.
+  expect(screen.getByRole('button', { name: /thử lại/i })).toBeInTheDocument()
+  expect(screen.getByRole('link', { name: /tiếp theo/i })).toBeInTheDocument()
 
   fireEvent.click(screen.getByRole('button', { name: /thử lại/i }))
-  expect(screen.getByText('Giờ đọc cả hai từ nào!')).toBeInTheDocument()
+  expect(screen.getByText('Giờ nói cả hai từ nhé')).toBeInTheDocument()
 })
 
 it('hands on to the next pair, and back to the level on the last one', async () => {
@@ -286,6 +441,34 @@ it('shows a not-found message for a pair that does not exist', () => {
   expect(screen.getByRole('heading')).toHaveTextContent('Ơ, không tìm thấy cặp từ này 🦊')
 })
 
+/** Brief §1 "Tầng dạy gập": once a result lands the teach column collapses to a tap-to-expand
+ * strip (PageBody's `collapsed`) instead of the old `max-md:hidden`; tapping it reopens the full
+ * column, and a real iPad landscape never loses it in the first place. */
+it('collapses the teach column to a tap-to-expand strip once a result lands, and reopens on tap', async () => {
+  await reachMic()
+  score(result(92))
+
+  const strip = screen.getByRole('button', { name: /mở/i })
+  expect(strip).toHaveTextContent('ship, sheep')
+  const hiddenWrap = ancestorWithClass(screen.getByTestId('pair-word-a'), 'hidden')
+  expect(hiddenWrap).toHaveClass('ipad:flex')
+
+  fireEvent.click(strip)
+  expect(screen.queryByRole('button', { name: /mở/i })).not.toBeInTheDocument()
+})
+
+it('reopens the teach column on tap, and collapses again once a fresh result lands', async () => {
+  await reachMic()
+  score(result(40))
+  expect(screen.getByRole('button', { name: /mở/i })).toBeInTheDocument()
+
+  fireEvent.click(screen.getByRole('button', { name: /mở/i }))
+  expect(screen.queryByRole('button', { name: /mở/i })).not.toBeInTheDocument()
+
+  score(result(95))
+  expect(screen.getByRole('button', { name: /mở/i })).toBeInTheDocument()
+})
+
 // --- as a step of today's lesson (spec §3) ---------------------------------------------------
 
 it('numbers itself inside the lesson and threads back to the mission', () => {
@@ -295,6 +478,8 @@ it('numbers itself inside the lesson and threads back to the mission', () => {
   expect(screen.getByText('Thẻ 1/2')).toBeInTheDocument()
   // One counter, not two: the bậc's own position means nothing inside a lesson.
   expect(screen.queryByText('Cặp 1/8')).not.toBeInTheDocument()
+  // The contrast is a fixed fact of the pair — it stays on the right even inside a lesson.
+  expect(screen.getByText(SHIP_SHEEP.contrast)).toBeInTheDocument()
   expect(screen.getByRole('link', { name: 'Nhiệm vụ' })).toHaveAttribute('href', '/mission')
 })
 
@@ -362,31 +547,10 @@ it('carries the safe-area shell at its own resting padding', () => {
   expect(shell).toContain('md:px-6')
 })
 
-/** Two 220×240 slabs side by side is the landscape pair; at 390 px they wrapped to two rows and
- * cut the second word off the bottom. On a phone they are half-width tiles on one line — 150 px
- * tall, still a large target — and `md:flex-initial`, never `md:flex-none`, hands the landscape
- * sizing back untouched. */
-it('puts both answer cards on one line on a phone and restores the landscape slabs from md up', () => {
+/** Brief §1: `PageBody`'s own frame, never a sticky panel painting over the teach column. */
+it('carries the PageShell frame, never a sticky panel', () => {
   renderPair()
-
-  const card = screen.getByRole('button', { name: 'sheep' })
-  expect(card.className).toContain('min-h-[150px]')
-  expect(card.className).toContain('md:min-h-[240px]')
-  expect(card.className).toContain('md:w-[220px]')
-  expect(card.className).toContain('md:flex-initial')
-  expect(card.className).not.toContain('md:flex-none')
-})
-
-/** `Button` writes its own `min-h-[72px]` for `size="lg"`, and this call site's plain
- * `min-h-[104px]` lost to it on Tailwind's utility order — the button has always been 72 px tall.
- * Restating it as `md:min-h-[104px]` would have *won* (variants are emitted after plain
- * utilities) and grown the iPad's button by 32 px, so the dead class is gone rather than left
- * here reading like a promise. */
-it('does not re-assert a min height the landscape frame never had', () => {
-  renderPair()
-
-  const listen = screen.getByRole('button', { name: /Nghe$/ })
-  expect(listen.className).not.toContain('min-h-[104px]')
-  expect(listen.className).toContain('md:px-12')
-  expect(listen.className).toContain('md:text-[30px]')
+  expect(screen.getByRole('main')).toHaveClass('overflow-hidden')
+  expect(screen.getByTestId('page-body')).toHaveClass('ipad:flex-row')
+  expect(document.querySelector('main')!.innerHTML).not.toContain('sticky')
 })
