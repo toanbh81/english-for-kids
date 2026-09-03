@@ -14,13 +14,16 @@ const mic = vi.hoisted(() => ({
   error: null as { kind: string; detail?: string } | null,
   dismissError: () => {},
   setMicState: (_s: 'idle' | 'recording' | 'processing' | 'disabled' | 'locked') => {},
+  // Read once, on mount/reset, by the effect below — set before `renderVoice()` so a screen can be
+  // rendered already mid-attempt (e.g. `processing`) with no post-render `act()` needed.
+  initialMicState: 'idle' as MicState,
 }))
 vi.mock('../speaking/useSpeakingAttempt', () => ({
   useSpeakingAttempt(opts: { resetKey?: string; autoStopMs?: number; onResult?: (r: PronunciationResult, b: Blob | null) => void }) {
     mic.autoStopMs = opts.autoStopMs
     const [state, setState] = useState<{ result: PronunciationResult | null; blob: Blob | null }>({ result: null, blob: null })
     const [micState, setMicState] = useState<MicState>('idle')
-    useEffect(() => { setState({ result: null, blob: null }); setMicState('idle') }, [opts.resetKey])
+    useEffect(() => { setState({ result: null, blob: null }); setMicState(mic.initialMicState) }, [opts.resetKey])
     mic.push = (r: PronunciationResult, b: Blob | null = null) => {
       setState({ result: r, blob: b })
       opts.onResult?.(r, b)
@@ -116,6 +119,7 @@ beforeEach(() => {
   localStorage.clear()
   mic.engine = 'azure'
   mic.error = null
+  mic.initialMicState = 'idle'
   playerControl.playUrl.mockReset().mockResolvedValue(undefined)
   playerControl.playBlob.mockReset().mockResolvedValue(undefined)
   store.saveRecording.mockReset().mockResolvedValue(undefined)
@@ -213,6 +217,32 @@ it('dims the header, swaps the chip and grows the passage while recording', () =
   expect(screen.getByTestId('voice-passage')).toHaveClass('text-[26px]')
   expect(screen.queryByTestId('mood-tips')).not.toBeInTheDocument()
   expect(screen.getByTestId('countdown-row')).toBeInTheDocument()
+})
+
+/** Spec decision 17 (brief R23 "Đang chấm"): `processing` — the gap between the mic stopping and
+ * a result landing — reads as an idle mic with an hourglass, and nothing else may react to it:
+ * no dimmed header, no "Đang ghi" chip, no collapsed strip, no grown passage, tips still shown.
+ * Rendered already in `processing` via `mic.initialMicState` rather than a post-mount `act()`. */
+it('holds the teach column still while scoring — processing is not recording', () => {
+  mic.initialMicState = 'processing'
+  renderVoice()
+
+  expect(screen.getByTestId('mood-emoji')).toHaveClass('text-[34px]', 'md:text-[48px]')
+  const moodLabel = screen.getByText(byFullText(`Đọc với giọng: ${SV1.moodVi}`))
+  expect(moodLabel).toHaveClass('text-[16px]', 'md:text-[22px]')
+  expect(screen.getByTestId('voice-passage')).toHaveClass('text-[24px]', 'md:text-[34px]', 'md:max-w-[560px]')
+  expect(screen.getByText(SV1.vi)).toHaveClass('text-[13px]', 'md:text-[17px]')
+
+  const backCell = screen.getByRole('link', { name: 'Quay lại' }).closest('div')!
+  expect(backCell).not.toHaveClass('opacity-40')
+  expect(screen.getByTestId('header-right')).not.toHaveClass('opacity-40')
+  expect(screen.getByText('Đoạn 1/8')).toBeInTheDocument()
+  expect(screen.queryByText('● Đang ghi')).not.toBeInTheDocument()
+
+  expect(screen.queryByRole('button', { name: /mở/i })).not.toBeInTheDocument()
+  expect(screen.getByTestId('mood-tips')).toBeInTheDocument()
+
+  expect(screen.getByRole('button', { name: /đang chấm/i })).toBeInTheDocument()
 })
 
 /** Brief §1 "Tầng dạy gập": once a result lands the teach column collapses to a tap-to-expand
