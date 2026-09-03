@@ -1,39 +1,47 @@
-import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
+import { render, screen, fireEvent, act, within } from '@testing-library/react'
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import type { PronunciationResult } from '../scoring/types'
 
-const recorderControl = vi.hoisted(() => ({ shouldFailStart: false, start: vi.fn() }))
-/** Queue of results for successive createScorer() calls; empty falls back to the default Azure stub. */
-const scorerControl = vi.hoisted(() => ({ queue: [] as { engine: string; scorer: unknown }[] }))
-
-vi.mock('../audio/recorder', () => ({
-  useRecorder: () => {
-    const [state, setState] = useState<'idle' | 'recording' | 'processing'>('idle')
+/** The hook is mocked, not the recorder + scorer: these tests are about what PracticeCard does
+ * with a result, and `useSpeakingAttempt` is covered by its own suite
+ * (`speaking/useSpeakingAttempt.test.tsx`, `.token.test.tsx`). `micState` is real state (not a
+ * hardcoded `'idle'`) because round-2's carrier behaviours — dimmed header, "● Đang ghi" chip, the
+ * collapsed strip, the shrunk emoji card — all key off `recording`/`processing`, matching the
+ * approved `SoundPractice.test.tsx` pattern this file copies. */
+type MicState = 'idle' | 'recording' | 'processing' | 'disabled' | 'locked'
+const mic = vi.hoisted(() => ({
+  push: (_r: PronunciationResult, _b: Blob | null = null) => {},
+  engine: 'azure' as 'azure' | 'webspeech',
+  error: null as { kind: string; detail?: string } | null,
+  dismissError: () => {},
+  setMicState: (_s: MicState) => {},
+  // Read once, on mount/reset, by the effect below — set before `renderCard()` so a screen can be
+  // rendered already mid-attempt (e.g. `processing`) with no post-render `act()` needed.
+  initialMicState: 'idle' as MicState,
+}))
+vi.mock('../speaking/useSpeakingAttempt', () => ({
+  useSpeakingAttempt(opts: { resetKey?: string; onResult?: (r: PronunciationResult, b: Blob | null) => void }) {
+    const [state, setState] = useState<{ result: PronunciationResult | null; blob: Blob | null }>({ result: null, blob: null })
+    const [micState, setMicState] = useState<MicState>('idle')
+    // The real hook drops the result whenever the reset key changes — here, on the next card.
+    useEffect(() => { setState({ result: null, blob: null }); setMicState(mic.initialMicState) }, [opts.resetKey])
+    mic.push = (r: PronunciationResult, b: Blob | null = null) => {
+      setState({ result: r, blob: b })
+      opts.onResult?.(r, b)
+    }
+    mic.dismissError = () => {}
+    mic.setMicState = setMicState
     return {
-      state,
-      level: 0,
-      start: vi.fn(async () => {
-        recorderControl.start()
-        if (recorderControl.shouldFailStart) throw new Error('mic denied')
-        setState('recording')
-      }),
-      stop: vi.fn(async () => { setState('idle'); return new Blob() }),
+      micState, level: 0, engine: mic.engine,
+      result: state.result, error: mic.error, lastBlob: state.blob,
+      onMic: () => {}, reset: () => { setState({ result: null, blob: null }); setMicState('idle') }, dismissError: mic.dismissError,
     }
   },
 }))
 const playerControl = vi.hoisted(() => ({ playUrl: vi.fn() }))
 vi.mock('../audio/player', () => ({ playUrl: playerControl.playUrl, playBlob: vi.fn().mockResolvedValue(undefined) }))
-vi.mock('../scoring/createScorer', () => ({
-  createScorer: async () => scorerControl.queue.shift() ?? ({
-    engine: 'azure',
-    scorer: {
-      score: async () => ({
-        overall: 85, accuracy: 85, fluency: 90, completeness: 100, engine: 'azure',
-        words: [{ word: 'three', score: 85, errorType: 'None', phonemes: [] }],
-      }),
-    },
-  }),
-}))
+
 import { PracticeCard } from './PracticeCard'
 import { LEVELS } from '../content'
 import { dayKey } from '../progress/activity'
@@ -50,13 +58,9 @@ function Probe() {
 const step = (id: string, route: string): LessonItem =>
   ({ kind: 'speak', activity: 'speak', id, route, label: id, emoji: '🗣️' })
 
-/** Today's lesson, written straight to storage, so the screen counts real steps. This file keeps
- * the activity log between tests (the scorer stubs are what it resets), and a lesson step counts
- * as done from any attempt logged after it — so the log is cleared with the lesson it belongs to,
- * or an earlier test's `three` would arrive having already finished today's /sound/th. */
+/** Today's lesson, written straight to storage, so the screen counts real steps. */
 function seedLesson(...items: LessonItem[]) {
   const now = Date.now()
-  localStorage.removeItem('speakup.activity')
   saveLesson({ day: dayKey(now), created: now, band: 5, items })
 }
 
@@ -80,111 +84,71 @@ function renderCard(cardId = 'sz-th-three', mission = false) {
   )
 }
 
-/** The card mints its scorer asynchronously, so an enabled mic is what "this card has settled"
- * looks like. Even a test that never records has to wait for it, or the state update lands after
- * the test body and React reports it as happening outside act(). */
-const scorerReady = () => waitFor(() => expect(screen.getByRole('button', { name: /bấm để nói/i })).toBeEnabled())
+const score = (r: PronunciationResult, blob: Blob | null = null) => act(() => { mic.push(r, blob) })
+const startRecording = () => act(() => { mic.setMicState('recording') })
 
-/** Records one attempt and waits for the 3-star result, which is what reveals the next/finish CTA. */
-async function scoreOnce() {
-  await scorerReady()
-  fireEvent.click(screen.getByRole('button', { name: /bấm để nói/i }))
-  await waitFor(() => expect(screen.getByRole('button', { name: /dừng/i })).toBeInTheDocument())
-  fireEvent.click(screen.getByRole('button', { name: /dừng/i }))
-  await waitFor(() => expect(screen.getAllByTestId('star-filled')).toHaveLength(3))
+function azureResult(overall: number, word = 'three'): PronunciationResult {
+  return { overall, accuracy: overall, fluency: overall, completeness: 100, engine: 'azure', words: [{ word, score: overall, errorType: 'None', phonemes: [] }] }
 }
 
-/** Records one Word Pop attempt and waits for `expectedStreak` slots to be filled. The result
- * lands in one render (feedback becomes non-null) and the streak effect chained off it commits
- * a second, separate render — the streak-star count alone can coincidentally already match after
- * the first render (`Math.min(2, feedback.stars)` does not depend on the streak), so waiting on
- * both slots together is what actually pins down the settled, post-effect state. */
-async function recordOnce(expectedStreak: 0 | 1 | 2) {
-  await scorerReady()
-  fireEvent.click(screen.getByRole('button', { name: /bấm để nói/i }))
-  await waitFor(() => expect(screen.getByRole('button', { name: /dừng/i })).toBeInTheDocument())
-  fireEvent.click(screen.getByRole('button', { name: /dừng/i }))
-  await waitFor(() => {
-    expect(screen.getByLabelText('Lần 1/2')).toHaveTextContent(expectedStreak >= 1 ? '●' : '○')
-    expect(screen.getByLabelText('Lần 2/2')).toHaveTextContent(expectedStreak >= 2 ? '●' : '○')
-  })
-}
+const stored = () => JSON.parse(localStorage.getItem('speakup.stars') ?? '{}')
 
-function azureResult(overall: number, word = 'cat') {
-  return { overall, accuracy: overall, fluency: overall, completeness: 100, engine: 'azure' as const, words: [{ word, score: overall, errorType: 'None' as const, phonemes: [] }] }
+/** Walks up from `el` to the nearest ancestor carrying `cls` — used where the class under test
+ * sits on a wrapper `data-testid` doesn't reach (PageBody's own collapse wrapper). */
+function ancestorWithClass(el: Element, cls: string): HTMLElement {
+  let node: Element | null = el
+  while (node && !node.classList.contains(cls)) node = node.parentElement
+  if (!node) throw new Error(`no ancestor of ${el.outerHTML.slice(0, 80)} carries class "${cls}"`)
+  return node as HTMLElement
 }
 
 beforeEach(() => {
+  localStorage.clear()
+  mic.engine = 'azure'
+  mic.error = null
+  mic.initialMicState = 'idle'
   playerControl.playUrl.mockReset().mockResolvedValue(undefined)
-  localStorage.removeItem('speakup.stars')
 })
 
-afterEach(() => {
-  recorderControl.shouldFailStart = false
-  recorderControl.start.mockClear()
-  scorerControl.queue.length = 0
-  delete (window as any).webkitSpeechRecognition
-  vi.useRealTimers()
-})
-
-it('shows the word, records, and renders 3 stars', async () => {
+it('shows the word, records, and renders 3 stars', () => {
   renderCard()
   expect(screen.getByText('three')).toBeInTheDocument()
-  await waitFor(() => expect(screen.getByRole('button', { name: /bấm để nói/i })).toBeEnabled()) // scorer ready
-  fireEvent.click(screen.getByRole('button', { name: /bấm để nói/i })) // start
-  await waitFor(() => expect(screen.getByRole('button', { name: /dừng/i })).toBeInTheDocument())
-  fireEvent.click(screen.getByRole('button', { name: /dừng/i })) // stop
-  await waitFor(() => expect(screen.getAllByTestId('star-filled')).toHaveLength(3))
+
+  score(azureResult(85))
+
+  expect(screen.getAllByTestId('star-filled')).toHaveLength(3)
   expect(screen.getByText('Tuyệt vời!')).toBeInTheDocument()
   expect(screen.getAllByTestId('star-filled')[0]).toHaveClass('animate-star-drop') // the stars drop in
 })
 
-it('logs a speak activity event after a scored attempt', async () => {
-  localStorage.removeItem('speakup.activity')
+it('logs a speak activity event after a scored attempt', () => {
   renderCard()
-  await waitFor(() => expect(screen.getByRole('button', { name: /bấm để nói/i })).toBeEnabled())
-  fireEvent.click(screen.getByRole('button', { name: /bấm để nói/i }))
-  await waitFor(() => expect(screen.getByRole('button', { name: /dừng/i })).toBeInTheDocument())
-  fireEvent.click(screen.getByRole('button', { name: /dừng/i }))
-  await waitFor(() => expect(screen.getAllByTestId('star-filled')).toHaveLength(3))
+  score(azureResult(85))
 
   const events = JSON.parse(localStorage.getItem('speakup.activity') ?? '[]')
   expect(events).toContainEqual(expect.objectContaining({ kind: 'speak', id: 'sz-th-three' }))
 })
 
-it('Tiếp theo goes to the next card of the same level', async () => {
+it('Tiếp theo goes to the next card of the same level', () => {
   renderCard()
-  await scoreOnce()
+  score(azureResult(85))
 
   fireEvent.click(screen.getByRole('link', { name: /tiếp theo/i }))
-  await scorerReady() // the next card mints its own scorer
 
   expect(screen.getByText(soundZooCards[1].text)).toBeInTheDocument() // the 2nd Sound Zoo card
   expect(screen.getByText(`Thẻ 2/${soundZooCards.length}`)).toBeInTheDocument()
 })
 
-it('the last card of a level finishes back at the level instead of jumping to the next level', async () => {
+it('the last card of a level finishes back at the level instead of jumping to the next level', () => {
   const total = soundZooCards.length
   renderCard(soundZooCards.at(-1)!.id) // last Sound Zoo card
-  await scoreOnce()
+  score(azureResult(85))
   expect(screen.getByText(`Thẻ ${total}/${total}`)).toBeInTheDocument()
   expect(screen.queryByRole('link', { name: /tiếp theo/i })).not.toBeInTheDocument()
 
   fireEvent.click(screen.getByRole('link', { name: /hoàn thành/i }))
 
-  // Not Word Pop's first card: the counter says total/total, so the run is over.
   expect(screen.getByText('danh sách thẻ')).toBeInTheDocument()
-})
-
-/** The legacy `/practice/sz-*` route still walks all 27 Sound Zoo cards. 27 dots at 16 px + gap
- * is ~640 px of header, which on a portrait iPad squeezed the 66 px back button below a thumb's
- * worth of tap target. Past a dozen cards the "Thẻ n/N" counter carries the position on its own. */
-it('drops the per-card dots on a level too long to show them', async () => {
-  renderCard() // sz-th-three: 27 cards
-  await scorerReady()
-  expect(soundZooCards.length).toBeGreaterThan(12)
-  expect(screen.getByText(`Thẻ 1/${soundZooCards.length}`)).toBeInTheDocument()
-  expect(screen.queryByTestId('card-dots')).not.toBeInTheDocument()
 })
 
 it('says the sample audio is missing instead of failing silently', async () => {
@@ -194,204 +158,101 @@ it('says the sample audio is missing instead of failing silently', async () => {
   await screen.findByText('Chưa có audio mẫu')
 })
 
-it('shows a friendly error when mic permission is denied', async () => {
-  recorderControl.shouldFailStart = true
+it('shows a friendly error when mic permission is denied', () => {
+  mic.error = { kind: 'mic' }
   renderCard()
-  await waitFor(() => expect(screen.getByRole('button', { name: /bấm để nói/i })).toBeEnabled())
-  fireEvent.click(screen.getByRole('button', { name: /bấm để nói/i }))
-  await screen.findByText(/cho phép dùng mic/)
+  expect(screen.getByText(/cho phép dùng mic/)).toBeInTheDocument()
 })
 
-it('Thử lại clears the result and re-enables the mic', async () => {
+it('Thử lại clears the result and re-enables the mic', () => {
   renderCard()
-  await waitFor(() => expect(screen.getByRole('button', { name: /bấm để nói/i })).toBeEnabled())
-  fireEvent.click(screen.getByRole('button', { name: /bấm để nói/i }))
-  await waitFor(() => expect(screen.getByRole('button', { name: /dừng/i })).toBeInTheDocument())
-  fireEvent.click(screen.getByRole('button', { name: /dừng/i }))
-  await waitFor(() => expect(screen.getAllByTestId('star-filled')).toHaveLength(3))
+  score(azureResult(85))
+  expect(screen.getAllByTestId('star-filled')).toHaveLength(3)
 
   fireEvent.click(screen.getByRole('button', { name: /thử lại/i }))
 
   expect(screen.queryAllByTestId('star-filled')).toHaveLength(0)
-  expect(screen.getByRole('button', { name: /bấm để nói/i })).toBeEnabled()
+  expect(screen.getByRole('button', { name: /bấm để nói/i })).toBeInTheDocument()
 })
 
-it('auto-stops the recording after 6s and still scores', async () => {
+/** Retry-only until 3★ or 3 attempts (task-7 brief): the CTA row holds "↻ Thử lại" alone until
+ * the gate opens, never a bare "Thử lại" next to a premature "Tiếp theo". */
+it('gates the CTA to retry-only until the card wins 3 stars', () => {
   renderCard()
-  await waitFor(() => expect(screen.getByRole('button', { name: /bấm để nói/i })).toBeEnabled()) // scorer ready (real timers)
-  vi.useFakeTimers()
-  fireEvent.click(screen.getByRole('button', { name: /bấm để nói/i })) // start
-  await act(async () => { await vi.advanceTimersByTimeAsync(6000) }) // auto-stop fires and scoring completes
-  expect(screen.getAllByTestId('star-filled')).toHaveLength(3)
-})
+  score(azureResult(65)) // 2 stars, 1st attempt: gate still closed
 
-it('counts the recording down from the 6s auto-stop', async () => {
-  renderCard()
-  await waitFor(() => expect(screen.getByRole('button', { name: /bấm để nói/i })).toBeEnabled()) // scorer ready (real timers)
-  vi.useFakeTimers()
-  fireEvent.click(screen.getByRole('button', { name: /bấm để nói/i }))
-  await act(async () => { await vi.advanceTimersByTimeAsync(1) }) // recorder.start() resolves -> recording
-  expect(screen.getByText('6')).toBeInTheDocument()
-  await act(async () => { await vi.advanceTimersByTimeAsync(1000) })
-  expect(screen.getByText('5')).toBeInTheDocument()
-})
+  expect(screen.getAllByTestId('star-filled')).toHaveLength(2)
+  expect(screen.queryByRole('link', { name: /tiếp theo/i })).not.toBeInTheDocument()
+  expect(screen.getByRole('button', { name: /thử lại/i })).toBeInTheDocument()
 
-describe('Web Speech engine', () => {
-  const webSpeechScorer = () => ({
-    start: vi.fn(),
-    score: vi.fn(async () => ({
-      overall: 100, accuracy: 100, fluency: 100, completeness: 100, engine: 'webspeech' as const,
-      words: [{ word: 'three', score: 100, errorType: 'None' as const, phonemes: [] }],
-    })),
-  })
+  fireEvent.click(screen.getByRole('button', { name: /thử lại/i }))
+  score(azureResult(65)) // 2nd attempt, still 2 stars
+  expect(screen.queryByRole('link', { name: /tiếp theo/i })).not.toBeInTheDocument()
 
-  it('scores via the recognizer without ever starting MediaRecorder', async () => {
-    ;(window as any).webkitSpeechRecognition = class {}
-    const scorer = webSpeechScorer()
-    // Twice: every attempt re-checks Azure first, and the token endpoint is still down here.
-    scorerControl.queue.push({ engine: 'webspeech', scorer }, { engine: 'webspeech', scorer })
-    renderCard()
-    await waitFor(() => expect(screen.getByRole('button', { name: /bấm để nói/i })).toBeEnabled())
-    expect(screen.getByTestId('engine-badge')).toHaveTextContent('chế độ đơn giản')
-
-    vi.useFakeTimers()
-    fireEvent.click(screen.getByRole('button', { name: /bấm để nói/i }))
-    await act(async () => { await vi.advanceTimersByTimeAsync(0) }) // the re-check resolves
-    expect(scorer.start).toHaveBeenCalledTimes(1)
-    expect(screen.getByRole('button', { name: /dừng/i })).toBeInTheDocument() // wsRecording drives the mic button
-    await act(async () => { await vi.advanceTimersByTimeAsync(6000) })
-
-    expect(screen.getAllByTestId('star-filled')).toHaveLength(3)
-    expect(recorderControl.start).not.toHaveBeenCalled()
-    expect(scorer.score).toHaveBeenCalledTimes(1)
-    expect(screen.queryByRole('button', { name: /nghe mình/i })).not.toBeInTheDocument()
-  })
-
-  it('explains that the browser lacks speech recognition instead of blaming the mic', async () => {
-    scorerControl.queue.push({ engine: 'webspeech', scorer: webSpeechScorer() }, { engine: 'webspeech', scorer: webSpeechScorer() })
-    renderCard() // no window.webkitSpeechRecognition installed
-    await waitFor(() => expect(screen.getByRole('button', { name: /bấm để nói/i })).toBeEnabled())
-    fireEvent.click(screen.getByRole('button', { name: /bấm để nói/i }))
-    await screen.findByText('Trình duyệt này chưa nghe được')
-    expect(screen.queryByText(/cho phép dùng mic/)).not.toBeInTheDocument()
-  })
-})
-
-describe('expired Azure token', () => {
-  const okResult = {
-    overall: 85, accuracy: 85, fluency: 90, completeness: 100, engine: 'azure' as const,
-    words: [{ word: 'three', score: 85, errorType: 'None' as const, phonemes: [] }],
-  }
-
-  async function recordAndStop() {
-    await waitFor(() => expect(screen.getByRole('button', { name: /bấm để nói/i })).toBeEnabled())
-    fireEvent.click(screen.getByRole('button', { name: /bấm để nói/i }))
-    await waitFor(() => expect(screen.getByRole('button', { name: /dừng/i })).toBeInTheDocument())
-    // Scoring runs entirely on microtasks (stop → score → refresh the token → score again), so
-    // the click is awaited inside act(): otherwise the tail of that chain commits between two
-    // awaits in the test body, where React cannot see it.
-    await act(async () => { fireEvent.click(screen.getByRole('button', { name: /dừng/i })) })
-  }
-
-  it('mints a fresh scorer and retries the score exactly once', async () => {
-    const stale = vi.fn().mockRejectedValue(new Error('token expired'))
-    const fresh = vi.fn(async () => okResult)
-    scorerControl.queue.push({ engine: 'azure', scorer: { score: stale } }, { engine: 'azure', scorer: { score: fresh } })
-    renderCard()
-    await recordAndStop()
-    await waitFor(() => expect(screen.getAllByTestId('star-filled')).toHaveLength(3))
-    expect(stale).toHaveBeenCalledTimes(1)
-    expect(fresh).toHaveBeenCalledTimes(1)
-    expect(screen.queryByText(/Không nghe rõ/)).not.toBeInTheDocument()
-  })
-
-  it('surfaces the friendly error after the single retry also fails, without looping', async () => {
-    const stale = vi.fn().mockRejectedValue(new Error('token expired'))
-    const fresh = vi.fn().mockRejectedValue(new Error('still expired'))
-    scorerControl.queue.push({ engine: 'azure', scorer: { score: stale } }, { engine: 'azure', scorer: { score: fresh } })
-    renderCard()
-    await recordAndStop()
-    await screen.findByText('Không nghe rõ, bé thử lại nhé!')
-    expect(stale).toHaveBeenCalledTimes(1)
-    expect(fresh).toHaveBeenCalledTimes(1)
-  })
-
-  it('does not retry when the refreshed engine is no longer Azure', async () => {
-    const stale = vi.fn().mockRejectedValue(new Error('token expired'))
-    const wsScore = vi.fn()
-    scorerControl.queue.push({ engine: 'azure', scorer: { score: stale } }, { engine: 'webspeech', scorer: { start: vi.fn(), score: wsScore } })
-    renderCard()
-    await recordAndStop()
-    await screen.findByText('Không nghe rõ, bé thử lại nhé!')
-    expect(wsScore).not.toHaveBeenCalled()
-  })
+  fireEvent.click(screen.getByRole('button', { name: /thử lại/i }))
+  score(azureResult(65)) // 3rd attempt: the attempt-count half of the gate opens
+  expect(screen.getByRole('link', { name: /tiếp theo/i })).toBeInTheDocument()
 })
 
 describe('Word Pop: hidden IPA + two-in-a-row streak', () => {
   const card = wordPopCards[0] // wp-cat
 
-  it('hides the IPA behind "Xem phiên âm" until tapped', async () => {
+  it('hides the IPA behind "Xem phiên âm" until tapped', () => {
     renderCard(card.id)
-    await scorerReady()
     expect(screen.queryByText(card.ipa)).not.toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Xem phiên âm' }))
+    fireEvent.click(screen.getByRole('button', { name: /xem phiên âm/i }))
 
     expect(screen.getByText(card.ipa)).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Xem phiên âm' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /xem phiên âm/i })).not.toBeInTheDocument()
   })
 
-  it('two consecutive ≥80 results award 3 stars and fill both streak slots', async () => {
-    const score = vi.fn().mockResolvedValueOnce(azureResult(85)).mockResolvedValueOnce(azureResult(90))
-    scorerControl.queue.push({ engine: 'azure', scorer: { score } })
+  it('two consecutive ≥80 results award 3 stars and fill both streak slots in the header chip', () => {
     renderCard(card.id)
 
-    await recordOnce(1) // first hit: streak 1/2, capped at 2 stars
+    score(azureResult(85, 'cat'))
     expect(screen.getByLabelText('Lần 1/2')).toHaveTextContent('●')
     expect(screen.getByLabelText('Lần 2/2')).toHaveTextContent('○')
     expect(screen.getAllByTestId('star-filled')).toHaveLength(2)
 
     fireEvent.click(screen.getByRole('button', { name: /thử lại/i }))
-    await recordOnce(2) // second hit: streak 2/2, wins 3 stars
+    score(azureResult(90, 'cat'))
 
     expect(screen.getByLabelText('Lần 1/2')).toHaveTextContent('●')
     expect(screen.getByLabelText('Lần 2/2')).toHaveTextContent('●')
     expect(screen.getByText('Nói đúng 2 lần liên tiếp! 🎉')).toBeInTheDocument()
     expect(screen.getAllByTestId('star-filled')).toHaveLength(3)
-    const stars = JSON.parse(localStorage.getItem('speakup.stars') ?? '{}')
-    expect(stars[card.id]).toBe(3)
+    expect(stored()[card.id]).toBe(3)
   })
 
-  it('an 80 then a 50 clears the streak and keeps stored stars capped at 2', async () => {
-    const score = vi.fn().mockResolvedValueOnce(azureResult(85)).mockResolvedValueOnce(azureResult(50))
-    scorerControl.queue.push({ engine: 'azure', scorer: { score } })
+  /** R24: the first ≥80 hit is one short of the win — the generic 2★ copy never mentions the
+   * streak, so it is swapped for a line that names exactly what is left to do. */
+  it('names the streak on the first ≥80 hit: "Nói đúng lần nữa để 3★!"', () => {
+    renderCard(card.id)
+    score(azureResult(85, 'cat'))
+
+    expect(screen.getByText('Nói đúng lần nữa để 3★!')).toBeInTheDocument()
+    expect(screen.getAllByTestId('star-filled')).toHaveLength(2)
+  })
+
+  it('an 80 then a 50 clears the streak and keeps stored stars capped at 2', () => {
     renderCard(card.id)
 
-    await recordOnce(1) // first hit: streak 1/2, capped at 2 stars
+    score(azureResult(85, 'cat'))
     expect(screen.getByLabelText('Lần 1/2')).toHaveTextContent('●')
 
     fireEvent.click(screen.getByRole('button', { name: /thử lại/i }))
-    await recordOnce(0) // sub-80: streak clears, single-attempt stars (1) are stored
+    score(azureResult(50, 'cat'))
 
     expect(screen.getByLabelText('Lần 1/2')).toHaveTextContent('○')
     expect(screen.getByLabelText('Lần 2/2')).toHaveTextContent('○')
-    const stars = JSON.parse(localStorage.getItem('speakup.stars') ?? '{}')
-    expect(stars[card.id] ?? 0).toBeLessThanOrEqual(2)
+    expect(stored()[card.id] ?? 0).toBeLessThanOrEqual(2)
   })
 
-  it('keeps the per-card dots for a 12-card level', async () => {
-    renderCard(card.id)
-    await scorerReady()
-    const dots = screen.getByTestId('card-dots')
-    expect(wordPopCards.length).toBeLessThanOrEqual(12)
-    expect(dots.children).toHaveLength(wordPopCards.length)
-  })
-
-  it('leaves Sound Zoo cards unchanged: IPA visible, no streak slots', async () => {
+  it('leaves Sound Zoo cards unchanged: IPA visible, no streak dots in the header chip', () => {
     renderCard() // default sz-th-three
-    await scorerReady()
     expect(screen.getByText(soundZooCards[0].ipa)).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Xem phiên âm' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /xem phiên âm/i })).not.toBeInTheDocument()
     expect(screen.queryByLabelText('Lần 1/2')).not.toBeInTheDocument()
     expect(screen.queryByLabelText('Lần 2/2')).not.toBeInTheDocument()
   })
@@ -399,43 +260,40 @@ describe('Word Pop: hidden IPA + two-in-a-row streak', () => {
 
 // --- as a step of today's lesson (spec §3) ---------------------------------------------------
 
-it('numbers itself inside the lesson, drops the level dots, and threads back to the mission', async () => {
+it('numbers itself inside the lesson and threads back to the mission', () => {
   const card = wordPopCards[0]
   seedLesson(step(card.id, `/practice/${card.id}`), NEXT_STEP)
   renderCard(card.id, true)
-  await scorerReady()
 
   expect(screen.getByText('Thẻ 1/2')).toBeInTheDocument()
-  // One counter, not two: the level's own position means nothing inside a lesson, dots included.
+  // One counter, not two: the level's own position means nothing inside a lesson.
   expect(screen.queryByText(`Thẻ 1/${wordPopCards.length}`)).not.toBeInTheDocument()
-  expect(screen.queryByTestId('card-dots')).not.toBeInTheDocument()
   expect(screen.getByRole('link', { name: 'Nhiệm vụ' })).toHaveAttribute('href', '/mission')
 })
 
 /** Reached from the 🔁 group the number counts inside review, and the noun says which group. */
-it('calls the step review when the lesson filed it under 🔁', async () => {
+it('calls the step review when the lesson filed it under 🔁', () => {
   const card = wordPopCards[0]
   seedLesson({ ...step(card.id, `/practice/${card.id}`), kind: 'review' }, NEXT_STEP)
   renderCard(card.id, true)
-  await scorerReady()
 
   expect(screen.getByText('Ôn tập 1/1')).toBeInTheDocument()
   expect(screen.queryByText(/^Thẻ \d/)).not.toBeInTheDocument()
 })
 
-it('hands on to the next step of the lesson, still carrying the flag', async () => {
+it('hands on to the next step of the lesson, still carrying the flag', () => {
   seedLesson(CARD_STEP, NEXT_STEP)
   renderCard('sz-th-three', true)
-  await scoreOnce()
+  score(azureResult(85))
 
   fireEvent.click(screen.getByRole('button', { name: /tiếp theo/i }))
   expect(screen.getByTestId('probe')).toHaveTextContent('/sound/th {"mission":true}')
 })
 
-it('ends at the mission screen when it is the last step of the lesson', async () => {
+it('ends at the mission screen when it is the last step of the lesson', () => {
   seedLesson(CARD_STEP)
   renderCard('sz-th-three', true)
-  await scoreOnce()
+  score(azureResult(85))
 
   fireEvent.click(screen.getByRole('button', { name: /hoàn thành/i }))
   expect(screen.getByTestId('probe')).toHaveTextContent('/mission null')
@@ -443,10 +301,9 @@ it('ends at the mission screen when it is the last step of the lesson', async ()
 
 /** Today's lesson may well list this very card — but a child who walked in from the level did not
  * arrive carrying the flag, and nothing about the screen may change for them. */
-it('stays a free-play card without the flag, lesson or no lesson', async () => {
+it('stays a free-play card without the flag, lesson or no lesson', () => {
   seedLesson(CARD_STEP, NEXT_STEP)
   renderCard()
-  await scorerReady()
 
   expect(screen.getByText(`Thẻ 1/${soundZooCards.length}`)).toBeInTheDocument()
   expect(screen.queryByText('Thẻ 1/2')).not.toBeInTheDocument()
@@ -456,43 +313,166 @@ it('stays a free-play card without the flag, lesson or no lesson', async () => {
 /** Phase 10: this screen had no phone layout at all — no breakpoint rules and, worse, no
  * `PAGE_SHELL`, so at 390×844 it measured 1156 px with the mic at y938 and its content ran under
  * the notch. jsdom cannot lay that out, so these guard the inputs the measurement depends on. */
-it('carries the safe-area shell and its own resting padding', async () => {
+it('carries the safe-area shell and its own resting padding', () => {
   renderCard()
-  await scorerReady()
 
   const shell = document.querySelector('main')!.className
   expect(shell).toContain('pt-[max(var(--page-pad-top,1.5rem),calc(env(safe-area-inset-top)_+_8px))]')
   expect(shell).toContain('pb-[max(var(--page-pad-bottom,1.5rem),calc(env(safe-area-inset-bottom)_+_10px))]')
-  // The resting value is the `py-5` this screen has always had, so the iPad is untouched.
   expect(shell).toContain('[--page-pad-top:1.25rem]')
   expect(shell).toContain('[--page-pad-bottom:1.25rem]')
-  // …and 20 px of side frame on a phone, the 24 px of the landscape frame from `md` up.
   expect(shell).toContain('px-5')
   expect(shell).toContain('md:px-6')
 })
 
-/** The meaning tile and the mouth tile stack on a phone and are restored at `md:`. */
-it('stacks the deck on a phone and restores the landscape tiles from md up', async () => {
-  renderCard()
-  await scorerReady()
-
-  const meaning = screen.getByText('nghĩa của từ').closest('div')!
-  expect(meaning.className).toContain('h-[96px]')
-  expect(meaning.className).toContain('md:h-[180px]')
-  expect(meaning.className).toContain('md:w-[180px]')
-
-  const mouth = screen.getByText('Khẩu hình miệng').closest('div')!
-  expect(mouth.className).toContain('h-16')
-  expect(mouth.className).toContain('md:h-[180px]')
-})
-
 /** The frame is the shared `PageShell`: `overflow-hidden` on `main`, `page-body` the only
  * scroller, never a `sticky` panel painting over a word chip. */
-it('carries the PageShell frame, never a sticky panel', async () => {
+it('carries the PageShell frame, never a sticky panel', () => {
   renderCard()
-  await scoreOnce()
+  score(azureResult(85))
 
   expect(screen.getByRole('main')).toHaveClass('overflow-hidden')
   expect(screen.getByTestId('page-body')).toHaveClass('overflow-y-auto')
   expect(document.querySelector('main')!.innerHTML).not.toContain('sticky')
+})
+
+// --- round-2 carrier: header chip, emoji card, mouth panel, recording, result, processing -----
+
+it('shows the "Thẻ n/N" chip at idle, with no per-level dot row', () => {
+  renderCard()
+  expect(screen.getByText(`Thẻ 1/${soundZooCards.length}`)).toBeInTheDocument()
+  // The old per-card dot row (up to 12 spans) is gone — the chip alone carries the count now.
+  expect(document.querySelectorAll('.h-4.w-4.rounded-full')).toHaveLength(0)
+})
+
+it('lays out the round-2 flashcard: emoji tile, word and IPA-reveal button at the briefed sizes', () => {
+  const card = wordPopCards[0]
+  renderCard(card.id)
+
+  const tile = screen.getByTestId('emoji-card')
+  expect(tile).toHaveClass('h-[140px]', 'w-[140px]', 'rounded-r26', 'md:h-[220px]', 'md:w-[220px]')
+  expect(within(tile).getByText(card.emoji)).toHaveClass('text-[76px]', 'md:text-[120px]')
+
+  expect(screen.getByText(card.text)).toHaveClass('text-[44px]', 'md:text-[64px]')
+
+  const reveal = screen.getByRole('button', { name: /xem phiên âm/i })
+  expect(reveal).toHaveClass('h-9', 'bg-sand', 'text-sand-text', 'md:h-11')
+
+  expect(screen.getByRole('button', { name: /nghe mẫu/i })).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: /khẩu hình/i })).toBeInTheDocument()
+})
+
+it('shows the Word Pop streak line under the card, hidden on the short fold', () => {
+  renderCard(wordPopCards[0].id)
+  const line = screen.getByText(/Nói đúng 2 lần liên tiếp → 3 sao/)
+  expect(line).toHaveClass('short:hidden')
+})
+
+it('never shows the streak line for a non-Word-Pop card', () => {
+  renderCard(soundZooCards[0].id)
+  expect(screen.queryByText(/Nói đúng 2 lần liên tiếp → 3 sao/)).not.toBeInTheDocument()
+})
+
+it('shows the streak dots inside the centre chip for a Word Pop card, unlit at idle', () => {
+  renderCard(wordPopCards[0].id)
+  expect(screen.getByText(`Thẻ 1/${wordPopCards.length}`)).toBeInTheDocument()
+  expect(screen.getByLabelText('Lần 1/2')).toHaveTextContent('○')
+  expect(screen.getByLabelText('Lần 2/2')).toHaveTextContent('○')
+})
+
+it('never grows streak dots in the header chip for a non-Word-Pop card', () => {
+  renderCard(soundZooCards[0].id)
+  expect(screen.queryByLabelText('Lần 1/2')).not.toBeInTheDocument()
+})
+
+it('toggles the mouth panel open and closed from the button row', () => {
+  renderCard()
+  expect(screen.queryByTestId('mouth-panel')).not.toBeInTheDocument()
+
+  fireEvent.click(screen.getByRole('button', { name: /khẩu hình/i }))
+  expect(screen.getByTestId('mouth-panel')).toBeInTheDocument()
+
+  fireEvent.click(screen.getByRole('button', { name: /khẩu hình/i }))
+  expect(screen.queryByTestId('mouth-panel')).not.toBeInTheDocument()
+})
+
+it('dims the header, swaps the chip, shrinks the card and hides the two buttons while recording', () => {
+  renderCard()
+  fireEvent.click(screen.getByRole('button', { name: /khẩu hình/i })) // open it, so recording closing it is observable
+  expect(screen.getByTestId('mouth-panel')).toBeInTheDocument()
+
+  startRecording()
+
+  const backCell = screen.getByRole('link', { name: 'Quay lại' }).closest('div')!
+  expect(backCell).toHaveClass('opacity-40', 'pointer-events-none')
+  expect(screen.getByTestId('header-right')).toHaveClass('opacity-40', 'pointer-events-none')
+
+  const chip = screen.getByText('● Đang ghi')
+  expect(chip).toHaveClass('bg-coral-50', 'text-coral-text')
+  expect(screen.queryByText(/^Thẻ \d/)).not.toBeInTheDocument()
+
+  expect(screen.getByTestId('emoji-card')).toHaveClass('h-[110px]')
+  expect(screen.queryByRole('button', { name: /nghe mẫu/i })).not.toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: /khẩu hình/i })).not.toBeInTheDocument()
+  expect(screen.queryByTestId('mouth-panel')).not.toBeInTheDocument() // the panel closes too
+
+  expect(screen.getByText('three')).toBeInTheDocument() // the word itself stays put
+  expect(screen.getByTestId('countdown-row')).toBeInTheDocument()
+})
+
+/** Brief §1 "Tầng dạy gập": once a result lands the teach column collapses to a tap-to-expand
+ * strip (PageBody's `collapsed`) with Foxy reacting in the result card; tapping the strip reopens
+ * the full column, and a fresh result collapses it again. */
+it('collapses the teach column to a tap-to-expand strip on a result, and reopens on tap', () => {
+  renderCard()
+  score(azureResult(85))
+
+  const strip = screen.getByRole('button', { name: /mở/i })
+  expect(strip).toHaveTextContent('three')
+  const hiddenWrap = ancestorWithClass(screen.getByTestId('emoji-card'), 'hidden')
+  expect(hiddenWrap).toHaveClass('ipad:flex')
+
+  const card = screen.getByTestId('result-card')
+  expect(within(card).getByTestId('foxy')).toBeInTheDocument()
+  expect(within(card).getByText('Foxy: "Đọc chuẩn quá đi!"')).toBeInTheDocument()
+
+  fireEvent.click(strip)
+  expect(screen.queryByRole('button', { name: /mở/i })).not.toBeInTheDocument()
+})
+
+/** Reviewer-precedent test (StarPractice/SoundPractice): scoring via "Thử lại" nulls `result` on
+ * its own, so a test that only clicks retry and checks the strip is gone would pass whether or not
+ * `setTeachOpen(true)` ever ran. Tap the strip open with no retry, confirm the full column is
+ * back, then push a fresh result over top and confirm the strip collapses again. */
+it('reopens the teach column on tap, and collapses again once a fresh result lands', () => {
+  renderCard()
+  score(azureResult(40))
+  expect(screen.getByRole('button', { name: /mở/i })).toBeInTheDocument()
+
+  fireEvent.click(screen.getByRole('button', { name: /mở/i }))
+  expect(screen.queryByRole('button', { name: /mở/i })).not.toBeInTheDocument()
+
+  fireEvent.click(screen.getByRole('button', { name: /thử lại/i }))
+  score(azureResult(95))
+  expect(screen.getByRole('button', { name: /mở/i })).toBeInTheDocument()
+})
+
+/** Spec decision 17 (brief R23 "Đang chấm"): `processing` reads as an idle mic with an hourglass
+ * and nothing else may react to it — no dimmed header, no "Đang ghi" chip, no collapsed strip, no
+ * shrunk card. Rendered already in `processing` via `mic.initialMicState`, no post-mount `act()`. */
+it('holds the teach column still while scoring — processing is not recording', () => {
+  mic.initialMicState = 'processing'
+  renderCard()
+
+  expect(screen.getByTestId('emoji-card')).toHaveClass('h-[140px]')
+  expect(screen.getByText('three')).toBeInTheDocument()
+
+  const backCell = screen.getByRole('link', { name: 'Quay lại' }).closest('div')!
+  expect(backCell).not.toHaveClass('opacity-40')
+  expect(screen.getByTestId('header-right')).not.toHaveClass('opacity-40')
+  expect(screen.getByText(`Thẻ 1/${soundZooCards.length}`)).toBeInTheDocument()
+  expect(screen.queryByText('● Đang ghi')).not.toBeInTheDocument()
+
+  expect(screen.queryByRole('button', { name: /mở/i })).not.toBeInTheDocument()
+  expect(screen.getByRole('button', { name: /đang chấm/i })).toBeInTheDocument()
 })

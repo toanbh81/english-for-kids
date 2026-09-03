@@ -44,7 +44,7 @@ export default {
       borderRadius: {
         xl2: '20px', xl3: '28px', xl4: '34px',   // kept until Phase 15
         r10: '10px', r12: '12px', r14: '14px', r16: '16px', r18: '18px',
-        r20: '20px', r22: '22px', r24: '24px', r28: '28px',
+        r20: '20px', r22: '22px', r24: '24px', r26: '26px', r28: '28px',
       },
       // Hard offset shadows, no blur: the "chunky" press-down look of the handoff.
       boxShadow: {
