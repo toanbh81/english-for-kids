@@ -12,7 +12,16 @@ const VIEWPORTS = {
   phone: { viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true },
   ipad: { viewport: { width: 1194, height: 834 }, deviceScaleFactor: 2, hasTouch: true },
   ipadp: { viewport: { width: 834, height: 1194 }, deviceScaleFactor: 2, hasTouch: true },
+  // 375×667 (iPhone SE) — the shortest fold Round-2 screens design for explicitly (tailwind's
+  // `short:` variant is `max-width:767px and max-height:700px`). Opt-in only — see VIEWPORTS below
+  // — a sweep of every screen at this size isn't useful day to day, this exists to spot-check the
+  // handful of `short:` rules a screen actually carries.
+  short: { viewport: { width: 375, height: 667 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true },
 }
+// Which of the VIEWPORTS above actually run. Defaults to the original three so a plain `node
+// shoot.mjs` behaves exactly as before; pass e.g. `VIEWPORTS=short` or `VIEWPORTS=phone,short` to
+// opt into the 375×667 fold for a spot-check.
+const ACTIVE_VIEWPORTS = new Set((process.env.VIEWPORTS ?? 'phone,ipad,ipadp').split(','))
 // iPad portrait only for the screens where its layout is a real question. Opt-in
 // (SHOTS_DIR=... IPADP_SUBSET=1) for a quick spot-check; the default is the full set, so a plain
 // run of this script is a real sweep of every screen at all three viewports, not just these eight.
@@ -260,6 +269,7 @@ async function run(vpName, vp) {
 }
 
 for (const [name, vp] of Object.entries(VIEWPORTS)) {
+  if (!ACTIVE_VIEWPORTS.has(name)) continue
   if (ONLY && ONLY !== name) continue
   log(`=== ${name} ===`)
   await run(name, vp)

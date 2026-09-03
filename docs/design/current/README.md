@@ -44,6 +44,7 @@ Trong sheet, ô nào tràn có dòng đỏ "⚠ tràn" ngay dưới ảnh.
 # dev server http (không SSL): pnpm --filter client exec vite --mode nossl --port 5174
 cd docs/design/current && npm i playwright-core@1.47.2 && node shoot.mjs        # tất cả frame
 SHOTS=home,mission node shoot.mjs phone                                          # chỉ vài ảnh
+VIEWPORTS=short SHOTS=practice-idle node shoot.mjs                               # spot-check 375×667 (tailwind `short:`), opt-in — mặc định vẫn chỉ phone,ipad,ipadp
 node sheet.mjs                                                                   # ghép sheet
 ```
 Cần Edge cài sẵn (`channel: 'msedge'`), không tải browser.

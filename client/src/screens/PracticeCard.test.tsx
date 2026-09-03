@@ -102,6 +102,12 @@ function ancestorWithClass(el: Element, cls: string): HTMLElement {
   return node as HTMLElement
 }
 
+/** Fix round 1 C1: `StreakDots` is shared by the header chip AND the line under the card, so both
+ * now carry the same "Lần 1/2"/"Lần 2/2" labels at once — `screen.getByLabelText` alone is
+ * ambiguous. These scope to one or the other explicitly. */
+const headerStreak = () => within(screen.getByTestId('header-streak'))
+const streakLine = () => within(screen.getByTestId('streak-line'))
+
 beforeEach(() => {
   localStorage.clear()
   mic.engine = 'azure'
@@ -211,18 +217,37 @@ describe('Word Pop: hidden IPA + two-in-a-row streak', () => {
     renderCard(card.id)
 
     score(azureResult(85, 'cat'))
-    expect(screen.getByLabelText('Lần 1/2')).toHaveTextContent('●')
-    expect(screen.getByLabelText('Lần 2/2')).toHaveTextContent('○')
+    expect(headerStreak().getByLabelText('Lần 1/2')).toHaveTextContent('●')
+    expect(headerStreak().getByLabelText('Lần 2/2')).toHaveTextContent('○')
     expect(screen.getAllByTestId('star-filled')).toHaveLength(2)
 
     fireEvent.click(screen.getByRole('button', { name: /thử lại/i }))
     score(azureResult(90, 'cat'))
 
-    expect(screen.getByLabelText('Lần 1/2')).toHaveTextContent('●')
-    expect(screen.getByLabelText('Lần 2/2')).toHaveTextContent('●')
+    expect(headerStreak().getByLabelText('Lần 1/2')).toHaveTextContent('●')
+    expect(headerStreak().getByLabelText('Lần 2/2')).toHaveTextContent('●')
     expect(screen.getByText('Nói đúng 2 lần liên tiếp! 🎉')).toBeInTheDocument()
     expect(screen.getAllByTestId('star-filled')).toHaveLength(3)
     expect(stored()[card.id]).toBe(3)
+  })
+
+  /** C1 fix: the line under the card used to hardcode literal "● ○" characters that never read
+   * `streak` — it could show a filled dot at streak 0 and stay stuck at "● ○" once the header
+   * chip had already reached "●●". Both now render from the same `StreakDots`, so this asserts
+   * on the LINE specifically (not the chip) at streak 0 and streak 1. */
+  it('mirrors the live streak in the line under the card, not a static "● ○"', () => {
+    renderCard(card.id)
+
+    expect(streakLine().getByLabelText('Lần 1/2')).toHaveTextContent('○')
+    expect(streakLine().getByLabelText('Lần 1/2')).toHaveClass('text-line-200')
+    expect(streakLine().getByLabelText('Lần 2/2')).toHaveTextContent('○')
+    expect(streakLine().getByLabelText('Lần 2/2')).toHaveClass('text-line-200')
+
+    score(azureResult(85, 'cat'))
+
+    expect(streakLine().getByLabelText('Lần 1/2')).toHaveTextContent('●')
+    expect(streakLine().getByLabelText('Lần 1/2')).toHaveClass('text-coral-500')
+    expect(streakLine().getByLabelText('Lần 2/2')).toHaveTextContent('○')
   })
 
   /** R24: the first ≥80 hit is one short of the win — the generic 2★ copy never mentions the
@@ -239,22 +264,23 @@ describe('Word Pop: hidden IPA + two-in-a-row streak', () => {
     renderCard(card.id)
 
     score(azureResult(85, 'cat'))
-    expect(screen.getByLabelText('Lần 1/2')).toHaveTextContent('●')
+    expect(headerStreak().getByLabelText('Lần 1/2')).toHaveTextContent('●')
 
     fireEvent.click(screen.getByRole('button', { name: /thử lại/i }))
     score(azureResult(50, 'cat'))
 
-    expect(screen.getByLabelText('Lần 1/2')).toHaveTextContent('○')
-    expect(screen.getByLabelText('Lần 2/2')).toHaveTextContent('○')
+    expect(headerStreak().getByLabelText('Lần 1/2')).toHaveTextContent('○')
+    expect(headerStreak().getByLabelText('Lần 2/2')).toHaveTextContent('○')
+    expect(streakLine().getByLabelText('Lần 1/2')).toHaveTextContent('○') // the line clears too
     expect(stored()[card.id] ?? 0).toBeLessThanOrEqual(2)
   })
 
-  it('leaves Sound Zoo cards unchanged: IPA visible, no streak dots in the header chip', () => {
+  it('leaves Sound Zoo cards unchanged: IPA visible, no streak dots anywhere', () => {
     renderCard() // default sz-th-three
     expect(screen.getByText(soundZooCards[0].ipa)).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /xem phiên âm/i })).not.toBeInTheDocument()
-    expect(screen.queryByLabelText('Lần 1/2')).not.toBeInTheDocument()
-    expect(screen.queryByLabelText('Lần 2/2')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('header-streak')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('streak-line')).not.toBeInTheDocument()
   })
 })
 
@@ -350,7 +376,7 @@ it('lays out the round-2 flashcard: emoji tile, word and IPA-reveal button at th
   renderCard(card.id)
 
   const tile = screen.getByTestId('emoji-card')
-  expect(tile).toHaveClass('h-[140px]', 'w-[140px]', 'rounded-r26', 'md:h-[220px]', 'md:w-[220px]')
+  expect(tile).toHaveClass('h-[140px]', 'w-[140px]', 'rounded-r26', 'md:h-[220px]', 'md:w-[220px]', 'md:rounded-[32px]')
   expect(within(tile).getByText(card.emoji)).toHaveClass('text-[76px]', 'md:text-[120px]')
 
   expect(screen.getByText(card.text)).toHaveClass('text-[44px]', 'md:text-[64px]')
@@ -362,27 +388,47 @@ it('lays out the round-2 flashcard: emoji tile, word and IPA-reveal button at th
   expect(screen.getByRole('button', { name: /khẩu hình/i })).toBeInTheDocument()
 })
 
+/** Design brief B1 bullet 1: "375×667: thẻ 110, ẩn dòng streak". jsdom doesn't evaluate media
+ * queries, so this only asserts the `short:` classes exist — the real 375×667 render is checked
+ * visually via `shots/short/practice-idle.png` (fix round 1 tooling addition). */
+it('carries the 375×667 short-fold classes: the card shrinks, the emoji scales down', () => {
+  renderCard()
+  const tile = screen.getByTestId('emoji-card')
+  expect(tile).toHaveClass('short:h-[110px]', 'short:w-[110px]')
+  expect(within(tile).getByText('3️⃣')).toHaveClass('short:text-[60px]')
+})
+
 it('shows the Word Pop streak line under the card, hidden on the short fold', () => {
   renderCard(wordPopCards[0].id)
-  const line = screen.getByText(/Nói đúng 2 lần liên tiếp → 3 sao/)
+  const line = screen.getByTestId('streak-line')
   expect(line).toHaveClass('short:hidden')
+  expect(within(line).getByText(/Nói đúng 2 lần liên tiếp → 3 sao/)).toBeInTheDocument()
 })
 
 it('never shows the streak line for a non-Word-Pop card', () => {
   renderCard(soundZooCards[0].id)
-  expect(screen.queryByText(/Nói đúng 2 lần liên tiếp → 3 sao/)).not.toBeInTheDocument()
+  expect(screen.queryByTestId('streak-line')).not.toBeInTheDocument()
 })
 
 it('shows the streak dots inside the centre chip for a Word Pop card, unlit at idle', () => {
   renderCard(wordPopCards[0].id)
   expect(screen.getByText(`Thẻ 1/${wordPopCards.length}`)).toBeInTheDocument()
-  expect(screen.getByLabelText('Lần 1/2')).toHaveTextContent('○')
-  expect(screen.getByLabelText('Lần 2/2')).toHaveTextContent('○')
+  expect(headerStreak().getByLabelText('Lần 1/2')).toHaveTextContent('○')
+  expect(headerStreak().getByLabelText('Lần 2/2')).toHaveTextContent('○')
 })
 
 it('never grows streak dots in the header chip for a non-Word-Pop card', () => {
   renderCard(soundZooCards[0].id)
-  expect(screen.queryByLabelText('Lần 1/2')).not.toBeInTheDocument()
+  expect(screen.queryByTestId('header-streak')).not.toBeInTheDocument()
+})
+
+/** Ruling item 4: the design brief's B1 `say` already bakes in "trong 5 giây nhé!", so the
+ * `SpeakPrompt` call drops `seconds` — a `seconds` prop would append a second, separately-colored
+ * "5 giây" (`SpeakPrompt.tsx` appends `{seconds} giây` whenever the prop is passed at all). */
+it('shows the 5-second prompt once, with no separate seconds badge doubling it', () => {
+  renderCard()
+  expect(screen.getByText('Nói to, rõ trong 5 giây nhé!')).toBeInTheDocument()
+  expect(screen.queryByText('5 giây')).not.toBeInTheDocument()
 })
 
 it('toggles the mouth panel open and closed from the button row', () => {

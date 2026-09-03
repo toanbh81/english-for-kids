@@ -19,6 +19,20 @@ import { useSpeakErrorAction } from '../speaking/useSpeakErrorAction'
 const AUTO_STOP_MS = 6000
 const COUNTDOWN_FROM = AUTO_STOP_MS / 1000
 
+/** Word Pop's two-in-a-row streak, drawn once and shared by the header chip ("Thẻ n/12 · ● ○")
+ * and the line under the card — fix round 1 C1: the line used to hardcode "● ○" as literal
+ * characters, so it could show a filled dot at streak 0 or stay stuck at "● ○" once the chip had
+ * already reached "●●". One component reading the same `streak` prop is what keeps them unable
+ * to drift apart again. */
+function StreakDots({ streak }: { streak: number }) {
+  return (
+    <>
+      <span aria-label="Lần 1/2" className={streak >= 1 ? 'text-coral-500' : 'text-line-200'}>{streak >= 1 ? '●' : '○'}</span>
+      <span aria-label="Lần 2/2" className={streak >= 2 ? 'text-coral-500' : 'text-line-200'}>{streak >= 2 ? '●' : '○'}</span>
+    </>
+  )
+}
+
 export function PracticeCard() {
   const { cardId = '' } = useParams()
   const card = findCard(cardId)
@@ -142,10 +156,9 @@ export function PracticeCard() {
             <Chip tone={mission ? 'coral' : 'teal'}>
               {headerLabel}
               {isWordPop && (
-                <span className="ml-1.5 inline-flex items-center gap-1 text-base leading-none">
+                <span data-testid="header-streak" className="ml-1.5 inline-flex items-center gap-1 text-base leading-none">
                   <span aria-hidden="true">·</span>
-                  <span aria-label="Lần 1/2" className={streak >= 1 ? 'text-coral-500' : 'text-line-200'}>{streak >= 1 ? '●' : '○'}</span>
-                  <span aria-label="Lần 2/2" className={streak >= 2 ? 'text-coral-500' : 'text-line-200'}>{streak >= 2 ? '●' : '○'}</span>
+                  <StreakDots streak={streak} />
                 </span>
               )}
             </Chip>
@@ -158,9 +171,9 @@ export function PracticeCard() {
             <div className="flex w-full flex-col items-center gap-3">
               <div
                 data-testid="emoji-card"
-                className={`flex shrink-0 items-center justify-center rounded-r26 bg-white shadow-card md:h-[220px] md:w-[220px] ${recording ? 'h-[110px] w-[140px]' : 'h-[140px] w-[140px]'}`}
+                className={`flex shrink-0 items-center justify-center rounded-r26 bg-white shadow-card short:h-[110px] short:w-[110px] md:h-[220px] md:w-[220px] md:rounded-[32px] ${recording ? 'h-[110px] w-[140px]' : 'h-[140px] w-[140px]'}`}
               >
-                <span aria-hidden="true" className="text-[76px] leading-none md:text-[120px]">{card.emoji}</span>
+                <span aria-hidden="true" className="text-[76px] leading-none short:text-[60px] md:text-[120px]">{card.emoji}</span>
               </div>
 
               <div className="font-display text-[44px] font-extrabold leading-none text-ink-900 md:text-[64px]">{card.text}</div>
@@ -186,8 +199,11 @@ export function PracticeCard() {
               {audioMissing && <p className="text-sm font-bold text-ink-300 md:text-lg">Chưa có audio mẫu</p>}
 
               {isWordPop && (
-                <p className="short:hidden text-center text-[12px] font-bold text-ink-300 md:text-[15px]">
-                  ● ○ + Nói đúng 2 lần liên tiếp → 3 sao
+                <p data-testid="streak-line" className="short:hidden flex flex-wrap items-center justify-center gap-1.5 text-center text-[12px] font-bold text-ink-300 md:text-[15px]">
+                  <span className="inline-flex items-center gap-1 text-base leading-none">
+                    <StreakDots streak={streak} />
+                  </span>
+                  <span>+ Nói đúng 2 lần liên tiếp → 3 sao</span>
                 </p>
               )}
             </div>
@@ -226,7 +242,7 @@ export function PracticeCard() {
             <>
               {recording
                 ? <SpeakPrompt mood="listening" say="Foxy đang lắng nghe…" />
-                : <SpeakPrompt mood="idle" say="Nói to, rõ trong 5 giây nhé!" seconds={5} />}
+                : <SpeakPrompt mood="idle" say="Nói to, rõ trong 5 giây nhé!" />}
               {attempt.error && <SpeakError error={attempt.error} onAction={onErrorAction} onDismiss={attempt.dismissError} />}
               <MicButton state={attempt.micState} level={attempt.level} onPress={attempt.onMic} secondsLeft={recording ? secondsLeft : undefined} countdownLayout="row" />
             </>
