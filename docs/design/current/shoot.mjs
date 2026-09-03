@@ -114,6 +114,15 @@ async function run(vpName, vp) {
   const ctx = await browser.newContext({ ...vp, reducedMotion: 'reduce', locale: 'vi-VN', ignoreHTTPSErrors: true })
   const page = await ctx.newPage()
   page.on('dialog', d => d.accept())
+  // Phase 13 Task 4 (`voice-recording`): a silent MediaStream stands in for a real mic so the
+  // recording state can be shot headless — registered once, before any navigation, so it is in
+  // place for every route this page ever loads.
+  await page.addInitScript(() => {
+    try {
+      navigator.mediaDevices = navigator.mediaDevices || {}
+      navigator.mediaDevices.getUserMedia = async () => new AudioContext().createMediaStreamDestination().stream
+    } catch { /* ignore: some contexts (iOS UA emulation) lock this down */ }
+  })
   const only = name => vpName !== 'ipadp' || !IPADP_SUBSET || IPADP_ONLY.has(name)
   const S = async (name, route, after, quick = false) => {
     if (!only(name)) return
@@ -171,6 +180,16 @@ async function run(vpName, vp) {
   await S('voice-idle', '/voice/sv1')
   await S('voice-result3', '/voice/sv1?fixture=result3')
   await S('voice-result1', '/voice/sv1?fixture=result1')
+  // Task 4: the recording state, with a stubbed mic (no real Azure/Web-Speech round trip). Dev
+  // has no Azure token, so this depends on Web Speech's `webkitSpeechRecognition` existing in
+  // headless Edge — if it doesn't, the mic errors out instead of entering `recording` and this
+  // throws, which `S` turns into a logged skip rather than a crash of the whole sweep.
+  await S('voice-recording', '/voice/sv1', async () => {
+    await page.getByRole('button', { name: /bấm để nói/i }).click()
+    await sleep(800)
+    const recording = await page.evaluate(() => !!document.querySelector('[data-testid="countdown-row"]'))
+    if (!recording) throw new Error('mic never entered recording — headless engine likely has no webkitSpeechRecognition')
+  })
   await S('stories', '/stories')
   await S('story-player', '/story/little-fox')
   await S('story-player-playing', null, async () => { await page.getByRole('button', { name: 'Phát' }).click(); await sleep(1200) })
