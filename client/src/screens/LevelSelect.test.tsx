@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react'
+import { render, screen } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { LevelSelect } from './LevelSelect'
 
@@ -36,30 +36,18 @@ it('hands Tập âm over to the sound-tile screen instead of listing its 27 card
   expect(screen.queryAllByRole('link').filter(a => a.getAttribute('href')?.startsWith('/practice'))).toHaveLength(0)
 })
 
-it('goes back to the map, the entry point the child actually came from', () => {
-  renderLevel()
-  expect(screen.getByRole('link', { name: /Về bản đồ/ })).toHaveAttribute('href', '/')
+it('back goes to the stairs and the "Xem các bậc" pill is gone', () => {
+  renderLevel('word-pop')
+  expect(screen.getByRole('link', { name: 'Các bậc' })).toHaveAttribute('href', '/levels')
+  expect(screen.queryByText('🗣️ Xem các bậc')).toBeNull()
 })
 
-// Spec decision 1: Home drops the island map below the tablet breakpoint, so the back arrow cannot
-// name a map there — not even to a screen reader. `BackButton`'s `mdLabel` puts both wordings in
-// the DOM as `sr-only` spans and lets the breakpoint take one out of the accessibility tree.
-it('names the phone destination and the map one at their own breakpoints', () => {
-  renderLevel()
-
-  const back = screen.getByRole('link', { name: /Về bản đồ/ })
-  // No `aria-label`: it is one string and could only ever say one of the two.
-  expect(back).not.toHaveAttribute('aria-label')
-  expect(within(back).getByText('Về trang chủ')).toHaveClass('sr-only', 'md:hidden')
-  expect(within(back).getByText('Về bản đồ')).toHaveClass('sr-only', 'hidden', 'md:inline')
-})
-
-it('offers the stairs as a second way into the other levels', () => {
-  renderLevel()
-  // `/levels` has no island of its own on the map, so this chip is what keeps it reachable.
-  const stairs = screen.getByRole('link', { name: /Xem các bậc/ })
-  expect(stairs).toHaveAttribute('href', '/levels')
-  expect(stairs).toHaveClass('min-h-[64px]')
+it('12 small tiles with emoji + word + stars, no lg:', () => {
+  renderLevel('word-pop')
+  expect(screen.getByText('Chạm vào một thẻ để luyện nói nhé!')).toBeInTheDocument()
+  expect(screen.getAllByTestId('tile')).toHaveLength(12)
+  expect(screen.getByTestId('list-grid').className).not.toMatch(/\blg:/)
+  expect(screen.getAllByTestId('stars')[0]).toHaveClass('text-[13px]')
 })
 
 it('shows a not-found message for an unknown level id', () => {
