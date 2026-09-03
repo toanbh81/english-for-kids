@@ -1,9 +1,10 @@
 import { render, screen, within } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { SENTENCES } from '../content'
-import { findTopic } from '../content/topics'
+import { TOPICS, findTopic } from '../content/topics'
 import { TOPICS as WORD_DECKS } from '../content/words'
 import { promote } from '../progress/leitner'
+import { topicUnlocked } from '../progress/topicProgress'
 import { setStars } from '../progress/store'
 import { SentenceList } from './SentenceList'
 
@@ -56,6 +57,17 @@ it('unfiltered: sticky topic groups of 64px truncating rows, two columns on iPad
   expect(within(s1Link).getAllByTestId('star-filled')).toHaveLength(2)
 })
 
+// Fix round 1: pins the exact href every rendered row carries when unfiltered — every one of
+// SENTENCES, plain `/sentence/<id>`, no `?topic=`. Dropped in the initial pass; restored per review.
+it('renders a row for every sentence linking to /sentence/<id> when not filtered', () => {
+  openEveryTopic()
+  renderList()
+  SENTENCES.forEach(s => {
+    const link = screen.getByRole('link', { name: s.vi })
+    expect(link).toHaveAttribute('href', `/sentence/${s.id}`)
+  })
+})
+
 it('groups sentences under all topic headings', () => {
   openEveryTopic()
   renderList()
@@ -66,16 +78,33 @@ it('groups sentences under all topic headings', () => {
   expect(screen.getByText('Thời tiết')).toBeInTheDocument()
 })
 
+// Fix round 1 (Important #1): the unfiltered subtitle used to count every sentence in the game
+// (`SENTENCES.length`, 32) instead of the ones actually rendered once unlocked topics cut that
+// down. Computed from `topicUnlocked`/`TOPICS`/`SENTENCES` directly — not a number pinned to
+// today's content — so this stays correct if the unlock set or sentence data changes shape.
+it('unfiltered subtitle counts only the rendered (unlocked-topic) sentences, not every sentence in the game', () => {
+  renderList()
+
+  const openTopics = TOPICS.filter(t => topicUnlocked(t.id))
+  const expectedCount = SENTENCES.filter(s => openTopics.some(t => t.id === s.topic)).length
+  expect(screen.getByText(`${expectedCount} câu · ${openTopics.length} chủ đề`)).toBeInTheDocument()
+  expect(rowLinks()).toHaveLength(expectedCount)
+})
+
 it('a valid ?topic= filter drops the H2s and names the topic in the subtitle', () => {
   renderList('/sentences?topic=family')
 
   expect(screen.queryAllByTestId('sticky-group')).toHaveLength(0)
   expect(screen.getByText('4 câu · Gia đình')).toBeInTheDocument()
 
+  // Fix round 1: every row's href, not just the first one, carries `?topic=family`.
   const family = SENTENCES.filter(s => s.topic === 'family')
   const rows = screen.getAllByTestId('list-row')
   expect(rows).toHaveLength(family.length)
-  expect(rows[0]).toHaveAttribute('href', `/sentence/${family[0].id}?topic=family`)
+  family.forEach(s => {
+    const link = screen.getByRole('link', { name: s.vi })
+    expect(link).toHaveAttribute('href', `/sentence/${s.id}?topic=family`)
+  })
   // Back to the hub the child came from, not all the way home.
   expect(screen.getByRole('link', { name: /Quay lại/ })).toHaveAttribute('href', '/topic/family')
   expect(screen.queryByText('Đồ ăn')).not.toBeInTheDocument()

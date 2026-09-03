@@ -15,7 +15,11 @@ export function SentenceList() {
   // the map has opened, or it would be a way around the island unlocks. A hub that links in with
   // its own `?topic=` has already made that decision.
   const shown = topic ? [topic] : TOPICS.filter(t => topicUnlocked(t.id))
-  const list = topic ? SENTENCES.filter(s => s.topic === topic.id) : []
+  // One slice per shown topic, computed once and reused for both the header's rendered-row count
+  // and the row list below (fix round 1: the header used to count every `SENTENCES` entry — 32 —
+  // instead of the ones actually on screen once unlocked topics cut that down).
+  const grouped = shown.map(t => ({ t, sentences: SENTENCES.filter(s => s.topic === t.id) }))
+  const shownCount = grouped.reduce((n, g) => n + g.sentences.length, 0)
 
   return (
     <PageShell>
@@ -27,14 +31,12 @@ export function SentenceList() {
           />
         )}
         title="🧱 Ghép câu"
-        sub={topic ? `${list.length} câu · ${topic.name}` : `${SENTENCES.length} câu · ${shown.length} chủ đề`}
+        sub={topic ? `${shownCount} câu · ${topic.name}` : `${shownCount} câu · ${shown.length} chủ đề`}
       />
       <PageBody fade gap={8}>
         <div data-testid="sentence-groups" className="flex flex-col gap-3 md:grid md:grid-cols-2 md:items-start md:gap-3">
-          {shown.map(t => {
-            // Unfiltered, `t` ranges over every shown topic and needs its own slice; filtered,
-            // `shown` is just `[topic]` so `t` is always `topic` and `list` already is that slice.
-            const rows = (topic ? list : SENTENCES.filter(s => s.topic === t.id)).map(s => (
+          {grouped.map(({ t, sentences }) => {
+            const rows = sentences.map(s => (
               <ListRow
                 key={s.id}
                 to={topic ? `/sentence/${s.id}?topic=${topic.id}` : `/sentence/${s.id}`}
