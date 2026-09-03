@@ -214,13 +214,23 @@ async function run(vpName, vp) {
   await S('words-animals', '/words/animals')
   await S('words-review-empty', '/words/review')
   await S('word-guess', '/words/animals/animals-elephant')
-  await S('word-guess-wrong', null, async () => { await page.getByRole('button', { name: /^(?!.*con voi).*$/ }).filter({ hasText: /con|cái|màu|quả/ }).first().click(); await sleep(150) })
-  await S('word-guess-correct', null, async () => { await tapText(page, 'con voi', { exact: false }) })
-  await S('word-card-front', null, async () => { await tapText(page, 'Tiếp theo →', { exact: false }) })
-  await S('word-card-back', null, async () => { await page.getByRole('button', { name: /lật|Lật|elephant/i }).first().click(); await sleep(900) })
-  // Task 10 wires WordCard's "skip the guess step when a fixture result is present" — until
-  // then this lands on the guess step, same as `word-guess`. Its own explicit route, so placed
-  // after the chained guess/flip shots above rather than between them.
+  await S('word-guess-wrong', '/words/animals/animals-elephant', async () => { await page.getByRole('button', { name: /^(?!.*con voi).*$/ }).filter({ hasText: /con|cái|màu|quả/ }).first().click(); await sleep(150) })
+  await S('word-guess-correct', '/words/animals/animals-elephant', async () => { await tapText(page, 'con voi', { exact: false }) })
+  // Task 10 (C7 round-2): `word-card-front`/`word-card-back` are past the guess step, which has no
+  // route of its own — each gets its own explicit route + the guess-then-"Tiếp theo →" chain that
+  // gets there, so it shoots correctly on its own (e.g. a `SHOTS=word-card-front` or `VIEWPORTS=
+  // short SHOTS=word-card-front` run) rather than depending on `word-guess-correct` having already
+  // run earlier in the very same sweep.
+  await S('word-card-front', '/words/animals/animals-elephant', async () => {
+    await tapText(page, 'con voi', { exact: false })
+    await tapText(page, 'Tiếp theo →', { exact: false })
+  })
+  await S('word-card-back', '/words/animals/animals-elephant', async () => {
+    await tapText(page, 'con voi', { exact: false })
+    await tapText(page, 'Tiếp theo →', { exact: false })
+    await page.getByRole('button', { name: /lật|Lật|elephant/i }).first().click()
+    await sleep(900)
+  })
   await S('word-result3', '/words/animals/animals-elephant?fixture=result3')
   await S('sentences', '/sentences')
   await S('sentences-topic', '/sentences?topic=family')

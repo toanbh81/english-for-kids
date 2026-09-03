@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import type { KeyboardEvent, MouseEvent } from 'react'
 import type { Word } from '../content/words/types'
 import type { PronunciationResult } from '../scoring/types'
@@ -7,19 +7,25 @@ import { findTopic, findWord } from '../content/words'
 import { shuffleTiles } from '../content/shuffle'
 import { getBox, promote, demote, dueWords } from '../progress/leitner'
 import { logActivity } from '../progress/activity'
-import { missionNoun, useMissionNext } from '../progress/missionNav'
+import { missionNoun, useMissionFlag, useMissionNext } from '../progress/missionNav'
 import { saveRecording } from '../progress/recordings'
+import { totalStars } from '../progress/store'
 import { playUrl } from '../audio/player'
 import { speakText } from '../story/speak'
 import { toFeedback } from '../scoring/feedback'
 import { useSpeakingAttempt } from '../speaking/useSpeakingAttempt'
 import { useSpeakErrorAction } from '../speaking/useSpeakErrorAction'
-import { MicButton, ResultCard, SpeakError } from '../components/speak'
+import { MicButton, ResultCard, SpeakError, SpeakPrompt } from '../components/speak'
 import { Foxy } from '../components/Foxy'
 import { BackButton, Button, Chip, NotFound } from '../components/ui'
+import { useLessonChipStatus } from '../components/LessonChip'
 import { PageShell, PageHeader, PageBody, PageFooter } from '../components/ui/page'
 
 const UNLOCK_SCORE = 60
+
+/** The hook stops the recording itself after this long; the countdown just mirrors it. */
+const AUTO_STOP_MS = 6000
+const COUNTDOWN_FROM = AUTO_STOP_MS / 1000
 
 /** Matches the .animate-shake keyframe duration in styles.css. */
 const SHAKE_MS = 400
@@ -61,6 +67,13 @@ function WordCardInner({ word, topic, isReview, list }: { word: Word; topic: str
   // Null unless the child arrived from the mission: only then is this card step "Từ mới 2/3" of
   // today's lesson rather than one card of a deck (spec §3).
   const mission = useMissionNext()
+  const { pathname } = useLocation()
+  const inMission = useMissionFlag()
+  // The header's right cell defaults to `LessonChip`, which draws nothing outside a running
+  // lesson step (Home/mission/parent screens excluded, or nothing on today's route matches) — this
+  // is the very same rule `LessonChip` itself uses to decide whether to render, so a total-stars
+  // badge only ever appears exactly where the lesson chip would otherwise have left the cell empty.
+  const lessonChipVisible = !!useLessonChipStatus(pathname, inMission)
   const [flipped, setFlipped] = useState(false)
   // Sticky, unlike `flipped`: the peek nudge is a one-time lesson ("this card turns over"), so the
   // very first flip retires it for good rather than letting it come back on every flip home.
@@ -129,8 +142,28 @@ function WordCardInner({ word, topic, isReview, list }: { word: Word; topic: str
     if (blob) saveRecording({ id: `${word.id}:${ts}`, ts, text: word.word, blob }).catch(() => {})
   }
 
-  const attempt = useSpeakingAttempt({ targetText: word.word, resetKey: word.id, onResult: handleResult })
+  const attempt = useSpeakingAttempt({ targetText: word.word, autoStopMs: AUTO_STOP_MS, resetKey: word.id, onResult: handleResult })
   const feedback = useMemo(() => (attempt.result ? toFeedback(attempt.result) : null), [attempt.result])
+
+  // Headless screenshots land straight on a scored attempt via `?fixture=result3`/`result1`
+  // (`useSpeakingAttempt` injects it on its own — see `speaking/fixture.ts`), with no guess ever
+  // answered. Backfill `guessPending` to false so `word-result3` renders the flip card + the
+  // compact result, not an untouched guess step sitting in front of a result nobody earned.
+  useEffect(() => {
+    if (attempt.result && guessPending) setGuessPending(false)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [attempt.result])
+
+  // The countdown only exists while the mic is open: it restarts on every recording and the
+  // interval is cleared the moment the state changes (or the card unmounts).
+  const recording = attempt.micState === 'recording'
+  const [secondsLeft, setSecondsLeft] = useState(COUNTDOWN_FROM)
+  useEffect(() => {
+    if (!recording) return
+    setSecondsLeft(COUNTDOWN_FROM)
+    const id = window.setInterval(() => setSecondsLeft(s => (s > 1 ? s - 1 : 1)), 1000)
+    return () => clearInterval(id)
+  }, [recording])
 
   const index = list.findIndex(w => w.id === word.id)
   const next = index >= 0 ? list[index + 1] : undefined
@@ -185,40 +218,48 @@ function WordCardInner({ word, topic, isReview, list }: { word: Word; topic: str
 
   return (
     <PageShell gutter="20">
-      <PageHeader back={<BackButton to={backTo} label={backLabel} />} engine={attempt.engine}>
-        <div className="flex flex-col items-center gap-1">
-          {mission && (
-            <Chip tone="teal">
-              {missionNoun(mission.pos, 'Từ mới')} {mission.pos.index}/{mission.pos.total}
-            </Chip>
-          )}
-          <h1 className="hidden font-display text-[22px] font-extrabold leading-none text-ink-900 md:block">Từ mới hôm nay 🧩</h1>
-          <p className="text-center font-display text-[13px] font-extrabold leading-snug text-ink-500 md:text-lg md:leading-7">Chạm thẻ để lật — nói đúng để mở khoá!</p>
-        </div>
+      <PageHeader
+        back={<BackButton to={backTo} label={backLabel} />}
+        engine={attempt.engine}
+        dimmed={recording}
+        right={lessonChipVisible ? undefined : <Chip tone="sun">⭐ {totalStars()}</Chip>}
+      >
+        {recording
+          ? <Chip tone="coral">● Đang ghi</Chip>
+          : mission
+            ? <Chip tone="coral">{missionNoun(mission.pos, 'Từ mới')} {mission.pos.index}/{mission.pos.total}</Chip>
+            : <Chip tone="teal">Từ mới {index + 1}/{list.length}</Chip>}
       </PageHeader>
 
       {guessPending ? (
         <>
           <PageBody center>
             <div className="flex w-full flex-1 flex-col items-center justify-center gap-4 py-2 md:gap-6 md:py-4">
-              <span aria-hidden="true" className="text-[74px] leading-none md:text-[96px]">{word.emoji}</span>
-              <span className="font-display text-[40px] font-extrabold leading-none text-ink-900 md:text-[44px]">{word.word}</span>
+              <span aria-hidden="true" className="text-[64px] leading-none">{word.emoji}</span>
+              <span className="font-display text-[36px] font-extrabold leading-none text-ink-900">{word.word}</span>
+              <Button variant="outline" size="adult" onClick={playSample}>🔊 Nghe lại</Button>
+              {audioMissing && <p className="text-lg font-bold text-ink-300">Chưa có audio mẫu</p>}
               <p className="font-display text-lg font-extrabold text-ink-500 md:text-xl">Từ này nghĩa là gì?</p>
               <div className="flex w-full flex-col gap-3 md:w-auto md:flex-row md:flex-wrap md:justify-center md:gap-4">
-                {guessOptions.map((option, idx) => (
-                  <Button
-                    key={option.id}
-                    variant="outline"
-                    className={`w-full font-display text-2xl max-md:min-h-[76px] max-md:justify-start max-md:gap-3.5 max-md:rounded-[22px] max-md:px-5 max-md:text-xl md:w-auto md:min-w-[160px] ${
-                      wrongOption === idx ? 'animate-shake' : ''
-                    } ${option.id === word.id && guessSolved ? 'border-good-300 text-ink-900 shadow-[0_6px_0_#7ED99A]' : ''}`}
-                    onClick={() => handleGuess(option)}
-                  >
-                    <span aria-hidden="true" className="text-[32px] leading-none md:hidden">{option.emoji}</span>
-                    {option.vi}
-                    {option.id === word.id && guessSolved && <span aria-hidden="true" className="ml-auto text-2xl">✅</span>}
-                  </Button>
-                ))}
+                {guessOptions.map((option, idx) => {
+                  const isCorrect = option.id === word.id
+                  const locked = guessSolved && !isCorrect
+                  return (
+                    <Button
+                      key={option.id}
+                      variant="outline"
+                      disabled={locked}
+                      className={`w-full min-h-[56px] font-display text-2xl md:w-auto md:min-w-[160px] ${
+                        wrongOption === idx ? 'animate-shake shadow-[0_5px_0_#F8A3AE,0_0_0_4px_#FFD4DA]' : ''
+                      } ${isCorrect && guessSolved ? 'border-good-300 text-ink-900 shadow-[0_5px_0_#7ED99A,0_0_0_4px_#B9ECC8]' : ''} ${locked ? 'opacity-50' : ''}`}
+                      onClick={() => handleGuess(option)}
+                    >
+                      <span aria-hidden="true" className="text-[26px] leading-none">{option.emoji}</span>
+                      {option.vi}
+                      {isCorrect && guessSolved && <span aria-hidden="true" className="ml-auto text-2xl">✅</span>}
+                    </Button>
+                  )
+                })}
               </div>
               {/* The guess step's own bubble — this one is kept outside the mic entirely, since
                   the mic is not even in play yet. */}
@@ -233,15 +274,24 @@ function WordCardInner({ word, topic, isReview, list }: { word: Word; topic: str
           </PageBody>
           {guessSolved && (
             <PageFooter>
-              <Button size="lg" pulse className="w-full" onClick={startSpeaking}>Tiếp theo →</Button>
+              <Button pulse className="w-full" onClick={startSpeaking}>Tiếp theo →</Button>
             </PageFooter>
           )}
         </>
       ) : (
-        <PageBody split={{
+        <PageBody
+          actGrow={!!feedback}
+          split={{
           teach: (
             <div className="flex w-full flex-col items-center gap-3">
-              <div className={`aspect-[16/17] w-[min(320px,82%)] shrink-0 [perspective:1200px] short:w-[min(320px,68%)] md:aspect-auto md:w-[320px] ${attempt.result ? 'md:h-[300px]' : 'md:h-[360px]'}`}>
+              <div className="relative aspect-[16/17] w-[min(320px,82%)] shrink-0 rounded-[30px] [perspective:1200px] short:w-[min(320px,68%)] md:aspect-auto md:w-[320px] md:h-[360px]">
+              {/* Round-2 decision: the corner icon is a one-time "this turns over" nudge, retired
+                  for good the moment the child flips once — it does not come back on a flip home —
+                  and it is hidden mid-recording along with the peek animation below (Foxy is
+                  listening; nothing should be inviting a flip). */}
+              {!hasFlipped && !recording && (
+                <span aria-hidden="true" className="pointer-events-none absolute right-2 top-2 z-[1] text-[22px] leading-none opacity-30">🔄</span>
+              )}
               <div
                 data-testid="flip-card"
                 role="button"
@@ -251,7 +301,7 @@ function WordCardInner({ word, topic, isReview, list }: { word: Word; topic: str
                 onKeyDown={onCardKey}
                 className={`relative h-full w-full cursor-pointer transition-transform duration-500 [transform-style:preserve-3d] ${
                   flipped ? '[transform:rotateY(180deg)]' : ''
-                } ${hasFlipped || flipped ? '' : 'animate-peek'}`}
+                } ${hasFlipped || flipped || recording ? '' : 'animate-peek'}`}
               >
                 <div
                   data-testid="face-front"
@@ -302,28 +352,41 @@ function WordCardInner({ word, topic, isReview, list }: { word: Word; topic: str
                   </button>
                 </div>
               </div>
-              {audioMissing && <p className="mt-2 text-center text-lg font-bold text-ink-300">Chưa có audio mẫu</p>}
               </div>
+              {audioMissing && <p className="text-center text-lg font-bold text-ink-300">Chưa có audio mẫu</p>}
+              {/* Q9: no text label rides on the card itself — this is the hint's only home, and it
+                  gives way to the compact result the moment there is one (that result sits right
+                  below it in the same stacked column, brief R16). */}
+              {!feedback && (
+                <p className="text-center text-[13px] font-bold text-[#B0A18E]">Mặt sau: nghĩa + câu ví dụ + 🔊</p>
+              )}
             </div>
           ),
           act: feedback ? (
-            <ResultCard
-              stars={feedback.stars}
-              praise={feedback.message}
-              score={score}
-              sub={outcome === 'unlocked' ? '🔓 Mở khoá!' : undefined}
-              words={feedback.words}
-              hint={outcome === 'retry' ? feedback.hint : undefined}
-              onRetry={retry}
-              primary={{ label: mission ? mission.label : 'Tiếp theo →', onClick: goNext }}
-              animate
-            />
+            <>
+              <ResultCard
+                compact
+                stars={feedback.stars}
+                praise={feedback.message}
+                score={score}
+                sub={outcome === 'unlocked' ? '🔓 Đã mở khoá' : 'thử lại để mở khoá'}
+                hint={outcome === 'retry' ? feedback.hint : undefined}
+                onRetry={retry}
+                primary={{ label: mission ? mission.label : 'Tiếp theo →', onClick: goNext }}
+                animate
+              />
+              {/* R16: the mic is redundant next to "Thử lại" on a phone (no room for both), but on
+                  an iPad it rides alongside the CTA so a re-record needs no extra tap. */}
+              <div className="max-md:hidden">
+                <MicButton state={attempt.micState} level={attempt.level} onPress={attempt.onMic} secondsLeft={recording ? secondsLeft : undefined} countdownLayout="row" />
+              </div>
+            </>
           ) : (
-            <div className="flex flex-col items-center gap-2">
+            <>
+              <SpeakPrompt mood={recording ? 'listening' : 'idle'} say={recording ? 'Foxy đang lắng nghe…' : 'Đọc to từ trên thẻ nhé!'} />
               {attempt.error && <SpeakError error={attempt.error} onAction={onErrorAction} onDismiss={attempt.dismissError} />}
-              <MicButton state={attempt.micState} level={attempt.level} onPress={attempt.onMic} />
-              <p className="font-display text-base font-extrabold text-ink-500 md:text-xl">🎤 Nói để mở khoá</p>
-            </div>
+              <MicButton state={attempt.micState} level={attempt.level} onPress={attempt.onMic} secondsLeft={recording ? secondsLeft : undefined} countdownLayout="row" />
+            </>
           ),
         }} />
       )}
