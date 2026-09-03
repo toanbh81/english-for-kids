@@ -164,6 +164,22 @@ async function run(vpName, vp) {
   await S('home-streak-panel', null, async () => { await page.getByRole('button', { name: /Tuần này/ }).click(); await sleep(300) })
   await S('mission', '/mission')
   await S('mission-done', '/mission/done')
+  // Task 11: the 0-star + 0-streak branch of MissionComplete — the worst case for this screen
+  // (spec decision 20). Re-seeds `activity` down to three below-passing events for today only (no
+  // prior days at all), so starsToday === 0 and streak() has nothing to count; `seed(page)` below
+  // restores the normal 5-day child for every shot after this one.
+  if (!WANT || WANT.includes('mission-done-zero')) {
+    await page.evaluate(() => {
+      const id = localStorage.getItem('speakup.profile')
+      const pre = id ? `speakup.${id}.` : 'speakup.'
+      const now = Date.now()
+      localStorage.setItem(pre + 'activity', JSON.stringify(
+        [0, 1, 2].map(i => ({ ts: now - (i + 1) * 60e3, kind: 'word', id: `z${i}`, score: 40 })),
+      ))
+    })
+    await S('mission-done-zero', '/mission/done')
+    await seed(page) // hand back the 5-day practiced child for every shot after this one
+  }
   // Task 10: today's empty mission. `getLesson` only ever generates when there is no record yet
   // for the day, so the only headless way into this state is to write a valid, already-empty
   // `lesson.<day>` record ourselves before navigating — then clean it up so a later `mission` shot

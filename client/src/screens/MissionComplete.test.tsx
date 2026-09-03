@@ -6,7 +6,17 @@ import { MissionComplete } from './MissionComplete'
 const NOW = new Date('2026-08-23T10:00:00').getTime()
 const DAY_MS = 24 * 60 * 60 * 1000
 
-function renderDone() {
+function renderDone(opts: { starsToday?: number; streak?: number } = {}) {
+  const { starsToday = 0, streak: streakDays } = opts
+  // One passing 'word' event per star — the component's own star count (Phase 12) only reads
+  // today's passing speak/word/sentence attempts, so this alone drives starsToday without also
+  // satisfying `dayIsDone` (which needs a story too), which would otherwise seed an unwanted streak.
+  for (let i = 0; i < starsToday; i++) {
+    logActivity({ ts: NOW - 1000 - i, kind: 'word', id: `star-${i}`, score: 90 })
+  }
+  if (streakDays) {
+    for (let d = 1; d <= streakDays; d++) seedDoneDay(NOW - d * DAY_MS + 1000)
+  }
   render(<MemoryRouter><MissionComplete /></MemoryRouter>)
 }
 
@@ -90,4 +100,39 @@ it('restores the iPad leading, not just the size, on the star pill', () => {
 
   const pill = screen.getByText(/^\+\d+ ⭐$/)
   expect(pill).toHaveClass('text-2xl', 'md:text-[30px]', 'md:leading-normal')
+})
+
+// Spec decision 20 (Task 11): a mission that closed with zero stars is still a mission closed —
+// the screen stops celebrating (no confetti, no cheering Foxy) without turning into a failure page.
+it('0 stars: happy Foxy, no confetti, a white card instead of the +n pill, a two-line H1', () => {
+  renderDone({ starsToday: 0 })
+
+  expect(screen.getByTestId('foxy')).toHaveAttribute('data-mood', 'happy')
+  expect(screen.queryByTestId('confetti')).toBeNull()
+  expect(screen.queryByText('+0 ⭐')).toBeNull()
+  expect(screen.getByText('Mai làm lại để lấy ⭐ nhé')).toHaveClass('rounded-r18', 'bg-white', 'text-[18px]', 'text-ink-500', 'shadow-card-sm')
+  const h1 = screen.getByRole('heading', { level: 1 })
+  expect(h1).toHaveTextContent('Xong nhiệm vụ rồi! 🦊Con đã rất cố gắng.')
+})
+
+it('≥1 star keeps the Phase 12 celebration exactly', () => {
+  renderDone({ starsToday: 2 })
+
+  expect(screen.getByTestId('foxy')).toHaveAttribute('data-mood', 'cheer')
+  expect(screen.getByTestId('confetti')).toBeInTheDocument()
+  expect(screen.getByText('+2 ⭐')).toBeInTheDocument()
+  expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Nhiệm vụ hoàn thành! 🎉')
+})
+
+it('a zero streak gets its own line', () => {
+  renderDone({ starsToday: 0, streak: 0 })
+
+  expect(screen.getByText('🔥 Bắt đầu chuỗi mới từ hôm nay!')).toBeInTheDocument()
+  expect(screen.queryByText(/Chuỗi 0 ngày/)).toBeNull()
+})
+
+it('the whole column still fits 667 without scrolling (no fixed heights added)', () => {
+  renderDone({ starsToday: 0, streak: 0 })
+
+  expect(screen.getByTestId('page-body')).toHaveClass('justify-center')
 })

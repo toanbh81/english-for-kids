@@ -21,6 +21,10 @@ export function MissionComplete() {
       && (STAR_KINDS as readonly string[]).includes(e.kind)
       && (e.score ?? 0) >= PASS_SCORE,
   ).length
+  // Spec decision 20: a mission that closed with zero stars still closed — the screen stops
+  // celebrating (no confetti, no cheering Foxy) rather than turning into a failure page.
+  const zero = starsToday === 0
+  const s = streak(now, events)
 
   return (
     // The phone stack of design M8b: the same column, sized so the whole celebration — mascot,
@@ -28,30 +32,44 @@ export function MissionComplete() {
     // bigger type from the tablet breakpoint up.
     <PageShell className="bg-gradient-to-b from-cream-50 to-[#FFEFD9]">
       <PageBody center className="items-center gap-4 text-center md:gap-5">
-        <Confetti />
+        {!zero && <Confetti />}
 
-        <Foxy mood="cheer" size="lg" className="animate-bob [&_svg]:h-[145px] [&_svg]:w-[150px] md:[&_svg]:h-[155px] md:[&_svg]:w-[160px]" />
+        <Foxy
+          mood={zero ? 'happy' : 'cheer'}
+          size="lg"
+          className={
+            zero
+              ? 'animate-bob [&_svg]:h-[144px] [&_svg]:w-[150px]'
+              : 'animate-bob [&_svg]:h-[145px] [&_svg]:w-[150px] md:[&_svg]:h-[155px] md:[&_svg]:w-[160px]'
+          }
+        />
 
         <h1 className="font-display text-[30px] font-extrabold leading-tight text-ink-900 md:text-[52px]">
-          Nhiệm vụ hoàn thành! 🎉
+          {zero ? <>Xong nhiệm vụ rồi! 🦊<br />Con đã rất cố gắng.</> : 'Nhiệm vụ hoàn thành! 🎉'}
         </h1>
 
-        {/* `md:leading-normal` is not decoration. `text-2xl` sets a 32 px line-height as well as a
-            24 px size, and `md:text-[30px]` restores only the size — so the pill came out 56 px tall
-            instead of the 69 it has always been, and the whole centred stack shifted with it (the
-            mascot and the title 6 px down, the streak line and the way out 7 px up). Any
-            arbitrary-size restore has to restate the leading it is stepping on; 1.5 is the inherited
-            value the 30 px pill has always resolved against. */}
-        <div className="inline-flex items-center gap-2 rounded-full bg-sun-50 px-8 py-3 font-display text-2xl font-extrabold text-sun-700 shadow-chunky-sun md:text-[30px] md:leading-normal">
-          +{starsToday} ⭐
-        </div>
+        {zero ? (
+          <div className="rounded-r18 bg-white px-[26px] py-3 text-[18px] font-bold text-ink-500 shadow-card-sm">
+            Mai làm lại để lấy ⭐ nhé
+          </div>
+        ) : (
+          // `md:leading-normal` is not decoration. `text-2xl` sets a 32 px line-height as well as a
+          // 24 px size, and `md:text-[30px]` restores only the size — so the pill came out 56 px tall
+          // instead of the 69 it has always been, and the whole centred stack shifted with it (the
+          // mascot and the title 6 px down, the streak line and the way out 7 px up). Any
+          // arbitrary-size restore has to restate the leading it is stepping on; 1.5 is the inherited
+          // value the 30 px pill has always resolved against.
+          <div className="inline-flex items-center gap-2 rounded-full bg-sun-50 px-8 py-3 font-display text-2xl font-extrabold text-sun-700 shadow-chunky-sun md:text-[30px] md:leading-normal">
+            +{starsToday} ⭐
+          </div>
+        )}
 
         <div className="w-full max-w-[380px]">
           <WeekDots dots={weekDots(now, events)} />
         </div>
 
         <p className="font-display text-base font-extrabold text-ink-500 md:text-2xl">
-          🔥 Chuỗi {streak(now, events)} ngày liên tiếp — giỏi lắm!
+          {s === 0 ? '🔥 Bắt đầu chuỗi mới từ hôm nay!' : `🔥 Chuỗi ${s} ngày liên tiếp — giỏi lắm!`}
         </p>
       </PageBody>
       <PageFooter>
