@@ -1,7 +1,6 @@
-import { Link } from 'react-router-dom'
 import { STORY_VOICE } from '../content'
 import { getStars } from '../progress/store'
-import { BackButton, CARD_LINK, Chip, StarRow } from '../components/ui'
+import { BackButton, ListGrid, Tile } from '../components/ui'
 import { PageShell, PageHeader, PageBody } from '../components/ui/page'
 
 /** The first sentence is enough to recognise a passage by, and keeps every card the same height. */
@@ -12,29 +11,27 @@ const firstSentence = (text: string) => text.split(/(?<=[.!?])\s+/)[0] ?? text
 export function VoiceLevel() {
   return (
     <PageShell>
-      <PageHeader back={<BackButton to="/levels" label="Các bậc" />}>
-        <h1 className="font-display text-[22px] font-extrabold leading-tight text-ink-900 md:text-[32px]">Story Voice 🎭</h1>
-      </PageHeader>
-      <PageBody>
-        <p className="text-center text-[15px] font-bold text-ink-500 md:text-lg">Đọc có hồn — vui, buồn, ngạc nhiên!</p>
-
-        <div className="grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-3">
+      <PageHeader
+        back={<BackButton to="/levels" label="Các bậc" />}
+        title="Story Voice 🎭"
+        sub="Đọc có hồn — vui, buồn, ngạc nhiên!"
+      />
+      <PageBody fade gap={10}>
+        <ListGrid size="lg">
           {STORY_VOICE.map((v, i) => (
-            <Link
+            <Tile
               key={v.id}
+              size="lg"
+              titleSize={15}
+              emoji={v.emoji}
+              chip={{ tone: 'coral', label: v.moodVi }}
+              title={firstSentence(v.text)}
+              stars={getStars(`voice:${v.id}`)}
+              ariaLabel={`Đoạn ${i + 1}: ${v.moodVi}`}
               to={`/voice/${v.id}`}
-              aria-label={`Đoạn ${i + 1}: ${v.moodVi}`}
-              className={CARD_LINK}
-            >
-              <span aria-hidden="true" className="text-[56px] leading-none">{v.emoji}</span>
-              <Chip tone="coral" size="sm">{v.moodVi}</Chip>
-              <span className="text-center font-display text-[22px] font-extrabold leading-tight text-ink-900">
-                {firstSentence(v.text)}
-              </span>
-              <StarRow value={getStars(`voice:${v.id}`)} />
-            </Link>
+            />
           ))}
-        </div>
+        </ListGrid>
       </PageBody>
     </PageShell>
   )

@@ -49,3 +49,13 @@ it('goes back to the stairs, the bậc Story Voice belongs to', () => {
   renderLevel()
   expect(screen.getByRole('link', { name: 'Các bậc' })).toHaveAttribute('href', '/levels')
 })
+
+it('8 large tiles: 28px mood emoji, coral mood chip, 15px first sentence clamped', () => {
+  renderLevel()
+
+  expect(screen.getAllByTestId('tile')).toHaveLength(8)
+  expect(screen.getByText(STORY_VOICE[0].emoji)).toHaveClass('text-[28px]', 'md:text-[34px]')
+  expect(screen.getByText(STORY_VOICE[0].moodVi)).toHaveClass('bg-coral-50', 'text-[11px]')
+  const firstLine = STORY_VOICE[0].text.split(/(?<=[.!?])\s+/)[0]
+  expect(screen.getByText(firstLine)).toHaveClass('text-[15px]', 'line-clamp-2', 'md:text-[19px]')
+})

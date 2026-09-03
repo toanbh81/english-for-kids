@@ -48,3 +48,12 @@ it('goes back to the stairs, the bậc Sentence Stars belongs to', () => {
   renderLevel()
   expect(screen.getByRole('link', { name: 'Các bậc' })).toHaveAttribute('href', '/levels')
 })
+
+it('10 large tiles: EN sentence clamped to 2 lines over a 12px sand meaning', () => {
+  renderLevel()
+
+  expect(screen.getAllByTestId('tile')).toHaveLength(10)
+  const t = screen.getAllByTestId('tile')[0]
+  expect(t.querySelector('.line-clamp-2')).toHaveClass('text-[17px]', 'leading-[1.2]')
+  expect(screen.getByText(SENTENCE_STARS[0].vi)).toHaveClass('text-[12px]', 'text-sand-text')
+})

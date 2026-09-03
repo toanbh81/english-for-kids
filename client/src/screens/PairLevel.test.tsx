@@ -28,8 +28,7 @@ it('shows one card per pair, with both words and the contrast', () => {
   for (const p of PAIRS) {
     const card = screen.getByRole('link', { name: `Cặp ${p.a.word} và ${p.b.word}` })
     expect(card).toHaveAttribute('href', `/pair/${p.id}`)
-    expect(within(card).getByText(p.a.word)).toBeInTheDocument()
-    expect(within(card).getByText(p.b.word)).toBeInTheDocument()
+    expect(within(card).getByText(`${p.a.emoji} ${p.a.word} · ${p.b.emoji} ${p.b.word}`)).toBeInTheDocument()
     expect(within(card).getByText(p.contrast)).toBeInTheDocument()
   }
 })
@@ -48,4 +47,19 @@ it('reads the stars off the pair key, not off a single word', () => {
 it('goes back to the stairs, the bậc Nghe & chọn belongs to', () => {
   renderLevel()
   expect(screen.getByRole('link', { name: 'Các bậc' })).toHaveAttribute('href', '/levels')
+})
+
+it('8 large tiles, one line per pair, teal contrast chip, no lg:', () => {
+  renderLevel()
+
+  expect(screen.getByTestId('list-grid')).toHaveClass('grid-cols-2', 'md:grid-cols-3', 'ipad:grid-cols-4')
+  expect(screen.getByTestId('list-grid').className).not.toMatch(/\blg:/)
+
+  const tiles = screen.getAllByTestId('tile')
+  expect(tiles).toHaveLength(8)
+  expect(tiles[0]).toHaveClass('h-[128px]', 'md:h-[160px]')
+
+  const first = PAIRS[0]
+  expect(screen.getByText(`${first.a.emoji} ${first.a.word} · ${first.b.emoji} ${first.b.word}`)).toHaveClass('text-[17px]', 'md:text-[20px]')
+  expect(within(tiles[0]).getByText(first.contrast)).toHaveClass('bg-teal-50', 'text-[11px]')
 })
