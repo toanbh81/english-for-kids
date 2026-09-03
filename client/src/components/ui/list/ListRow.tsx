@@ -63,7 +63,13 @@ export function ListRow({
         </span>
         {sub && <span className="truncate text-[13px] font-bold text-ink-500 md:text-[15px]">{sub}</span>}
       </span>
-      {stars !== undefined && <Stars value={stars} size="13" className="ml-auto shrink-0 md:text-[14px]" />}
+      {stars !== undefined && (
+        // See Tile.tsx: `Stars` has no accessible label of its own, so its `★` glyphs must not
+        // leak into the row link's computed name.
+        <span aria-hidden="true" className="contents">
+          <Stars value={stars} size="13" className="ml-auto shrink-0 md:text-[14px]" />
+        </span>
+      )}
       {chevron && <span aria-hidden="true" className="shrink-0 font-display text-[22px] leading-none text-ink-300">▸</span>}
     </Link>
   )

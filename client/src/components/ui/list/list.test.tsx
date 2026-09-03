@@ -35,18 +35,31 @@ describe('list frame', () => {
   })
 
   it('Tile ipa renders the 36px #C08457 glyph and an ink sub', () => {
-    render(<MemoryRouter><Tile to="/x" ipa="/θ/" sub="three" /></MemoryRouter>)
+    // No `title`, so `ariaLabel` is required (task-2 review, Important #2) — matches how A11
+    // SoundLevel always calls this shape (task-5 brief).
+    render(<MemoryRouter><Tile to="/x" ipa="/θ/" sub="three" ariaLabel="Âm /θ/, ví dụ three" /></MemoryRouter>)
     expect(screen.getByText('/θ/')).toHaveClass('font-display', 'text-[36px]', 'text-[#C08457]', 'md:text-[45px]')
     expect(screen.getByText('three')).toHaveClass('text-[14px]', 'text-ink-500', 'md:text-[17px]')
+    expect(screen.getByRole('link', { name: 'Âm /θ/, ví dụ three' })).toBe(screen.getByTestId('tile'))
   })
 
   it('Tile locked and accent variants', () => {
     const { rerender } = render(<MemoryRouter><Tile to="/x" variant="locked" emoji="🔒" title="Đồ chơi" chip={{ label: 'Chưa mở khoá' }} /></MemoryRouter>)
     expect(screen.getByTestId('tile')).toHaveClass('bg-sand', 'opacity-85', 'shadow-[0_5px_0_#E2D5C0]')
     expect(screen.getByText('Đồ chơi')).toHaveClass('text-sand-text')
+    // §1 "Ô nhỏ · khoá": the "Chưa mở khoá" chip is #EFE2CC/#A79781 (`sand` tone), not the
+    // default `neutral` — task-2 review, Important #1.
+    expect(screen.getByText('Chưa mở khoá')).toHaveClass('bg-line-200', 'text-sand-text')
     rerender(<MemoryRouter><Tile to="/words/review" variant="accent" emoji="📚" title="Ôn tập" chip={{ tone: 'coralSolid', label: '12 từ hôm nay' }} /></MemoryRouter>)
     expect(screen.getByTestId('tile')).toHaveClass('bg-sun-50', 'shadow-[0_5px_0_#EFDDA8]')
     expect(screen.getByText('12 từ hôm nay')).toHaveClass('bg-coral-500', 'text-white')
+  })
+
+  it('Tile always has an accessible name — ariaLabel for an emoji-only tile, title text with no leaking star glyphs otherwise', () => {
+    const { rerender } = render(<MemoryRouter><Tile to="/sound/th" emoji="🦁" ariaLabel="Tập âm" stars={2} /></MemoryRouter>)
+    expect(screen.getByRole('link', { name: 'Tập âm' })).toBe(screen.getByTestId('tile'))
+    rerender(<MemoryRouter><Tile to="/x" emoji="🐘" title="elephant" stars={3} /></MemoryRouter>)
+    expect(screen.getByRole('link', { name: 'elephant' })).toBe(screen.getByTestId('tile'))
   })
 
   it('ListRow 64 truncates one line and pins 13px stars right', () => {
@@ -63,6 +76,10 @@ describe('list frame', () => {
     expect(screen.getByText('The Little Fox')).toHaveClass('text-[19px]', 'md:text-[23px]')
     expect(screen.getByText('Chú cáo nhỏ · 4 cảnh')).toHaveClass('text-[13px]', 'text-ink-500', 'md:text-[15px]')
     expect(screen.getByText('▸')).toHaveClass('text-[22px]', 'text-ink-300')
+    // `title` is required on `ListRow`, so its accessible name always exists — but `Stars`'
+    // `★` glyphs must not leak into it (task-2 review, Important #2).
+    expect(screen.getByRole('link', { name: /The Little Fox/ })).toBe(screen.getByTestId('list-row'))
+    expect(screen.queryByRole('link', { name: /★/ })).toBeNull()
   })
 
   it('StickyGroup pins its H2 to the top of the scroller, with an optional count tail', () => {

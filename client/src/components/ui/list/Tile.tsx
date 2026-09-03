@@ -16,11 +16,33 @@ const TITLE = {
 }
 const SUB = { ink: 'text-[14px] font-bold text-ink-500 md:text-[17px]', sand: 'text-[12px] font-bold text-sand-text md:text-[15px]' }
 
+type TileBase = {
+  to: string
+  size?: 'sm' | 'lg'
+  variant?: 'open' | 'locked' | 'accent'
+  emoji?: string
+  ipa?: string
+  /** Only meaningful with `size='lg'` — the A14 mood-line tile uses 15 for a shorter first line. */
+  titleSize?: 15 | 17
+  sub?: ReactNode
+  subTone?: 'ink' | 'sand'
+  chip?: { tone?: ChipTone; label: ReactNode }
+  stars?: 0 | 1 | 2 | 3
+  state?: unknown
+  className?: string
+}
+
+// Every tile needs an accessible name: either its visible `title` text stands in for it, or a
+// caller with an emoji/IPA-only tile (A10/A11's word-pop and sound tiles, say) must supply
+// `ariaLabel` explicitly — TS refuses to compile a tile with neither, so this can't regress
+// silently the way it did when `ariaLabel` was merely optional (task-2 review, Important #2).
+type TileProps = TileBase & ({ title: string; ariaLabel?: string } | { title?: never; ariaLabel: string })
+
 /** The shared list frame's tile (brief §1, decision 1): small square at `sm` (word/sound/story/
  * topic — content ≤ one word, emoji or IPA glyph), large rectangle at `lg` (sentence/pair/
  * paragraph — up to two lines, ellipsized). `variant='locked'` is the not-unlocked-yet look
- * (`sand` surface, dimmed text); `variant='accent'` is the WordTopics "review" tile (`sun-50`
- * surface). At least one of `emoji`/`ipa`/`title` should be given. */
+ * (`sand` surface, dimmed text, and — unless `chip.tone` overrides it — a `sand`-toned "Chưa mở
+ * khoá" chip); `variant='accent'` is the WordTopics "review" tile (`sun-50` surface). */
 export function Tile({
   to,
   size = 'sm',
@@ -36,27 +58,15 @@ export function Tile({
   ariaLabel,
   state,
   className = '',
-}: {
-  to: string
-  size?: 'sm' | 'lg'
-  variant?: 'open' | 'locked' | 'accent'
-  emoji?: string
-  ipa?: string
-  title?: ReactNode
-  /** Only meaningful with `size='lg'` — the A14 mood-line tile uses 15 for a shorter first line. */
-  titleSize?: 15 | 17
-  sub?: ReactNode
-  subTone?: 'ink' | 'sand'
-  chip?: { tone?: ChipTone; label: ReactNode }
-  stars?: 0 | 1 | 2 | 3
-  ariaLabel?: string
-  state?: unknown
-  className?: string
-}) {
+}: TileProps) {
   return (
     <Link
       to={to}
       state={state}
+      // No fallback synthesized from `title` here: when `ariaLabel` is absent, the browser
+      // computes the link's accessible name from its own visible text content (the title span
+      // below) — which `TileProps` now guarantees exists. `Stars`' star glyphs are kept out of
+      // that computed name by the `aria-hidden` wrapper further down.
       aria-label={ariaLabel}
       data-testid="tile"
       className={`flex flex-col items-center justify-center rounded-r18 text-center transition-transform active:translate-y-[2px] ${BOX[size]} ${SURFACE[variant]} ${className}`}
@@ -79,11 +89,22 @@ export function Tile({
       )}
       {sub && <span className={SUB[subTone ?? 'ink']}>{sub}</span>}
       {chip && (
-        <Chip tone={chip.tone ?? 'neutral'} size="sm" className="rounded-[9px] px-2 py-0.5 text-[11px] leading-tight md:text-[13px]">
+        <Chip
+          tone={chip.tone ?? (variant === 'locked' ? 'sand' : 'neutral')}
+          size="sm"
+          className="rounded-[9px] px-2 py-0.5 text-[11px] leading-tight md:text-[13px]"
+        >
           {chip.label}
         </Chip>
       )}
-      {stars !== undefined && <Stars value={stars} size="13" className="md:text-[14px]" />}
+      {stars !== undefined && (
+        // `Stars` carries no accessible label of its own (its `★` glyphs are plain text), so it
+        // must not leak into the link's computed name — `contents` keeps the wrapper out of the
+        // flex layout while `aria-hidden` keeps it out of the accessibility tree.
+        <span aria-hidden="true" className="contents">
+          <Stars value={stars} size="13" className="md:text-[14px]" />
+        </span>
+      )}
     </Link>
   )
 }

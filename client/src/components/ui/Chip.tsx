@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 
-export type ChipTone = 'teal' | 'coral' | 'sun' | 'neutral' | 'coralSolid'
+export type ChipTone = 'teal' | 'coral' | 'sun' | 'neutral' | 'coralSolid' | 'sand'
 export type ChipSize = 'sm' | 'md'
 
 const TONE: Record<ChipTone, string> = {
@@ -9,6 +9,10 @@ const TONE: Record<ChipTone, string> = {
   sun: 'bg-sun-50 text-sun-700',
   neutral: 'bg-cream-50 text-ink-500',
   coralSolid: 'bg-coral-500 text-white',
+  // The "Chưa mở khoá" chip on a locked list `Tile` (brief §1 "Ô nhỏ · khoá"): `#EFE2CC`/`#A79781`.
+  // `#EFE2CC` is the existing `line-200` token (already used as a background by `ProgressBar`,
+  // `Toggle`, `SceneDots`), not a new hex.
+  sand: 'bg-line-200 text-sand-text',
 }
 
 const SIZE: Record<ChipSize, string> = {

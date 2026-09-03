@@ -181,6 +181,11 @@ describe('Chip', () => {
     render(<Chip tone="coralSolid">12 từ hôm nay</Chip>)
     expect(screen.getByText('12 từ hôm nay')).toHaveClass('bg-coral-500', 'text-white')
   })
+
+  it('sand is the locked-tile chip colour, #EFE2CC/#A79781', () => {
+    render(<Chip tone="sand">Chưa mở khoá</Chip>)
+    expect(screen.getByText('Chưa mở khoá')).toHaveClass('bg-line-200', 'text-sand-text')
+  })
 })
 
 describe('ChipPair', () => {
