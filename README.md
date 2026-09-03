@@ -1304,6 +1304,161 @@ tap into the Dashboard's reset dialog.
 | 80 (limit lock) | Practice a card after the daily minute limit is reached | 🌙 "Hôm nay bé học đủ rồi!" error, mic shows locked (not disabled-grey, not recording), CTA reads "Về nhà" | ⏳ pending |
 | 81 (offline notice) | Turn on airplane mode, then use a speaking screen | 📡 fallback notice appears once for the session, "Tiếp tục" dismisses it; using another speaking screen afterward shows only the "chế độ đơn giản" engine badge, no repeat notice | ⏳ pending |
 
+## Phase 13 — Khung luyện nói (vòng 2)
+
+Round 2 of the redesign (`docs/design/round-2026-09/README.md`) redraws the **"dạy" (teach) half** of
+the nine speaking/word/sentence screens on top of Phase 12's frame, which already owned the "làm" (do)
+half — Foxy, mic, error, `ResultCard`, CTA. Implemented 2026-09-03 on branch `phase13-practice` (tasks
+1–12); every "làm theo đề xuất" decision is recorded in
+`docs/superpowers/specs/2026-09-03-phase13-practice-frame-design.md`, sourced from
+`docs/design/2026-09-03-round2-practice-brief.md`.
+
+- **Dải gập (collapsible teach strip).** `PageBody split` takes a `collapsed?: { emoji; label;
+  onExpand }`. Phone shows a 32 px strip (`#D9C9AE`, "▾ mở"); iPad portrait shows a 64 px white strip;
+  iPad landscape never collapses (both columns always show). The open/closed state (`teachOpen`)
+  belongs to the screen, so tapping the strip always reopens the teach column in place.
+- **Header mờ khi ghi (header dims while recording).** `PageHeader` takes `dimmed?` — the back button
+  and the header's right slot drop to `opacity-40 pointer-events-none` — and each screen feeds a coral
+  "● Đang ghi" chip into the header's center slot while `recording` is true.
+- **Chip đôi (`ChipPair`).** A joined two-part pill, teal on the left with a left radius, coral on the
+  right with a right radius. Used by Tập âm ("Âm i/N · Từ i/N", always shown now — the old 3-dot
+  indicator is gone) and Nghe & chọn ("Cặp i/N · ɪ/iː").
+- **Đếm ngược cùng hàng (countdown same row).** `MicButton` gained `countdownLayout: 'row' | 'column'`.
+  Every Phase 13 screen keeps `row` (tick mark + number sharing one row, number `min-w-[56px]` phone /
+  `min-w-[70px]` iPad) — the design's iPad-portrait `column` variant is parked for the final review
+  (Ruling, not responsive without a media-query hook or a `MicButton` `order` rework).
+- **Foxy nhắc (`SpeakPrompt`).** A new component — Foxy at 60 px (phone) / 72 px (iPad) plus a speech
+  bubble, with the seconds-to-record in coral — sits before `MicButton` in the act column. Every screen
+  supplies its own `say` copy (e.g. PracticeCard's "Nói to, rõ trong 5 giây nhé!", VoicePractice's "Đọc
+  cả đoạn thật có hồn nhé!").
+- **Act xếp ngang ở iPad dọc.** `PageBody split`'s act container is `md:flex-row md:gap-10
+  ipad:flex-col` — on iPad **portrait** the prompt/error/mic row lays out horizontally (like landscape
+  used to), instead of stacking, so it fits inside the collapsible teach/act split without pushing the
+  mic off-screen.
+
+Two carrier fixes landed alongside the six behaviours, both discovered by screenshot review mid-branch
+rather than planned up front:
+- **Tailwind `ipad:` variant specificity.** Compiling `ipad` as a plain `screen` variant put it before
+  `md` in Tailwind 3's variant order, so every `md:` utility silently beat its `ipad:` counterpart on
+  the same property regardless of which the JSX wrote last (`md:flex-row` > `ipad:flex-col`, `md:h-
+  [300px]` > `ipad:h-auto`) — invisible to a test that only asserts class names. Fixed by registering
+  the variant as `'@media (…) { &:is(&) }'`, so every `ipad:` rule compiles to `.ipad\:x:is(.ipad\:x)`
+  (specificity 0,2,0), beating any single-class `md:` rule outright. This incidentally fixed four other
+  silent `md:`>`ipad:` bugs already living in `ResultCard`, `PageFooter`, `DailyMission` and
+  `LevelStairs`.
+- **Phone no-shrink rule.** `PageBody split`'s teach/act children used to both `flex-1` on phone, so an
+  error banner could shrink the act column below its content and spill upward. Now on phone nothing
+  shrinks (teach `flex-[1_0_auto]`, act `shrink-0`) and the page body scrolls instead — `md:`/`ipad:`
+  keep the old shrink-with-internal-scroll behaviour.
+
+### The nine screens
+
+| Screen | What changed |
+|---|---|
+| PracticeCard (B1, Word Pop) | `MouthPanel` toggle behind a "👄 Khẩu hình" button (140×140 phone inline / 220×220 iPad under the button row); header chip "Thẻ i/N · ● ○" streak dots (hidden at `short:`) |
+| SoundWordList (B2, Tập âm word list) | `SoundTier` + `SpeakPrompt` Foxy hint ("Luyện đủ 3 từ để xanh cả âm!") under a 3-card grid; iPad is 1 column, 200×180 cells, centered |
+| SoundPractice (B3) | `ChipPair` "Âm i/N · Từ i/N" always visible; `SoundTier`; `ResultCard.forceHint` shows the 👅 tip whenever tone isn't "good", not just on a low score |
+| PairPractice (B4) | `ChipPair` "Cặp i/N · ɪ/iː"; listen phase collapses its wrong-pick feedback to one line ("🙈 Nghe lại rồi chọn nhé"); the result phase replaces the old summary `Card` with a single-line green chip |
+| StarPractice (B5) | Rhythm card grows to 480 px on iPad; the old reserved 112 px spacer is gone; `ResultCard.sub` carries the "Nhịp: …" line |
+| VoicePractice (B6) | The carrier's reference screen — demonstrates all six behaviours above; mood badge + tips card still precede the mic (unchanged from Phase 9); `ResultCard.fox` row follows the score bars |
+| StoryRetell (C4) | Header chip "Kể lại · cảnh i/N" replaces the H1; no progress bar; CTA is one primary button + "Thử lại" |
+| WordCard (C7) | `ResultCard.compact` overlays just the score/hint under the card instead of replacing it; the card never resizes; the pre-flip peek animation (6 s) and its 🔄 hint dim instead of disappearing once a result is scored |
+| SentenceBuilder (C9) | Result state keeps the tray in place and lays `ScoredWords` chips where the tiles were (does **not** collapse into a strip, unlike the other eight — a Ruling below explains why); on iPad the mic stays disabled with caption "Xếp đúng câu trước nhé" until the sentence is correctly assembled; "Tiếp theo →" stays inside the current topic when the screen was opened with `?topic=` |
+
+### Result-state measurements at 1194×834 (iPad landscape)
+
+All eight mic screens were measured via the dev-only `?fixture=result3` route (`import.meta.env.DEV`
+only, stripped from production builds) with `docs/design/current/shoot.mjs`'s overflow probe, which
+reads `PageBody`'s `scrollHeight`/`clientHeight`. **None overflow** — every one lands exactly at the
+710 px `PageBody` height (1194×834 minus header/footer), because the act column's internal
+shrink-with-scroll behaviour (Task 5) absorbs any extra content rather than growing the outer scroll
+region:
+
+| Screen | route | `scrollHeight` | `clientHeight` | Overflow |
+|---|---|---|---|---|
+| PracticeCard | `/practice/wp-cat?fixture=result3` | 710 | 710 | none |
+| SoundPractice | `/sound/th/sz-th-three?fixture=result3` | 710 | 710 | none |
+| PairPractice | `/pair/pair-ship-sheep?fixture=result3` | 710 | 710 | none |
+| StarPractice | `/star/ss1?fixture=result3` | 710 | 710 | none |
+| VoicePractice | `/voice/sv1?fixture=result3` | 710 | 710 | none |
+| StoryRetell | `/story/little-fox/retell?fixture=result3` | 710 | 710 | none |
+| WordCard | `/words/animals/animals-elephant?fixture=result3` | 710 | 710 | none |
+| SentenceBuilder | `/sentence/s12?fixture=result3` | 710 | 710 | none |
+
+The full three-viewport sweep (`SHOTS_DIR=docs/design/current-phase13/shots node
+docs/design/current/shoot.mjs`, all screens, no `SHOTS` filter) wrote 20 `-full.png` files — 13 phone,
+4 iPad landscape, 3 iPad portrait — every one of them a screen Phase 13 doesn't touch: the level-select
+lists (`level-word-pop`, `level-sound-zoo`, `level-pairs`, `level-stars`, `level-voice`),
+`home`/`home-fresh`/`home-over-limit`, `words`/`words-animals`, `sentences` (the `SentenceList` screen,
+not `SentenceBuilder`), `parent-dashboard`, and one phone-only 1 px probe graze on
+`voice-recording` (already a known, accepted Ruling — see below). **None of the four screens the plan
+named as must-fit (`voice-result3`, `star-result3`, `sound-result3`, `sentence-result3`) appear in the
+`ipad/` overflow list.** A separate `VIEWPORTS=short SHOTS=practice-idle,practice-result3,sound-
+practice-idle,sound-result3,voice-idle,voice-result3` spot-check of the 375×667 fold added 4 more
+`-full.png` (`practice-idle`, `sound-practice-idle`, `voice-idle`, `voice-result3` — the `-result3`
+fixtures fit at every other frame; `practice-result3` and `sound-result3` fit even at 375×667). These
+four are the phone no-shrink Ruling working as designed: the page scrolls under the fold instead of
+clipping or overlapping, which is what that Ruling accepted as the trade-off.
+
+### Sai lệch so với brief (Ruling)
+
+Recorded in `.superpowers/sdd/2026-09-03-phase13-practice-frame/progress.md`'s `Ruling:` lines during
+implementation, not silently picked:
+
+- Same workspace policy as Phase 12 — branch worked in the main tree, no separate worktree.
+- `countdownLayout="row"` stays on every Phase 13 screen; the design's iPad-portrait `column` variant
+  is parked for the final review (not responsive without a media-query hook or a `MicButton` `order`
+  rework) — cosmetic only if wrong.
+- Phone's tips card keeps one tip per line, and a 1 px shoot-probe graze on `phone/voice-recording` is
+  accepted as-is — the brief has no single-row requirement and nothing is clipped.
+- The iPad-portrait error-banner squeeze (act row forcing the prompt bubble to one word per line) was
+  fixed in the carrier during Task 5: `md:flex-wrap ipad:flex-nowrap`, the error banner takes its own
+  full row above prompt+mic on `md`, and the prompt bubble got a sane max-width.
+- The Tailwind `ipad:` variant now compiles as `'@media (…) { &:is(&) }'` so it always outranks a
+  single-class `md:` rule regardless of declaration order (see "Tailwind `ipad:` variant specificity"
+  above).
+- The vacuous "reopens teach on retry" test in StarPractice/VoicePractice was replaced by the real
+  sequence: result → strip; tap → teach; next result → strip again.
+- `SpeakError` moving to its own full row above prompt+mic on `md` portrait was accepted as transient —
+  PairPractice and SentenceBuilder's own act columns (Tasks 8/11) rebuild that order as prompt → error
+  → mic, which is their intended layout anyway.
+- Tập âm's IPA chip takes `md:text-coral-text` on iPad — the design brief's own line outranks the
+  condensed task brief's silence on colour.
+- PracticeCard (B1) drops the `seconds` prop entirely — the design's own `say` copy already carries the
+  number, so the plan's separate `seconds={5}` would have doubled it.
+- `shoot.mjs` gained the `short` 375×667 viewport behind `VIEWPORTS=` (default unchanged) — this is
+  what Task 12's short-fold sweep uses.
+- PracticeCard's (B1) iPad card corner radius is `md:rounded-[32px]`, per the design file rather than
+  a new design-token name.
+- On phone nothing in `PageBody split` shrinks any more (teach `flex-[1_0_auto]`, act `shrink-0`; the
+  page scrolls instead) — `md:`/`ipad:` keep the old shrink-with-internal-scroll behaviour (see "Phone
+  no-shrink rule" above).
+- The "0 `act()` warnings" constraint means zero `act()` *warnings*, not zero `act()` calls — explicit
+  `act()` wrappers around a mock's own state pushes are fine (SoundPractice precedent).
+- SentenceBuilder (C9) does **not** collapse into a strip like the other eight screens: its result
+  state is the sentence line + `ScoredWords` chips sitting in the tray's own position, with the banner
+  and "Đọc câu" button hidden — the design's own bullet says the chips replace the tray in place, which
+  presumes the tray stays visible. Cost: a taller phone result page than a collapsed strip would give.
+- `SentenceList` row links now carry `?topic=<id>` when the list is filtered by topic, so
+  SentenceBuilder's "stay in topic" behaviour (R20) is actually reachable — a one-line change outside
+  the task's file list; Phase 14 redraws the list anyway.
+
+Parked for the phase's final review (not fixed in Task 12, since Task 12 makes no product-code
+changes): on phone, `ResultCard`'s `fox` row (44 px) lets Foxy's face overlap the CTA row below it on
+`voice-result3` and `sentence-result3` — a Phase 12 `ResultCard` defect surfaced by Phase 13's shots,
+not a Phase 13 regression.
+
+### iPad checklist rows for this phase
+
+Continuing the numbering from the table above.
+
+| # | Step | Expected result | Result |
+|---|------|------------------|--------|
+| 82 (chip đôi) | Tập âm or Nghe & chọn → open a practice card | Header shows a joined two-part pill — teal left half, coral right half — reading "Âm i/N · Từ i/N" or "Cặp i/N · ɪ/iː"; no separate 3-dot indicator anywhere | ⏳ pending |
+| 83 (dải gập) | Any of the 9 speak/word/sentence screens → the teach half collapses into a strip once idle/result state settles → tap the strip | The teach column reopens in place (phone: 32 px strip "▾ mở"; iPad portrait: 64 px white strip); iPad landscape never shows a strip at all | ⏳ pending |
+| 84 (khẩu hình bật/tắt) | Word Pop (PracticeCard) → tap "👄 Khẩu hình" | A mouth-shape panel opens (140×140 phone inline / 220×220 iPad under the buttons) and tapping again closes it | ⏳ pending |
+| 85 (header mờ khi ghi) | Any speaking screen → tap the mic to start recording | Header's back button and right-side slot dim to ~40% opacity and stop responding to taps; a coral "● Đang ghi" chip appears in the header center until recording stops | ⏳ pending |
+
 ## Architecture
 
 ```

@@ -1,5 +1,8 @@
 # Phase 13 — Khung luyện nói (vòng 2): phần "dạy" của 9 màn trên khung Phase 12
 
+Trạng thái: đã triển khai 2026-09-03 (nhánh `phase13-practice`, tasks 1–12); sai lệch ghi ở README
+§Phase 13.
+
 Phase 12 dựng khung trang và phần "làm" (Foxy + mic + lỗi + ResultCard + CTA). Phase 13 vẽ lại **phần "dạy"** của 9 màn luyện nói theo vòng 2 của Claude Design, bổ sung 6 hành vi khung mà vòng 2 mới chốt (dải gập, header mờ khi ghi, chip đôi, đếm ngược cùng hàng, Foxy nhắc số giây, act xếp ngang ở iPad dọc), và áp số đo 3 frame cho từng màn.
 
 **Số đo nằm trong brief, không ở đây:** `docs/design/2026-09-03-round2-practice-brief.md` (§1 khung, §2 chín biến thể, §3 Q7–Q10, §4 R1–R24, §5 rủi ro, §6 việc mới). Spec này chỉ ghi quyết định đã chốt và luật ràng buộc.
