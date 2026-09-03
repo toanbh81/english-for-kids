@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, cleanup } from '@testing-library/react'
+import { render, screen, fireEvent, cleanup, within } from '@testing-library/react'
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 
 const state = vi.hoisted(() => ({
@@ -7,8 +7,11 @@ const state = vi.hoisted(() => ({
   rate: 1 as 0.75 | 1,
   tMs: 0,
   wordIndex: 1,
-  hasTimings: false,
-  hasAudio: false,
+  // A clean "ready, nothing wrong" default: most tests here have nothing to do with the audio
+  // Notice, so they should not have to also pick their way around it. Tests about the two audio
+  // states set `hasTimings`/`hasAudio`/`playing` explicitly.
+  hasTimings: true,
+  hasAudio: true,
   subtitles: false,
   ended: false,
   timings: [] as { start: number; end: number }[],
@@ -23,6 +26,7 @@ const actions = vi.hoisted(() => ({
   goScene: vi.fn(),
   replayWord: vi.fn(),
   toggleSubtitles: vi.fn(),
+  retry: vi.fn(),
 }))
 
 vi.mock('../story/useStoryPlayer', () => ({
@@ -68,16 +72,20 @@ function renderPlayer(id = 'little-fox', mission = false) {
 beforeEach(() => {
   localStorage.clear()
   Object.assign(state, {
-    sceneIndex: 0, playing: false, rate: 1, tMs: 0, wordIndex: 1, hasTimings: false,
-    hasAudio: false, subtitles: false, ended: false, timings: [],
+    sceneIndex: 0, playing: false, rate: 1, tMs: 0, wordIndex: 1, hasTimings: true,
+    hasAudio: true, subtitles: false, ended: false, timings: [],
   })
   Object.values(actions).forEach(fn => fn.mockClear())
 })
 
-it('shows the story title and titleVi', () => {
+it('the header carries the scene chip over the story name, above the picture', () => {
   renderPlayer()
-  expect(screen.getByText('The Little Fox')).toBeInTheDocument()
-  expect(screen.getByText('Chú cáo nhỏ')).toBeInTheDocument()
+  const story = findStory('little-fox')!
+  const banner = screen.getByRole('banner')
+  expect(within(banner).getByText(`Cảnh 1/${story.scenes.length}`)).toBeInTheDocument()
+  expect(within(banner).getByText('🦊 The Little Fox')).toHaveClass('text-[11px]', 'text-ink-300')
+  expect(screen.queryByTestId('story-title')).toBeNull()
+  expect(banner.compareDocumentPosition(screen.getByTestId('story-art')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
 })
 
 it('shows the scene 0 emoji', () => {
@@ -113,14 +121,8 @@ it('gives the picture a fixed 16/9 frame on a phone and the flexible one from md
   expect(frame).toHaveClass('md:aspect-auto', 'md:max-h-[52vh]', 'md:min-h-0', 'md:flex-1')
 })
 
-it('drops the text title and draws a scene progress bar only on a phone', () => {
+it('draws a scene progress bar only on a phone', () => {
   renderPlayer()
-  // The title is still rendered — it is only hidden below the tablet breakpoint (design M6 has
-  // no text header at all), so the landscape frame keeps it. It now lives in the body, below the
-  // real header (the back arrow and the scene chip), rather than being a header of its own.
-  expect(screen.getByTestId('story-title')).toHaveClass('hidden', 'md:block')
-  expect(screen.getByText('The Little Fox')).toBeInTheDocument()
-
   const bar = screen.getByTestId('scene-progress')
   expect(bar).toHaveClass('h-[11px]', 'md:hidden')
   // 7 scenes, showing the first: the solid teal fill is 1/7 wide, not a gradient.
@@ -129,10 +131,12 @@ it('drops the text title and draws a scene progress bar only on a phone', () => 
   expect(fill.style.width).toMatch(/^14\.28/)
 })
 
-it('moves the tap hint out of the picture on a phone and keeps the floating pill from md up', () => {
+it('the tap hint is one line above the karaoke at every frame, never a pill on the art', () => {
   renderPlayer()
-  expect(screen.getByText('👆 Chạm 1 từ để nghe lại')).toHaveClass('md:hidden')
-  expect(screen.getByText('👆 Chạm vào 1 từ để nghe lại')).toHaveClass('max-md:hidden')
+  const hint = screen.getByText('👆 Chạm 1 từ để nghe lại')
+  expect(hint).toHaveClass('text-[13px]', 'text-teal-600', 'short:hidden')
+  expect(hint.className).not.toMatch(/md:hidden/)
+  expect(within(screen.getByTestId('story-art')).queryByText(/Chạm/)).toBeNull()
 })
 
 it('clicking Phát calls toggle', () => {
@@ -171,6 +175,7 @@ it('hides the Vietnamese subtitle when subtitles is false', () => {
 })
 
 it('shows the estimated-clock note when the scene has no timings', () => {
+  state.hasTimings = false
   renderPlayer()
   expect(screen.getByText(/Chưa có giọng đọc/)).toBeInTheDocument()
 })
@@ -180,7 +185,7 @@ it('hides the estimated-clock note once the scene has timings', () => {
   state.hasAudio = true
   renderPlayer()
   expect(screen.queryByText(/Chưa có giọng đọc/)).not.toBeInTheDocument()
-  expect(screen.queryByText('Không phát được giọng đọc')).not.toBeInTheDocument()
+  expect(screen.queryByText(/Không phát được giọng đọc/)).not.toBeInTheDocument()
 })
 
 it('shows a playback-failed note when a timed scene is playing without audio', () => {
@@ -190,8 +195,23 @@ it('shows a playback-failed note when a timed scene is playing without audio', (
   renderPlayer()
   // The narration exists but is not coming out (missing mp3 / blocked autoplay) — a different
   // problem from "gen-story.mjs was never run", so it gets its own wording.
-  expect(screen.getByText('Không phát được giọng đọc')).toBeInTheDocument()
+  expect(screen.getByText('🔇 Không phát được giọng đọc')).toBeInTheDocument()
   expect(screen.queryByText(/Chưa có giọng đọc/)).not.toBeInTheDocument()
+})
+
+it('the two audio states are 44px Notices, the error one with a retry action', () => {
+  state.hasTimings = false
+  renderPlayer()
+  expect(screen.getByRole('status')).toHaveTextContent('Chưa có giọng đọc — chữ chạy theo nhịp ước lượng')
+
+  cleanup()
+  Object.assign(state, { hasTimings: true, hasAudio: false, playing: true })
+  renderPlayer()
+  const err = screen.getByRole('status')
+  expect(err).toHaveClass('bg-fix-50', 'border-fix-300')
+  expect(err).toHaveTextContent('🔇 Không phát được giọng đọc')
+  fireEvent.click(within(err).getByRole('button', { name: 'Thử lại' }))
+  expect(actions.retry).toHaveBeenCalled()
 })
 
 it('stays quiet about audio on a timed scene that is not playing yet', () => {

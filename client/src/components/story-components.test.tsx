@@ -32,12 +32,12 @@ describe('Karaoke', () => {
     expect(buttons[0]).toHaveClass('text-[#CDBFA9]', 'text-[21px]', 'md:text-[32px]')
     expect(buttons[2]).toHaveClass('text-ink-900', 'text-[21px]', 'md:text-[32px]')
   })
-  it('gives every word a 64px-wide centred tap target', () => {
-    render(<Karaoke words={words} activeIndex={1} onWordTap={() => {}} />)
-    // Short words like "a" or "is" are otherwise far too narrow for a 5-year-old's finger.
-    for (const button of screen.getAllByRole('button')) {
-      expect(button).toHaveClass('min-h-[64px]', 'min-w-[64px]', 'justify-center')
-    }
+  it('a karaoke word is a 44px target, not 64 (Q11 named exception)', () => {
+    render(<Karaoke words={[{ w: 'The' }]} activeIndex={0} onWordTap={() => {}} />)
+    const w = screen.getByRole('button', { name: 'The' })
+    expect(w).toHaveClass('min-h-[44px]', 'px-1.5', 'py-2')
+    expect(w.className).not.toMatch(/min-w-\[64px\]/)
+    expect(w.parentElement).toHaveClass('gap-x-1')
   })
   it('calls onWordTap with the tapped index', () => {
     const fn = vi.fn()
@@ -75,6 +75,14 @@ describe('PlayerControls', () => {
     expect(play).toHaveClass('h-24', 'w-24', 'text-[38px]')
     expect(play).toHaveClass('md:w-[104px]', 'md:h-[104px]', 'md:text-[44px]')
     expect(play).toHaveClass('rounded-full', 'bg-teal-500', 'text-white')
+  })
+
+  it('PlayerControls: round step buttons, 44×40 speed chips, the flag label', () => {
+    render(<PlayerControls {...baseProps} />)
+    expect(screen.getByRole('button', { name: 'Cảnh trước' })).toHaveClass('rounded-full', 'h-[64px]', 'w-[64px]')
+    expect(screen.getByText('🐢')).toHaveClass('h-10', 'w-11', 'rounded-[11px]')
+    expect(screen.getByText('🇻🇳 Phụ đề')).toBeInTheDocument()
+    expect(screen.queryByText('Phụ đề Việt')).toBeNull()
   })
 
   /** The wrap at 390 px would otherwise put the speed pill and ⏮ on the first line and the play

@@ -25,6 +25,7 @@ export type StoryPlayer = PlayerState & {
   goScene(i: number): void
   replayWord(i: number): void
   toggleSubtitles(): void
+  retry(): void
   timings: { start: number; end: number }[]
   ended: boolean
 }
@@ -68,7 +69,11 @@ export function useStoryPlayer(story: Story): StoryPlayer {
   const [rate, setRateState] = useState<0.75 | 1>(1)
   const [tMs, setTMs] = useState(NOT_STARTED)
   const [hasAudio, setHasAudio] = useState(false)
-  const [subtitles, setSubtitles] = useState(true)
+  const [subtitles, setSubtitles] = useState(() => {
+    // R29 / quyết định 28: đọc MỘT LẦN lúc mount, không nghe resize — xoay máy giữa chừng không
+    // được tự tắt phụ đề dưới tay đứa trẻ.
+    try { return window.innerHeight >= 700 } catch { return true }
+  })
   const [ended, setEnded] = useState(false)
 
   const scene = story.scenes[sceneIndex]
@@ -313,8 +318,26 @@ export function useStoryPlayer(story: Story): StoryPlayer {
 
   function toggleSubtitles() { setSubtitles(s => !s) }
 
+  /** R23: nút "Thử lại" của dòng lỗi. Nạp lại src của cảnh hiện tại và chơi lại từ vị trí đang
+   * đứng — cùng đường đi mà effect đổi cảnh dùng, chỉ khác là nó không đổi `sceneIndex`. */
+  function retry() {
+    const audio = audioElRef.current
+    if (!audio || !audioActiveRef.current) { beginPlayback(tMs === NOT_STARTED ? 0 : tMs); return }
+    const token = ++loadTokenRef.current
+    metadataReadyRef.current = false
+    playResolvedRef.current = false
+    hasAudioRef.current = false
+    setHasAudio(false)
+    audio.pause()
+    audio.src = scene.audio
+    audio.load()
+    audio.playbackRate = rateRef.current
+    beginPlayback(tMs === NOT_STARTED ? 0 : tMs)
+    void token
+  }
+
   return {
     sceneIndex, playing, rate, tMs, wordIndex, hasTimings: complete, hasAudio, subtitles, ended, timings,
-    play, pause, toggle, setRate, nextScene, prevScene, goScene, replayWord, toggleSubtitles,
+    play, pause, toggle, setRate, nextScene, prevScene, goScene, replayWord, toggleSubtitles, retry,
   }
 }

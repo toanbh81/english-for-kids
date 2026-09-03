@@ -520,6 +520,61 @@ it('critical fix: one Audio element is reused across every scene (iOS per-elemen
   unmount()
 })
 
+it('retry() reloads the scene audio and plays again', async () => {
+  class Spy {
+    static loadCount = 0
+    static playCount = 0
+    src = ''
+    currentTime = 0
+    playbackRate = 1
+    addEventListener(type: string, cb: () => void): void {
+      if (type === 'loadedmetadata') cb()
+    }
+    removeEventListener(): void {}
+    play(): Promise<void> {
+      Spy.playCount++
+      return Promise.resolve()
+    }
+    pause(): void {}
+    removeAttribute(): void {}
+    load(): void {
+      Spy.loadCount++
+    }
+  }
+  // @ts-expect-error stub Audio to count load()/play() calls across the initial play and retry()
+  globalThis.Audio = Spy
+  const story = makeStory()
+  const { result, unmount } = renderHook(() => useStoryPlayer(story))
+
+  act(() => result.current.play())
+  await flush()
+  const loadsBefore = Spy.loadCount
+  const playsBefore = Spy.playCount
+
+  act(() => result.current.retry())
+  await flush()
+  expect(Spy.loadCount).toBe(loadsBefore + 1) // audio.load() called one more time
+  expect(Spy.playCount).toBe(playsBefore + 1) // play() called again
+  unmount()
+})
+
+it('subtitles default off under a 700px viewport, on at or above', () => {
+  const story = makeStory()
+  const original = Object.getOwnPropertyDescriptor(window, 'innerHeight')
+
+  Object.defineProperty(window, 'innerHeight', { value: 667, configurable: true })
+  const { result: short, unmount: unmountShort } = renderHook(() => useStoryPlayer(story))
+  expect(short.current.subtitles).toBe(false)
+  unmountShort()
+
+  Object.defineProperty(window, 'innerHeight', { value: 844, configurable: true })
+  const { result: tall, unmount: unmountTall } = renderHook(() => useStoryPlayer(story))
+  expect(tall.current.subtitles).toBe(true)
+  unmountTall()
+
+  if (original) Object.defineProperty(window, 'innerHeight', original)
+})
+
 it('minor fix: an incomplete-timings scene never creates an Audio element', async () => {
   let created = 0
   class CountingAudio extends FakeAudio {

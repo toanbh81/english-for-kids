@@ -13,8 +13,8 @@ import { Toggle } from './ui/Toggle'
  * second; `md:order-none` hands the DOM order back from 768 up, where the whole thing is one row.
  */
 const TRANSPORT = 'order-1 md:order-none'
-const STEP = `flex h-[64px] w-[64px] items-center justify-center rounded-2xl bg-white text-3xl text-ink-500 shadow-card-sm active:translate-y-[2px] ${TRANSPORT}`
-const SPEED_CHIP = 'flex h-10 w-11 items-center justify-center rounded-[14px] text-xl transition-colors md:h-[46px] md:w-[52px] md:text-2xl'
+const STEP = `flex h-[64px] w-[64px] items-center justify-center rounded-full bg-white text-3xl text-ink-500 shadow-card-sm active:translate-y-[2px] ${TRANSPORT}`
+const SPEED_CHIP = 'flex h-10 w-11 items-center justify-center rounded-[11px] text-xl transition-colors md:h-[46px] md:w-[52px] md:text-2xl'
 const SPEED_ACTIVE = 'bg-coral-50 ring-[3px] ring-inset ring-peach-400'
 
 type Props = {
@@ -71,16 +71,16 @@ export function PlayerControls({
 
         <div className="order-3 flex flex-col md:order-none">
           {/* The design shrinks this switch to a 14 px line of text (§9 M6); it stays a real
-              switch — the brief's Q12 leaves the static-text version unresolved and a toggle the
-              child cannot press is not a smaller toggle. Only the label shrinks, which is what
-              gets speed + subtitles onto one 375 px row. */}
+              switch, since a toggle the child cannot press is not a smaller toggle. Only the
+              label shrinks, which is what gets speed + subtitles onto one 375 px row. The flag
+              lives inside the label itself ("🇻🇳 Phụ đề") rather than `Toggle`'s separate `emoji`
+              slot, so it reads as one chip instead of two. */}
           <Toggle
             role="button"
             ariaLabel={subtitles ? 'Phụ đề bật' : 'Phụ đề tắt'}
             on={subtitles}
             onChange={onSubtitles}
-            emoji="🇻🇳"
-            label="Phụ đề Việt"
+            label="🇻🇳 Phụ đề"
             className="max-md:gap-2 max-md:px-0 max-md:text-[14px]"
           />
         </div>

@@ -252,6 +252,17 @@ async function run(vpName, vp) {
   await S('stories', '/stories')
   await S('story-player', '/story/little-fox')
   await S('story-player-playing', null, async () => { await page.getByRole('button', { name: 'Phát' }).click(); await sleep(1200) })
+  // Task 14 / R23: the error `Notice`. little-fox's mp3s exist on disk in dev — headless Edge can
+  // decode and "play" them fine even with no audio device, so there is no naturally-occurring
+  // 404 to exercise here. Abort the scene's own audio request instead (a stubbed failing fetch):
+  // the element's `error` event fires exactly as it would for a missing/broken file, `hasAudio`
+  // never flips true, and the child `Notice` + "Thử lại" render for real.
+  await page.route('**/audio/stories/little-fox/scene-1.mp3', route => route.abort())
+  await S('story-player-no-audio', '/story/little-fox', async () => {
+    await page.getByRole('button', { name: 'Phát' }).click()
+    await sleep(1500)
+  })
+  await page.unroute('**/audio/stories/little-fox/scene-1.mp3')
   await S('story-player-ended', null, async () => {
     // no narration audio in dev → estimated timings; wait for the last scene to end (~40 s worst case)
     for (let i = 0; i < 60; i++) { if (await page.getByText('Tiếp tục ▸').count()) break; await sleep(1000) }
