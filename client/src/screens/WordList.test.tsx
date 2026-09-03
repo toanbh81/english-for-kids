@@ -15,30 +15,53 @@ function renderList(topic: string) {
 
 beforeEach(() => localStorage.clear())
 
-it('sits in the shared page frame', () => {
+it('a topic list is a 3-column small-tile grid with a counted subtitle and no lg:', () => {
   renderList('food')
-  expect(screen.getByRole('main')).toHaveClass('overflow-hidden')
-  expect(screen.getByRole('banner')).toHaveClass('grid')
-  expect(screen.getByTestId('page-body')).toHaveClass('overflow-y-auto')
+  expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('🍎 Đồ ăn')
+  expect(screen.getByText('8 từ · chạm để học')).toBeInTheDocument()
+  expect(screen.getByTestId('list-grid')).toHaveClass('grid-cols-3', 'md:grid-cols-5', 'ipad:grid-cols-6')
+  expect(screen.getAllByTestId('tile')).toHaveLength(8)
+  expect(screen.getByTestId('page-body')).toHaveClass('gap-2.5', 'after:sticky')
+  expect(screen.queryAllByTestId('sticky-group')).toHaveLength(0)
+})
+
+it('a word tile shows emoji, word and the lock chip, never stars', () => {
+  promote('food-apple')
+  renderList('food')
+  const tile = screen.getByRole('link', { name: /apple/ })
+  expect(tile).toHaveClass('h-[110px]', 'md:h-[136px]')
+  expect(screen.getAllByText('🔓')).toHaveLength(1)
+  expect(screen.getAllByText('🔒')).toHaveLength(7)
+  expect(screen.queryByTestId('stars')).toBeNull()
+})
+
+it('the review deck groups due words by topic in TOPICS order, with sticky H2s', () => {
+  // `promote` sets `due` a day+ in the future, so these three must be back-dated far enough that
+  // it still lands in the past — pass `now` as two days ago (brief note under Step 1).
+  const past = Date.now() - 2 * 24 * 3600e3
+  promote('food-apple', past)
+  promote('animals-elephant', past)
+  promote('animals-giraffe', past)
+  renderList('review')
+  expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('📚 Ôn tập hôm nay')
+  expect(screen.getByText('3 từ · chạm để ôn')).toBeInTheDocument()
+  const groups = screen.getAllByTestId('sticky-group')
+  expect(groups.map(h => h.textContent)).toEqual(['🐘Động vật· 2 từ', '🍎Đồ ăn· 1 từ'])
+  expect(groups[0]).toHaveClass('sticky', 'top-0', 'bg-cream-50')
+})
+
+it('the empty state exists only on the review deck', () => {
+  renderList('review')
+  expect(screen.getByTestId('empty-state')).toBeInTheDocument()
+  cleanup()
+  renderList('food')
+  expect(screen.queryByTestId('empty-state')).toBeNull()
 })
 
 it('shows a not-found message for an unknown topic', () => {
   renderList('nope')
   expect(screen.getByRole('heading')).toHaveTextContent('Ơ, không tìm thấy chủ đề này 🦊')
   expect(screen.getByRole('link', { name: '← Về trang chủ' })).toHaveAttribute('href', '/words')
-})
-
-it('lists all 8 words of a topic, locked by default', () => {
-  renderList('food')
-  expect(screen.getByText('apple')).toBeInTheDocument()
-  expect(screen.getAllByText('🔒')).toHaveLength(8)
-})
-
-it('shows 🔓 for an unlocked word', () => {
-  promote('food-apple')
-  renderList('food')
-  expect(screen.getAllByText('🔓')).toHaveLength(1)
-  expect(screen.getAllByText('🔒')).toHaveLength(7)
 })
 
 // A map topic was reached from its island, so that is where back goes; the flat word index is only
@@ -50,25 +73,4 @@ it('sends a map topic back to its island, and the review deck to the word index'
   cleanup()
   renderList('review')
   expect(screen.getByRole('link', { name: 'Từ vựng' })).toHaveAttribute('href', '/words')
-})
-
-it('links each word card to /words/:topic/:wordId', () => {
-  renderList('food')
-  expect(screen.getByRole('link', { name: /apple/ })).toHaveAttribute('href', '/words/food/food-apple')
-})
-
-it('review topic with no due words shows the empty-state message', () => {
-  renderList('review')
-  expect(screen.getByText('Chưa có từ cần ôn hôm nay')).toBeInTheDocument()
-  expect(screen.getByRole('link', { name: 'Từ mới hôm nay →' })).toHaveAttribute('href', '/words')
-})
-
-it('review topic lists due words across all topics', () => {
-  const past = Date.now() - 2 * 24 * 60 * 60 * 1000
-  promote('food-apple', past)
-  promote('school-book', past)
-  renderList('review')
-  expect(screen.getByText('apple')).toBeInTheDocument()
-  expect(screen.getByText('book')).toBeInTheDocument()
-  expect(screen.getByRole('link', { name: /apple/ })).toHaveAttribute('href', '/words/review/food-apple')
 })

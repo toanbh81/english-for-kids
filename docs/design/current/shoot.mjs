@@ -213,6 +213,36 @@ async function run(vpName, vp) {
   await S('words', '/words')
   await S('words-animals', '/words/animals')
   await S('words-review-empty', '/words/review')
+  // Task 3: trường hợp xấu nhất của cả khung danh sách — 64 ô ôn tập, 8 nhóm H2 dính. Id từ được
+  // thu từ chính app (href của 8 màn chủ đề) thay vì hard-code, để danh sách không mục ruỗng khi
+  // content đổi.
+  async function seedReviewDeck() {
+    await go(page, '/words')
+    const topics = await page.$$eval('a[href^="/words/"]', as => as
+      .map(a => a.getAttribute('href').split('/')[2]).filter(t => t && t !== 'review'))
+    const ids = []
+    for (const t of topics) {
+      await go(page, `/words/${t}`)
+      ids.push(...await page.$$eval(`a[href^="/words/${t}/"]`, as => as.map(a => a.getAttribute('href').split('/')[3])))
+    }
+    await page.evaluate(ids => {
+      const id = localStorage.getItem('speakup.profile')
+      const pre = id ? `speakup.${id}.` : 'speakup.'
+      const due = Date.now() - 24 * 3600e3
+      localStorage.setItem(pre + 'leitner', JSON.stringify(Object.fromEntries(ids.map(w => [w, { box: 1, due }]))))
+    }, ids)
+    return ids.length
+  }
+  if (!WANT || WANT.includes('words-review')) {
+    const n = await seedReviewDeck()
+    log(`   words-review: seeded ${n} due words`)
+    await S('words-review', '/words/review')
+    // Trả trạng thái về seed chuẩn: deck ôn tập rỗng là tiền đề của mọi ảnh sau nó.
+    await page.evaluate(() => {
+      const id = localStorage.getItem('speakup.profile')
+      localStorage.removeItem((id ? `speakup.${id}.` : 'speakup.') + 'leitner')
+    })
+  }
   await S('word-guess', '/words/animals/animals-elephant')
   await S('word-guess-wrong', '/words/animals/animals-elephant', async () => { await page.getByRole('button', { name: /^(?!.*con voi).*$/ }).filter({ hasText: /con|cái|màu|quả/ }).first().click(); await sleep(150) })
   await S('word-guess-correct', '/words/animals/animals-elephant', async () => { await tapText(page, 'con voi', { exact: false }) })
