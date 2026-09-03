@@ -170,7 +170,9 @@ it('the header sits inside the teal band, centred on the island-star chip', () =
   renderHub('animals')
   expect(screen.getByRole('banner')).toHaveClass('bg-transparent')
   expect(screen.getByText(/^⭐ \d+\/\d+ sao đảo$/)).toHaveClass('bg-white/[.92]', 'text-teal-600', 'rounded-r12', 'text-[15px]')
-  expect(screen.getByTestId('island-header')).toHaveClass('bg-teal-500')
+  // Fix round 2: the teal colour is a decorative fill *inside* `island-header` now (the band
+  // itself wraps the real header + name block, see the tests below), not a class on the testid.
+  expect(screen.getByTestId('island-header').querySelector('.bg-teal-500')).toHaveClass('-z-10')
   expect(screen.getByText('Động vật')).toHaveClass('text-[28px]', 'text-white')
 })
 
@@ -247,20 +249,26 @@ it('the pinned CTA names the first unfinished story, in content order, once word
 /** jsdom has no stylesheet and so no layout: these pin *which breakpoint each rule is written at*.
  * The geometry itself (nothing under a pinned element at 390×844 and 375×667, and 1194×834
  * unchanged) is measured in a real browser. */
-it('draws the island band behind the whole shell, header included', () => {
+it('wraps the header and name block, sized by their own content — no fixed band height', () => {
   unlockWords('animals', 6)
 
   renderHub('animals')
 
   const band = screen.getByTestId('island-header')
-  // Decorative: it is a background, so it never reaches the accessibility tree at any width.
-  expect(band).toHaveAttribute('aria-hidden', 'true')
-  // Absolute and `pointer-events-none`, so it neither displaces the header/sections nor swallows a
-  // tap; `-z-10` so it paints *behind* the normal-flow header and body it now sits under (R19).
-  expect(band).toHaveClass('absolute', 'pointer-events-none', 'bg-teal-500', '-z-10')
-  // Its height follows the same safe-area shell the page padding does, rather than fixing the
-  // design's 236 px — which is only the right number on a phone with a notch to clear.
-  expect(Array.from(band.classList).some(c => c.startsWith('h-[calc(180px'))).toBe(true)
+  // Fix round 2: the band is real content's own container now, not a decorative guess at their
+  // combined height — it reaches the accessibility tree (the header and name block inside it do).
+  expect(band).not.toHaveAttribute('aria-hidden')
+  expect(within(band).getByRole('banner')).toBeInTheDocument() // the header lives inside it…
+  expect(within(band).getByText('Động vật')).toBeInTheDocument() // …and so does the name block
+  // No fixed or computed height class anywhere on the band itself — its height is purely
+  // whatever those two children's own content adds up to (the re-review's actual complaint: a
+  // guessed constant drifting from "band = header + name block, exactly").
+  expect(Array.from(band.classList).some(c => /(?:^|:)h-\[/.test(c))).toBe(false)
+
+  // The teal colour is a separate, still-decorative fill inside the band, behind its real content.
+  const fill = band.querySelector('.bg-teal-500')
+  expect(fill).toHaveAttribute('aria-hidden', 'true')
+  expect(fill).toHaveClass('absolute', 'inset-0', 'pointer-events-none', '-z-10')
 
   // `BackButton`'s own `child` variant already meets the 64 px tap-target floor on a phone (a 56
   // px circle with an invisible 64 px hit band).
@@ -288,9 +296,12 @@ it('scales the band, name block and rows to phone × 1.25 from md up (decision 1
 
   renderHub('animals')
 
-  // 236px band → 295 (236 × 1.25); `ipad:` repeats it verbatim, per the file's own note on why a
-  // real iPad landscape needs an explicit `ipad:` value and not just a `md:` one left to carry over.
-  expect(screen.getByTestId('island-header')).toHaveClass('md:h-[295px]', 'ipad:h-[295px]')
+  // Fix round 2: the band has no fixed/computed height of its own to scale — it wraps the header
+  // and the name block, and *their* paddings are what decision 15's × 1.25 applies to instead: the
+  // 4px gap above the avatar and the 10px below it (the artboard's own numbers around the name
+  // block) become 5px/13px, and `md:`/`ipad:` repeat verbatim per the file's own note above.
+  const nameBlock = screen.getByText('🐘').parentElement!
+  expect(nameBlock).toHaveClass('pt-1', 'pb-[10px]', 'md:pt-[5px]', 'md:pb-[13px]', 'ipad:pt-[5px]', 'ipad:pb-[13px]')
 
   // Name-block avatar 84×84/42px emoji → 105×105/53px (84 × 1.25, 42 × 1.25 rounded to 53).
   const avatar = screen.getByText('🐘')

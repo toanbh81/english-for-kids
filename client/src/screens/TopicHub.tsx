@@ -163,45 +163,48 @@ function TopicHubInner({ topic }: { topic: Topic }) {
   const next = nextItem({ topic, words, deckSize, wordsStars, starred, sentenceCount: sentences.length, sentenceStars, stories, storyStars })
 
   return (
-    <PageShell className="relative isolate">
-      {/* The island band (R19): now the background of the header *and* the name block below it,
-          not decoration tucked inside the body — so it starts at the very top of the shell and
-          sits behind everything (`-z-10`; an absolutely-positioned sibling otherwise paints ABOVE
-          the normal-flow header/body per the stacking rules, not below them). `isolate` gives the
-          shell its own stacking context so that negative z-index is scoped to right here — without
-          it, the band (having no stacking context of its own to climb out of) hands its negative
-          z-index up to the nearest ancestor that DOES have one, which painted it behind the whole
-          app rather than just behind this screen's own header and body. Its height keeps the
-          phase-13 formula (180 px of content below the shell's own top padding) unchanged on a
-          phone; only the corner radius moved from a flat 40 to the design's 44/44/40/40. Fix
-          round 1 / decision 15: 236px × 1.25 = 295 from `md:` up, fixed rather than formula-based
-          since the safe-area top inset that formula exists for is a phone-only concern. */}
+    <PageShell>
+      {/* The island band (R19): the shared background of the header *and* the name block below
+          it — as of fix round 2, `island-header` is a real (not `aria-hidden`) container the two
+          of them sit inside, not a separately-sized decoration guessing at their combined height.
+          The artboard's own invariant is "band = header + name block, exactly" — a fixed/computed
+          height (236px, or `md:h-[295px]` at ×1.25 per decision 15) drifts from that the moment
+          either block's own natural size doesn't match the guess (round 1's re-review found the
+          first row riding 10–58px into the band because the guess was short); dropping the height
+          entirely and letting the band size itself to its two real children removes the guess.
+          `-mx-4 md:-mx-6 ipad:-mx-6` + the negative top margin (`PageShell`'s own top-padding
+          formula, copied verbatim from `pageShell.ts`) bleed the *background* out to the shell's
+          true edges the same way `PageFooter`'s fade does (`page/PageFooter.tsx`); the inner content
+          column below restores that same padding on the *content* so the header/name block sit
+          exactly where they always have, just with the teal now reaching further than they do.
+          `relative isolate` keeps the fill's `-z-10` scoped to this box (a bare `relative` doesn't
+          establish a stacking context, so a `-z-10` child would otherwise escape to the next
+          ancestor that does, painting behind the whole app — the exact bug round 1 fixed for the
+          old `main`-relative band). */}
       <div
-        aria-hidden="true"
         data-testid="island-header"
-        className="pointer-events-none absolute inset-x-0 top-0 h-[calc(180px_+_max(1.5rem,calc(env(safe-area-inset-top)_+_9px)))] rounded-b-[44px_44px_40px_40px] bg-teal-500 -z-10 md:h-[295px] ipad:h-[295px]"
-      />
+        className="relative isolate -mx-4 -mt-[max(1.25rem,calc(env(safe-area-inset-top)_+_8px))] md:-mx-6 md:mb-[-8px] ipad:-mx-6 ipad:mb-[-8px]"
+      >
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 -z-10 rounded-b-[44px_44px_40px_40px] bg-teal-500"
+        />
+        <div className="mx-auto w-full max-w-[1080px] px-4 pt-[max(1.25rem,calc(env(safe-area-inset-top)_+_8px))] md:px-6 ipad:px-6">
+          {/* R19 / decision 5: the one named exception to "header always on cream" — `onBand`
+              turns the header transparent and its back button white-on-teal so it sits on the
+              band, centred on the island's own star chip instead of the topic name (that moved
+              into the name block below). */}
+          <PageHeader onBand back={<BackButton to="/" label="Về nhà" />}>
+            <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-r12 bg-white/[.92] px-3.5 py-[7px] font-display text-[15px] font-extrabold text-teal-600">
+              {`⭐ ${starNum}/${starDen} sao đảo`}
+            </span>
+          </PageHeader>
 
-      {/* R19 / decision 5: the one named exception to "header always on cream" — `onBand` turns
-          the header transparent and its back button white-on-teal so it sits on the band above,
-          centred on the island's own star chip instead of the topic name (that moved into the
-          body's name block below). */}
-      <PageHeader onBand back={<BackButton to="/" label="Về nhà" />}>
-        <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-r12 bg-white/[.92] px-3.5 py-[7px] font-display text-[15px] font-extrabold text-teal-600">
-          {`⭐ ${starNum}/${starDen} sao đảo`}
-        </span>
-      </PageHeader>
-
-      <PageBody>
-        {/* Decision 15: no A8 iPad artboard, so the inferred default is phone × 1.25, applied to
-            every size below (rounded to a whole px) — `ipad:` mirrors `md:` verbatim rather than
-            leaving landscape to inherit portrait's rule by omission (see the note on `SECTION`
-            above). `ipad:mx-auto ipad:max-w-[1080px]` is the same centring every list screen gets
-            for free from `PageShell`'s own wrapper (`WordList.tsx` relies on it without writing it
-            out) — written explicitly here since this content sits beside the full-bleed band, not
-            inside a plain cream shell, so it is worth being able to see at the call site. */}
-        <div className="flex w-full flex-col gap-3 md:gap-5 ipad:mx-auto ipad:max-w-[1080px] ipad:gap-5">
-          <div className="flex items-center gap-3.5 pb-3">
+          {/* Fix round 2: the artboard's own paddings around the name block, not a number that
+              happened to make the old fixed-height band line up — 4px between the header and the
+              avatar, 10px between the avatar and the band's own (now content-driven) bottom edge;
+              × 1.25 at `md:`/`ipad:` per decision 15, same as every other size in this block. */}
+          <div className="flex items-center gap-3.5 pt-1 pb-[10px] md:gap-4 md:pt-[5px] md:pb-[13px] ipad:gap-4 ipad:pt-[5px] ipad:pb-[13px]">
             <span
               aria-hidden="true"
               className="flex h-[84px] w-[84px] shrink-0 items-center justify-center rounded-full bg-white text-[42px] leading-none shadow-[0_6px_0_#1FA396] md:h-[105px] md:w-[105px] md:text-[53px] ipad:h-[105px] ipad:w-[105px] ipad:text-[53px]"
@@ -216,6 +219,18 @@ function TopicHubInner({ topic }: { topic: Topic }) {
               </div>
             </div>
           </div>
+        </div>
+      </div>
+
+      <PageBody>
+        {/* Decision 15: no A8 iPad artboard, so the inferred default is phone × 1.25, applied to
+            every size below (rounded to a whole px) — `ipad:` mirrors `md:` verbatim rather than
+            leaving landscape to inherit portrait's rule by omission (see the note on `SECTION`
+            above). `ipad:mx-auto ipad:max-w-[1080px]` is the same centring every list screen gets
+            for free from `PageShell`'s own wrapper (`WordList.tsx` relies on it without writing it
+            out) — written explicitly here since this content sits beside the full-bleed band, not
+            inside a plain cream shell, so it is worth being able to see at the call site. */}
+        <div className="flex w-full flex-col gap-3 md:gap-5 ipad:mx-auto ipad:max-w-[1080px] ipad:gap-5">
 
           <Link to={`/words/${topic.id}`} className={`${SECTION} ${wordsToday ? TODAY_OUTLINE : ''}`}>
             <span aria-hidden="true" className={SECTION_EMOJI}>🧩</span>
