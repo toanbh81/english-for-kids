@@ -15,7 +15,7 @@ describe('SoundTier', () => {
     expect(mouth).toHaveClass('md:h-16', 'md:w-16')
     expect(mouth.querySelector('span')).not.toHaveClass('animate-wiggle')
 
-    expect(screen.getByText('/θ/')).toHaveClass('text-[40px]', 'text-[#C08457]', 'md:text-[72px]')
+    expect(screen.getByText('/θ/')).toHaveClass('text-[40px]', 'text-[#C08457]', 'md:text-[72px]', 'md:text-coral-text')
 
     const speaker = screen.getByRole('button', { name: 'Nghe âm lẻ' })
     expect(speaker).toHaveClass('h-14', 'w-14', 'rounded-full', 'bg-teal-500', 'md:h-16', 'md:w-16')

@@ -32,7 +32,7 @@ export function SoundTier({ ph, ipa, tip, onPlay, audioMissing, wiggle, mdWide }
         <span data-testid="mouth-tile" aria-hidden="true" className="flex h-14 w-14 shrink-0 items-center justify-center rounded-r16 bg-white text-[30px] leading-none md:order-1 md:h-16 md:w-16">
           <span className={wiggle ? 'animate-wiggle' : undefined}>👄</span>
         </span>
-        <div className="flex-1 font-display text-[40px] font-extrabold leading-none text-[#C08457] md:order-2 md:flex-initial md:text-[72px]">/{ipa}/</div>
+        <div className="flex-1 font-display text-[40px] font-extrabold leading-none text-[#C08457] md:order-2 md:flex-initial md:text-[72px] md:text-coral-text">/{ipa}/</div>
         <button
           type="button"
           aria-label="Nghe âm lẻ"

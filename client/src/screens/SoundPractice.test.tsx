@@ -245,6 +245,11 @@ it('says the sound was not scored when the engine reports no phoneme detail', ()
   expect(screen.getByText('Chưa nghe rõ âm này — thử lại nhé!')).toBeInTheDocument()
   // The word's own score is still reported — that much was measured.
   expect(screen.getByText(/70 điểm/)).toBeInTheDocument()
+  // Fix round 1 / brief R11: an unscored phoneme caps at 2 stars, and `forceHint` must still show
+  // the mouth tip there — `tone !== 'good'` includes the `null` (unscored) tone, not just a tone
+  // that was actually measured and found wanting.
+  expect(screen.getAllByTestId('star-filled')).toHaveLength(2)
+  expect(within(screen.getByTestId('result-card')).getByText(/Sửa từ này/)).toHaveTextContent(PHONEME_TIPS.th)
 })
 
 /** The simple engine reports no phoneme detail at all, so "try again" is the whole truth there —

@@ -208,7 +208,7 @@ function SoundWord({ sound, idx }: { sound: SoundGroup; idx: number }) {
                   </div>
                 }
                 hint={tip && tone !== 'good' ? { word: card.text, phoneme: ph, tip } : undefined}
-                forceHint={tone !== null && tone !== 'good'}
+                forceHint={tone !== 'good'}
                 canReplay={!!attempt.lastBlob}
                 onReplay={() => playBlob(attempt.lastBlob!).catch(() => {})}
                 onSample={playSample}
