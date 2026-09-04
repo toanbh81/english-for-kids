@@ -9,8 +9,9 @@ import { isCloudConfigured } from '../cloud/supabase'
 import { hasAnyHistory, profileHistory, sumHistory } from '../progress/history'
 import { ProfilePicker } from '../components/ProfilePicker'
 import { ParentQuestion } from '../components/ParentQuestion'
-import { BackButton, Button, Card, LinkText, Notice } from '../components/ui'
+import { BackButton, Button, Card, GateBlobs, GateCard, LinkText, Notice } from '../components/ui'
 import { PageShell, PageHeader, PageBody } from '../components/ui/page'
+import { FieldRow, FIELD_INPUT, FIELD_INPUT_CODE, FIELD_INPUT_ERROR } from '../components/adult'
 
 /**
  * The start screen's other door (spec flows 3 and 4): "Đã dùng Speak Up rồi?" — for a device whose
@@ -48,37 +49,49 @@ type Stranding =
   | { kind: 'holding'; profiles: number; stars: number; events: number; mirrored: boolean }
   | { kind: 'unchecked' }
 
-function describeAuthError(code: string): string {
+/** Round-4 wording (R10 / brief §2 "14 câu lỗi"). Signature and the seven identifying branches are
+ * unchanged from before this pass — only the sentence each branch returns — so callers and tests
+ * that key off the CODE rather than the copy keep working. */
+export function describeAuthError(code: string): string {
   const lower = code.toLowerCase()
   if (code === 'invalid-email') return 'Email chưa đúng định dạng.'
-  if (code === 'cloud-unconfigured') return 'Chưa thể kết nối lúc này, thử lại sau nhé.'
+  if (code === 'cloud-unconfigured') return 'Tính năng tài khoản chưa bật trên bản này.'
   // Never "thử lại": a retry reproduces this exactly. The way out is the parent screen, where the
   // email is linked to the account this device already has instead of replacing it.
   if (code === 'anonymous-session-in-use') {
-    return 'Máy này đang có hồ sơ của một bé chưa liên kết email. Hãy vào Góc phụ huynh để liên kết email cho hồ sơ đó, thay vì đăng nhập bằng tài khoản khác.'
+    return 'Máy này đang có hồ sơ của tài khoản khác — đăng xuất ở Góc phụ huynh trước.'
   }
   // The honest answer to "Tôi có email đã liên kết" when it turns out this one is not linked. It
   // must never read as a network hiccup: the parent has to try their other address, or the
   // recovery code, rather than the same email again.
   if (code === 'email-not-linked') {
-    return 'Email này chưa liên kết với hồ sơ nào. Kiểm tra lại địa chỉ, hoặc dùng mã khôi phục nhé.'
+    return 'Email này chưa liên kết với Speak Up — thử mã khôi phục.'
   }
   if (code === 'invalid-token' || /invalid|expired|not\s*found/.test(lower)) {
-    return 'Mã chưa đúng hoặc đã hết hạn, thử lại nhé.'
+    return 'Mã sai hoặc đã hết hạn — gửi lại mã mới nhé.'
   }
-  if (/network|fetch/.test(lower)) return 'Không có kết nối mạng, thử lại nhé.'
-  return 'Có lỗi xảy ra, thử lại nhé.'
+  if (/network|fetch/.test(lower)) return 'Mất kết nối — kiểm tra mạng rồi thử lại.'
+  return 'Có lỗi xảy ra — thử lại sau ít phút.'
 }
 
-function describeRecoverError(status: number): string {
-  if (status === 400) return 'Mã khôi phục gồm 8 ký tự, kiểm tra lại nhé.'
-  if (status === 401) return 'Phiên làm việc có vấn đề, thử tải lại trang.'
-  if (status === 403) return 'Mã này thuộc tài khoản đã liên kết email — dùng email để khôi phục nhé.'
-  if (status === 404) return 'Không tìm thấy mã này, kiểm tra lại nhé.'
-  if (status === 409) return 'Mã này vừa được dùng rồi.'
-  if (status === 429) return 'Thử quá nhiều lần, đợi một chút rồi thử lại nhé.'
-  return 'Có lỗi ở máy chủ, thử lại sau nhé.'
+export function describeRecoverError(status: number): string {
+  if (status === 400) return 'Mã phải đủ 8 chữ và số.'
+  if (status === 401) return 'Mã không đúng — kiểm tra lại chữ O và số 0.'
+  if (status === 403) return 'Mã này thuộc tài khoản khác đang dùng máy này.'
+  if (status === 404) return 'Không tìm thấy mã — có thể đã được thay mã mới.'
+  if (status === 409) return 'Mã đã dùng trên máy khác — tạo mã mới ở máy đó.'
+  if (status === 429) return 'Thử quá nhiều lần — đợi 5 phút rồi thử lại.'
+  return 'Không kết nối được máy chủ — thử lại sau.'
 }
+
+/** R10 / quyết định 22. Bốn nguồn khác nhau, một hậu quả: chưa nói chuyện được với máy chủ và
+ * KHÔNG có gì bị tiêu — `afterAuthenticated` (fetchRemoteProfiles null), `finishRestore` (pull
+ * hỏng), `attemptRecover` (chưa có token / fetch ném). Một câu + một nút "Thử lại" trong dải lỗi là
+ * đủ; bốn câu khác nhau cho cùng một hành động chỉ làm phụ huynh đoán xem cái nào là lỗi của họ.
+ * KHÔNG gộp hai câu "roster không đọc được" (`afterAuthenticated`'s `merged === null`,
+ * `attemptRecover`'s `!rosterIsReadable()`): đó là hậu quả khác hẳn — mã/hồ sơ KHÔNG được dùng, và
+ * câu phải nói ra điều đó. Gộp 4, không gộp 6. */
+const SYSTEM_ERROR = 'Không kết nối được máy chủ — thử lại sau'
 
 /**
  * What signing in as another account would strand — or null ONLY when that has been established.
@@ -153,6 +166,10 @@ export function CloudStart() {
   const [code, setCode] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  /** The retry for whichever `SYSTEM_ERROR` is currently showing — re-runs the exact step that
+   * failed, without spending the code/token again. `null` whenever `error` is not one of the four
+   * merged system failures (R10 / quyết định 22). */
+  const [errorAction, setErrorAction] = useState<(() => void) | null>(null)
   const [info, setInfo] = useState<string | null>(null)
   const [stranding, setStranding] = useState<Stranding | null>(null)
   /** The child a failed pull left un-restored, so the parent can try that same one again. */
@@ -180,6 +197,7 @@ export function CloudStart() {
   function backToMenu() {
     setStage('menu')
     setError(null)
+    setErrorAction(null)
     setOtp('')
     setCode('')
     setStranding(null)
@@ -187,6 +205,7 @@ export function CloudStart() {
 
   function openDoor(which: Door) {
     setError(null)
+    setErrorAction(null)
     setInfo(null)
     setDoor(which)
     setStage(passedGate ? which : 'gate')
@@ -199,7 +218,8 @@ export function CloudStart() {
     // that failed must never be announced as "this account has no profiles", which is the sentence
     // that tells a parent their child is gone.
     if (remote === null) {
-      setError('Chưa xem được danh sách hồ sơ của tài khoản (máy chủ chưa trả lời). Đừng lo, chưa có gì mất cả — thử lại khi mạng ổn định hơn nhé.')
+      setError(SYSTEM_ERROR)
+      setErrorAction(() => afterAuthenticated)
       setCandidates(null)
       setStage('menu')
       return
@@ -251,11 +271,13 @@ export function CloudStart() {
   async function finishRestore(id: string) {
     setBusy(true)
     setError(null)
+    setErrorAction(null)
     const pulled = await pullProfile(id)
     setBusy(false)
     if (!pulled) {
       setRetryId(id)
-      setError('Đã tìm thấy hồ sơ của bé, nhưng chưa tải được tiến độ về máy này. Máy vẫn đang ở hồ sơ cũ — kiểm tra mạng rồi thử tải lại nhé.')
+      setError(SYSTEM_ERROR)
+      setErrorAction(() => () => { void finishRestore(id) })
       return
     }
     setRetryId(null)
@@ -286,6 +308,7 @@ export function CloudStart() {
    */
   async function sendOtp(abandonAnonymous: boolean) {
     setError(null)
+    setErrorAction(null)
     setBusy(true)
     const result = await signInWithEmail(email, abandonAnonymous ? { abandonAnonymous } : {})
     if (result.ok) { setBusy(false); setStranding(null); setStage('email-otp'); return }
@@ -319,6 +342,7 @@ export function CloudStart() {
   async function handleVerifyEmail(e: FormEvent) {
     e.preventDefault()
     setError(null)
+    setErrorAction(null)
     setBusy(true)
     const result = await verifyEmailOtp(email, otp)
     if (!result.ok) { setBusy(false); setError(describeAuthError(result.error)); return }
@@ -326,12 +350,22 @@ export function CloudStart() {
     setBusy(false)
   }
 
-  async function handleRecover(e: FormEvent) {
-    e.preventDefault()
+  /**
+   * The recovery-code submit, factored out from its form's `onSubmit` so the SAME attempt can be
+   * re-run by the "Thử lại" action in the error band (R10 / quyết định 22) without spending the
+   * code twice or asking the parent to retype it — the code itself is never cleared on failure.
+   */
+  async function attemptRecover() {
     setError(null)
+    setErrorAction(null)
     setBusy(true)
     const token = await currentAccessToken()
-    if (!token) { setBusy(false); setError('Chưa có kết nối, thử lại khi có mạng nhé.'); return }
+    if (!token) {
+      setBusy(false)
+      setError(SYSTEM_ERROR)
+      setErrorAction(() => attemptRecover)
+      return
+    }
     // Ask before spending: /api/recover burns the code and re-parents the profiles in one
     // server-side step, so a roster that cannot receive the result would cost the family their
     // only key — the retry answers 404, and nothing here repairs a damaged roster.
@@ -351,12 +385,25 @@ export function CloudStart() {
       if (!res.ok) { setBusy(false); setError(describeRecoverError(status)); return }
     } catch {
       setBusy(false)
-      setError('Không có kết nối mạng, thử lại nhé.')
+      setError(SYSTEM_ERROR)
+      setErrorAction(() => attemptRecover)
       return
     }
     await afterAuthenticated()
     setBusy(false)
   }
+
+  async function handleRecover(e: FormEvent) {
+    e.preventDefault()
+    await attemptRecover()
+  }
+
+  // The three stages whose error surfaces in their own `FieldRow` gutter now — the top-of-card
+  // `Notice` below is left for stages that have no field of their own to attach it to (`menu`,
+  // reached whenever `afterAuthenticated` bounces a system failure back there). Task 9 moves those
+  // into the `'result'` stage; until then this is the one place they still land.
+  const fieldStage = stage === 'email' || stage === 'email-otp' || stage === 'code'
+  const retryAction = errorAction ? { label: 'Thử lại', onClick: errorAction } : undefined
 
   if (candidates) {
     return (
@@ -367,7 +414,7 @@ export function CloudStart() {
             <p className="text-sm font-semibold text-ink-500">Tài khoản này có {candidates.length} hồ sơ. Chọn một để khôi phục lên máy này.</p>
             {/* A failed pull says so HERE too, next to the picker that is still up — tapping the same
               * face again is the retry. */}
-            {error && <Notice kind="error" adult role="alert" title={error} />}
+            {error && <Notice kind="error" adult role="alert" title={error} action={retryAction} />}
             <ProfilePicker profiles={candidates} onSelect={finishRestore} busy={busy} />
           </Card>
         </PageBody>
@@ -376,17 +423,18 @@ export function CloudStart() {
   }
 
   return (
-    <PageShell>
-      <PageHeader back={<BackButton to="/" label="Về nhà" variant="adult" />} />
+    <PageShell className="relative">
+      <GateBlobs />
+      <PageHeader right={null} back={<BackButton to="/" label="Về nhà" mdLabel="Về bản đồ 🏝️" variant="adult" />} />
       <PageBody center>
-        <Card className="flex w-full max-w-md flex-col gap-5 p-6 text-center">
+        <GateCard>
           <div>
-            <h1 className="font-display text-xl font-extrabold text-ink-900">Đã dùng Speak Up rồi?</h1>
-            <p className="mt-1 text-sm font-semibold text-ink-500">Khôi phục tiến độ của bé trên máy này.</p>
+            <h1 className="font-display text-[18px] font-extrabold text-ink-900">Đã dùng Speak Up rồi?</h1>
+            <p className="mt-1 text-[13px] font-bold text-ink-500">Khôi phục tiến độ của bé trên máy này.</p>
           </div>
 
           {info && <Notice kind="info" adult title={info} />}
-          {error && <Notice kind="error" adult role="alert" title={error} />}
+          {!fieldStage && error && <Notice kind="error" adult role="alert" title={error} action={retryAction} />}
           {/* A pull that failed leaves the parent one tap from trying again, on the same child —
             * rather than back at a menu with no idea which door to take twice. */}
           {retryId && (
@@ -412,8 +460,8 @@ export function CloudStart() {
           {stage === 'gate' && (
             <div className="flex flex-col items-center gap-6">
               <ParentQuestion
-                title="Câu hỏi dành cho bố/mẹ"
-                onPass={() => { setPassedGate(true); setStage(door) }}
+                sub="Câu hỏi dành cho bố mẹ trước khi khôi phục."
+                onPass={() => { setError(null); setErrorAction(null); setPassedGate(true); setStage(door) }}
               />
               <LinkText onClick={backToMenu}>← Chọn cách khác</LinkText>
             </div>
@@ -421,17 +469,24 @@ export function CloudStart() {
 
           {stage === 'email' && (
             <form onSubmit={handleSendEmail} className="flex flex-col gap-4">
-              <label className="flex flex-col gap-1 text-left">
-                <span className="text-sm font-bold text-ink-500">Email của bố/mẹ</span>
-                <input
-                  type="email"
-                  required
-                  autoFocus
-                  value={email}
-                  onChange={e => setEmail(e.target.value)}
-                  className="min-h-[64px] rounded-xl2 border-2 border-line-200 px-4 text-base font-semibold text-ink-900"
-                />
-              </label>
+              <FieldRow
+                label="Email của bố mẹ"
+                htmlFor="cloud-start-email"
+                error={error ?? undefined}
+                action={retryAction}
+                help="Chỉ dùng để gửi mã xác nhận và giữ tiến độ. Không gửi quảng cáo."
+                input={
+                  <input
+                    id="cloud-start-email"
+                    type="email"
+                    required
+                    autoFocus
+                    value={email}
+                    onChange={e => setEmail(e.target.value)}
+                    className={`${FIELD_INPUT} ${error ? FIELD_INPUT_ERROR : ''}`}
+                  />
+                }
+              />
               {/* The button that led here says "email đã liên kết", and now the code means it:
                 * `signInWithEmail` cannot create an account any more. Saying so up front is cheaper
                 * than the parent discovering it from an error. */}
@@ -510,41 +565,60 @@ export function CloudStart() {
         {stage === 'email-otp' && (
           <form onSubmit={handleVerifyEmail} className="flex flex-col gap-4">
             <p className="text-sm font-semibold text-ink-500">Nhập mã 6 số vừa gửi tới {email}</p>
-            <label className="flex flex-col gap-1 text-left">
-              <span className="text-sm font-bold text-ink-500">Mã xác nhận</span>
-              <input
-                inputMode="numeric"
-                required
-                autoFocus
-                value={otp}
-                onChange={e => setOtp(e.target.value)}
-                className="min-h-[64px] rounded-xl2 border-2 border-line-200 px-4 text-center font-display text-2xl font-extrabold text-ink-900"
-              />
-            </label>
+            <FieldRow
+              label="Mã 6 số"
+              htmlFor="cloud-start-otp"
+              error={error ?? undefined}
+              action={retryAction}
+              help="Mã hết hạn sau 10 phút."
+              input={
+                <input
+                  id="cloud-start-otp"
+                  inputMode="numeric"
+                  required
+                  autoFocus
+                  value={otp}
+                  onChange={e => setOtp(e.target.value)}
+                  className={`${FIELD_INPUT} ${FIELD_INPUT_CODE} ${error ? FIELD_INPUT_ERROR : ''}`}
+                />
+              }
+            />
             <Button type="submit" size="adult" disabled={busy} className="w-full">Xác nhận</Button>
-            <LinkText onClick={() => { setStage('email'); setOtp(''); setError(null) }}>Sửa lại email</LinkText>
+            <div className="flex items-center justify-between">
+              <LinkText onClick={() => { setStage('email'); setOtp(''); setError(null); setErrorAction(null) }}>Sửa lại email</LinkText>
+              {/* The countdown the design sketches ("Gửi lại mã (0:42)") has no timer anywhere in
+                * this code to drive it — Ruling deferred to Task 16, which owns the remaining A2
+                * polish. The resend itself is real: it re-runs the same first-attempt send. */}
+              <LinkText onClick={() => { void sendOtp(false) }}>Gửi lại mã</LinkText>
+            </div>
           </form>
         )}
 
         {stage === 'code' && (
           <form onSubmit={handleRecover} className="flex flex-col gap-4">
-            <label className="flex flex-col gap-1 text-left">
-              <span className="text-sm font-bold text-ink-500">Mã khôi phục (8 ký tự)</span>
-              <input
-                required
-                autoFocus
-                maxLength={8}
-                value={code}
-                onChange={e => setCode(e.target.value.toUpperCase())}
-                className="min-h-[64px] rounded-xl2 border-2 border-line-200 px-4 text-center font-display text-2xl font-extrabold uppercase tracking-widest text-ink-900"
-              />
-            </label>
-            <p className="text-xs font-semibold text-ink-300">Mã do màn hình phụ huynh cấp lúc tạo tài khoản.</p>
+            <FieldRow
+              label="Mã khôi phục (8 ký tự)"
+              htmlFor="cloud-start-code"
+              error={error ?? undefined}
+              action={retryAction}
+              help="Mã do máy trước tạo ra trong Góc phụ huynh (chụp màn hình)."
+              input={
+                <input
+                  id="cloud-start-code"
+                  required
+                  autoFocus
+                  maxLength={8}
+                  value={code}
+                  onChange={e => setCode(e.target.value.toUpperCase())}
+                  className={`${FIELD_INPUT} ${FIELD_INPUT_CODE} uppercase ${error ? FIELD_INPUT_ERROR : ''}`}
+                />
+              }
+            />
             <Button type="submit" size="adult" disabled={busy} className="w-full">Khôi phục</Button>
             <LinkText onClick={backToMenu}>← Chọn cách khác</LinkText>
           </form>
         )}
-        </Card>
+        </GateCard>
       </PageBody>
     </PageShell>
   )

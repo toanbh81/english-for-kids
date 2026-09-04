@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import type { Profile } from '../cloud/profileState'
@@ -52,7 +52,7 @@ vi.mock('../cloud/sync', () => sync)
 import { listProfiles } from '../cloud/profileState'
 import { logActivity } from '../progress/activity'
 import { setStars } from '../progress/store'
-import { CloudStart } from './CloudStart'
+import { CloudStart, describeAuthError, describeRecoverError } from './CloudStart'
 
 /** Real UUIDs, because the real roster refuses anything else (`isProfileId`). */
 const MINTED = '11111111-2222-4333-8444-555555555555'
@@ -88,6 +88,28 @@ function answerTheQuestion() {
 function openEmailDoor() {
   fireEvent.click(screen.getByText('Tôi có email đã liên kết'))
   answerTheQuestion()
+}
+
+function openCodeDoor() {
+  renderStart()
+  fireEvent.click(screen.getByText('Tôi có mã khôi phục'))
+  answerTheQuestion()
+}
+
+async function typeCode(value: string) {
+  fireEvent.change(screen.getByLabelText(/Mã khôi phục/), { target: { value } })
+}
+
+async function submitRecover() {
+  await act(async () => { fireEvent.submit(screen.getByLabelText(/Mã khôi phục/).closest('form')!) })
+}
+
+/** Reaches the OTP field via the email door, with nothing sent yet. */
+async function reachOtp() {
+  renderStart()
+  openEmailDoor()
+  fireEvent.change(screen.getByLabelText('Email của bố mẹ'), { target: { value: 'bome@example.com' } })
+  await act(async () => { fireEvent.submit(screen.getByLabelText('Email của bố mẹ').closest('form')!) })
 }
 
 beforeEach(() => {
@@ -133,16 +155,16 @@ describe('the parent question in front of both doors', () => {
     renderStart()
 
     fireEvent.click(screen.getByText('Tôi có email đã liên kết'))
-    expect(screen.queryByLabelText('Email của bố/mẹ')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('Email của bố mẹ')).not.toBeInTheDocument()
     expect(screen.getByText((_, el) => el?.children.length === 0 && el?.textContent?.replace(/\s+/g, ' ').trim() === '3 × 3 =')).toBeInTheDocument()
 
     fireEvent.change(screen.getByLabelText('Đáp án'), { target: { value: '5' } })
     fireEvent.click(screen.getByRole('button', { name: 'Vào' }))
     expect(screen.getByTestId('question-error')).toHaveTextContent('⛔ Chưa đúng — câu hỏi đã đổi, thử lại nhé.')
-    expect(screen.queryByLabelText('Email của bố/mẹ')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('Email của bố mẹ')).not.toBeInTheDocument()
 
     answerTheQuestion()
-    expect(screen.getByLabelText('Email của bố/mẹ')).toBeInTheDocument()
+    expect(screen.getByLabelText('Email của bố mẹ')).toBeInTheDocument()
   })
 
   it('asks before the recovery-code form too', () => {
@@ -169,8 +191,8 @@ describe('the email door', () => {
   async function goToEmail() {
     renderStart()
     openEmailDoor()
-    fireEvent.change(screen.getByLabelText('Email của bố/mẹ'), { target: { value: 'bome@example.com' } })
-    await act(async () => { fireEvent.submit(screen.getByLabelText('Email của bố/mẹ').closest('form')!) })
+    fireEvent.change(screen.getByLabelText('Email của bố mẹ'), { target: { value: 'bome@example.com' } })
+    await act(async () => { fireEvent.submit(screen.getByLabelText('Email của bố mẹ').closest('form')!) })
   }
 
   /**
@@ -356,8 +378,8 @@ describe('the email door', () => {
 
     await goToEmail()
     await act(async () => {
-      fireEvent.change(screen.getByLabelText('Mã xác nhận'), { target: { value: '123456' } })
-      fireEvent.submit(screen.getByLabelText('Mã xác nhận').closest('form')!)
+      fireEvent.change(screen.getByLabelText('Mã 6 số'), { target: { value: '123456' } })
+      fireEvent.submit(screen.getByLabelText('Mã 6 số').closest('form')!)
     })
 
     expect(screen.getByRole('alert')).toHaveTextContent('Chưa đọc được danh sách hồ sơ trên máy này')
@@ -371,12 +393,13 @@ describe('the email door', () => {
     profileState.fetchRemoteProfiles.mockResolvedValue(null)
     await goToEmail()
     await act(async () => {
-      fireEvent.change(screen.getByLabelText('Mã xác nhận'), { target: { value: '123456' } })
-      fireEvent.submit(screen.getByLabelText('Mã xác nhận').closest('form')!)
+      fireEvent.change(screen.getByLabelText('Mã 6 số'), { target: { value: '123456' } })
+      fireEvent.submit(screen.getByLabelText('Mã 6 số').closest('form')!)
     })
 
     expect(screen.queryByText(/chưa có hồ sơ nào/)).not.toBeInTheDocument()
-    expect(screen.getByRole('alert')).toHaveTextContent('Chưa xem được danh sách hồ sơ')
+    // R10 / quyết định 22: this is one of the four merged system failures now.
+    expect(screen.getByRole('alert')).toHaveTextContent('Không kết nối được máy chủ')
     expect(sync.pullProfile).not.toHaveBeenCalled()
   })
 
@@ -428,7 +451,7 @@ describe('the email door', () => {
 
     fireEvent.click(screen.getByText('← Quay lại'))
 
-    expect(screen.getByLabelText('Email của bố/mẹ')).toBeInTheDocument()
+    expect(screen.getByLabelText('Email của bố mẹ')).toBeInTheDocument()
     expect(auth.signInWithEmail).toHaveBeenCalledTimes(1)
   })
 
@@ -443,12 +466,14 @@ describe('the email door', () => {
 
     await goToEmail()
 
-    expect(screen.getByRole('alert')).toHaveTextContent('Email này chưa liên kết với hồ sơ nào')
-    expect(screen.getByRole('alert')).toHaveTextContent('mã khôi phục')
+    // The 'email' stage owns its own field now — the error lands in the FieldRow gutter, not the
+    // top-of-card alert (R9 / decision 17).
+    expect(screen.getByTestId('field-error')).toHaveTextContent(describeAuthError('email-not-linked'))
+    expect(screen.getByTestId('field-error')).toHaveTextContent('mã khôi phục')
     expect(auth.signInWithEmail).toHaveBeenCalledTimes(1)
     expect(auth.signInWithEmail).not.toHaveBeenCalledWith('bome@example.com', { abandonAnonymous: true })
     // Still on the email form, ready for the other address.
-    expect(screen.getByLabelText('Email của bố/mẹ')).toBeInTheDocument()
+    expect(screen.getByLabelText('Email của bố mẹ')).toBeInTheDocument()
   })
 
   it('says the same thing on the form itself, before the parent types', async () => {
@@ -473,24 +498,24 @@ describe('the email door', () => {
   it('shows a Vietnamese error and lets the parent retry on an offline failure', async () => {
     auth.signInWithEmail.mockResolvedValue({ ok: false, error: 'Failed to fetch' })
     await goToEmail()
-    expect(screen.getByRole('alert')).toHaveTextContent('Không có kết nối mạng')
+    expect(screen.getByTestId('field-error')).toHaveTextContent(describeAuthError('Failed to fetch'))
     // still on the email form, ready to retry
-    expect(screen.getByLabelText('Email của bố/mẹ')).toBeInTheDocument()
+    expect(screen.getByLabelText('Email của bố mẹ')).toBeInTheDocument()
   })
 
   it('reports a wrong or expired OTP without losing the typed email', async () => {
     await goToEmail()
     auth.verifyEmailOtp.mockResolvedValue({ ok: false, error: 'Token has expired or is invalid' })
-    fireEvent.change(screen.getByLabelText('Mã xác nhận'), { target: { value: '000000' } })
-    await act(async () => { fireEvent.submit(screen.getByLabelText('Mã xác nhận').closest('form')!) })
-    expect(screen.getByRole('alert')).toHaveTextContent('hết hạn')
+    fireEvent.change(screen.getByLabelText('Mã 6 số'), { target: { value: '000000' } })
+    await act(async () => { fireEvent.submit(screen.getByLabelText('Mã 6 số').closest('form')!) })
+    expect(screen.getByTestId('field-error')).toHaveTextContent('hết hạn')
     expect(screen.getByText(/vừa gửi tới bome@example.com/)).toBeInTheDocument()
   })
 
   it('lets the parent go back and correct a typo\'d email', async () => {
     await goToEmail()
     fireEvent.click(screen.getByText('Sửa lại email'))
-    const input = screen.getByLabelText('Email của bố/mẹ') as HTMLInputElement
+    const input = screen.getByLabelText('Email của bố mẹ') as HTMLInputElement
     expect(input.value).toBe('bome@example.com')
     fireEvent.change(input, { target: { value: 'fixed@example.com' } })
     await act(async () => { fireEvent.submit(input.closest('form')!) })
@@ -513,8 +538,8 @@ describe('the email door', () => {
 
     await goToEmail()
     await act(async () => {
-      fireEvent.change(screen.getByLabelText('Mã xác nhận'), { target: { value: '123456' } })
-      fireEvent.submit(screen.getByLabelText('Mã xác nhận').closest('form')!)
+      fireEvent.change(screen.getByLabelText('Mã 6 số'), { target: { value: '123456' } })
+      fireEvent.submit(screen.getByLabelText('Mã 6 số').closest('form')!)
     })
     await waitFor(() => expect(profileState.switchProfile).toHaveBeenCalledWith(SOC))
 
@@ -529,8 +554,8 @@ describe('the email door', () => {
 
     await goToEmail()
     await act(async () => {
-      fireEvent.change(screen.getByLabelText('Mã xác nhận'), { target: { value: '123456' } })
-      fireEvent.submit(screen.getByLabelText('Mã xác nhận').closest('form')!)
+      fireEvent.change(screen.getByLabelText('Mã 6 số'), { target: { value: '123456' } })
+      fireEvent.submit(screen.getByLabelText('Mã 6 số').closest('form')!)
     })
 
     // The restore failed, so the device is still on the placeholder - removing it would leave the
@@ -547,8 +572,8 @@ describe('the email door', () => {
 
     await goToEmail()
     await act(async () => {
-      fireEvent.change(screen.getByLabelText('Mã xác nhận'), { target: { value: '123456' } })
-      fireEvent.submit(screen.getByLabelText('Mã xác nhận').closest('form')!)
+      fireEvent.change(screen.getByLabelText('Mã 6 số'), { target: { value: '123456' } })
+      fireEvent.submit(screen.getByLabelText('Mã 6 số').closest('form')!)
     })
     await act(async () => { fireEvent.click(await screen.findByText('Soc')) })
 
@@ -559,8 +584,8 @@ describe('the email door', () => {
     profileState.fetchRemoteProfiles.mockResolvedValue([profile(SOC, 'Sóc')])
     await goToEmail()
     await act(async () => {
-      fireEvent.change(screen.getByLabelText('Mã xác nhận'), { target: { value: '123456' } })
-      fireEvent.submit(screen.getByLabelText('Mã xác nhận').closest('form')!)
+      fireEvent.change(screen.getByLabelText('Mã 6 số'), { target: { value: '123456' } })
+      fireEvent.submit(screen.getByLabelText('Mã 6 số').closest('form')!)
     })
     await waitFor(() => expect(sync.pullProfile).toHaveBeenCalledWith(SOC))
     expect(profileState.switchProfile).toHaveBeenCalledWith(SOC)
@@ -582,8 +607,8 @@ describe('the email door', () => {
 
     await goToEmail()
     await act(async () => {
-      fireEvent.change(screen.getByLabelText('Mã xác nhận'), { target: { value: '123456' } })
-      fireEvent.submit(screen.getByLabelText('Mã xác nhận').closest('form')!)
+      fireEvent.change(screen.getByLabelText('Mã 6 số'), { target: { value: '123456' } })
+      fireEvent.submit(screen.getByLabelText('Mã 6 số').closest('form')!)
     })
 
     await waitFor(() => expect(sync.pullProfile).toHaveBeenCalled())
@@ -600,8 +625,8 @@ describe('the email door', () => {
 
     await goToEmail()
     await act(async () => {
-      fireEvent.change(screen.getByLabelText('Mã xác nhận'), { target: { value: '123456' } })
-      fireEvent.submit(screen.getByLabelText('Mã xác nhận').closest('form')!)
+      fireEvent.change(screen.getByLabelText('Mã 6 số'), { target: { value: '123456' } })
+      fireEvent.submit(screen.getByLabelText('Mã 6 số').closest('form')!)
     })
 
     // One real candidate left, so there is no picker at all — and the pull is the child's.
@@ -617,8 +642,8 @@ describe('the email door', () => {
 
     await goToEmail()
     await act(async () => {
-      fireEvent.change(screen.getByLabelText('Mã xác nhận'), { target: { value: '123456' } })
-      fireEvent.submit(screen.getByLabelText('Mã xác nhận').closest('form')!)
+      fireEvent.change(screen.getByLabelText('Mã 6 số'), { target: { value: '123456' } })
+      fireEvent.submit(screen.getByLabelText('Mã 6 số').closest('form')!)
     })
 
     expect(await screen.findByText('Sóc')).toBeInTheDocument()
@@ -637,8 +662,8 @@ describe('the email door', () => {
       profileState.fetchRemoteProfiles.mockResolvedValue([profile(SOC, 'Sóc')])
       await goToEmail()
       await act(async () => {
-        fireEvent.change(screen.getByLabelText('Mã xác nhận'), { target: { value: '123456' } })
-        fireEvent.submit(screen.getByLabelText('Mã xác nhận').closest('form')!)
+        fireEvent.change(screen.getByLabelText('Mã 6 số'), { target: { value: '123456' } })
+        fireEvent.submit(screen.getByLabelText('Mã 6 số').closest('form')!)
       })
     }
 
@@ -647,9 +672,9 @@ describe('the email door', () => {
 
       expect(sync.pullProfile).toHaveBeenCalledWith(SOC)
       expect(profileState.switchProfile).not.toHaveBeenCalled()
-      expect(screen.getByRole('alert')).toHaveTextContent('chưa tải được tiến độ')
-      // …and says where the device actually stands, which is: nowhere new.
-      expect(screen.getByRole('alert')).toHaveTextContent('vẫn đang ở hồ sơ cũ')
+      // R10 / quyết định 22: the pull failure is one of the four merged system errors now, shown
+      // in the still-mounted 'email-otp' FieldRow rather than the top-of-card alert.
+      expect(screen.getByTestId('field-error')).toHaveTextContent('Không kết nối được máy chủ')
     })
 
     it('offers the same child again rather than the menu', async () => {
@@ -667,13 +692,13 @@ describe('the email door', () => {
       profileState.fetchRemoteProfiles.mockResolvedValue([profile(SOC, 'Sóc'), profile(CAO, 'Cáo')])
       await goToEmail()
       await act(async () => {
-        fireEvent.change(screen.getByLabelText('Mã xác nhận'), { target: { value: '123456' } })
-        fireEvent.submit(screen.getByLabelText('Mã xác nhận').closest('form')!)
+        fireEvent.change(screen.getByLabelText('Mã 6 số'), { target: { value: '123456' } })
+        fireEvent.submit(screen.getByLabelText('Mã 6 số').closest('form')!)
       })
       await act(async () => { fireEvent.click(await screen.findByText('Cáo')) })
 
       expect(profileState.switchProfile).not.toHaveBeenCalled()
-      expect(screen.getByRole('alert')).toHaveTextContent('chưa tải được tiến độ')
+      expect(screen.getByRole('alert')).toHaveTextContent('Không kết nối được máy chủ')
       // The picker is still up: tapping the same face again IS the retry.
       expect(screen.getByText('Cáo')).toBeInTheDocument()
     })
@@ -683,8 +708,8 @@ describe('the email door', () => {
     profileState.fetchRemoteProfiles.mockResolvedValue([profile(SOC, 'Sóc'), profile(CAO, 'Cáo')])
     await goToEmail()
     await act(async () => {
-      fireEvent.change(screen.getByLabelText('Mã xác nhận'), { target: { value: '123456' } })
-      fireEvent.submit(screen.getByLabelText('Mã xác nhận').closest('form')!)
+      fireEvent.change(screen.getByLabelText('Mã 6 số'), { target: { value: '123456' } })
+      fireEvent.submit(screen.getByLabelText('Mã 6 số').closest('form')!)
     })
     expect(await screen.findByText('Sóc')).toBeInTheDocument()
     expect(screen.getByText('Cáo')).toBeInTheDocument()
@@ -703,8 +728,8 @@ describe('the email door', () => {
     ])
     await goToEmail()
     await act(async () => {
-      fireEvent.change(screen.getByLabelText('Mã xác nhận'), { target: { value: '123456' } })
-      fireEvent.submit(screen.getByLabelText('Mã xác nhận').closest('form')!)
+      fireEvent.change(screen.getByLabelText('Mã 6 số'), { target: { value: '123456' } })
+      fireEvent.submit(screen.getByLabelText('Mã 6 số').closest('form')!)
     })
 
     expect(await screen.findByText('Tạo 04/03/2026')).toBeInTheDocument()
@@ -715,8 +740,8 @@ describe('the email door', () => {
     profileState.fetchRemoteProfiles.mockResolvedValue([])
     await goToEmail()
     await act(async () => {
-      fireEvent.change(screen.getByLabelText('Mã xác nhận'), { target: { value: '123456' } })
-      fireEvent.submit(screen.getByLabelText('Mã xác nhận').closest('form')!)
+      fireEvent.change(screen.getByLabelText('Mã 6 số'), { target: { value: '123456' } })
+      fireEvent.submit(screen.getByLabelText('Mã 6 số').closest('form')!)
     })
     expect(await screen.findByText(/chưa có hồ sơ nào/)).toBeInTheDocument()
     expect(sync.pullProfile).not.toHaveBeenCalled()
@@ -756,7 +781,9 @@ describe('the recovery-code door', () => {
     fireEvent.change(screen.getByLabelText(/Mã khôi phục/), { target: { value: 'ABC23XYZ' } })
     await act(async () => { fireEvent.submit(screen.getByLabelText(/Mã khôi phục/).closest('form')!) })
     expect(fetch).not.toHaveBeenCalled()
-    expect(screen.getByRole('alert')).toHaveTextContent('Mã của bạn vẫn còn nguyên')
+    // The roster failure keeps its own sentence — the FieldRow gutter, not the top-of-card alert,
+    // now that stage 'code' owns a field of its own (R9/R10).
+    expect(screen.getByTestId('field-error')).toHaveTextContent('Mã của bạn vẫn còn nguyên')
     expect(sync.pullProfile).not.toHaveBeenCalled()
     // and the damaged bytes are still on disk for whoever can read them
     expect(localStorage.getItem('speakup.profiles')).toBe('[{"id":"11111111-2222-4333-8444-5555')
@@ -767,7 +794,7 @@ describe('the recovery-code door', () => {
     goToCode()
     fireEvent.change(screen.getByLabelText(/Mã khôi phục/), { target: { value: 'ABC23XYZ' } })
     await act(async () => { fireEvent.submit(screen.getByLabelText(/Mã khôi phục/).closest('form')!) })
-    expect(screen.getByRole('alert')).toHaveTextContent('đã liên kết email')
+    expect(screen.getByTestId('field-error')).toHaveTextContent(describeRecoverError(403))
     expect(sync.pullProfile).not.toHaveBeenCalled()
   })
 
@@ -776,7 +803,7 @@ describe('the recovery-code door', () => {
     goToCode()
     fireEvent.change(screen.getByLabelText(/Mã khôi phục/), { target: { value: 'ZZZZZZZZ' } })
     await act(async () => { fireEvent.submit(screen.getByLabelText(/Mã khôi phục/).closest('form')!) })
-    expect(screen.getByRole('alert')).toHaveTextContent('Không tìm thấy mã này')
+    expect(screen.getByTestId('field-error')).toHaveTextContent(describeRecoverError(404))
   })
 
   it('is honest about a dropped connection rather than blaming the code', async () => {
@@ -784,7 +811,8 @@ describe('the recovery-code door', () => {
     goToCode()
     fireEvent.change(screen.getByLabelText(/Mã khôi phục/), { target: { value: 'ABC23XYZ' } })
     await act(async () => { fireEvent.submit(screen.getByLabelText(/Mã khôi phục/).closest('form')!) })
-    expect(screen.getByRole('alert')).toHaveTextContent('Không có kết nối mạng')
+    // R10 / quyết định 22: a thrown fetch is one of the four merged system errors now.
+    expect(screen.getByTestId('field-error')).toHaveTextContent('Không kết nối được máy chủ')
   })
 
   it('refuses to call the API at all with no session token to present', async () => {
@@ -793,7 +821,7 @@ describe('the recovery-code door', () => {
     fireEvent.change(screen.getByLabelText(/Mã khôi phục/), { target: { value: 'ABC23XYZ' } })
     await act(async () => { fireEvent.submit(screen.getByLabelText(/Mã khôi phục/).closest('form')!) })
     expect(fetch).not.toHaveBeenCalled()
-    expect(screen.getByRole('alert')).toBeInTheDocument()
+    expect(screen.getByTestId('field-error')).toHaveTextContent('Không kết nối được máy chủ')
   })
 
   it('goes back to the menu', () => {
@@ -815,5 +843,106 @@ it('holds every control to the 44 px adult tap floor', () => {
   for (const label of ['← Chọn cách khác']) {
     expect(screen.getByText(label).className, label).toContain('min-h-[44px]')
   }
-  expect(screen.getByLabelText('Email của bố/mẹ').className).toContain('min-h-[64px]')
+  // R9 / decision 17: the field is a 44 px `FieldRow` input now, not the old 64 px child control.
+  expect(screen.getByLabelText('Email của bố mẹ').className).toContain('h-11')
+  expect(screen.getByLabelText('Email của bố mẹ').className).not.toMatch(/min-h-\[64px\]/)
+})
+
+/**
+ * Task 8 (brief §2 A2, R9/R10, decisions 17/21/22/35) — `GateCard` + `FieldRow` at the adult 44 px
+ * floor, the fourteen round-4 error sentences keyed by CODE rather than copy, and the four scattered
+ * system failures merged into one sentence with a retry that does not spend the code/token again.
+ */
+describe('the round-4 GateCard frame', () => {
+  it('every auth code maps to the round-4 sentence', () => {
+    expect(describeAuthError('invalid-email')).toBe('Email chưa đúng định dạng.')
+    expect(describeAuthError('cloud-unconfigured')).toBe('Tính năng tài khoản chưa bật trên bản này.')
+    expect(describeAuthError('anonymous-session-in-use')).toBe('Máy này đang có hồ sơ của tài khoản khác — đăng xuất ở Góc phụ huynh trước.')
+    expect(describeAuthError('email-not-linked')).toBe('Email này chưa liên kết với Speak Up — thử mã khôi phục.')
+    expect(describeAuthError('invalid-token')).toBe('Mã sai hoặc đã hết hạn — gửi lại mã mới nhé.')
+    expect(describeAuthError('network error')).toBe('Mất kết nối — kiểm tra mạng rồi thử lại.')
+    expect(describeAuthError('whatever')).toBe('Có lỗi xảy ra — thử lại sau ít phút.')
+  })
+
+  it('every recover status maps to the round-4 sentence', () => {
+    expect(describeRecoverError(400)).toBe('Mã phải đủ 8 chữ và số.')
+    expect(describeRecoverError(401)).toBe('Mã không đúng — kiểm tra lại chữ O và số 0.')
+    expect(describeRecoverError(403)).toBe('Mã này thuộc tài khoản khác đang dùng máy này.')
+    expect(describeRecoverError(404)).toBe('Không tìm thấy mã — có thể đã được thay mã mới.')
+    expect(describeRecoverError(409)).toBe('Mã đã dùng trên máy khác — tạo mã mới ở máy đó.')
+    expect(describeRecoverError(429)).toBe('Thử quá nhiều lần — đợi 5 phút rồi thử lại.')
+    expect(describeRecoverError(500)).toBe('Không kết nối được máy chủ — thử lại sau.')
+  })
+
+  it('the four system failures share one sentence and a retry that does not burn the code', async () => {
+    const okRecover = { ok: true, status: 200, json: async () => ({ profiles: 0 }) }
+    auth.currentAccessToken.mockResolvedValue(null)
+    openCodeDoor()
+    await typeCode('QZQJ7MFC')
+    await submitRecover()
+
+    expect(screen.getByTestId('field-error')).toHaveTextContent('Không kết nối được máy chủ — thử lại sau')
+    // the code is still there — nothing was spent
+    expect(screen.getByDisplayValue('QZQJ7MFC')).toBeInTheDocument()
+
+    auth.currentAccessToken.mockResolvedValue('tok');
+    (fetch as ReturnType<typeof vi.fn>).mockResolvedValue(okRecover)
+    fireEvent.click(screen.getByRole('button', { name: 'Thử lại' }))
+    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(1))
+  })
+
+  it('the unreadable-roster failure keeps its own sentence — the consequence is different', async () => {
+    // A damaged roster (kept separate from the four merged system errors: R10 says gộp 4, không 6).
+    openCodeDoor()
+    localStorage.setItem('speakup.profiles', '[{"id":"11111111-2222-4333-8444-5555')
+    await typeCode('QZQJ7MFC')
+    await submitRecover()
+
+    expect(screen.getByTestId('field-error')).toHaveTextContent('Mã của bạn vẫn còn nguyên')
+    expect(screen.getByTestId('field-error')).not.toHaveTextContent('Không kết nối được máy chủ')
+  })
+
+  it('every stage is a 420px GateCard with a 44px field, a label above it and an 18px gutter', async () => {
+    renderStart()
+    openEmailDoor()
+
+    expect(screen.getByTestId('gate-card')).toHaveClass('w-[min(420px,calc(100%-32px))]', 'p-5')
+    const input = screen.getByLabelText('Email của bố mẹ')
+    expect(input).toHaveClass('h-11', 'rounded-r12', 'border-2', 'border-sand-edge')
+    expect(input.className).not.toMatch(/min-h-\[64px\]|text-base/)
+    expect(screen.getByTestId('field-error')).toHaveClass('min-h-[18px]')
+    expect(screen.getByText(/Không gửi quảng cáo/)).toHaveClass('text-[11px]')
+  })
+
+  it('the OTP and the recovery code are the 22px tracked boxes', async () => {
+    await reachOtp()
+    expect(screen.getByLabelText('Mã 6 số')).toHaveClass('text-center', 'font-display', 'text-[22px]', 'tracking-[6px]')
+
+    cleanup()
+    openCodeDoor()
+    expect(screen.getByLabelText('Mã khôi phục (8 ký tự)')).toHaveClass('text-[22px]', 'tracking-[6px]', 'uppercase')
+  })
+
+  it('the header carries the adult Back with the landscape label, and the gate stage its own sub', async () => {
+    renderStart()
+    const back = screen.getByRole('link', { name: /^Về nhà/ })
+    expect(within(back).getByText('Về bản đồ 🏝️')).toHaveClass('ipad:inline')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Tôi có email đã liên kết' }))
+    expect(screen.getByText('Câu hỏi dành cho bố mẹ trước khi khôi phục.')).toBeInTheDocument()
+  })
+
+  it('no field or button in this screen is a 64px child control any more', async () => {
+    for (const open of [
+      () => { renderStart(); openEmailDoor() },
+      () => { openCodeDoor() },
+      reachOtp,
+    ]) {
+      cleanup()
+      await open()
+      for (const el of [...screen.queryAllByRole('button'), ...screen.queryAllByRole('textbox')]) {
+        expect(el.className).not.toMatch(/min-h-\[64px\]|md:min-h-\[64px\]|md:h-16/)
+      }
+    }
+  })
 })
