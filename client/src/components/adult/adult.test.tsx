@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react'
+import { fireEvent, render, screen, within } from '@testing-library/react'
 import { FieldRow } from './FieldRow'
 import { Panel } from './Panel'
 import { PanelGrid } from './PanelGrid'
@@ -26,6 +26,22 @@ describe('Panel', () => {
     fireEvent.click(summary)
     expect(screen.getByText('▾')).toBeInTheDocument()
     expect(screen.getByText('row')).toBeVisible()
+  })
+
+  it('the collapsible summary exposes its open/closed state via aria-expanded', () => {
+    render(<Panel title="Bản ghi gần đây · 20" collapsible><b>row</b></Panel>)
+    const summary = screen.getByRole('button', { name: /Bản ghi gần đây/ })
+    expect(summary).toHaveAttribute('aria-expanded', 'false')
+    fireEvent.click(summary)
+    expect(summary).toHaveAttribute('aria-expanded', 'true')
+    fireEvent.click(summary)
+    expect(summary).toHaveAttribute('aria-expanded', 'false')
+  })
+
+  it('a collapsible Panel with a right slot still shows it in the phone summary row', () => {
+    render(<Panel title="⏰ Giới hạn mỗi ngày" collapsible right={<span>Hôm nay: 12/25'</span>}><i /></Panel>)
+    const summary = screen.getByRole('button', { name: /Giới hạn mỗi ngày/ })
+    expect(within(summary).getByText("Hôm nay: 12/25'")).toBeInTheDocument()
   })
 
   it('a scroll Panel gets the flex-1 scroller and the 40px bottom fade', () => {
@@ -83,6 +99,18 @@ describe('SegRow', () => {
     expect(segs.every(s => !/min-h-\[64px\]|md:h-16/.test(s.className))).toBe(true)
   })
 
+  it('aria-pressed follows tone — only the on seg reads as pressed', () => {
+    render(<SegRow segs={[
+      { key: 'a', label: 'Tự động', tone: 'on', onClick: () => {} },
+      { key: '1', label: '1', tone: 'off', onClick: () => {} },
+      { key: '2', label: '2', tone: 'dim', onClick: () => {} },
+    ]} />)
+    const segs = screen.getAllByTestId('seg')
+    expect(segs[0]).toHaveAttribute('aria-pressed', 'true')
+    expect(segs[1]).toHaveAttribute('aria-pressed', 'false')
+    expect(segs[2]).toHaveAttribute('aria-pressed', 'false')
+  })
+
   it('clicking a seg calls its own onClick', () => {
     const onClick = vi.fn()
     render(<SegRow segs={[{ key: 'a', label: '10', tone: 'off', onClick }]} />)
@@ -103,14 +131,20 @@ describe('Stepper', () => {
     expect(screen.getByText('5–60, bước 5')).toHaveClass('text-[11px]')
   })
 
-  it('never emits a number outside 5..60 and keeps a hidden input for a11y', () => {
+  it('never emits a number outside 5..60 and keeps a hidden input for a11y, named after the custom label', () => {
     const onChange = vi.fn()
     const { rerender } = render(<Stepper value={60} onChange={onChange} label="Tuỳ chỉnh" />)
     fireEvent.click(screen.getByRole('button', { name: 'Tăng' })); expect(onChange).not.toHaveBeenCalled()
     rerender(<Stepper value={5} onChange={onChange} label="Tuỳ chỉnh" />)
     fireEvent.click(screen.getByRole('button', { name: 'Giảm' })); expect(onChange).not.toHaveBeenCalled()
+    expect(screen.getByLabelText('Tuỳ chỉnh')).toHaveAttribute('type', 'number')
+    expect(screen.getByLabelText('Tuỳ chỉnh')).toHaveClass('sr-only')
+  })
+
+  it('falls back to "Phút mỗi ngày" as both the visible and hidden-input label when none is given', () => {
+    render(<Stepper value={25} onChange={() => {}} />)
+    expect(screen.getByText('Phút mỗi ngày')).toBeInTheDocument()
     expect(screen.getByLabelText('Phút mỗi ngày')).toHaveAttribute('type', 'number')
-    expect(screen.getByLabelText('Phút mỗi ngày')).toHaveClass('sr-only')
   })
 
   it('width=56 locks the value box narrow at every width', () => {

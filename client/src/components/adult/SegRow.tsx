@@ -31,6 +31,7 @@ export function SegRow({ segs, className = '' }: { segs: Seg[]; className?: stri
           data-testid="seg"
           data-tone={seg.tone}
           aria-label={seg.ariaLabel}
+          aria-pressed={seg.tone === 'on'}
           onClick={seg.onClick}
           className={`${SEG} ${TONE[seg.tone]}`}
         >

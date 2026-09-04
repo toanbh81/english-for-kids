@@ -43,8 +43,11 @@ export function Panel({
       {collapsible
         ? (
           <>
-            <button type="button" onClick={() => setOpen(o => !o)} className="flex min-h-[56px] items-center justify-between gap-2 text-left md:hidden">
-              <h2 className={TITLE}>{title}</h2>
+            <button type="button" onClick={() => setOpen(o => !o)} aria-expanded={open} className="flex min-h-[56px] items-center justify-between gap-2 text-left md:hidden">
+              <span className="flex min-w-0 flex-1 items-center justify-between gap-2">
+                <h2 className={TITLE}>{title}</h2>
+                {right}
+              </span>
               <span className="text-[14px] text-ink-300">{open ? '▾' : '▸'}</span>
             </button>
             <div className="hidden items-center justify-between gap-2 md:flex">

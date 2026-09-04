@@ -18,7 +18,7 @@ export function Stepper({
   min = 5,
   max = 60,
   step = 5,
-  label,
+  label = 'Phút mỗi ngày',
   width = 64,
 }: {
   value: number
@@ -26,7 +26,7 @@ export function Stepper({
   min?: number
   max?: number
   step?: number
-  label: string
+  label?: string
   width?: 64 | 56
 }) {
   const inputId = useId()
@@ -45,7 +45,7 @@ export function Stepper({
         <button type="button" aria-label="Tăng" onClick={() => apply(value + step)} className={BTN}>+</button>
       </div>
       <span className="text-[11px] font-bold text-ink-300">{min}–{max}, bước {step}</span>
-      <input id={inputId} type="number" className="sr-only" aria-label="Phút mỗi ngày" min={min} max={max} step={step} value={value} onChange={e => apply(Number(e.target.value))} />
+      <input id={inputId} type="number" className="sr-only" aria-label={label} min={min} max={max} step={step} value={value} onChange={e => apply(Number(e.target.value))} />
     </div>
   )
 }
