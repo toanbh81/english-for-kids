@@ -185,7 +185,7 @@ export function AccountCard({
 
       {state.kind === 'linked' && (
         <>
-          <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
             <div
               data-testid="linked-email"
               title={state.email}
@@ -211,7 +211,7 @@ export function AccountCard({
       )}
 
       {state.kind === 'syncError' && (
-        <div className="flex flex-col gap-2">
+        <div className="flex min-w-0 flex-col gap-2">
           {state.email !== null && (
             <div
               data-testid="linked-email"

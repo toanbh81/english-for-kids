@@ -49,6 +49,7 @@ const profileStateMock = vi.hoisted(() => ({
   listProfiles: vi.fn<() => MockProfile[]>(),
   activeProfileId: vi.fn<() => string | null>(),
   addProfile: vi.fn<(name?: string) => MockProfile | null>(),
+  connectCloud: vi.fn<() => Promise<void>>(async () => undefined),
   renameProfile: vi.fn<(id: string, name: string) => MockProfile[]>(),
   renameRemoteProfile: vi.fn<() => Promise<boolean>>(async () => true),
   switchProfile: vi.fn<(id: string) => boolean>(() => true),
@@ -106,11 +107,23 @@ function renderGate() {
  * only exist with it), and one scored event this week by default so the header's summary line has
  * something to say — pass `events: []` explicitly for the genuinely-empty-week scenario. `events`
  * always seeds `speakup.activity` before the render so a caller can drive the header's weekly
- * summary or the chart without reaching for `localStorage.setItem` by hand. */
-function renderDashboard(opts: { events?: ActivityEvent[]; cloud?: boolean } = {}) {
+ * summary or the chart without reaching for `localStorage.setItem` by hand. Task 11 adds `profiles`:
+ * a count that seeds that many mock profiles (`listProfiles`/`activeProfileId`, active = the first)
+ * for the "Hồ sơ" column's worst case — 8 rows — without every call site building the array by hand. */
+function renderDashboard(opts: { events?: ActivityEvent[]; cloud?: boolean; profiles?: number } = {}) {
   cloud.configured = opts.cloud ?? true
   const events = opts.events ?? [{ ts: Date.now(), kind: 'speak', id: 'seed', score: 80 }]
   localStorage.setItem('speakup.activity', JSON.stringify(events))
+  if (opts.profiles) {
+    const roster: MockProfile[] = Array.from({ length: opts.profiles }, (_, i) => ({
+      id: `p${i + 1}`,
+      name: i === 0 ? 'Bé' : `Bé ${i + 1}`,
+      avatar: '🦊',
+      created: i,
+    }))
+    profileStateMock.listProfiles.mockReturnValue(roster)
+    profileStateMock.activeProfileId.mockReturnValue(roster[0].id)
+  }
   return renderWithDialogs(<ParentDashboard />)
 }
 
@@ -128,6 +141,9 @@ function answerCorrectly() {
 async function flush() {
   await act(async () => { await Promise.resolve() })
 }
+
+/** Task 11's own name for the same wait — the brief's failing tests spell it `settle()`. */
+const settle = flush
 
 /** A promise the test controls, standing in for a slow `clearRecordings`/`resetRemoteProgress`/
  * `signOut` — Fix round 1: the reset/sign-out dialogs stay open and busy until their own async
@@ -725,10 +741,10 @@ describe('Phase 11: "Tài khoản"', () => {
     // ever checks that this id is ABSENT — a `queryByTestId` that never fires is not a passing test,
     // it is an untested assertion, so this confirms the same id actually renders when it should.
     expect(screen.getByTestId('account-card')).toBeInTheDocument()
-    expect(screen.getByText(/Tiến độ học của bé sẽ được lưu trên tài khoản của bạn/)).toBeInTheDocument()
-    expect(screen.getByLabelText('Email của bố/mẹ')).toBeInTheDocument()
+    expect(screen.getByText('Liên kết email để giữ tiến độ và xem trên máy khác.')).toBeInTheDocument()
+    expect(screen.getByLabelText('Email của bố mẹ')).toBeInTheDocument()
     expect(await screen.findByText('ABC23XYZ')).toBeInTheDocument()
-    expect(screen.getByText(/chụp màn hình lại nhé/)).toBeInTheDocument()
+    expect(screen.getByText(/chụp màn hình lại/)).toBeInTheDocument()
   })
 
   it('never shows a recovery code once the account is linked — that is correct, not a bug', async () => {
@@ -740,7 +756,7 @@ describe('Phase 11: "Tài khoản"', () => {
     await flush()
 
     expect(authMock.ensureRecoveryCode).not.toHaveBeenCalled()
-    expect(screen.queryByText(/chụp màn hình lại nhé/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/chụp màn hình lại/)).not.toBeInTheDocument()
     expect(screen.getByText('bome@example.com')).toBeInTheDocument()
   })
 
@@ -772,22 +788,22 @@ describe('Phase 11: "Tài khoản"', () => {
     renderWithDialogs(<ParentDashboard />)
     await flush()
 
-    fireEvent.change(screen.getByLabelText('Email của bố/mẹ'), { target: { value: 'bome@example.com' } })
+    fireEvent.change(screen.getByLabelText('Email của bố mẹ'), { target: { value: 'bome@example.com' } })
     await act(async () => {
-      fireEvent.submit(screen.getByLabelText('Email của bố/mẹ').closest('form')!)
+      fireEvent.submit(screen.getByLabelText('Email của bố mẹ').closest('form')!)
     })
     expect(authMock.linkEmail).toHaveBeenCalledWith('bome@example.com')
     expect(screen.getByText(/Nhập mã 6 số vừa gửi tới bome@example.com/)).toBeInTheDocument()
 
-    fireEvent.change(screen.getByLabelText('Mã xác nhận'), { target: { value: '123456' } })
+    fireEvent.change(screen.getByLabelText('Mã 6 số'), { target: { value: '123456' } })
     await act(async () => {
-      fireEvent.submit(screen.getByLabelText('Mã xác nhận').closest('form')!)
+      fireEvent.submit(screen.getByLabelText('Mã 6 số').closest('form')!)
     })
     expect(authMock.verifyEmailOtp).toHaveBeenCalledWith('bome@example.com', '123456')
     expect(screen.getByText('bome@example.com')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Đăng xuất' })).toBeInTheDocument()
     // The standing ruling: linking just dropped the code server-side, so it must vanish here too.
-    expect(screen.queryByText(/chụp màn hình lại nhé/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/chụp màn hình lại/)).not.toBeInTheDocument()
   })
 
   it('reports a wrong or expired OTP without losing the typed email', async () => {
@@ -796,13 +812,13 @@ describe('Phase 11: "Tài khoản"', () => {
 
     renderWithDialogs(<ParentDashboard />)
     await flush()
-    fireEvent.change(screen.getByLabelText('Email của bố/mẹ'), { target: { value: 'bome@example.com' } })
-    await act(async () => { fireEvent.submit(screen.getByLabelText('Email của bố/mẹ').closest('form')!) })
+    fireEvent.change(screen.getByLabelText('Email của bố mẹ'), { target: { value: 'bome@example.com' } })
+    await act(async () => { fireEvent.submit(screen.getByLabelText('Email của bố mẹ').closest('form')!) })
 
-    fireEvent.change(screen.getByLabelText('Mã xác nhận'), { target: { value: '000000' } })
-    await act(async () => { fireEvent.submit(screen.getByLabelText('Mã xác nhận').closest('form')!) })
+    fireEvent.change(screen.getByLabelText('Mã 6 số'), { target: { value: '000000' } })
+    await act(async () => { fireEvent.submit(screen.getByLabelText('Mã 6 số').closest('form')!) })
 
-    expect(screen.getByRole('alert')).toHaveTextContent('hết hạn')
+    expect(screen.getByTestId('field-error')).toHaveTextContent('hết hạn')
     expect(screen.getByText(/vừa gửi tới bome@example.com/)).toBeInTheDocument()
   })
 
@@ -812,22 +828,22 @@ describe('Phase 11: "Tài khoản"', () => {
 
     renderWithDialogs(<ParentDashboard />)
     await flush()
-    fireEvent.change(screen.getByLabelText('Email của bố/mẹ'), { target: { value: 'bome@example.com' } })
-    await act(async () => { fireEvent.submit(screen.getByLabelText('Email của bố/mẹ').closest('form')!) })
+    fireEvent.change(screen.getByLabelText('Email của bố mẹ'), { target: { value: 'bome@example.com' } })
+    await act(async () => { fireEvent.submit(screen.getByLabelText('Email của bố mẹ').closest('form')!) })
 
-    expect(screen.getByRole('alert')).toHaveTextContent('Không có kết nối mạng')
-    expect(screen.getByLabelText('Email của bố/mẹ')).toBeInTheDocument()
+    expect(screen.getByTestId('field-error')).toHaveTextContent('Không có kết nối mạng')
+    expect(screen.getByLabelText('Email của bố mẹ')).toBeInTheDocument()
   })
 
   it('lets the parent correct a typo\'d email before it is verified', async () => {
     cloud.configured = true
     renderWithDialogs(<ParentDashboard />)
     await flush()
-    fireEvent.change(screen.getByLabelText('Email của bố/mẹ'), { target: { value: 'typo@example.com' } })
-    await act(async () => { fireEvent.submit(screen.getByLabelText('Email của bố/mẹ').closest('form')!) })
+    fireEvent.change(screen.getByLabelText('Email của bố mẹ'), { target: { value: 'typo@example.com' } })
+    await act(async () => { fireEvent.submit(screen.getByLabelText('Email của bố mẹ').closest('form')!) })
 
     fireEvent.click(screen.getByText('Sửa lại email'))
-    const input = screen.getByLabelText('Email của bố/mẹ') as HTMLInputElement
+    const input = screen.getByLabelText('Email của bố mẹ') as HTMLInputElement
     expect(input.value).toBe('typo@example.com')
     fireEvent.change(input, { target: { value: 'fixed@example.com' } })
     await act(async () => { fireEvent.submit(input.closest('form')!) })
@@ -854,7 +870,7 @@ describe('Phase 11: "Tài khoản"', () => {
     // longer exists. The screen says where the device stands instead.
     expect(screen.queryByRole('button', { name: 'Đăng xuất' })).not.toBeInTheDocument()
     expect(screen.getByTestId('no-session')).toBeInTheDocument()
-    expect(screen.queryByLabelText('Email của bố/mẹ')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('Email của bố mẹ')).not.toBeInTheDocument()
   })
 
   /** Fix round 1, finding 1: the sign-out dialog carries `signOut()` as `onConfirm`, so it stays
@@ -1043,7 +1059,7 @@ describe('Phase 11: "Tài khoản"', () => {
 
       expect(screen.getByText('bome@example.com')).toBeInTheDocument()
       expect(screen.getByRole('button', { name: 'Đăng xuất' })).toBeInTheDocument()
-      expect(screen.queryByLabelText('Email của bố/mẹ')).not.toBeInTheDocument()
+      expect(screen.queryByLabelText('Email của bố mẹ')).not.toBeInTheDocument()
       expect(screen.queryByTestId('no-session')).not.toBeInTheDocument()
     })
 
@@ -1057,7 +1073,7 @@ describe('Phase 11: "Tài khoản"', () => {
       renderWithDialogs(<ParentDashboard />)
       await flush()
 
-      expect(screen.getByLabelText('Email của bố/mẹ')).toBeInTheDocument()
+      expect(screen.getByLabelText('Email của bố mẹ')).toBeInTheDocument()
       expect(await screen.findByText('ABC23XYZ')).toBeInTheDocument()
       expect(screen.queryByRole('button', { name: 'Đăng xuất' })).not.toBeInTheDocument()
       expect(screen.queryByTestId('no-session')).not.toBeInTheDocument()
@@ -1074,9 +1090,10 @@ describe('Phase 11: "Tài khoản"', () => {
       await flush()
 
       expect(screen.queryByRole('button', { name: 'Đăng xuất' })).not.toBeInTheDocument()
-      expect(screen.getByTestId('no-session')).toHaveTextContent('vẫn đang được lưu trên máy này')
+      // `AccountCard`'s ② copy (Task 4) — see `docs/design/2026-09-04-round4-parent-zone-brief.md` §2.
+      expect(screen.getByTestId('no-session')).toHaveTextContent('Bé vẫn học bình thường, tiến độ lưu trên máy.')
       // No dead form: `linkEmail` would call `updateUser` on a user that does not exist.
-      expect(screen.queryByLabelText('Email của bố/mẹ')).not.toBeInTheDocument()
+      expect(screen.queryByLabelText('Email của bố mẹ')).not.toBeInTheDocument()
     })
 
     it('blames the network when that is the reason there is no account', async () => {
@@ -1201,6 +1218,9 @@ describe('Phase 11: "Tài khoản"', () => {
 
   /** F7: "an toàn trên mọi thiết bị" sat on the same screen as "Bản ghi gần đây", and recordings
    * never sync. The consent line the spec asks for stays; the promise around it gets honest. */
+  /* Task 11 note: this consent line moved into `AccountCard` (Task 4) — a single sentence with no
+   * claim about recordings syncing either way, so the over-promise this test used to guard against
+   * ("an toàn trên mọi thiết bị") simply has nowhere left to sneak back in. */
   it('promises only what actually travels', async () => {
     cloud.configured = true
 
@@ -1208,8 +1228,7 @@ describe('Phase 11: "Tài khoản"', () => {
     await flush()
 
     expect(screen.queryByText(/trên mọi thiết bị/)).not.toBeInTheDocument()
-    expect(screen.getByText(/bản ghi giọng nói chỉ nằm trên máy này/)).toBeInTheDocument()
-    expect(screen.getByText(/Tiến độ học của bé sẽ được lưu trên tài khoản của bạn/)).toBeInTheDocument()
+    expect(screen.getByText('Liên kết email để giữ tiến độ và xem trên máy khác.')).toBeInTheDocument()
   })
 
   it('does not touch the mirror on reset with no cloud configured', async () => {
@@ -1222,6 +1241,83 @@ describe('Phase 11: "Tài khoản"', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Xoá tiến trình' }))
     await flush()
     expect(syncMock.resetRemoteProgress).not.toHaveBeenCalled()
+  })
+})
+
+/**
+ * Task 11: the Account panel's body is now `AccountCard` (Task 4) — a two-column `Panel` with the
+ * card on the left and a "Hồ sơ" column on the right (`ipad:`/`md:` from), one row per profile.
+ * `AccountCard` owns its own copy and its own `sync-status` pill; this screen only derives which of
+ * its eleven states applies and wires the eight handlers through.
+ */
+describe('Task 11: account panel is AccountCard, with a profile column', () => {
+  const EMAIL61 = 'nguyenthiphuongthaonguyenvanphamlethihoangtranminhab@vidu.com'
+  const SYNCED: MockSyncStatus = { state: 'synced', pending: 0, lastSyncedAt: null, lastError: null, syncing: false }
+
+  it('the account panel is the AccountCard with the 32px pill in its title row', async () => {
+    // The default mock answers `state: 'off'` — SyncPill's own signal for "no cloud" — under which
+    // it renders nothing at all, pill included. A pill to assert on needs a real sync state.
+    syncMock.syncStatus.mockReturnValue(SYNCED)
+    renderDashboard()
+    await settle()
+    const panel = screen.getByTestId('account-card')
+    expect(within(panel).getByTestId('account-card-body')).toBeInTheDocument()
+    expect(within(panel).getByTestId('sync-status')).toHaveClass('h-8')
+  })
+
+  it('no session drives both the card and the pill from the same fact', async () => {
+    syncMock.syncStatus.mockReturnValue(SYNCED)
+    authMock.currentUserId.mockResolvedValue(null)
+    renderDashboard()
+    await settle()
+    expect(screen.getByTestId('no-session')).toBeInTheDocument()
+    expect(screen.getByTestId('sync-status')).toHaveTextContent('⚡ Chưa kết nối')
+  })
+
+  it('a 61-character email never widens the panel: one ellipsised line, full value in the title', async () => {
+    authMock.isAnonymous.mockResolvedValue(false)
+    authMock.currentEmail.mockResolvedValue(EMAIL61)
+    renderDashboard()
+    await settle()
+    const box = screen.getByTestId('linked-email')
+    expect(box).toHaveClass('truncate', 'min-w-0')
+    expect(box).toHaveAttribute('title', EMAIL61)
+    expect(box.parentElement).toHaveClass('flex', 'min-w-0')
+  })
+
+  it('a sync error becomes state ⑩, not a silent pill', async () => {
+    syncMock.syncStatus.mockReturnValue({ ...SYNCED, pending: 3, lastError: 'boom' })
+    renderDashboard()
+    await settle()
+    expect(screen.getByText('3 mục chưa lên máy chủ. Sẽ thử lại khi có mạng.')).toBeInTheDocument()
+  })
+
+  it('the profile column is the right half on iPad portrait, with a 2px divider', async () => {
+    renderDashboard({ profiles: 8 })
+    await settle()
+    expect(screen.getByTestId('account-columns')).toHaveClass('md:grid', 'md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]', 'md:gap-4')
+    expect(screen.getByTestId('profile-column')).toHaveClass('md:border-l-2', 'md:border-line-200', 'md:pl-4')
+  })
+
+  /** Fix: the brief's own version of this test queries the "Đổi tên" button at document scope, which
+   * throws once there is more than one profile row (each row has its own). Scoped to the first row —
+   * the thing the rest of the assertion is already about — the intent (style check) is unchanged. */
+  it('a profile row is 40px: name on one ellipsised line and two 32px buttons', async () => {
+    renderDashboard({ profiles: 8 })
+    await settle()
+    const rows = screen.getAllByTestId('profile-row')
+    expect(rows).toHaveLength(8)
+    expect(rows[0]).toHaveClass('min-h-[40px]', 'border-b', 'border-line-200')
+    expect(within(rows[0]).getByText(/Bé/)).toHaveClass('truncate', 'text-[13px]')
+    expect(screen.getByRole('button', { name: '+ Thêm hồ sơ' })).toHaveClass('h-8', 'rounded-r10', 'bg-teal-50', 'text-teal-600', 'text-[12px]')
+    expect(within(rows[0]).getByRole('button', { name: 'Đổi tên' })).toHaveClass('h-8', 'underline', 'text-[12px]')
+  })
+
+  it('an unreadable roster still warns instead of pairing a blank name with "+ Thêm hồ sơ"', async () => {
+    profileStateMock.listProfiles.mockReturnValue([])
+    renderDashboard()
+    await settle()
+    expect(screen.getByTestId('profile-unreadable')).toBeInTheDocument()
   })
 })
 

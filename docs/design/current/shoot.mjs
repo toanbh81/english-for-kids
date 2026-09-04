@@ -523,6 +523,39 @@ async function run(vpName, vp) {
       await sleep(500)
     }
   }
+  // The account card's `link` form (state ④) only appears once the anonymous session below has
+  // actually landed in this render — a safety net, not the primary mechanism (that is `mockAnonSignIn()`
+  // + `waitForAnonSession()` just below): a `getSession()` that raced a re-render can still read as
+  // "no session" (state ②) for a beat, and "Thử kết nối" is the same recovery a parent would reach
+  // for, so retrying it here is just that click. `DEBUG_ACCOUNT=1` prints the card's own text on the
+  // way to giving up, for whoever next has to work out which of the eleven states it actually landed on.
+  const ensureLinkForm = async () => {
+    for (let i = 0; i < 5; i++) {
+      if (await page.locator('#account-email').count()) return true
+      const retry = page.getByRole('button', { name: 'Thử kết nối' })
+      if (await retry.count()) await retry.click()
+      await sleep(1000)
+    }
+    if (process.env.DEBUG_ACCOUNT) console.log('DEBUG account panel text:', await page.locator('[data-testid="account-card"]').innerText().catch(e => e.message))
+    return page.locator('#account-email').count().then(n => n > 0)
+  }
+  // Task 11: the account card now reads `sync.lastError` (brief §2's own state precedence) before
+  // it reads `linked` — correctly, but that means the `/start` section's leftover FAKE anonymous
+  // session (an intentionally-invalid JWT — see `FAKE_ANON_SESSION`'s own comment) would otherwise
+  // show every `/parent` shot below state ⑩ the moment the sync engine's next REST call against it
+  // is refused, instead of whatever each shot is actually meant to demonstrate. A REAL round trip
+  // to the live project fixes that but is not reliably fast/reachable from this sandbox's headless
+  // Edge (multi-second stalls, occasional loss — the earlier version of this block chased that with
+  // longer waits and retries and still flaked). `mockAnonSignIn()` sidesteps the network instead —
+  // deterministic, same helper the /start section already relies on — paired with a blanket
+  // `**/rest/v1/**` stub so the sync engine's OTHER calls (not just signup) never 401 against the
+  // fake token either. Unmocked and cleaned up right after the three shots below, so nothing past
+  // this section inherits a fake session.
+  await page.evaluate(() => { localStorage.removeItem('speakup.auth') })
+  await mockAnonSignIn()
+  await page.route('**/rest/v1/**', r => r.fulfill({ status: 200, body: '[]' }))
+  await go(page, '/')
+  await waitForAnonSession()
   await S('parent-dashboard', '/parent', openDashboard)
   // Round 4 §2 P2.3/P2.4/P2.8: the worst-case "0 events" state — the minutes chart, the weak-sound
   // panel and the recordings panel all show their empty state at once. `-full` is what Task 16
@@ -538,6 +571,79 @@ async function run(vpName, vp) {
     await S('parent-dashboard-empty', '/parent', openDashboard)
     await seed(page) // trả lại đứa trẻ 5 ngày cho mọi ảnh sau
   }
+
+  // Task 11 (brief §2 "Thẻ Tài khoản" ⑥/⑨/⑩): three `AccountCard` states `dev` local storage alone
+  // cannot seed — the OTP box, a 61-char linked email and a broken flush — so each drives the real
+  // screen through the real form/click path, mocking only the network underneath it.
+  //
+  // Ordered ⑥ (OTP) before ⑨ (linked), the reverse of the brief's own listing: ⑨'s mocked
+  // `verify*` response is accepted by supabase-js and persisted for real into `speakup.auth` (same
+  // mechanism `start-result-empty` above relies on) — reaching ⑥ afterwards would load the dashboard
+  // already "linked" instead of anonymous-with-an-idle-link-form, which is the state ⑥ needs to type
+  // into. Running OTP first sidesteps that; the persisted session from ⑨ is still removed right after
+  // so it cannot leak into `parent-dashboard-profiles`/`home`/etc. below.
+  //
+  // ⑥ OTP trong thẻ: gõ email rồi bấm "Liên kết" — PUT `**/auth/v1/user*` (linkEmail's `updateUser`,
+  // the anonymous-upgrade call) trả 200 rỗng. Không xác nhận mã, nên không có gì được lưu lại.
+  await S('parent-dashboard-otp', '/parent', async () => {
+    await page.route('**/auth/v1/user*', r => (r.request().method() === 'PUT' ? r.fulfill({ status: 200, body: '{}' }) : r.continue()))
+    await openDashboard()
+    if (!(await ensureLinkForm())) throw new Error('no anonymous session reached the link form')
+    await page.fill('#account-email', EMAIL61)
+    await tapText(page, 'Liên kết')
+    await sleep(700)
+    await page.unroute('**/auth/v1/user*')
+  })
+  // ⑨ đã liên kết, email 61 ký tự: cùng PUT ở trên, rồi POST `**/auth/v1/verify*` (verifyEmailOtp)
+  // trả một phiên giả mang chính `EMAIL61` — cùng khuôn `FAKE_SESSION` mà `/start`'s shots đã dùng.
+  await S('parent-dashboard-linked', '/parent', async () => {
+    await page.route('**/auth/v1/user*', r => (r.request().method() === 'PUT' ? r.fulfill({ status: 200, body: '{}' }) : r.continue()))
+    await page.route('**/auth/v1/verify*', r => r.fulfill({
+      status: 200,
+      body: JSON.stringify({ ...FAKE_SESSION, user: { ...FAKE_SESSION.user, email: EMAIL61, is_anonymous: false } }),
+    }))
+    // The blanket `**/rest/v1/**` stub from above is still armed — `FAKE_SESSION`'s token is
+    // deliberately not a real JWT (see its own comment), so without it the sync engine's very next
+    // REST call would 401 for real and flip the card straight into state ⑩ instead of the ⑨ this
+    // shot is actually after.
+    await openDashboard()
+    if (!(await ensureLinkForm())) throw new Error('no anonymous session reached the link form')
+    await page.fill('#account-email', EMAIL61)
+    await tapText(page, 'Liên kết')
+    await sleep(500)
+    await page.fill('#account-otp', '482100')
+    await tapText(page, 'Xác nhận')
+    await sleep(700)
+    await page.unroute('**/auth/v1/user*')
+    await page.unroute('**/auth/v1/verify*')
+  })
+  // ⑩ sync lỗi: chặn mọi REST rồi tạo một lần ghi để flush hỏng. The brief's own text names the
+  // trigger "đổi giới hạn" (change the limit) — today's dashboard does that with one of the three
+  // 15/20/30-phút chips, not yet the Task-13 stepper the brief's pseudocode assumed ("Tăng"). This
+  // route registration replaces the blanket stub above (Playwright tries the newest matching
+  // handler first) rather than needing to unroute it first.
+  await S('parent-dashboard-sync-error', '/parent', async () => {
+    await page.route('**/rest/v1/**', r => r.abort())
+    await openDashboard()
+    await tapText(page, '30 phút')
+    // The write is queued instantly but the flush it needs to actually FAIL sits behind a real
+    // 30s debounce (`cloud/sync.ts` `DEBOUNCE_MS`) — sleeping past that would work but is a slow
+    // way to shoot one frame. `onHidden`'s own trigger (a child putting the iPad down) fires an
+    // immediate flush the moment `document.visibilityState` reads "hidden"; faking that property
+    // here is the same shortcut the `profile-gate-reask` shot above takes for `resume()`.
+    await page.evaluate(() => {
+      Object.defineProperty(document, 'visibilityState', { value: 'hidden', configurable: true })
+      document.dispatchEvent(new Event('visibilitychange'))
+    })
+    await sleep(800)
+  })
+  // Clean slate for everything after this section: drop every mock this block armed (the blanket
+  // stub / abort above, and `mockAnonSignIn()`'s own signup/profiles routes) and the fake session
+  // itself — `FAKE_SESSION` (⑨'s) and the mocked anonymous one both persisted into REAL
+  // localStorage, and no shot past this point should inherit either.
+  await page.unroute('**/rest/v1/**')
+  await unmockAnonSignIn()
+  await page.evaluate(() => { localStorage.removeItem('speakup.auth') })
 
   // ---------- special Home states ----------
   await seed(page, { overLimit: true })

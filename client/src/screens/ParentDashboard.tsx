@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import type { ChangeEvent, FormEvent } from 'react'
+import type { ChangeEvent } from 'react'
 import { getActivity, minutesPerDay, averageScoreByKind, weakPhonemes, clearActivity } from '../progress/activity'
 import { clearBand, getBand, setBandAuto, setBandValue } from '../progress/band'
 import type { Band } from '../progress/band'
@@ -26,12 +26,12 @@ import {
   NAME_MAX,
   activeProfileId,
   addProfile,
+  connectCloud,
   ensureRemoteProfiles,
   fetchRemoteProfiles,
   listProfiles,
   renameProfile,
   renameRemoteProfile,
-  shortName,
   switchProfile,
 } from '../cloud/profileState'
 import { flush, hasPendingReset, resetRemoteProgress, subscribeSyncStatus, syncStatus } from '../cloud/sync'
@@ -40,9 +40,10 @@ import { fetchRemoteStats } from '../cloud/remote'
 import type { RemoteStats } from '../cloud/remote'
 import { isCloudConfigured } from '../cloud/supabase'
 import { ProfilePicker } from '../components/ProfilePicker'
-import { AccountCardSkeleton, BackButton, Button, Card, EmptyState, Notice, RemoteRowSkeleton, SyncPill } from '../components/ui'
+import { BackButton, Button, Card, EmptyState, Notice, RemoteRowSkeleton } from '../components/ui'
 import { PageShell, PageHeader, PageBody } from '../components/ui/page'
-import { Panel, PanelGrid } from '../components/adult'
+import { AccountCard, Panel, PanelGrid } from '../components/adult'
+import type { AccountState } from '../components/adult'
 import { useDialog } from '../components/ui/useDialog'
 
 /**
@@ -107,20 +108,6 @@ function describeAuthError(code: string): string {
  * an offline device gets an explanation instead of a form that cannot work.
  */
 const online = (): boolean => typeof navigator === 'undefined' || navigator.onLine !== false
-
-/** The `no-session` notice's copy, split at its first sentence (title) from the rest (sub) per the
- * Phase 12 task 11 ruling — same two Vietnamese messages as before, just no longer one run-on `<p>`. */
-function noSessionNotice(): { title: string; sub: string } {
-  return online()
-    ? {
-        title: 'Máy này chưa kết nối được với tài khoản nào.',
-        sub: 'Thử mở lại trang này sau một chút nhé. Tiến độ của bé vẫn đang được lưu trên máy này.',
-      }
-    : {
-        title: 'Đang ngoại tuyến nên chưa tạo được tài khoản cho máy này.',
-        sub: 'Có mạng trở lại, mở lại trang này để liên kết email nhé. Tiến độ của bé vẫn đang được lưu trên máy này.',
-      }
-}
 
 function formatDayLabel(day: string): string {
   const [, m, d] = day.split('-')
@@ -425,8 +412,9 @@ export function ParentDashboard({ onLock }: Props) {
   // Tài khoản: link email, sign out, recovery code, add/rename/switch profiles.
   // ---------------------------------------------------------------------------------------------
 
-  async function handleSendOtp(e: FormEvent) {
-    e.preventDefault()
+  // `AccountCard`'s own forms call `e.preventDefault()` themselves before invoking these — Task 4's
+  // contract keeps them presentational, so the event never travels this far.
+  async function handleSendOtp() {
     setLinkBusy(true)
     setLinkError(null)
     const result = await linkEmail(linkEmailValue)
@@ -435,8 +423,7 @@ export function ParentDashboard({ onLock }: Props) {
     setLinkStage('otp')
   }
 
-  async function handleVerifyOtp(e: FormEvent) {
-    e.preventDefault()
+  async function handleVerifyOtp() {
     setLinkBusy(true)
     setLinkError(null)
     const result = await verifyEmailOtp(linkEmailValue, linkOtp)
@@ -456,6 +443,22 @@ export function ParentDashboard({ onLock }: Props) {
     setLinkStage('idle')
     setLinkOtp('')
     setLinkError(null)
+  }
+
+  /** ② "Thử kết nối" — re-runs the same bootstrap `main.tsx` fires at launch (idempotent, per its
+   * own doc comment), then re-reads the three auth facts exactly as the mount effect above does, so
+   * a device that just came back online (or whose first attempt raced the network) can reach a
+   * session without a full reload. */
+  async function handleRetryConnect() {
+    await connectCloud()
+    const [em, anon, userId] = await Promise.all([currentEmail(), isAnonymous(), currentUserId()])
+    setEmail(em)
+    setHasSession(userId !== null)
+    setAuthReady(true)
+    if (anon) {
+      const code = await ensureRecoveryCode()
+      setRecoveryCode(code)
+    }
   }
 
   async function handleSignOut() {
@@ -494,8 +497,10 @@ export function ParentDashboard({ onLock }: Props) {
     if (cloudAvailable) void ensureRemoteProfiles()
   }
 
-  async function handleRenameActiveProfile() {
-    const current = profiles.find(p => p.id === activeId)
+  /** Task 11: one row per profile now (not just the active one), so this renames whichever row's
+   * "Đổi tên" was tapped — `id`, not `activeId`. */
+  async function handleRenameProfile(id: string) {
+    const current = profiles.find(p => p.id === id)
     if (!current) return
     const name = await dialog.prompt({ title: 'Đổi tên hồ sơ', label: 'Tên của bé', initial: current.name, maxLength: NAME_MAX })
     if (name === null || !name.trim()) return
@@ -507,6 +512,18 @@ export function ParentDashboard({ onLock }: Props) {
     if (id === activeId) return
     switchProfile(id)
   }
+
+  /**
+   * `AccountCard`'s eleven states (Task 4), derived here rather than owned by it — the component
+   * stays presentational, and every fact it needs already lives in this screen's own state.
+   */
+  const accountState: AccountState =
+    !authReady ? { kind: 'loading' }
+    : !hasSession ? { kind: 'noSession', online: online() }
+    : sync.lastError ? { kind: 'syncError', email, pending: sync.pending }
+    : linked ? { kind: 'linked', email: email!, signingOut: signOutBusy, pending: sync.pending }
+    : linkStage === 'otp' ? { kind: 'otp', email: linkEmailValue, otp: linkOtp, busy: linkBusy, error: linkError ?? undefined }
+    : { kind: 'link', email: linkEmailValue, busy: linkBusy, error: linkError ?? undefined }
 
   return (
     <PageShell gutter="24">
@@ -533,159 +550,111 @@ export function ParentDashboard({ onLock }: Props) {
       <div className="flex flex-col">
         <PanelGrid>
         {cloudAvailable && (
-          <Panel
-            title="Tài khoản"
-            col="full"
-            testId="account-card"
-            right={<SyncPill status={sync} onRetry={() => void flush()} />}
-          >
-            {!authReady ? (
-              <AccountCardSkeleton />
-            ) : !linked ? (
-              <div className="flex flex-col gap-3">
-                {/* No session at all — offline since install, or just signed out. The account this
-                  * screen would talk about does not exist yet, so it says so instead of offering a
-                  * form that cannot possibly reach anyone. */}
-                {!hasSession && (
-                  <Notice kind="warn" testId="no-session" adult {...noSessionNotice()} />
-                )}
-                {/* With no session there is nothing to link an email TO — `linkEmail` calls
-                  * `updateUser` on a user that does not exist — so neither form is drawn. */}
-                {!hasSession ? null : linkStage === 'idle' ? (
-                  <form onSubmit={handleSendOtp} className="flex flex-col gap-2">
-                    {/* What actually travels, and only that: stars, history and lessons. The
-                      * recordings card is on this same screen and its blobs never leave the
-                      * device — "an toàn trên mọi thiết bị" promised the parent otherwise. */}
-                    <p className="text-xs font-semibold text-ink-500 md:text-sm">
-                      Liên kết email để mở lại sao, lịch sử luyện tập và bài học của bé trên máy khác
-                      (bản ghi giọng nói chỉ nằm trên máy này). Tiến độ học của bé sẽ được lưu trên
-                      tài khoản của bạn.
-                    </p>
-                    <div className="flex flex-wrap gap-2">
-                      <input
-                        type="email"
-                        required
-                        aria-label="Email của bố/mẹ"
-                        placeholder="email@vidu.com"
-                        value={linkEmailValue}
-                        onChange={e => setLinkEmailValue(e.target.value)}
-                        className="h-11 min-w-0 flex-1 rounded-xl2 border-2 border-line-200 px-3 text-sm font-semibold text-ink-900"
-                      />
-                      <Button type="submit" size="adult" disabled={linkBusy}>
-                        Liên kết
-                      </Button>
-                    </div>
-                  </form>
-                ) : (
-                  <form onSubmit={handleVerifyOtp} className="flex flex-col gap-2">
-                    <p className="text-xs font-semibold text-ink-500 md:text-sm">
-                      Nhập mã 6 số vừa gửi tới {linkEmailValue}
-                    </p>
-                    <div className="flex flex-wrap gap-2">
-                      <input
-                        inputMode="numeric"
-                        required
-                        aria-label="Mã xác nhận"
-                        value={linkOtp}
-                        onChange={e => setLinkOtp(e.target.value)}
-                        className="h-11 w-32 rounded-xl2 border-2 border-line-200 px-3 text-center text-sm font-semibold text-ink-900"
-                      />
-                      <Button type="submit" size="adult" disabled={linkBusy}>
-                        Xác nhận
-                      </Button>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={handleEditLinkEmail}
-                      className="min-h-[36px] self-start text-xs font-bold text-ink-500 underline"
-                    >
-                      Sửa lại email
-                    </button>
-                  </form>
-                )}
+          <Panel title="Tài khoản" col="full" testId="account-card">
+            {/* Task 11 (brief §2, quyết định 24/26): the panel's own SyncPill went away —
+              * `AccountCard` (Task 4) already draws the h-8 pill as its own title row, and a second
+              * one here would just be the same `data-testid="sync-status"` twice under this panel. */}
+            <div
+              data-testid="account-columns"
+              className="flex flex-col gap-3 md:grid md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] md:gap-4"
+            >
+              <AccountCard
+                state={accountState}
+                sync={sync}
+                hasSession={hasSession}
+                recoveryCode={recoveryCode}
+                onEmailChange={setLinkEmailValue}
+                onOtpChange={setLinkOtp}
+                onSendOtp={() => { void handleSendOtp() }}
+                onVerifyOtp={() => { void handleVerifyOtp() }}
+                onEditEmail={handleEditLinkEmail}
+                onSignOut={() => { void handleSignOut() }}
+                onRetryConnect={() => { void handleRetryConnect() }}
+                onRetrySync={() => { void flush() }}
+              />
 
-                {linkError && <p role="alert" className="text-xs font-semibold text-fix-700">{linkError}</p>}
+              <div
+                data-testid="profile-column"
+                className="flex min-w-0 flex-col gap-1.5 md:border-l-2 md:border-line-200 md:pl-4"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <h3 className="text-[14px] font-extrabold text-ink-900">Hồ sơ · {profiles.length}</h3>
+                  <button
+                    type="button"
+                    onClick={() => { void handleAddProfile() }}
+                    className="relative h-8 shrink-0 rounded-r10 bg-teal-50 px-2.5 text-[12px] font-extrabold text-teal-600 after:absolute after:-inset-2 after:content-['']"
+                  >
+                    + Thêm hồ sơ
+                  </button>
+                </div>
 
-                {recoveryCode && (
+                {/* The roster can be unreadable — a half-written value this app now refuses to write
+                  * over — and `speakup.profile` can be unset, in which case the device is reading the
+                  * legacy namespace. Both used to render as an empty string directly beside
+                  * "+ Thêm hồ sơ", which is the worst possible pairing: a parent who sees a blank
+                  * name taps the button, and that button is the one that writes the roster. */}
+                {!activeProfileEntry ? (
                   <Notice
-                    kind="credential"
+                    kind="warn"
                     adult
-                    title="Mã khôi phục — chụp màn hình lại nhé"
-                    sub="Dùng mã này để lấy lại tiến độ trên máy khác."
-                    code={recoveryCode}
+                    testId="profile-unreadable"
+                    title="Chưa đọc được danh sách hồ sơ trên máy này. Tiến độ của bé vẫn đang được lưu bình thường — mở lại ứng dụng để kiểm tra, và tạm thời đừng thêm hồ sơ mới."
                   />
+                ) : (
+                  <div className="flex flex-col">
+                    {profiles.map(p => (
+                      <div
+                        key={p.id}
+                        data-testid="profile-row"
+                        className="flex min-h-[40px] items-center gap-2 border-b border-line-200"
+                      >
+                        <span aria-hidden className="text-[20px] leading-none">{p.avatar}</span>
+                        <span
+                          className="min-w-0 flex-1 truncate text-[13px] font-extrabold text-ink-900"
+                          title={p.name}
+                        >
+                          {p.name}{p.id === activeId && ' · đang dùng máy này'}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => { void handleRenameProfile(p.id) }}
+                          className="h-8 shrink-0 px-2 text-[12px] font-extrabold text-ink-500 underline relative after:absolute after:-inset-2 after:content-['']"
+                        >
+                          Đổi tên
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {profileNotice && (
+                  <div className="mt-2">
+                    <Notice kind="error" adult testId="profile-notice" title={profileNotice} />
+                  </div>
+                )}
+                {profiles.length > 1 && (
+                  <div className="mt-2">
+                    <ProfilePicker profiles={profiles} activeId={activeId} onSelect={handleSwitchProfile} density="grid" footer={false} />
+                  </div>
+                )}
+                {/* Flow 5's manual door. Shown whenever the account is known to hold at least one
+                  * profile — even when it is only the one already active here — so the affordance is
+                  * discoverable regardless of whether the section below is currently visible on its
+                  * own (it appears without this being pressed once a DIFFERENT profile is on the
+                  * account; pressing it adds this device's own child, for comparing the two). */}
+                {remoteProfiles.status === 'ready' && remoteProfiles.profiles.length > 0 && (
+                  <Button
+                    size="adult"
+                    variant="outline"
+                    onClick={() => setRemoteViewOn(v => !v)}
+                    aria-pressed={remoteViewOn}
+                    data-testid="remote-view-toggle"
+                    className="mt-2"
+                  >
+                    Xem từ xa
+                  </Button>
                 )}
               </div>
-            ) : (
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <p className="text-sm font-semibold text-ink-900">{email}</p>
-                <button
-                  type="button"
-                  onClick={() => { void handleSignOut() }}
-                  disabled={signOutBusy}
-                  className="min-h-[44px] rounded-xl2 border border-line-200 px-3 text-xs font-semibold text-ink-500 disabled:opacity-50"
-                >
-                  Đăng xuất
-                </button>
-              </div>
-            )}
-
-            <div className="mt-4 border-t border-line-200 pt-3">
-              <div className="mb-2 flex items-center justify-between">
-                <h3 className="text-xs font-bold text-ink-500 md:text-sm">Hồ sơ</h3>
-                <Button size="adult" variant="outline" onClick={() => { void handleAddProfile() }}>
-                  + Thêm hồ sơ
-                </Button>
-              </div>
-              {/* The roster can be unreadable — a half-written value this app now refuses to write
-                * over — and `speakup.profile` can be unset, in which case the device is reading the
-                * legacy namespace. Both used to render as an empty string directly beside
-                * "+ Thêm hồ sơ", which is the worst possible pairing: a parent who sees a blank
-                * name taps the button, and that button is the one that writes the roster. */}
-              {activeProfileEntry ? (
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <p className="text-sm font-semibold text-ink-900" title={activeProfileEntry.name}>
-                    {activeProfileEntry.avatar} {shortName(activeProfileEntry.name)}
-                  </p>
-                  <Button size="adult" variant="outline" onClick={() => { void handleRenameActiveProfile() }}>
-                    Đổi tên
-                  </Button>
-                </div>
-              ) : (
-                <Notice
-                  kind="warn"
-                  adult
-                  testId="profile-unreadable"
-                  title="Chưa đọc được danh sách hồ sơ trên máy này. Tiến độ của bé vẫn đang được lưu bình thường — mở lại ứng dụng để kiểm tra, và tạm thời đừng thêm hồ sơ mới."
-                />
-              )}
-              {profileNotice && (
-                <div className="mt-2">
-                  <Notice kind="error" adult testId="profile-notice" title={profileNotice} />
-                </div>
-              )}
-              {profiles.length > 1 && (
-                <div className="mt-2">
-                  <ProfilePicker profiles={profiles} activeId={activeId} onSelect={handleSwitchProfile} />
-                </div>
-              )}
-              {/* Flow 5's manual door. Shown whenever the account is known to hold at least one
-                * profile — even when it is only the one already active here — so the affordance is
-                * discoverable regardless of whether the section below is currently visible on its
-                * own (it appears without this being pressed once a DIFFERENT profile is on the
-                * account; pressing it adds this device's own child, for comparing the two). */}
-              {remoteProfiles.status === 'ready' && remoteProfiles.profiles.length > 0 && (
-                <Button
-                  size="adult"
-                  variant="outline"
-                  onClick={() => setRemoteViewOn(v => !v)}
-                  aria-pressed={remoteViewOn}
-                  data-testid="remote-view-toggle"
-                  className="mt-2"
-                >
-                  Xem từ xa
-                </Button>
-              )}
             </div>
           </Panel>
         )}
