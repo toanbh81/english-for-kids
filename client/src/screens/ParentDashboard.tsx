@@ -113,18 +113,6 @@ const formatAvg = (n: number | null): string => (n == null ? '—' : String(Math
 
 const DAY_MS = 24 * 3600e3
 
-/**
- * `RemoteStats` (`cloud/remote.ts`, read-only for this task) carries neither a last-updated nor an
- * audio-sync signal — there is nowhere honest to derive `stale`/`noAudio` from yet. Reading them
- * off a locally widened type (rather than inventing a field on the imported type) keeps a real
- * fetch — where both are always `undefined` — from ever being misread as "definitely stale": the
- * guards below only fire on a genuine value, never on a missing one. Only this screen's own tests
- * (task-14-report.md) exercise either branch today, via a mocked `fetchRemoteStats`; a future task
- * that teaches `cloud/remote.ts` to compute these for real lights them up with no further change
- * here.
- */
-type RemoteEntry = RemoteStats & { updatedAt?: number; noAudioSync?: boolean }
-
 /** R18 — the 2–3 free-standing `<p>` lines the old remote card drew, squeezed into the ONE string
  * `RemoteRow` truncates rather than wraps. */
 function composeRemoteSub(entry: RemoteStats): string {
@@ -993,28 +981,35 @@ export function ParentDashboard({ onLock }: Props) {
                       )
                     }
                     // Only reached once `p.id in remoteStats` is true, so this is a real recorded
-                    // fetch result — `RemoteEntry | null`, never `undefined`, despite the index
+                    // fetch result — `RemoteStats | null`, never `undefined`, despite the index
                     // signature's own wider type.
-                    const entry = remoteStats[p.id] as RemoteEntry | null
+                    const entry = remoteStats[p.id]
 
+                    // `noAudio` (in `RemoteRowState`, `RemoteRow.tsx`) has no real signal behind
+                    // it today — the dashboard never emits it, deliberately, per the controller's
+                    // ruling: a state the UI can render but the product cannot produce, rather than
+                    // a fabricated flag.
                     const state: RemoteRowState =
                       entry === null ? 'error'
                       : entry.eventCount === 0 ? 'empty'
-                      // R18 / decision 30 — a new mark, read off the clock: `updatedAt` is only
-                      // ever set by a test today (see `RemoteEntry`'s own doc comment above), so
-                      // this never fires against a live fetch until `cloud/remote.ts` grows a
-                      // real signal for it.
+                      // decided by the clock, not by a flag — `updatedAt` is `fetchRemoteStats`'s
+                      // own newest-event `ts` (`cloud/remote.ts`), `undefined` only when there are
+                      // no events, which `eventCount === 0` already caught above.
                       : entry.updatedAt != null && now - entry.updatedAt > 7 * DAY_MS ? 'stale'
                       : p.id === activeId ? 'thisDevice'
-                      : entry.noAudioSync ? 'noAudio'
                       : 'data'
 
                     const name = state === 'thisDevice' ? `${p.name} · máy này` : p.name
+                    // No 'noAudio' branch here: the dashboard never produces that state (see the
+                    // comment on `state` above), so `composeRemoteSub` is the only thing left for
+                    // 'data'/'thisDevice' — the old `— bản ghi giọng không đồng bộ` suffix it once
+                    // appended for 'noAudio' would be dead code, checking a value `state` can no
+                    // longer hold.
                     const sub =
                       state === 'error' ? 'Không tải được — kiểm tra mạng.'
                       : state === 'empty' ? 'Chưa có dữ liệu trên máy chủ.'
                       : state === 'stale' ? composeStaleSub(entry!, now, entry!.updatedAt!)
-                      : composeRemoteSub(entry!) + (state === 'noAudio' ? ' — bản ghi giọng không đồng bộ' : '')
+                      : composeRemoteSub(entry!)
 
                     const onAction =
                       state === 'error' ? () => handleRetryRemote(p.id)

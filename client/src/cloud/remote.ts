@@ -51,6 +51,12 @@ export type RemoteStats = {
    * genuinely has not practised yet; it is never used to distinguish that from a failed fetch,
    * which reports `null` from `fetchRemoteStats` instead of an object with this at 0. */
   eventCount: number
+  /** The newest event's `ts` (epoch ms), i.e. when this profile last actually practised —
+   * `undefined` when `eventCount` is 0, since there is no event to date it from. The `events`
+   * query already orders by `ts` descending, so this is read straight off the first row rather
+   * than recomputed; a caller (the parent dashboard's remote panel) uses it to tell a genuinely
+   * stale reading from a fresh one, driven by the clock rather than a flag. */
+  updatedAt?: number
 }
 
 type RemoteEventRow = { ts?: unknown; kind?: unknown; item_id?: unknown; score?: unknown; phonemes?: unknown }
@@ -182,6 +188,11 @@ export async function fetchRemoteStats(profileId: string): Promise<RemoteStats |
     // the null-vs-empty-array distinction in the doc comment above.
     if (error || !Array.isArray(data)) return null
 
+    // `data` is still in the query's own `ts` descending order here — the newest row is `data[0]`.
+    // Read before `toActivityEvents` re-sorts ascending, so this does not need its own re-scan.
+    const newestRow = (data as RemoteEventRow[])[0]
+    const updatedAt = newestRow ? toEpoch(newestRow.ts) ?? undefined : undefined
+
     const events = toActivityEvents(data as RemoteEventRow[])
     const lessonLookup = await fetchRemoteLessonLookup(sb, profileId)
     const now = Date.now()
@@ -191,6 +202,7 @@ export async function fetchRemoteStats(profileId: string): Promise<RemoteStats |
       averages: averageScoreByKind(events),
       weak: weakPhonemes(WEAK_PHONEME_COUNT, events),
       eventCount: events.length,
+      updatedAt,
     }
   } catch {
     return null

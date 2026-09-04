@@ -126,6 +126,9 @@ async function run(vpName, vp) {
   // Opt-in (`DEBUG_REST=1`) network/console trace — built while chasing Task 14's `parent-remote-7`
   // (a stale/fake session token from an earlier section 401ing background sync mid-scenario), left
   // in for whoever next has to work out which mocked route a scenario's request actually matched.
+  // CAUTION: `bodySnippet` below logs response bodies verbatim, unredacted — fine against this
+  // script's own mocked/dev fixtures, but this must stay opt-in and never be turned on while
+  // shooting against a real Supabase project with real user data.
   if (process.env.DEBUG_REST) {
     page.on('request', req => { if (req.url().includes('/rest/v1/')) log('REQ', req.method(), req.url()) })
     page.on('response', async res => {
@@ -711,15 +714,17 @@ async function run(vpName, vp) {
     await page.getByRole('button', { name: /Xem tất cả 20/ }).click(); await sleep(300)
   })
 
-  // Task 14 (R18): the remote-progress panel's 7-state table, stubbing PostgREST directly rather
-  // than a real second account — `profiles`/`events`/`kv` keyed by `profile_id` in the query
-  // string, same shape `cloud/profileState.ts`/`cloud/remote.ts` actually call. Five of the seven
-  // states are reachable through the REAL app this way (loading/error/empty/data/thisDevice); the
-  // other two (`stale`/`noAudio`) read a last-updated/audio-sync signal `RemoteStats` does not
-  // carry yet (`ParentDashboard.tsx`'s own `RemoteEntry` doc comment — cloud/remote.ts is
-  // read-only for Task 14) — genuinely unreachable from live data until a later task teaches
-  // `cloud/remote.ts` to compute them, not something this script can fake without inventing a
-  // network shape the real client never sends.
+  // Task 14 (R18), fix round 1: the remote-progress panel's state table, stubbing PostgREST
+  // directly rather than a real second account — `profiles`/`events`/`kv` keyed by `profile_id` in
+  // the query string, same shape `cloud/profileState.ts`/`cloud/remote.ts` actually call. Six of
+  // the panel's states are reachable through the REAL app this way — loading/error/empty/data/
+  // thisDevice, plus (as of fix round 1) `stale`, which now comes from a genuinely old `ts` in
+  // STALE_ID's mocked `events` row rather than a flag: `cloud/remote.ts`'s `fetchRemoteStats`
+  // computes `updatedAt` off that row itself, same as it would for a real account, and the
+  // dashboard's own clock (`now - entry.updatedAt > 7 * DAY_MS`) does the rest. `noAudio` has no
+  // real signal behind it anywhere in `RemoteStats` — the dashboard never emits it — so it stays
+  // absent from this table on purpose, not as a gap to fill later. (Scenario key kept as
+  // `parent-remote-7` — historical, not a live count of states shown.)
   await S('parent-remote-7', '/parent', async () => {
     // The REAL anonymous sign-in this device would otherwise attempt (unmocked, like the rest of
     // this section relies on the surrounding real session) mints a brand-new Supabase user on
@@ -739,32 +744,41 @@ async function run(vpName, vp) {
     const ERROR_ID = 'aaaaaaaa-0000-4000-8000-000000000002'
     const EMPTY_ID = 'aaaaaaaa-0000-4000-8000-000000000003'
     const DATA_ID = 'aaaaaaaa-0000-4000-8000-000000000004'
+    const STALE_ID = 'aaaaaaaa-0000-4000-8000-000000000005'
     const NOW_ISO = new Date().toISOString()
-    const SEVEN_PROFILES = [
+    const REMOTE_DEMO_PROFILES = [
       { id: LOADING_ID, name: 'Một cái tên hồ sơ dài hai mươi chín ký tự', avatar: '🦊', created_at: NOW_ISO },
       { id: ERROR_ID, name: 'Bé', avatar: '🦊', created_at: NOW_ISO },
       { id: EMPTY_ID, name: 'Bé', avatar: '🦊', created_at: NOW_ISO },
       { id: DATA_ID, name: 'Minh', avatar: '🦊', created_at: NOW_ISO },
       { id: deviceId, name: 'Bé', avatar: '🦊', created_at: NOW_ISO },
+      { id: STALE_ID, name: 'Minh', avatar: '🦊', created_at: NOW_ISO },
     ]
     const NOW = Date.now()
+    // STALE_ID's one event really is 12 days old — `fetchRemoteStats` (`cloud/remote.ts`) reads
+    // its `ts` straight off this row into `RemoteStats.updatedAt`, so the dashboard's `stale`
+    // branch fires off the real clock, exactly as it would for an actual account whose child
+    // hasn't practised in a while, not off a fixture flag.
+    const STALE_EVENT_AGE_MS = 12 * 24 * 3600e3
     const rowsFor = (id) => (
       (id === DATA_ID || id === deviceId)
         ? Array.from({ length: 20 }, (_, i) => ({
           ts: NOW - i * 2 * 3600e3, kind: 'speak', item_id: `e${i}`, score: 75 + (i % 10),
         }))
+        : id === STALE_ID
+        ? [{ ts: NOW - STALE_EVENT_AGE_MS, kind: 'speak', item_id: 'e-old', score: 80 }]
         : [] // EMPTY_ID — ERROR_ID never reaches this (its route 500s below)
     )
     // Registered AFTER `mockAnonSignIn()` — Playwright tries the newest matching handler first —
-    // so this replaces its own blanket `'[]'` profiles stub with the real 7-row fixture, and every
+    // so this replaces its own blanket `'[]'` profiles stub with the real fixture rows, and every
     // OTHER REST call the mocked session still makes (kv/recovery_codes/events for the device's
     // own profile) is free to keep hitting the real, already-working backend.
-    await page.route('**/rest/v1/profiles*', r => r.fulfill({ status: 200, body: JSON.stringify(SEVEN_PROFILES) }))
+    await page.route('**/rest/v1/profiles*', r => r.fulfill({ status: 200, body: JSON.stringify(REMOTE_DEMO_PROFILES) }))
     await page.route('**/rest/v1/events*', r => {
       const id = new URL(r.request().url()).searchParams.get('profile_id')?.replace(/^eq\./, '')
       if (id === ERROR_ID) { r.fulfill({ status: 500, body: JSON.stringify({ message: 'boom' }) }); return }
       if (id === LOADING_ID) return // never resolves — the loading row
-      if (id !== DATA_ID && id !== deviceId && id !== EMPTY_ID) { r.continue(); return } // the device's OWN push/pull
+      if (id !== DATA_ID && id !== deviceId && id !== EMPTY_ID && id !== STALE_ID) { r.continue(); return } // the device's OWN push/pull
       r.fulfill({ status: 200, body: JSON.stringify(rowsFor(id)) })
     })
     await page.route('**/rest/v1/kv*', r => {
@@ -778,7 +792,7 @@ async function run(vpName, vp) {
     await page.waitForSelector('[data-testid="remote-view-toggle"]', { state: 'visible', timeout: 15000 })
     await page.getByTestId('remote-view-toggle').click()
     // Every fetch above resolves on its own microtask over a stubbed, local response — no real
-    // network latency left to race — but the panel still has five independent promises to settle,
+    // network latency left to race — but the panel still has six independent promises to settle,
     // so this polls for the 'data' row's own signal rather than trusting a single fixed sleep.
     await page.waitForFunction(
       () => document.body.innerText.includes('🔥'),

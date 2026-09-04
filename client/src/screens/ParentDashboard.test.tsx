@@ -73,10 +73,9 @@ type MockRemoteStats = {
   averages: { story: number | null; speak: number | null; word: number | null; sentence: number | null }
   weak: { phoneme: string; avg: number; count: number }[]
   eventCount: number
-  // Task 14 — not part of the real `RemoteStats` (`cloud/remote.ts` is read-only for that task);
-  // see `ParentDashboard.tsx`'s own `RemoteEntry` doc comment for why these ride along only here.
+  // The newest event's `ts` — same field, same meaning as the real `RemoteStats.updatedAt`
+  // (`cloud/remote.ts`), just set by hand here instead of computed from mocked rows.
   updatedAt?: number
-  noAudioSync?: boolean
 }
 const remoteMock = vi.hoisted(() => ({
   fetchRemoteStats: vi.fn<(id: string) => Promise<MockRemoteStats | null>>(async () => null),
@@ -144,21 +143,20 @@ function minutesTodayEvents(total: number): ActivityEvent[] {
  * `speakup.limit.minutes`/`speakup.band`) and `minutesToday` (seeds a session totalling that many
  * minutes instead of the default one-event/one-minute seed, for panel C's "Hôm nay: N/limit'" line). */
 /**
- * Task 14 — one entry of the remote-progress panel's 7-state demo. `stats: null` is a failed
+ * Task 14 — one entry of the remote-progress panel's state demo. `stats: null` is a failed
  * fetch (the "error" row); `stats: 'pending'` is a fetch that never resolves (the "loading" row —
  * a resolved value, even a slow one, would eventually settle out of it, which is exactly the state
- * this fixture needs to hold still). `updatedAt`/`noAudioSync` ride along on the resolved object
- * exactly as `RemoteEntry` (`ParentDashboard.tsx`) reads them — see that type's own doc comment for
- * why `cloud/remote.ts` itself carries neither field yet. An id of `'p1'` is this file's own
- * convention for "the profile active on this device" (`ACTIVE_PROFILE.id`, `beforeEach`'s default
- * `activeProfileId()` — every other `renderDashboard` option already assumes it).
+ * this fixture needs to hold still). `updatedAt` rides along on the resolved object exactly as the
+ * real `RemoteStats.updatedAt` (`cloud/remote.ts`) does — the dashboard reads it straight off the
+ * fetch result, no widened type involved. An id of `'p1'` is this file's own convention for "the
+ * profile active on this device" (`ACTIVE_PROFILE.id`, `beforeEach`'s default `activeProfileId()`
+ * — every other `renderDashboard` option already assumes it).
  */
 type RemoteFixture = {
   id: string
   name: string
   stats: MockRemoteStats | null | 'pending'
   updatedAt?: number
-  noAudioSync?: boolean
 }
 
 function renderDashboard(opts: {
@@ -196,7 +194,7 @@ function renderDashboard(opts: {
       const f = fixtures.find(x => x.id === id)
       if (!f || f.stats === null) return null
       if (f.stats === 'pending') return new Promise<MockRemoteStats | null>(() => { /* never resolves */ })
-      return { ...f.stats, updatedAt: f.updatedAt, noAudioSync: f.noAudioSync }
+      return { ...f.stats, updatedAt: f.updatedAt }
     })
   }
   return renderWithDialogs(<ParentDashboard />)
@@ -1925,14 +1923,17 @@ describe('Phase 11 task 5: remote progress view', () => {
 
 /**
  * Task 14: panel D — 5 recordings + "Xem tất cả 20" expanding in place, playback errors, and the
- * remote-progress panel's 7 `RemoteRow` states.
+ * remote-progress panel's `RemoteRow` states.
  *
- * `stale`/`noAudio` (`ParentDashboard.tsx`'s `RemoteEntry`) read an `updatedAt`/`noAudioSync` that
- * the real `RemoteStats` (`cloud/remote.ts`, read-only for this task) does not carry yet — see that
- * type's own doc comment. `SEVEN` below is the only place either field is ever set; a real fetch
- * always leaves both `undefined`, so those two branches are exercised here and nowhere live yet.
+ * `RemoteRowState` has seven members, but the dashboard only ever emits six of them for real data:
+ * `loading`, `error`, `empty`, `data`, `thisDevice`, `stale` (decided by `entry.updatedAt`, the
+ * real `RemoteStats.updatedAt` from `cloud/remote.ts` — the newest event's `ts`, not a flag).
+ * `noAudio` has no real signal behind it — nothing in `RemoteStats` says whether a recording's
+ * audio failed to sync — so the dashboard never produces it, and no test here forces it through
+ * the dashboard the way an earlier round did with a locally-widened test type; that state stays on
+ * `RemoteRowState` (`RemoteRow.tsx`) for a future task with a real signal to light it up.
  */
-describe('Task 14: recordings panel (5 + expand) and remote progress (7 states)', () => {
+describe('Task 14: recordings panel (5 + expand) and remote progress (6 reachable states)', () => {
   // 60 chars — the design's own "câu dài nhất vẽ: 61 ký tự" — one line, ellipsis, everywhere.
   const LONG_SENTENCE = 'My sister has a baby doll and she plays with it every day.'
 
@@ -1952,8 +1953,8 @@ describe('Task 14: recordings panel (5 + expand) and remote progress (7 states)'
 
   // Index 4's id is `'p1'` — this file's convention for "the profile active on this device"
   // (`ACTIVE_PROFILE.id`, `beforeEach`'s default `activeProfileId()`) — so it is the one row that
-  // needs "Xem từ xa" pressed before it joins the other six (see the test below).
-  const SEVEN: RemoteFixture[] = [
+  // needs "Xem từ xa" pressed before it joins the other five (see the test below).
+  const SIX: RemoteFixture[] = [
     { id: 'r1', name: 'Một cái tên hồ sơ dài hai mươi chín ký tự', stats: 'pending' },
     { id: 'r2', name: 'Bé', stats: null },
     { id: 'r3', name: 'Bé', stats: { streak: 0, weekMinutes: 0, averages: { story: null, speak: null, word: null, sentence: null }, weak: [], eventCount: 0 } },
@@ -1964,12 +1965,6 @@ describe('Task 14: recordings panel (5 + expand) and remote progress (7 states)'
       name: 'Minh',
       stats: { streak: 5, weekMinutes: 30, averages: { story: null, speak: 70, word: 60, sentence: 55 }, weak: [], eventCount: 15 },
       updatedAt: Date.now() - 12 * 24 * 3600e3,
-    },
-    {
-      id: 'r7',
-      name: 'An',
-      stats: { streak: 1, weekMinutes: 12, averages: { story: null, speak: 65, word: null, sentence: null }, weak: [], eventCount: 6 },
-      noAudioSync: true,
     },
   ]
 
@@ -2022,34 +2017,31 @@ describe('Task 14: recordings panel (5 + expand) and remote progress (7 states)'
     expect(screen.getByText('Chưa có bản ghi nào')).toBeInTheDocument()
   })
 
-  it('remote rows cover all seven states in one panel', async () => {
-    renderDashboard({ remote: SEVEN })
+  it('remote rows cover all six reachable states in one panel', async () => {
+    renderDashboard({ remote: SIX })
     fireEvent.click(await screen.findByTestId('remote-view-toggle'))
 
-    // Every non-`'pending'` fetch resolves on its own microtask, independently of the other six —
+    // Every non-`'pending'` fetch resolves on its own microtask, independently of the other five —
     // `waitFor` (not a one-shot `findByText`, which does an EXACT match by default and would
     // never match "Bé · máy này" against the string "· máy này" alone) polls until every one of
     // them has actually landed in the DOM, not merely until each row's OWN wrapper — present from
     // the very first render, loading or not — exists.
     await waitFor(() => {
       const polled = screen.getAllByTestId('remote-row')
-      expect(polled).toHaveLength(7)
+      expect(polled).toHaveLength(6)
       expect(polled[3]).toHaveTextContent('🔥 4 ngày') // 'data'
       expect(polled[4]).toHaveTextContent('· máy này') // 'thisDevice'
       expect(polled[5]).toHaveTextContent(/Cập nhật \d+ ngày trước/) // 'stale'
-      expect(polled[6]).toHaveTextContent('bản ghi giọng không đồng bộ') // 'noAudio'
     })
 
     const rows = screen.getAllByTestId('remote-row')
-    expect(rows).toHaveLength(7)
+    expect(rows).toHaveLength(6)
     expect(within(rows[0]).getAllByTestId('skeleton').length).toBeGreaterThan(0) // đang tải
     expect(within(rows[1]).getByRole('button', { name: 'Thử lại' })).toBeInTheDocument() // lỗi tải
     expect(rows[2]).toHaveTextContent('Chưa có dữ liệu trên máy chủ.') // chưa có
     expect(rows[3]).toHaveTextContent(/🔥 4 ngày · 58'\/tuần · Nói 79/) // có dữ liệu, MỘT dòng
     expect(rows[4]).toHaveTextContent('· máy này')
     expect(rows[5]).toHaveTextContent(/Cập nhật \d+ ngày trước/) // cũ >7 ngày
-    expect(rows[6]).toHaveTextContent('bản ghi giọng không đồng bộ')
-    expect(screen.getAllByText(/Bản ghi giọng nói của bé không đồng bộ/)).toHaveLength(1) // chú thích MỘT lần
   })
 
   it('a stale row is decided by the clock, not by a flag', async () => {
@@ -2064,7 +2056,7 @@ describe('Task 14: recordings panel (5 + expand) and remote progress (7 states)'
   })
 
   it('"Chi tiết" opens a dialog with the numbers the row could not fit', async () => {
-    renderDashboard({ remote: SEVEN })
+    renderDashboard({ remote: SIX })
     await settle()
     await screen.findByText(/🔥 4 ngày/) // the 'data' row's own fetch has landed
 

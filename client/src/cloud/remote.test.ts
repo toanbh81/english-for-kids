@@ -201,6 +201,28 @@ describe('fetchRemoteStats', () => {
     vi.useRealTimers()
   })
 
+  it('reports updatedAt as the newest event\'s ts, read off the first (desc-ordered) row', async () => {
+    cloud.client = makeClient({
+      events: {
+        // `makeClient` hands back exactly this array, unsorted by the test double — mirroring the
+        // real query's own `.order('ts', { ascending: false })`, newest first, is this test's job.
+        data: [
+          { ts: BASE + 20, kind: 'speak', item_id: 's2' },
+          { ts: BASE + 10, kind: 'speak', item_id: 's1' },
+        ],
+        error: null,
+      },
+    })
+    const stats = await fetchRemoteStats('p1')
+    expect(stats?.updatedAt).toBe(BASE + 20)
+  })
+
+  it('leaves updatedAt undefined for a profile with zero events', async () => {
+    cloud.client = makeClient({ events: { data: [], error: null } })
+    const stats = await fetchRemoteStats('p1')
+    expect(stats?.updatedAt).toBeUndefined()
+  })
+
   it('surfaces weak phonemes from the fetched rows, via weakPhonemes unmodified', async () => {
     cloud.client = makeClient({
       events: {
