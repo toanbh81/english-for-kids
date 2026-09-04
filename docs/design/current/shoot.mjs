@@ -364,6 +364,11 @@ async function run(vpName, vp) {
   await S('sentence-result3', '/sentence/s12?fixture=result3')
   await S('parent-gate', '/parent')
   await S('parent-gate-wrong', null, async () => { await page.fill('input', '7'); await page.keyboard.press('Enter') })
+  // Round 4 §2 P1: an "empty submit" — its own frame, and the question does NOT change.
+  await S('parent-gate-empty', '/parent', async () => {
+    await page.getByRole('button', { name: 'Vào' }).click()
+    await sleep(300)
+  })
   await S('parent-dashboard', '/parent', async () => {
     const q = await page.locator('text=/\\d+ × \\d+/').first().textContent()
     const [a, b] = q.match(/\d+/g).map(Number)

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { ParentDashboard } from './ParentDashboard'
 import { ParentQuestion } from '../components/ParentQuestion'
-import { BackButton, Card } from '../components/ui'
+import { BackButton, GateBlobs, GateCard } from '../components/ui'
 import { PageShell, PageHeader, PageBody } from '../components/ui/page'
 
 const FLAG_KEY = 'speakup.parent'
@@ -44,12 +44,13 @@ export function ParentGate() {
   }
 
   return (
-    <PageShell>
-      <PageHeader back={<BackButton to="/" label="Về nhà" variant="adult" />} />
+    <PageShell className="relative">
+      <GateBlobs />
+      <PageHeader right={null} back={<BackButton to="/" label="Về nhà" mdLabel="Về bản đồ 🏝️" variant="adult" />} />
       <PageBody center>
-        <Card className="flex w-full max-w-md flex-col items-center gap-6 p-8 text-center">
-          <ParentQuestion key={attempt} onPass={handlePass} />
-        </Card>
+        <GateCard>
+          <ParentQuestion key={attempt} onPass={handlePass} sub="Trả lời phép tính để vào Góc phụ huynh." />
+        </GateCard>
       </PageBody>
     </PageShell>
   )

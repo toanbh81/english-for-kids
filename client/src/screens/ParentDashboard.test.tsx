@@ -98,6 +98,19 @@ function renderWithDialogs(ui: ReactElement) {
   return render(<MemoryRouter><DialogProvider>{ui}</DialogProvider></MemoryRouter>)
 }
 
+function renderGate() {
+  return renderWithDialogs(<ParentGate />)
+}
+
+/** Reads whatever product this render's `ParentQuestion` is currently asking (no `Math.random`
+ * mock needed) and submits it. */
+function answerCorrectly() {
+  const equation = screen.getByText(/× \d+ =/)
+  const [a, b] = equation.textContent!.match(/\d+/g)!.map(Number)
+  fireEvent.change(screen.getByLabelText('Đáp án'), { target: { value: String(a * b) } })
+  fireEvent.click(screen.getByRole('button', { name: 'Vào' }))
+}
+
 /** Flush the microtask queue (e.g. the mocked listRecordings promise) inside act so the
  * resulting state update doesn't trigger an "update not wrapped in act" warning later. */
 async function flush() {
@@ -230,6 +243,42 @@ describe('ParentGate', () => {
     expect(screen.getByLabelText('Đáp án')).toBeInTheDocument()
     expect(screen.queryByText(/Phút luyện mỗi ngày/)).not.toBeInTheDocument()
     expect(sessionStorage.getItem(FLAG_KEY)).toBeNull()
+  })
+
+  it('the gate is one 420px left-aligned card centred in the body, with no max-w-md left', () => {
+    renderGate()
+    const card = screen.getByTestId('gate-card')
+    expect(card).toHaveClass('w-[min(420px,calc(100%-32px))]', 'p-5', 'gap-3', 'text-left')
+    expect(card.className).not.toMatch(/max-w-md|text-center/)
+    expect(screen.getByTestId('page-body')).toHaveClass('justify-center')
+  })
+
+  it('the header is the adult Back with a landscape-only label, and no LessonChip on the right', () => {
+    renderGate()
+    const back = screen.getByRole('link', { name: /Về nhà/ })
+    expect(back).toHaveClass('h-11', 'rounded-r14')
+    expect(within(back).getByText('Về bản đồ 🏝️')).toHaveClass('sr-only', 'hidden', 'ipad:inline')
+    expect(screen.getByTestId('header-right')).toBeEmptyDOMElement()
+  })
+
+  it('the card carries the title, the sub and the 32px question', () => {
+    renderGate()
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Dành cho phụ huynh')
+    expect(screen.getByText('Trả lời phép tính để vào Góc phụ huynh.')).toBeInTheDocument()
+    expect(screen.getByText(/× \d+ =/)).toHaveClass('text-[32px]')
+  })
+
+  it('an empty submit stays on the gate; the right answer hands over to the dashboard', () => {
+    renderGate()
+    fireEvent.click(screen.getByRole('button', { name: 'Vào' }))
+    expect(screen.getByTestId('gate-card')).toBeInTheDocument()
+    answerCorrectly()
+    expect(screen.getByRole('heading', { name: /Góc phụ huynh/ })).toBeInTheDocument()
+  })
+
+  it('the background blobs are decorative and cannot scroll the body', () => {
+    renderGate()
+    expect(screen.getByTestId('gate-blobs')).toHaveClass('pointer-events-none', 'absolute', 'inset-0', 'overflow-hidden')
   })
 })
 
