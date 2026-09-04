@@ -7,7 +7,7 @@ import { Chip } from './Chip'
 import { ChipPair } from './ChipPair'
 import { DialogProvider } from './DialogProvider'
 import { EmptyState } from './EmptyState'
-import { GateCard } from './GateCard'
+import { GateBlobs, GateCard } from './GateCard'
 import { HomeLabel } from './HomeLabel'
 import { NotFound } from './NotFound'
 import { Notice } from './Notice'
@@ -148,6 +148,21 @@ describe('BackButton', () => {
     const a = screen.getByRole('link', { name: 'Về nhà' })
     expect(a).toHaveClass('h-11', 'rounded-r14')
     expect(a).toHaveTextContent('Về nhà')
+  })
+
+  it('adult variant swaps its VISIBLE label at ipad:, unlike the icon-only variants', () => {
+    router(<BackButton to="/" label="Về nhà" mdLabel="Về bản đồ 🏝️" variant="adult" />)
+    // The pill's own printed text carries the wording, so — unlike `mdLabel` on the icon-only
+    // child variant above — this swap is plain visible text, not `sr-only`: exactly one of the two
+    // is ever `display:none` at a time (round-4 fix wave 1).
+    expect(screen.getByText('Về nhà')).toHaveClass('ipad:hidden')
+    expect(screen.getByText('Về nhà').className).not.toMatch(/sr-only/)
+    expect(screen.getByText('Về bản đồ 🏝️')).toHaveClass('hidden', 'ipad:inline')
+    expect(screen.getByText('Về bản đồ 🏝️').className).not.toMatch(/sr-only/)
+    // The accessible NAME still can't follow a breakpoint (no stylesheet needed to prove it —
+    // an `aria-label` is just one string), so it's pinned to `label` rather than left ambiguous
+    // between the two on-screen spans.
+    expect(screen.getByRole('link', { name: 'Về nhà' })).toBeInTheDocument()
   })
 
   it('onArt variant is 48 on a translucent white disc', () => {
@@ -427,11 +442,20 @@ describe('EmptyState', () => {
 })
 
 describe('GateCard', () => {
-  it('is Dialog.tsx:84 in another place: 420, r20, p20, gap 12, left-aligned', () => {
+  it('is Dialog.tsx:84 in another place: 420, r20, p20, gap 12, left-aligned text, centred card', () => {
     render(<GateCard><h1>Dành cho phụ huynh</h1></GateCard>)
     const card = screen.getByTestId('gate-card')
-    expect(card).toHaveClass('flex', 'w-[min(420px,calc(100%-32px))]', 'flex-col', 'gap-3', 'rounded-r20', 'bg-white', 'p-5', 'shadow-[0_6px_0_#EFE2CC]', 'text-left')
+    expect(card).toHaveClass('mx-auto', 'flex', 'w-[min(420px,calc(100%-32px))]', 'flex-col', 'gap-3', 'rounded-r20', 'bg-white', 'p-5', 'shadow-[0_6px_0_#EFE2CC]', 'text-left')
     expect(card.className).not.toMatch(/max-w-md|text-center|\blg:|\bsm:/)
+  })
+})
+
+describe('GateBlobs', () => {
+  it('is a decorative, negatively-stacked fill behind the card (round-4 fix wave 1)', () => {
+    render(<GateBlobs />)
+    const blobs = screen.getByTestId('gate-blobs')
+    expect(blobs).toHaveClass('pointer-events-none', 'absolute', 'inset-0', '-z-10', 'overflow-hidden')
+    expect(blobs).toHaveAttribute('aria-hidden', 'true')
   })
 })
 

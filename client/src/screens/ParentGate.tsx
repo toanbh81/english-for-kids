@@ -44,7 +44,11 @@ export function ParentGate() {
   }
 
   return (
-    <PageShell className="relative">
+    // `isolate` alongside `relative`: a bare `relative` doesn't establish a stacking context, so
+    // `GateBlobs`'s `-z-10` would otherwise escape to the next ancestor that does, painting behind
+    // the whole app rather than just this page (round-4 fix wave 1 — the same bug class TopicHub's
+    // island band fixed for its own `-z-10` fill).
+    <PageShell className="relative isolate">
       <GateBlobs />
       <PageHeader right={null} back={<BackButton to="/" label="Về nhà" mdLabel="Về bản đồ 🏝️" variant="adult" />} />
       <PageBody center>

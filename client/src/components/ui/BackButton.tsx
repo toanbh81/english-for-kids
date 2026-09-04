@@ -22,6 +22,19 @@ const VARIANT: Record<BackVariant, string> = {
  * can follow it: `hidden` takes the wrong one out of the accessibility tree at each width, exactly
  * as `HomeLabel` does for a visible one, and the `aria-label` steps aside so the element's own
  * content is what names it.
+ *
+ * **The adult variant's own label is never hidden**, so `mdLabel` there swaps the VISIBLE text
+ * instead (same `hidden`/`ipad:` pair, no `sr-only`) — round-4 fix wave 1's `ParentGate` is the
+ * first caller to combine `variant='adult'` with `mdLabel`. Its accessible NAME stays pinned to
+ * `label` throughout (a static `aria-label`, not content), rather than switching with the two
+ * spans: an `aria-label` really can't follow a breakpoint (the paragraph above is the reason the
+ * child variant never uses one for this), so a *changing* name was never on the table here either
+ * — the choice is between a name that's ambiguous at the swap (both spans are on-screen content,
+ * and a CSS-only visibility swap gives them no distinguishing DOM signal a screen reader — or a
+ * test with no stylesheet loaded — can resolve) and a name that's simply stable. A pill whose own
+ * printed text already carries the wording doesn't lose anything by keeping one fixed name; an
+ * icon-only control (`child`/`onArt`) has nothing else to fall back on, which is why those two
+ * keep the breakpoint-following `sr-only` pair instead.
  */
 export function BackButton({ to, label = 'Quay lại', mdLabel, variant = 'child', state, className = '' }: {
   to: string
@@ -37,19 +50,33 @@ export function BackButton({ to, label = 'Quay lại', mdLabel, variant = 'child
   className?: string
 }) {
   const visibleLabel = variant === 'adult'
+  const adultSwap = visibleLabel && mdLabel !== undefined
   return (
     <Link
       to={to}
       state={state}
-      aria-label={mdLabel === undefined && !visibleLabel ? label : undefined}
+      // Every case but one names itself from content: `child`/`onArt` with no `mdLabel` are
+      // icon-only (no other text), so they still need the static `aria-label` here; `child`/
+      // `onArt` WITH `mdLabel`, and the plain adult pill, all leave it undefined and let their own
+      // (visible or sr-only) spans below supply the name instead. `adultSwap` is the one exception
+      // — see the doc comment above for why its name is pinned to `label` rather than swapping.
+      aria-label={adultSwap ? label : mdLabel === undefined && !visibleLabel ? label : undefined}
       // `shrink-0`: it lives in flex headers next to content that can be much wider than the
       // viewport (a long level's progress dots), and a squeezed circle drops below the
       // 64 px tap-target floor exactly where a small finger needs it most.
       className={`inline-flex shrink-0 items-center justify-center bg-white font-display text-ink-300 active:translate-y-[2px] ${VARIANT[variant]} ${className}`}
     >
       <span aria-hidden="true" className={visibleLabel ? 'text-[18px]' : undefined}>←</span>
-      {visibleLabel && <span>{label}</span>}
-      {mdLabel !== undefined && (
+      {visibleLabel && mdLabel === undefined && <span>{label}</span>}
+      {adultSwap && (
+        // `aria-hidden`: the `aria-label` above already names the link, so these two are purely
+        // the printed text swapping at `ipad:` — not a second, competing source of the name.
+        <>
+          <span aria-hidden="true" className="ipad:hidden">{label}</span>
+          <span aria-hidden="true" className="hidden ipad:inline">{mdLabel}</span>
+        </>
+      )}
+      {!visibleLabel && mdLabel !== undefined && (
         <>
           <span className="sr-only ipad:hidden">{label}</span>
           <span className="sr-only hidden ipad:inline">{mdLabel}</span>

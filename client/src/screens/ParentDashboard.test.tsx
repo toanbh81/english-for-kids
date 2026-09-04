@@ -248,16 +248,21 @@ describe('ParentGate', () => {
   it('the gate is one 420px left-aligned card centred in the body, with no max-w-md left', () => {
     renderGate()
     const card = screen.getByTestId('gate-card')
-    expect(card).toHaveClass('w-[min(420px,calc(100%-32px))]', 'p-5', 'gap-3', 'text-left')
+    expect(card).toHaveClass('mx-auto', 'w-[min(420px,calc(100%-32px))]', 'p-5', 'gap-3', 'text-left')
     expect(card.className).not.toMatch(/max-w-md|text-center/)
     expect(screen.getByTestId('page-body')).toHaveClass('justify-center')
   })
 
   it('the header is the adult Back with a landscape-only label, and no LessonChip on the right', () => {
     renderGate()
-    const back = screen.getByRole('link', { name: /Về nhà/ })
+    // Exact name, not a regex: fix round 1 made the adult pill's VISIBLE label breakpoint-aware
+    // (mirroring the child variant's sr-only pair) instead of always showing `label` alongside a
+    // merely visually-hidden `mdLabel` — below `ipad:` exactly one of the two spans is in the
+    // accessibility tree, so the accessible name is `label` alone, with no duplicate.
+    const back = screen.getByRole('link', { name: 'Về nhà' })
     expect(back).toHaveClass('h-11', 'rounded-r14')
-    expect(within(back).getByText('Về bản đồ 🏝️')).toHaveClass('sr-only', 'hidden', 'ipad:inline')
+    expect(within(back).getByText('Về nhà')).toHaveClass('ipad:hidden')
+    expect(within(back).getByText('Về bản đồ 🏝️')).toHaveClass('hidden', 'ipad:inline')
     expect(screen.getByTestId('header-right')).toBeEmptyDOMElement()
   })
 
@@ -278,7 +283,7 @@ describe('ParentGate', () => {
 
   it('the background blobs are decorative and cannot scroll the body', () => {
     renderGate()
-    expect(screen.getByTestId('gate-blobs')).toHaveClass('pointer-events-none', 'absolute', 'inset-0', 'overflow-hidden')
+    expect(screen.getByTestId('gate-blobs')).toHaveClass('pointer-events-none', 'absolute', 'inset-0', '-z-10', 'overflow-hidden')
   })
 })
 
