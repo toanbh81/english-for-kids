@@ -182,7 +182,6 @@ export function CloudStart() {
    * failed, without spending the code/token again. `null` whenever `error` is not one of the four
    * merged system failures (R10 / quyết định 22). */
   const [errorAction, setErrorAction] = useState<(() => void) | null>(null)
-  const [info, setInfo] = useState<string | null>(null)
   const [stranding, setStranding] = useState<Stranding | null>(null)
   /** The child a failed pull left un-restored, so the parent can try that same one again. */
   const [retryId, setRetryId] = useState<string | null>(null)
@@ -218,17 +217,15 @@ export function CloudStart() {
     setOtp('')
     setCode('')
     setStranding(null)
-    // Task 9: `info`/`retryId` are now read only inside the `'result'` stage's own body, so
-    // leaving either set would resurface a stale system message the next time this screen shows
-    // one — a card that has moved on must not still be carrying the previous failure.
-    setInfo(null)
+    // Task 9: `retryId` is now read only inside the `'result'` stage's own body, so leaving it
+    // set would resurface a stale retry target the next time this screen shows one — a card that
+    // has moved on must not still be carrying the previous failure.
     setRetryId(null)
   }
 
   function openDoor(which: Door) {
     setError(null)
     setErrorAction(null)
-    setInfo(null)
     setDoor(which)
     setStage(passedGate ? which : 'gate')
   }
@@ -472,9 +469,9 @@ export function CloudStart() {
             <p className="mt-1 text-[13px] font-bold text-ink-500">Khôi phục tiến độ của bé trên máy này.</p>
           </div>
 
-          {/* Task 9 / R8: `info`/`retryId` are read only inside the `'result'` stage's own body now
-            * — this used to rattle a `Notice`/floating "Thử tải lại" on top of every stage. `error`
-            * still lands here for the two stages with no field or `Notice` of their own to show it:
+          {/* Task 9 / R8: `retryId` is read only inside the `'result'` stage's own body now — this
+            * used to rattle a `Notice`/floating "Thử tải lại" on top of every stage. `error` still
+            * lands here for the two stages with no field or `Notice` of their own to show it:
             * `menu` (`afterAuthenticated`'s roster/pull-read failures) and `abandon` (the guard
             * firing again on the confirmed retry). NOT `'result'`, which owns its own `Notice` and
             * would otherwise show the retry control twice. */}
@@ -547,7 +544,13 @@ export function CloudStart() {
           <div className="flex flex-col gap-3 text-left">
             <h2 className="font-display text-base font-extrabold text-ink-900">Máy này đang có dữ liệu</h2>
             <p className="text-sm font-semibold text-ink-500">Khôi phục sẽ thay bằng tài khoản của bố mẹ. Dữ liệu hiện tại:</p>
-            <p data-testid="abandon-copy" className="rounded-r10 bg-sun-50 px-2.5 py-2 text-[12px] font-bold leading-[1.45] text-sun-700">
+            {/* `break-all`, not `break-words`: the 61-char email has no spaces, and a flex child's
+              * default `min-width:auto` resolves to its min-content width — `break-words`
+              * (`overflow-wrap:break-word`) does not reliably shrink that in every browser, so the
+              * box (and the card) can still be forced wide by one unbroken "word" even with it
+              * applied. `break-all` (`word-break:break-all`) shrinks min-content properly on its
+              * own, which is what actually stopped the phone/short overflow (C1). */}
+            <p data-testid="abandon-copy" className="rounded-r10 bg-sun-50 px-2.5 py-2 text-[12px] font-bold leading-[1.45] text-sun-700 break-all">
               {abandonCopy(stranding)} Tài khoản đăng nhập: <b>{email}</b>.
             </p>
             <Button size="adult" disabled={busy} onClick={() => { void sendOtp(true) }} className="w-full">
@@ -562,7 +565,9 @@ export function CloudStart() {
 
         {stage === 'email-otp' && (
           <form onSubmit={handleVerifyEmail} className="flex flex-col gap-4">
-            <p className="text-sm font-semibold text-ink-500">Nhập mã 6 số vừa gửi tới {email}</p>
+            {/* Fix round 1 / Important I2: same overflow as `abandon-copy` (C1) — the 61-char email
+              * has no spaces, so `break-all` is what actually keeps it inside the card on phone. */}
+            <p className="break-all text-sm font-semibold text-ink-500">Nhập mã 6 số vừa gửi tới {email}</p>
             <FieldRow
               label="Mã 6 số"
               htmlFor="cloud-start-otp"
@@ -621,15 +626,16 @@ export function CloudStart() {
           * a floating "Thử tải lại" on top of every stage now land on their own stage instead —
           * reached from `afterAuthenticated`'s "0 restorable profiles" branch and from
           * `finishRestore`'s single-candidate pull failure. Both read as the same generic outcome
-          * (the design's own stage ⑧ uses one sentence for either), and "Thử tải lại" re-runs
-          * whichever one actually failed: the specific pull when `retryId` names it, the whole
-          * fetch-and-adopt round trip otherwise. */}
+          * (the design's own stage ⑧ uses one sentence for either — the title is fixed, not
+          * `info`-driven, on purpose: there is nothing left to distinguish the two by), and "Thử
+          * tải lại" re-runs whichever one actually failed: the specific pull when `retryId` names
+          * it, the whole fetch-and-adopt round trip otherwise. */}
         {stage === 'result' && (
           <div className="flex flex-col gap-3">
             <Notice
               kind="warn"
               adult
-              title={info ?? 'Tài khoản này chưa có hồ sơ nào để khôi phục. Bắt đầu mới cho bé hoặc thử email khác.'}
+              title="Tài khoản này chưa có hồ sơ nào để khôi phục. Bắt đầu mới cho bé hoặc thử email khác."
             />
             {retryId
               ? <Button size="adult" variant="outline" disabled={busy} onClick={() => { void finishRestore(retryId) }} className="w-full">Thử tải lại</Button>

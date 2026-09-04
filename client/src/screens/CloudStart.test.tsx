@@ -1054,7 +1054,7 @@ describe('the result stage, abandon copy, and compact picker (Task 9)', () => {
   it('abandon prints one of the four sun-tinted copy lines and never the email in the button', async () => {
     await reachAbandon({ profiles: 2, stars: 128, events: 340, mirrored: false })
 
-    expect(screen.getByTestId('abandon-copy')).toHaveClass('rounded-r10', 'bg-sun-50', 'text-[12px]')
+    expect(screen.getByTestId('abandon-copy')).toHaveClass('rounded-r10', 'bg-sun-50', 'text-[12px]', 'break-all')
     expect(screen.getByTestId('abandon-copy')).toHaveTextContent('2 hồ sơ, 128 sao và 340 lượt luyện trên máy này sẽ bị thay.')
     const go = screen.getByRole('button', { name: 'Vẫn tiếp tục với email này' })
     expect(go).not.toHaveTextContent(EMAIL61)
@@ -1083,5 +1083,22 @@ describe('the result stage, abandon copy, and compact picker (Task 9)', () => {
     expect(screen.getAllByRole('button')[0]).toHaveClass('h-[72px]')
     fireEvent.click(screen.getAllByRole('button')[1])
     expect(screen.getByTestId('cell-spinner')).toBeInTheDocument()
+  })
+
+  /**
+   * Fix round 1 / Critical C1 + Important I2: the 61-char email has no spaces, so neither the
+   * abandon-copy line nor the email-OTP description could rely on the browser's ordinary
+   * word-wrap — both overflowed the card (and the phone viewport) without `break-all`. This is a
+   * regression check, not a design nicety: the whole point of R11 was to stop the email from
+   * breaking layout.
+   */
+  it('breaks the 61-char email inside the abandon copy rather than overflowing it', async () => {
+    await reachAbandon({ profiles: 1, stars: 3, events: 2, mirrored: false })
+    expect(screen.getByTestId('abandon-copy')).toHaveClass('break-all')
+  })
+
+  it('breaks the 61-char email inside the email-OTP description rather than overflowing it', async () => {
+    await reachOtp()
+    expect(screen.getByText(/Nhập mã 6 số vừa gửi tới/)).toHaveClass('break-all')
   })
 })

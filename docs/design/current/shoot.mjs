@@ -172,6 +172,20 @@ async function run(vpName, vp) {
     const [a, b] = q.match(/\d+/g).map(Number)
     await page.fill('input', String(a * b)); await page.keyboard.press('Enter')
   }
+  // Fix round 1 / Critical C2. `signInAnonymously()` fires unawaited from `main.tsx`'s
+  // `bootstrapProfiles()` and hits the REAL, unmocked network on every page load — a race against
+  // however long that takes, not a storage-persistence issue. Submitting the email before it
+  // lands leaves `isAnonymous()` reading "no session yet" (`cloud/auth.ts:79`), so the LOCAL guard
+  // in `signInWithEmail` never fires, and the real `signInWithOtp()` call underneath falls through
+  // to whichever mocked/real answer happens to be sitting on `**/auth/v1/otp*` at that instant —
+  // which is exactly how `start-abandon` intermittently landed on the generic "Có lỗi xảy ra"
+  // instead of the abandon screen. `speakup.auth` is the one key `getSession()` (and therefore
+  // `isAnonymous()`) actually reads (`cloud/supabase.ts`'s `storageKey`), so wait for THAT rather
+  // than a fixed `sleep()` — deterministic regardless of how long the real network call takes.
+  // `speakup.auth` lands only after the whole post-signup chain (profile row, `kv` pull, events,
+  // recovery code) settles, not right after the `/auth/v1/signup` response itself — measured at
+  // ~10s on a live project, so the wait needs real headroom, not just enough to beat a fast reply.
+  const waitForAnonSession = () => page.waitForFunction(() => !!localStorage.getItem('speakup.auth'), null, { timeout: 20000 })
   const EMAIL61 = 'nguyenhoangbaongocanhthu.phuhuynh.speakup2026@examplemail.com'
   // A minimal GoTrue session shape for the one shot (`start-result-empty`) that needs OTP
   // verification to actually SUCCEED — supabase-js only needs enough to accept `setSession`
@@ -196,6 +210,7 @@ async function run(vpName, vp) {
     await page.route('**/auth/v1/verify*', r => r.fulfill({ status: 400, body: JSON.stringify({ error_code: 'invalid-token' }) }))
   }
   await S('start-otp-error', '/start', async () => {
+    await waitForAnonSession()
     await tapText(page, 'Tôi có email đã liên kết', { exact: false }); await gateAnswer()
     await page.fill('input[type=email]', EMAIL61); await page.keyboard.press('Enter'); await sleep(600)
     await page.fill('input', '4821'); await page.keyboard.press('Enter'); await sleep(600)
@@ -205,6 +220,7 @@ async function run(vpName, vp) {
     await page.unroute('**/auth/v1/verify*')
     await page.route('**/auth/v1/verify*', r => r.fulfill({ status: 200, body: JSON.stringify(FAKE_SESSION) }))
     await page.route('**/rest/v1/profiles*', r => r.fulfill({ status: 200, body: '[]' }))
+    await waitForAnonSession()
     await tapText(page, 'Tôi có email đã liên kết', { exact: false }); await gateAnswer()
     await page.fill('input[type=email]', EMAIL61); await page.keyboard.press('Enter'); await sleep(600)
     await page.fill('input', '482100'); await page.keyboard.press('Enter'); await sleep(900)
@@ -228,6 +244,7 @@ async function run(vpName, vp) {
   // the cloud.
   await page.route('**/auth/v1/otp*', r => r.fulfill({ status: 422, body: JSON.stringify({ error_code: 'anonymous-session-in-use' }) }))
   await S('start-abandon', '/start', async () => {
+    await waitForAnonSession()
     await tapText(page, 'Tôi có email đã liên kết', { exact: false }); await gateAnswer()
     await page.fill('input[type=email]', EMAIL61); await page.keyboard.press('Enter'); await sleep(900)
   })
@@ -441,11 +458,29 @@ async function run(vpName, vp) {
     await page.getByRole('button', { name: 'Vào' }).click()
     await sleep(300)
   })
-  await S('parent-dashboard', '/parent', async () => {
+  // Task 10: the "answer the parent-gate math, then wait for the dashboard to settle" tail three
+  // shots below all repeated verbatim — pulled out once so a future fourth shot does not add a
+  // fourth copy.
+  const openDashboard = async () => {
     const q = await page.locator('text=/\\d+ × \\d+/').first().textContent()
     const [a, b] = q.match(/\d+/g).map(Number)
     await page.fill('input', String(a * b)); await page.keyboard.press('Enter'); await sleep(1500)
-  })
+  }
+  await S('parent-dashboard', '/parent', openDashboard)
+  // Round 4 §2 P2.3/P2.4/P2.8: the worst-case "0 events" state — the minutes chart, the weak-sound
+  // panel and the recordings panel all show their empty state at once. `-full` is what Task 16
+  // measures the ≈1100/≤834/≤1194 scroll-height claims against.
+  if (!WANT || WANT.includes('parent-dashboard-empty')) {
+    await go(page, '/')
+    await page.evaluate(() => {
+      const id = localStorage.getItem('speakup.profile')
+      const pre = id ? `speakup.${id}.` : 'speakup.'
+      localStorage.setItem(pre + 'activity', '[]')
+      localStorage.removeItem(pre + 'stars')
+    })
+    await S('parent-dashboard-empty', '/parent', openDashboard)
+    await seed(page) // trả lại đứa trẻ 5 ngày cho mọi ảnh sau
+  }
 
   // ---------- special Home states ----------
   await seed(page, { overLimit: true })
@@ -503,9 +538,7 @@ async function run(vpName, vp) {
   await S('parent-dashboard-profiles', '/parent', async () => {
     await page.getByRole('button', { pressed: true }).first().click({ timeout: 5000 })
     await sleep(600)
-    const q = await page.locator('text=/\\d+ × \\d+/').first().textContent()
-    const [a, b] = q.match(/\d+/g).map(Number)
-    await page.fill('input', String(a * b)); await page.keyboard.press('Enter'); await sleep(1500)
+    await openDashboard()
   })
   if (vpName === 'phone') {
     const ios = await browser.newContext({ ...vp, reducedMotion: 'reduce', userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1' })
