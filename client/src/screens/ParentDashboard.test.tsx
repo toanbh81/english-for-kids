@@ -1,5 +1,5 @@
 import 'fake-indexeddb/auto'
-import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import type { ReactElement } from 'react'
 import { DialogProvider } from '../components/ui/DialogProvider'
@@ -145,6 +145,24 @@ async function flush() {
 /** Task 11's own name for the same wait — the brief's failing tests spell it `settle()`. */
 const settle = flush
 
+/** Task 12's stub for `window.matchMedia` (jsdom has none — `window.matchMedia` is `undefined`
+ * there, and the app code's own `window.matchMedia?.(query).matches` reads that as "narrow" via
+ * optional chaining). `chartRange`'s mount-time read and the weak-chip tip's `isWide` both ask the
+ * same `(min-width: 768px)` query, so one boolean is all any test here needs. Cleared by
+ * `vi.unstubAllGlobals()` in the `afterEach` below. */
+function matchMedia(matches: boolean) {
+  vi.stubGlobal('matchMedia', vi.fn().mockReturnValue({
+    matches,
+    media: '',
+    onchange: null,
+    addListener: vi.fn(),
+    removeListener: vi.fn(),
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+    dispatchEvent: vi.fn(),
+  }))
+}
+
 /** A promise the test controls, standing in for a slow `clearRecordings`/`resetRemoteProgress`/
  * `signOut` — Fix round 1: the reset/sign-out dialogs stay open and busy until their own async
  * work settles, which only shows up in a test that does not let that work resolve immediately. */
@@ -192,6 +210,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.restoreAllMocks()
+  vi.unstubAllGlobals()
   vi.useRealTimers()
 })
 
@@ -209,7 +228,7 @@ describe('ParentGate', () => {
     fireEvent.change(screen.getByLabelText('Đáp án'), { target: { value: '9' } })
     fireEvent.click(screen.getByRole('button', { name: 'Vào' }))
 
-    await screen.findByText(/Phút luyện mỗi ngày/)
+    await screen.findByText(/Phút luyện/)
     expect(Number(sessionStorage.getItem(FLAG_KEY))).toBeGreaterThan(Date.now() - 1000)
   })
 
@@ -221,7 +240,7 @@ describe('ParentGate', () => {
     fireEvent.change(input, { target: { value: '9' } })
     fireEvent.submit(input.closest('form')!)
 
-    await screen.findByText(/Phút luyện mỗi ngày/)
+    await screen.findByText(/Phút luyện/)
     expect(Number(sessionStorage.getItem(FLAG_KEY))).toBeGreaterThan(Date.now() - 1000)
   })
 
@@ -229,7 +248,7 @@ describe('ParentGate', () => {
     sessionStorage.setItem(FLAG_KEY, String(Date.now()))
     renderWithDialogs(<ParentGate />)
 
-    await screen.findByText(/Phút luyện mỗi ngày/)
+    await screen.findByText(/Phút luyện/)
     expect(screen.queryByLabelText('Đáp án')).not.toBeInTheDocument()
   })
 
@@ -238,7 +257,7 @@ describe('ParentGate', () => {
     renderWithDialogs(<ParentGate />)
 
     expect(screen.getByLabelText('Đáp án')).toBeInTheDocument()
-    expect(screen.queryByText(/Phút luyện mỗi ngày/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/Phút luyện/)).not.toBeInTheDocument()
   })
 
   it('asks the question again when the session flag is not a timestamp', () => {
@@ -251,7 +270,7 @@ describe('ParentGate', () => {
   it('clears the session flag on unmount so leaving /parent re-locks the gate', async () => {
     sessionStorage.setItem(FLAG_KEY, String(Date.now()))
     const { unmount } = renderWithDialogs(<ParentGate />)
-    await screen.findByText(/Phút luyện mỗi ngày/)
+    await screen.findByText(/Phút luyện/)
 
     unmount()
 
@@ -264,12 +283,12 @@ describe('ParentGate', () => {
 
     fireEvent.change(screen.getByLabelText('Đáp án'), { target: { value: '9' } })
     fireEvent.click(screen.getByRole('button', { name: 'Vào' }))
-    await screen.findByText(/Phút luyện mỗi ngày/)
+    await screen.findByText(/Phút luyện/)
 
     fireEvent.click(screen.getByRole('button', { name: /Khoá lại/ }))
 
     expect(screen.getByLabelText('Đáp án')).toBeInTheDocument()
-    expect(screen.queryByText(/Phút luyện mỗi ngày/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/Phút luyện/)).not.toBeInTheDocument()
     expect(sessionStorage.getItem(FLAG_KEY)).toBeNull()
   })
 
@@ -332,6 +351,7 @@ describe('ParentDashboard', () => {
 
   it('renders exactly 14 minute bars and lists the weakest phoneme first', async () => {
     vi.useFakeTimers({ now: NOW })
+    matchMedia(true) // md/ipad width: chartRange defaults to 14
     seedActivity([
       { ts: NOW, kind: 'speak', id: 'w1', score: 80, phonemes: [{ phoneme: 'th', score: 30 }] },
       { ts: NOW, kind: 'speak', id: 'w2', score: 80, phonemes: [{ phoneme: 'th', score: 40 }] },
@@ -344,9 +364,8 @@ describe('ParentDashboard', () => {
 
     expect(screen.getAllByTestId('minute-bar')).toHaveLength(14)
 
-    const phonemeRows = screen.getAllByText(/— trung bình/)
-    expect(phonemeRows[0]).toHaveTextContent('/th/')
-    expect(phonemeRows[0]).toHaveTextContent('trung bình 35 (2 lần)')
+    const chips = screen.getAllByTestId('weak-chip')
+    expect(chips[0]).toHaveTextContent('/th/ · 35 (2 lần)')
   })
 
   it('shows the "chưa đủ dữ liệu" empty state when there is no phoneme data', async () => {
@@ -381,20 +400,24 @@ describe('ParentDashboard', () => {
   })
 
   it('shows the target line label at the current daily limit', async () => {
+    // `MinutesChart` draws the dashed empty box instead of a target line with no activity at
+    // all — seed one event so the chart it is actually about is on screen.
+    seedActivity([{ ts: Date.now(), kind: 'speak', id: 'w1', score: 80 }])
     renderWithDialogs(<ParentDashboard />)
     await flush()
 
-    expect(screen.getByText('Mục tiêu 20 phút/ngày')).toBeInTheDocument()
+    expect(screen.getByText("mục tiêu 20'")).toBeInTheDocument()
   })
 
   it('persists a limit chip click', async () => {
+    seedActivity([{ ts: Date.now(), kind: 'speak', id: 'w1', score: 80 }])
     renderWithDialogs(<ParentDashboard />)
     await flush()
 
     fireEvent.click(screen.getByRole('button', { name: '30 phút' }))
 
     expect(localStorage.getItem('speakup.limit.minutes')).toBe('30')
-    expect(screen.getByText('Mục tiêu 30 phút/ngày')).toBeInTheDocument()
+    expect(screen.getByText("mục tiêu 30'")).toBeInTheDocument()
   })
 
   it('a recording row plays through the mocked playBlob when tapped', async () => {
@@ -617,34 +640,93 @@ describe('ParentDashboard', () => {
     expect(screen.getByRole('main')).toHaveClass('px-6', 'md:px-6')
   })
 
-  /** Fourteen days of data at every width; a phone draws the last seven, and each hidden bar takes
-   * its own date label with it so the two can never come apart. */
-  it('draws the last seven of the fourteen bars on a phone', async () => {
-    // The chart shows an empty state in place of the bars with no activity at all — seed one
-    // event so this test exercises the bars, which is what it is actually about.
-    seedActivity([{ ts: Date.now(), kind: 'speak', id: 'w1', score: 80 }])
-    renderWithDialogs(<ParentDashboard />)
-    await flush()
+  /* ---- Task 12: MinutesChart panel, four average tiles, tappable weak-sound chips ---- */
 
-    const cells = screen.getAllByTestId('minute-bar').map(bar => bar.parentElement!)
-    expect(cells).toHaveLength(14)
-    expect(cells.slice(0, 7).every(c => c.classList.contains('hidden'))).toBe(true)
-    expect(cells.slice(7).every(c => c.classList.contains('flex') && !c.classList.contains('hidden'))).toBe(true)
-    expect(cells[0]).toHaveClass('md:flex')
-    // The heading counts what is drawn at each width rather than claiming fourteen at both.
-    expect(screen.getByText('(7 ngày)')).toHaveClass('md:hidden')
-    expect(screen.getByText('(14 ngày)')).toHaveClass('hidden', 'md:inline')
+  it('the chart panel renders MinutesChart with 7 days on a phone and 14 from md up', () => {
+    matchMedia(false)
+    renderDashboard()
+    expect(screen.getAllByTestId('minute-bar')).toHaveLength(7)
+
+    cleanup()
+    matchMedia(true)
+    renderDashboard()
+    expect(screen.getAllByTestId('minute-bar')).toHaveLength(14)
+
+    fireEvent.click(screen.getByRole('button', { name: '7' }))
+    expect(screen.getAllByTestId('minute-bar')).toHaveLength(7)
   })
 
-  it('shows the empty state for the whole chart region — bars, date labels and total — when there is no activity at all', async () => {
-    renderWithDialogs(<ParentDashboard />)
-    await flush()
+  it('an empty log draws the dashed box, never fourteen zero-minute bars', () => {
+    // "Âm hay sai" and the recordings panel (still empty before its own fetch resolves) also
+    // render an `EmptyState` with no activity at all — only the chart's own is `variant="dashed"`.
+    renderDashboard({ events: [] })
+    const dashed = screen.getAllByTestId('empty-state').find(el => el.classList.contains('border-dashed'))
+    expect(dashed).toHaveClass('border-dashed', 'min-h-[120px]')
+    expect(screen.queryByTestId('minute-bar')).toBeNull()
+  })
 
-    expect(screen.getByText('Chưa có lịch sử luyện')).toBeInTheDocument()
-    expect(screen.queryByTestId('minute-bar')).not.toBeInTheDocument()
-    expect(screen.queryByText(/Tổng:/)).not.toBeInTheDocument()
-    // The card's own heading and target line are not part of the chart region, so they stay.
-    expect(screen.getByText('Mục tiêu 20 phút/ngày')).toBeInTheDocument()
+  it('the averages panel has four tiles and Truyện reads "—" because a story event carries no score', () => {
+    renderDashboard()
+    const panel = screen.getByTestId('averages-panel')
+    expect(within(panel).getByTestId('averages-grid')).toHaveClass('grid-cols-4')
+    expect(within(panel).getAllByTestId('average-tile')).toHaveLength(4)
+    expect(within(panel).getByText('Truyện').nextSibling).toHaveTextContent('—')
+    expect(within(panel).getByRole('heading', { level: 2 })).toHaveTextContent('Điểm trung bình')
+  })
+
+  // Two phonemes, each said twice, so `weakPhonemes` (which needs at least two samples per
+  // phoneme) keeps both — one under 50 (fix tone) and one in 50–70 (sun tone). `renderDashboard`
+  // seeds `localStorage` itself from `opts.events`, so these go in that way rather than through
+  // `seedActivity` (which a bare `renderDashboard()` call right after would just overwrite).
+  const WEAK_EVENTS: ActivityEvent[] = [
+    { ts: Date.now(), kind: 'speak', id: 'w1', score: 80, phonemes: [{ phoneme: 'th', score: 44 }] },
+    { ts: Date.now(), kind: 'speak', id: 'w2', score: 80, phonemes: [{ phoneme: 'th', score: 48 }] },
+    { ts: Date.now(), kind: 'speak', id: 'w3', score: 80, phonemes: [{ phoneme: 'r', score: 60 }] },
+    { ts: Date.now(), kind: 'speak', id: 'w4', score: 80, phonemes: [{ phoneme: 'r', score: 64 }] },
+  ]
+
+  it('a weak-sound chip is one nowrap 36px pill, toned by score', () => {
+    renderDashboard({ events: WEAK_EVENTS })
+    const chips = screen.getAllByTestId('weak-chip')
+    expect(chips[0]).toHaveClass('h-9', 'rounded-r12', 'whitespace-nowrap', 'text-[13px]', 'bg-fix-50', 'text-fix-700')
+    expect(chips[0]).toHaveTextContent(/^\/[^/]+\/ · \d+ \(\d+ lần\)$/)
+    expect(chips.find(c => c.className.includes('bg-ok-50'))).toBeTruthy() // 50–70 → sun
+  })
+
+  it('on a phone the chip is a button that opens its tip; the tip is not hidden away', () => {
+    matchMedia(false)
+    renderDashboard({ events: WEAK_EVENTS })
+    expect(screen.queryByTestId('weak-tip')).toBeNull()
+
+    fireEvent.click(screen.getAllByTestId('weak-chip')[0])
+    expect(screen.getByTestId('weak-tip')).toHaveClass('rounded-r10', 'bg-[#FFF6E0]', 'text-[12px]', 'text-sun-700')
+
+    fireEvent.click(screen.getAllByTestId('weak-chip')[0])
+    expect(screen.queryByTestId('weak-tip')).toBeNull()
+  })
+
+  it('from md up the tip of the first chip is shown without asking', () => {
+    matchMedia(true)
+    renderDashboard({ events: WEAK_EVENTS })
+    expect(screen.getByTestId('weak-tip')).toBeInTheDocument()
+  })
+
+  it('five weak sounds and a three-line tip still fit the panel without a horizontal scroll', () => {
+    const FIVE_EVENTS: ActivityEvent[] = [
+      { ts: Date.now(), kind: 'speak', id: 'a1', score: 80, phonemes: [{ phoneme: 'th', score: 30 }] },
+      { ts: Date.now(), kind: 'speak', id: 'a2', score: 80, phonemes: [{ phoneme: 'th', score: 34 }] },
+      { ts: Date.now(), kind: 'speak', id: 'b1', score: 80, phonemes: [{ phoneme: 'dh', score: 40 }] },
+      { ts: Date.now(), kind: 'speak', id: 'b2', score: 80, phonemes: [{ phoneme: 'dh', score: 44 }] },
+      { ts: Date.now(), kind: 'speak', id: 'c1', score: 80, phonemes: [{ phoneme: 'v', score: 50 }] },
+      { ts: Date.now(), kind: 'speak', id: 'c2', score: 80, phonemes: [{ phoneme: 'v', score: 54 }] },
+      { ts: Date.now(), kind: 'speak', id: 'd1', score: 80, phonemes: [{ phoneme: 'f', score: 60 }] },
+      { ts: Date.now(), kind: 'speak', id: 'd2', score: 80, phonemes: [{ phoneme: 'f', score: 64 }] },
+      { ts: Date.now(), kind: 'speak', id: 'e1', score: 80, phonemes: [{ phoneme: 'z', score: 68 }] },
+      { ts: Date.now(), kind: 'speak', id: 'e2', score: 80, phonemes: [{ phoneme: 'z', score: 70 }] },
+    ]
+    renderDashboard({ events: FIVE_EVENTS })
+    expect(screen.getAllByTestId('weak-chip')).toHaveLength(5)
+    expect(screen.getByTestId('weak-list')).toHaveClass('flex-wrap', 'gap-1.5')
   })
 
   it('pressing a length chip persists the lesson length', async () => {
@@ -680,7 +762,7 @@ describe('ParentDashboard', () => {
     expect(grid).toHaveClass('grid-cols-1', 'md:grid-cols-2', 'ipad:grid-cols-3')
     const titles = within(grid).getAllByRole('heading', { level: 2 }).map(h => h.textContent)
     expect(titles).toEqual([
-      'Tài khoản', 'Phút luyện mỗi ngày', 'Điểm trung bình', 'Âm hay sai',
+      'Tài khoản', 'Phút luyện · 7 ngày', 'Điểm trung bình', 'Âm hay sai',
       '⏰ Giới hạn mỗi ngày', 'Bài học', 'Bản ghi gần đây', 'Tiến độ từ xa',
     ])
     expect(screen.queryByTestId('account-card')).toBe(within(grid).getByTestId('account-card'))
@@ -709,7 +791,11 @@ describe('ParentDashboard', () => {
     expect(screen.queryByTestId('account-card')).toBeNull()
     expect(screen.queryByText('Tiến độ từ xa')).toBeNull()
     expect(screen.queryByText('Hồ sơ')).toBeNull()
-    expect(within(screen.getByTestId('panel-grid')).getAllByTestId('panel')).toHaveLength(6)
+    // The averages panel carries its own `averages-panel` testid (Task 12) alongside the generic
+    // `panel` every other panel keeps — both count as "a panel" here.
+    const grid = screen.getByTestId('panel-grid')
+    const panels = [...within(grid).queryAllByTestId('panel'), ...within(grid).queryAllByTestId('averages-panel')]
+    expect(panels).toHaveLength(6)
     expect(screen.getByTestId('panel-grid')).toHaveClass('grid-cols-1', 'md:grid-cols-2', 'ipad:grid-cols-3')
   })
 

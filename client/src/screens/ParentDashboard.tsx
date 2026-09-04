@@ -40,9 +40,9 @@ import { fetchRemoteStats } from '../cloud/remote'
 import type { RemoteStats } from '../cloud/remote'
 import { isCloudConfigured } from '../cloud/supabase'
 import { ProfilePicker } from '../components/ProfilePicker'
-import { BackButton, Button, Card, EmptyState, Notice, RemoteRowSkeleton } from '../components/ui'
+import { BackButton, Button, EmptyState, Notice, RemoteRowSkeleton } from '../components/ui'
 import { PageShell, PageHeader, PageBody } from '../components/ui/page'
-import { AccountCard, Panel, PanelGrid } from '../components/adult'
+import { AccountCard, MinutesChart, Panel, PanelGrid } from '../components/adult'
 import type { AccountState } from '../components/adult'
 import { useDialog } from '../components/ui/useDialog'
 
@@ -59,10 +59,11 @@ import { useDialog } from '../components/ui/useDialog'
  * which used to be held to the child's 64 px floor by name (spec decision 2) and lost that
  * exception in this same pass.
  */
-const KIND_LABEL = { speak: 'Nói', word: 'Từ vựng', sentence: 'Ghép câu' } as const
+const KIND_LABEL = { speak: 'Nói', word: 'Từ vựng', sentence: 'Ghép câu', story: 'Truyện' } as const
 const LIMIT_CHIPS = [15, 20, 30] as const
-/** How many of the chart's fourteen days a phone draws (design §12 M8c). */
-const PHONE_DAYS = 7
+/** R21 — a weak-sound chip's tone by its average score: under 50 reads as something to fix,
+ * everything else (the design only ever draws 50–70) as a soft nudge. */
+const CHIP = (avg: number) => (avg < 50 ? 'bg-fix-50 text-fix-700' : 'bg-ok-50 text-ok-700')
 const BAND_VALUES = [1, 2, 3, 4, 5] as const satisfies readonly Band[]
 /**
  * What the parent is told when the mirror's half of a reset has not happened.
@@ -108,11 +109,6 @@ function describeAuthError(code: string): string {
  * an offline device gets an explanation instead of a form that cannot work.
  */
 const online = (): boolean => typeof navigator === 'undefined' || navigator.onLine !== false
-
-function formatDayLabel(day: string): string {
-  const [, m, d] = day.split('-')
-  return `${d}/${m}`
-}
 
 const formatAvg = (n: number | null): string => (n == null ? '—' : String(Math.round(n)))
 
@@ -298,13 +294,20 @@ export function ParentDashboard({ onLock }: Props) {
     () => (cloudAvailable && activeId && hasPendingReset(activeId) ? PENDING_RESET_NOTICE : null),
   )
 
+  /** R19/decision 27 — read once at mount, the same test `recordingsOpen` used before it: 14 days
+   * from `md:`/`ipad:` up, 7 on a phone. The chart's own "7 · 14" switch (`md:` up only) can move
+   * it either way after that; this is only ever the starting point. */
+  const [chartRange, setChartRange] = useState<7 | 14>(
+    () => (window.matchMedia?.('(min-width: 768px)').matches ? 14 : 7),
+  )
+  /** decision 28 — which weak-sound chip's tip is pinned open on a phone; `null` until a chip is
+   * tapped. From `md:` up the first chip's tip shows regardless of this (see `isWide` below). */
+  const [openTip, setOpenTip] = useState<string | null>(null)
+
   const { events, now } = snapshot
   const days = minutesPerDay(14, now, events)
   const todayKey = days[days.length - 1]?.day
   const limitMinutes = getLimitMinutes()
-  const scaleMax = Math.max(1, limitMinutes, ...days.map(d => d.minutes))
-  const targetTopPct = Math.min(100, Math.max(0, 100 - (limitMinutes / scaleMax) * 100))
-  const totalMinutes = days.reduce((sum, d) => sum + d.minutes, 0)
   const weekMinutes = minutesPerDay(7, now, events).reduce((sum, d) => sum + d.minutes, 0)
   const averages = averageScoreByKind(events)
   const kindAverages = Object.values(averages).filter((v): v is number => v != null)
@@ -312,6 +315,19 @@ export function ParentDashboard({ onLock }: Props) {
     ? String(Math.round(kindAverages.reduce((sum, v) => sum + v, 0) / kindAverages.length))
     : '—'
   const weak = weakPhonemes(5, events)
+  // `MinutesChart` reads "empty" from an empty `days` array, not from every entry reading zero —
+  // `minutesPerDay` always hands back `chartRange` zero-filled rows, so a genuinely empty log has
+  // to be spelled `[]` here, or the chart would draw fourteen 4%-floor bars instead of its dashed
+  // empty box.
+  const chartDays = events.length === 0 ? [] : days
+  const rangeDays = days.slice(-chartRange)
+  const avgPerDay = rangeDays.length
+    ? (rangeDays.reduce((sum, d) => sum + d.minutes, 0) / rangeDays.length).toFixed(1).replace('.', ',')
+    : '0'
+  // Same question `chartRange`'s own mount-time read answers ("is this a phone"), but re-read on
+  // every render rather than pinned to a third state — a parent toggling the chart's 7/14 switch
+  // must not silently hide the first chip's tip underneath it.
+  const isWide = window.matchMedia?.('(min-width: 768px)').matches ?? false
 
   useEffect(() => {
     let cancelled = false
@@ -660,73 +676,26 @@ export function ParentDashboard({ onLock }: Props) {
         )}
 
         <Panel
-          title="Phút luyện mỗi ngày"
+          title={`Phút luyện · ${chartRange} ngày`}
           right={
-            // The chart holds the same fourteen days at every width; a phone draws the last seven
-            // of them (design §12 M8c). Fourteen date labels cannot share 300 px — at 320 they
-            // made the card wider than the screen — and `hidden` drops a day's column and its
-            // label together, so a bar and its date can never come apart.
-            <>
-              <span className="md:hidden">(7 ngày)</span>
-              <span className="hidden md:inline">(14 ngày)</span>
-            </>
+            chartDays.length > 0
+              ? <span className="text-[11px] font-bold text-ink-300">TB {avgPerDay}'/ngày</span>
+              : undefined
           }
         >
-              <p className="mb-3 mt-1 text-xs font-semibold text-ink-500 md:mb-4 md:text-sm">Mục tiêu {limitMinutes} phút/ngày</p>
-
-              {events.length === 0 ? (
-                <EmptyState
-                  adult
-                  emoji="📈"
-                  title="Chưa có lịch sử luyện"
-                  sub="Biểu đồ sẽ hiện từ ngày học đầu tiên."
-                />
-              ) : (
-                <>
-                  <div className="relative h-24 md:h-40">
-                    <div className="absolute inset-x-0 border-t-2 border-dashed border-ink-300" style={{ top: `${targetTopPct}%` }} />
-                    <div className="absolute inset-0 flex items-end gap-1">
-                      {days.map((d, i) => (
-                        <div key={d.day} className={`h-full flex-1 items-end ${i < days.length - PHONE_DAYS ? 'hidden md:flex' : 'flex'}`}>
-                          <div
-                            data-testid="minute-bar"
-                            data-minutes={d.minutes}
-                            className={`w-full rounded-t ${d.day === todayKey ? 'bg-coral-500' : 'bg-teal-500'}`}
-                            style={{ height: `${Math.max(2, (d.minutes / scaleMax) * 100)}%` }}
-                          />
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                  <div className="mt-2 flex gap-1">
-                    {days.map((d, i) => (
-                      <span
-                        key={d.day}
-                        className={`flex-1 text-center text-[10px] font-bold text-ink-300 ${i < days.length - PHONE_DAYS ? 'hidden md:block' : 'block'}`}
-                      >
-                        {formatDayLabel(d.day)}
-                      </span>
-                    ))}
-                  </div>
-                  {/* The total counts what the chart shows, so it follows the same seven/fourteen split.
-                      `weekMinutes` is the last seven days already — the summary line at the top of the
-                      screen is built from it. */}
-                  <p className="mt-2 text-xs font-semibold text-ink-500 md:mt-3 md:text-sm">
-                    Tổng: <span className="md:hidden">{weekMinutes}</span><span className="hidden md:inline">{totalMinutes}</span> phút
-                  </p>
-                </>
-              )}
+          <MinutesChart days={chartDays} limitMinutes={limitMinutes} range={chartRange} onRangeChange={setChartRange} todayKey={todayKey} />
         </Panel>
 
-        <Panel title="Điểm trung bình">
-          <div className="grid grid-cols-3 gap-2 md:gap-3">
-            {(['speak', 'word', 'sentence'] as const).map(kind => (
-              <Card key={kind} className="flex flex-col items-center gap-1 p-3 text-center md:p-5">
-                <span className="text-xs font-bold text-ink-500 md:text-sm">{KIND_LABEL[kind]}</span>
-                <span className="font-display text-[26px] font-extrabold text-ink-900 md:text-[40px]">
+        <Panel testId="averages-panel" title="Điểm trung bình">
+          <div data-testid="averages-grid" className="grid grid-cols-4 gap-1.5 md:gap-2">
+            {(['speak', 'word', 'sentence', 'story'] as const).map(kind => (
+              <div key={kind} data-testid="average-tile" className="flex flex-col items-center rounded-r12 bg-cream-50 px-1 py-2 md:px-2 md:py-2.5">
+                <span className="text-[10px] text-ink-300 md:text-[11px]">{KIND_LABEL[kind]}</span>
+                {/* Ô "Truyện" luôn "—": StoryQuiz.tsx:90 ghi event không kèm score (kiểm ở Task 3 Step 0). Artboard vẽ đúng như vậy — không hứa một con số không tồn tại. */}
+                <span className="font-display text-[20px] font-extrabold text-ink-900 md:text-[24px]">
                   {averages[kind] != null ? Math.round(averages[kind]!) : '—'}
                 </span>
-              </Card>
+              </div>
             ))}
           </div>
         </Panel>
@@ -740,21 +709,30 @@ export function ParentDashboard({ onLock }: Props) {
               sub="Âm hay sai hiện ra sau vài lần bé luyện nói."
             />
           ) : (
-            <ul className="flex flex-col gap-2 md:gap-3">
-              {weak.map(w => (
-                <li key={w.phoneme} className="flex flex-col gap-2">
-                  <p className="inline-flex w-fit items-center rounded-full bg-fix-50 px-3 py-1.5 font-display text-sm font-extrabold text-fix-700 md:px-4 md:py-2 md:text-lg">
-                    /{w.phoneme}/ — trung bình {Math.round(w.avg)} ({w.count} lần)
-                  </p>
-                  {/* The design keeps the chips and drops the coaching paragraph on a phone: the
-                      chip carries the number already, and the tip is a paragraph of reading in a
-                      card that has to leave room for the three below it. Back from 768 up. */}
-                  {PHONEME_TIPS[w.phoneme] && (
-                    <p className="hidden rounded-xl2 bg-sun-50 px-4 py-3 text-sm font-semibold text-sun-700 md:block">{PHONEME_TIPS[w.phoneme]}</p>
+            <div data-testid="weak-list" className="flex flex-wrap gap-1.5">
+              {weak.map((w, i) => (
+                <div key={w.phoneme} className="flex flex-col gap-1.5">
+                  <button
+                    data-testid="weak-chip"
+                    type="button"
+                    aria-expanded={openTip === w.phoneme}
+                    onClick={() => setOpenTip(t => (t === w.phoneme ? null : w.phoneme))}
+                    className={`inline-flex h-9 items-center whitespace-nowrap rounded-r12 px-3 font-display text-[13px] font-extrabold ${CHIP(w.avg)}`}
+                  >
+                    /{w.phoneme}/ · {Math.round(w.avg)} ({w.count} lần)
+                  </button>
+                  {/* Phone: the tip stays reachable — a tap on the chip toggles it (decision 28) —
+                      instead of vanishing below `md:` the way the old `hidden … md:block` paragraph
+                      did. From `md:` up the first chip's tip is shown without asking, same as the
+                      artboard. */}
+                  {PHONEME_TIPS[w.phoneme] && (openTip === w.phoneme || (i === 0 && isWide)) && (
+                    <p data-testid="weak-tip" className="rounded-r10 bg-[#FFF6E0] px-2.5 py-2 text-[12px] font-bold leading-[1.45] text-sun-700">
+                      {PHONEME_TIPS[w.phoneme]}
+                    </p>
                   )}
-                </li>
+                </div>
               ))}
-            </ul>
+            </div>
           )}
         </Panel>
 
