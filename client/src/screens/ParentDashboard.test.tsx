@@ -1333,8 +1333,10 @@ describe('Phase 11: "Tài khoản"', () => {
 /**
  * Task 11: the Account panel's body is now `AccountCard` (Task 4) — a two-column `Panel` with the
  * card on the left and a "Hồ sơ" column on the right (`ipad:`/`md:` from), one row per profile.
- * `AccountCard` owns its own copy and its own `sync-status` pill; this screen only derives which of
- * its eleven states applies and wires the eight handlers through.
+ * Fix round 1 (decision 14): the h32 `sync-status` pill moved to the `Panel`'s own header row via
+ * `right`; `AccountCard` gets `showPill={false}` so it draws no copy of its own — exactly one pill
+ * per panel, now aligned with the "Tài khoản" title. This screen only derives which of `AccountCard`'s
+ * eleven states applies and wires the eight handlers through.
  */
 describe('Task 11: account panel is AccountCard, with a profile column', () => {
   const EMAIL61 = 'nguyenthiphuongthaonguyenvanphamlethihoangtranminhab@vidu.com'
@@ -1366,8 +1368,11 @@ describe('Task 11: account panel is AccountCard, with a profile column', () => {
     renderDashboard()
     await settle()
     const box = screen.getByTestId('linked-email')
-    expect(box).toHaveClass('truncate', 'min-w-0')
+    expect(box).toHaveClass('min-w-0')
     expect(box).toHaveAttribute('title', EMAIL61)
+    // Fix round 1: `truncate` moved off `box` (a flex container — Chromium never paints the
+    // ellipsis for a flex container's own direct text-node child) onto a nested non-flex span.
+    expect(box.querySelector('span')).toHaveClass('block', 'truncate')
     expect(box.parentElement).toHaveClass('flex', 'min-w-0')
   })
 
@@ -1394,9 +1399,20 @@ describe('Task 11: account panel is AccountCard, with a profile column', () => {
     const rows = screen.getAllByTestId('profile-row')
     expect(rows).toHaveLength(8)
     expect(rows[0]).toHaveClass('min-h-[40px]', 'border-b', 'border-line-200')
-    expect(within(rows[0]).getByText(/Bé/)).toHaveClass('truncate', 'text-[13px]')
+    expect(within(rows[0]).getByText('Bé')).toHaveClass('truncate', 'text-[13px]')
     expect(screen.getByRole('button', { name: '+ Thêm hồ sơ' })).toHaveClass('h-8', 'rounded-r10', 'bg-teal-50', 'text-teal-600', 'text-[12px]')
     expect(within(rows[0]).getByRole('button', { name: 'Đổi tên' })).toHaveClass('h-8', 'underline', 'text-[12px]')
+  })
+
+  /** Fix round 1, decision 26: the "· đang dùng máy này" hint is its own 11px sub-line under the
+   * 13px name, not folded into the same span — `renderDashboard({ profiles: 8 })`'s roster.p1 is
+   * the active profile, so `rows[0]` is the one that carries it. */
+  it('the active row has a distinct 11px sub-line under the 13px name', async () => {
+    renderDashboard({ profiles: 8 })
+    await settle()
+    const rows = screen.getAllByTestId('profile-row')
+    expect(within(rows[0]).getByText('Bé')).toHaveClass('text-[13px]', 'font-extrabold', 'text-ink-900')
+    expect(within(rows[0]).getByText('đang dùng máy này')).toHaveClass('text-[11px]', 'text-ink-300')
   })
 
   it('an unreadable roster still warns instead of pairing a blank name with "+ Thêm hồ sơ"', async () => {

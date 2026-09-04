@@ -48,6 +48,16 @@ describe('AccountCard', () => {
     expect(screen.getByTestId('account-card-body')).toHaveClass('min-h-[150px]')
   })
 
+  /** Fix round 1 (decision 14): the h32 pill moved to the `Panel` header via `right` in
+   * `ParentDashboard`; `showPill={false}` lets that caller opt out of the card's own copy so only
+   * one `data-testid="sync-status"` renders per panel. Default stays `true` for every other test
+   * in this file. */
+  it('showPill={false} renders the card with no pill of its own', () => {
+    render(<AccountCard {...base} showPill={false} state={{ kind: 'linked', email: EMAIL61 }} />)
+    expect(screen.queryByTestId('sync-status')).not.toBeInTheDocument()
+    expect(screen.getByTestId('linked-email')).toBeInTheDocument()
+  })
+
   it('② no session online: info notice + "Thử kết nối", pill "⚡ Chưa kết nối"', () => {
     render(<AccountCard {...base} hasSession={false} state={{ kind: 'noSession', online: true }} />)
     const n = screen.getByTestId('no-session')
@@ -115,8 +125,11 @@ describe('AccountCard', () => {
   it('⑨ linked: a 61-char email in a 44px read-only box, one line, ellipsised, with a title', () => {
     render(<AccountCard {...base} sync={SYNCED_AT} state={{ kind: 'linked', email: EMAIL61 }} />)
     const box = screen.getByTestId('linked-email')
-    expect(box).toHaveClass('h-11', 'truncate', 'min-w-0', 'rounded-r12', 'border-2', 'border-line-200')
+    expect(box).toHaveClass('h-11', 'min-w-0', 'rounded-r12', 'border-2', 'border-line-200')
     expect(box).toHaveAttribute('title', EMAIL61)
+    // Fix round 1: `truncate` lives on a nested non-flex span, not on `box` itself — Chromium never
+    // paints the ellipsis for a flex container's own direct text-node child.
+    expect(box.querySelector('span')).toHaveClass('block', 'truncate')
     expect(screen.getByTestId('sync-status')).toHaveTextContent('✓ Đã đồng bộ · 09:41')
     expect(screen.getByRole('button', { name: 'Đăng xuất' })).toHaveClass('min-h-[44px]')
   })

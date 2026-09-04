@@ -40,7 +40,7 @@ import { fetchRemoteStats } from '../cloud/remote'
 import type { RemoteStats } from '../cloud/remote'
 import { isCloudConfigured } from '../cloud/supabase'
 import { ProfilePicker } from '../components/ProfilePicker'
-import { BackButton, Button, EmptyState, Notice, RemoteRowSkeleton } from '../components/ui'
+import { BackButton, Button, EmptyState, Notice, RemoteRowSkeleton, SyncPill } from '../components/ui'
 import { PageShell, PageHeader, PageBody } from '../components/ui/page'
 import { AccountCard, MinutesChart, Panel, PanelGrid } from '../components/adult'
 import type { AccountState } from '../components/adult'
@@ -566,10 +566,16 @@ export function ParentDashboard({ onLock }: Props) {
       <div className="flex flex-col">
         <PanelGrid>
         {cloudAvailable && (
-          <Panel title="Tài khoản" col="full" testId="account-card">
-            {/* Task 11 (brief §2, quyết định 24/26): the panel's own SyncPill went away —
-              * `AccountCard` (Task 4) already draws the h-8 pill as its own title row, and a second
-              * one here would just be the same `data-testid="sync-status"` twice under this panel. */}
+          <Panel
+            title="Tài khoản"
+            col="full"
+            testId="account-card"
+            right={<SyncPill status={sync} hasSession={hasSession} size="md" onRetry={() => { void flush() }} />}
+          >
+            {/* Fix round 1 (decision 14): the h32 pill moved to this `Panel`'s header row via
+              * `right` above — `AccountCard` no longer draws its own copy (`showPill={false}`), so
+              * exactly one `data-testid="sync-status"` renders for this panel, aligned with the
+              * "Tài khoản" title instead of sitting on its own row inside the card body. */}
             <div
               data-testid="account-columns"
               className="flex flex-col gap-3 md:grid md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] md:gap-4"
@@ -578,6 +584,7 @@ export function ParentDashboard({ onLock }: Props) {
                 state={accountState}
                 sync={sync}
                 hasSession={hasSession}
+                showPill={false}
                 recoveryCode={recoveryCode}
                 onEmailChange={setLinkEmailValue}
                 onOtpChange={setLinkOtp}
@@ -625,11 +632,16 @@ export function ParentDashboard({ onLock }: Props) {
                         className="flex min-h-[40px] items-center gap-2 border-b border-line-200"
                       >
                         <span aria-hidden className="text-[20px] leading-none">{p.avatar}</span>
-                        <span
-                          className="min-w-0 flex-1 truncate text-[13px] font-extrabold text-ink-900"
-                          title={p.name}
-                        >
-                          {p.name}{p.id === activeId && ' · đang dùng máy này'}
+                        <span className="flex min-w-0 flex-1 flex-col justify-center">
+                          <span
+                            className="block truncate text-[13px] font-extrabold text-ink-900"
+                            title={p.name}
+                          >
+                            {p.name}
+                          </span>
+                          {p.id === activeId && (
+                            <span className="block truncate text-[11px] text-ink-300">đang dùng máy này</span>
+                          )}
                         </span>
                         <button
                           type="button"

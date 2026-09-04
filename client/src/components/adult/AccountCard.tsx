@@ -31,6 +31,10 @@ type Props = {
   state: AccountState
   sync: SyncStatus
   hasSession: boolean
+  /** Fix round 1 — the h32 pill belongs in the Account `Panel`'s header row (decision 14), not the
+   * card body; the caller now draws it via `Panel`'s `right` slot with the same props this card used
+   * internally. Default `true` keeps every other caller (and this component's own tests) unchanged. */
+  showPill?: boolean
   /** ⑧ — rides alongside any of the ④–⑦ forms; a linked account never has one (`ensureRecoveryCode`
    * is a no-op once there is an email), so this is only ever non-null on the anonymous branch. */
   recoveryCode: string | null
@@ -63,6 +67,7 @@ export function AccountCard({
   state,
   sync,
   hasSession,
+  showPill = true,
   recoveryCode,
   onEmailChange,
   onOtpChange,
@@ -86,9 +91,11 @@ export function AccountCard({
 
   return (
     <div data-testid="account-card-body" className="flex min-h-[150px] flex-col gap-2.5">
-      <div className="flex items-center justify-end">
-        <SyncPill status={sync} hasSession={hasSession} size="md" onRetry={onRetrySync} />
-      </div>
+      {showPill && (
+        <div className="flex items-center justify-end">
+          <SyncPill status={sync} hasSession={hasSession} size="md" onRetry={onRetrySync} />
+        </div>
+      )}
 
       {state.kind === 'noSession' && (
         <Notice
@@ -189,9 +196,9 @@ export function AccountCard({
             <div
               data-testid="linked-email"
               title={state.email}
-              className="flex h-11 min-w-0 flex-1 items-center truncate rounded-r12 border-2 border-line-200 px-3 text-[13px] font-bold text-ink-900"
+              className="flex h-11 min-w-0 flex-1 items-center rounded-r12 border-2 border-line-200 px-3 text-[13px] font-bold text-ink-900"
             >
-              {state.email}
+              <span className="block truncate">{state.email}</span>
             </div>
             <Button
               size="adult"
@@ -216,9 +223,9 @@ export function AccountCard({
             <div
               data-testid="linked-email"
               title={state.email}
-              className="flex h-11 min-w-0 flex-1 items-center truncate rounded-r12 border-2 border-line-200 px-3 text-[13px] font-bold text-ink-900"
+              className="flex h-11 min-w-0 flex-1 items-center rounded-r12 border-2 border-line-200 px-3 text-[13px] font-bold text-ink-900"
             >
-              {state.email}
+              <span className="block truncate">{state.email}</span>
             </div>
           )}
           <p className="text-[12px] font-extrabold text-fix-700">
