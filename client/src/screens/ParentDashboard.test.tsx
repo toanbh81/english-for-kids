@@ -709,6 +709,8 @@ describe('ParentDashboard', () => {
     expect(lessonRow).toHaveClass('min-h-[56px]', 'md:hidden')
     // The `right` slot (today-vs-limit) rides along in the phone summary row too.
     expect(within(limitRow).getByText(/Hôm nay:/)).toBeInTheDocument()
+    // …and the lesson panel's own summary (finding 1 of the fix round) does the same.
+    expect(within(lessonRow).getByText(/Tự động ·/)).toBeInTheDocument()
 
     // `Panel` folds its body under a plain Tailwind `hidden` class rather than the `hidden`
     // attribute or an inline style — jsdom applies neither of those without a real stylesheet, so
@@ -717,6 +719,28 @@ describe('ParentDashboard', () => {
     expect(lengthLabel.parentElement).toHaveClass('hidden', 'md:block')
     fireEvent.click(lessonRow)
     expect(lengthLabel.parentElement).not.toHaveClass('hidden')
+  })
+
+  /**
+   * Fix round, finding 1: round4 brief §2 row 7 spells out the phone-folded lesson row as
+   * `"Bài học · Tự động · Vừa ~12' ▸"` — the limit panel already carries its live state through
+   * `Panel`'s `right` slot ("the limit panel prints today against the limit…" above); the lesson
+   * panel didn't. Mirrors that test: `right` renders twice (phone fold row + `md:flex` desktop
+   * row), so check both rather than picking one.
+   */
+  it('the lesson panel folds to a summary carrying the live state, auto on', () => {
+    renderDashboard({ band: { mode: 'auto', value: 2 } })
+    for (const el of screen.getAllByText("Tự động · Vừa ~12'")) {
+      expect(el).toHaveClass('text-[12px]', 'text-ink-500')
+    }
+  })
+
+  it('the lesson panel summary reads the chosen band, not "Tự động", once auto is off', () => {
+    localStorage.setItem('speakup.lesson.length', 'short')
+    renderDashboard({ band: { mode: 'manual', value: 4 } })
+    for (const el of screen.getAllByText("Bậc 4 · Ngắn ~8'")) {
+      expect(el).toHaveClass('text-[12px]', 'text-ink-500')
+    }
   })
 
   it('says when a difficulty or length change takes effect', async () => {

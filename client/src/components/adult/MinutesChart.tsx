@@ -68,7 +68,14 @@ export function MinutesChart({ days, limitMinutes, range, todayKey, onRangeChang
           className="pointer-events-none absolute inset-x-0 border-t-2 border-dashed border-sun-400"
           style={{ top: `${targetTopPct}%` }}
         />
-        <span className="pointer-events-none absolute right-0 text-[10px] font-bold text-sun-700" style={{ top: `${targetTopPct}%`, transform: 'translateY(-100%)' }}>
+        {/* Fix round, finding 2: right-anchored, this sat in the same top-right corner as the 7/14
+          * range switch one row up — whenever the seeded activity never crosses the daily limit,
+          * `scaleMax === limitMinutes` and the target line (and this label) sit at the very top of
+          * the plot, so `translateY(-100%)` pushed the label up into the switch's row with no gap
+          * between them. Left-anchoring keeps the label on its dashed line without ever sharing the
+          * switch's corner, at every viewport (the switch itself is `hidden` below `md:`, so there
+          * is nothing to collide with on a phone either way). */}
+        <span className="pointer-events-none absolute left-0 text-[10px] font-bold text-sun-700" style={{ top: `${targetTopPct}%`, transform: 'translateY(-100%)' }}>
           mục tiêu {limitMinutes}'
         </span>
         {shown.map(d => (

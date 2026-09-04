@@ -879,7 +879,16 @@ export function ParentDashboard({ onLock }: Props) {
           <Stepper value={limitMinutes} onChange={handleLimitStep} label="Tuỳ chỉnh" />
         </Panel>
 
-        <Panel testId="lesson-panel" title="Bài học" collapsible>
+        <Panel
+          testId="lesson-panel"
+          title="Bài học"
+          collapsible
+          right={
+            <span className="text-[12px] font-bold text-ink-500">
+              {bandAuto ? 'Tự động' : `Bậc ${band.value}`} · {LENGTH_LABEL[length]}
+            </span>
+          }
+        >
           <span className="mb-2 block text-xs font-bold text-ink-500 md:text-sm">Độ khó</span>
           <SegRow segs={lessonSegs} />
           {/* R24 — auto ON means the current band is a RESULT, not a choice: the dim seg above
