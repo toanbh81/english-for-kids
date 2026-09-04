@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import type { FormEvent } from 'react'
-import { Link, Navigate } from 'react-router-dom'
+import { Navigate, useNavigate } from 'react-router-dom'
 import { currentAccessToken, currentEmail, signInWithEmail, verifyEmailOtp } from '../cloud/auth'
 import type { Profile } from '../cloud/profileState'
 import { activeProfileId, adoptProfiles, dropProfile, fetchRemoteProfiles, listProfiles, rosterIsReadable, switchProfile } from '../cloud/profileState'
@@ -9,7 +9,7 @@ import { isCloudConfigured } from '../cloud/supabase'
 import { hasAnyHistory, profileHistory, sumHistory } from '../progress/history'
 import { ProfilePicker } from '../components/ProfilePicker'
 import { ParentQuestion } from '../components/ParentQuestion'
-import { BackButton, Button, Card, GateBlobs, GateCard, LinkText, Notice } from '../components/ui'
+import { BackButton, Button, GateBlobs, GateCard, LinkText, Notice } from '../components/ui'
 import { PageShell, PageHeader, PageBody } from '../components/ui/page'
 import { FieldRow, FIELD_INPUT, FIELD_INPUT_CODE, FIELD_INPUT_ERROR } from '../components/adult'
 
@@ -35,7 +35,7 @@ import { FieldRow, FIELD_INPUT, FIELD_INPUT_CODE, FIELD_INPUT_ERROR } from '../c
  * See `assessStranding` and `handleSendEmail`.
  */
 
-type Stage = 'menu' | 'gate' | 'email' | 'email-otp' | 'code' | 'abandon'
+type Stage = 'menu' | 'gate' | 'email' | 'email-otp' | 'code' | 'abandon' | 'result'
 type Door = 'email' | 'code'
 
 /**
@@ -92,6 +92,18 @@ export function describeRecoverError(status: number): string {
  * `attemptRecover`'s `!rosterIsReadable()`): đó là hậu quả khác hẳn — mã/hồ sơ KHÔNG được dùng, và
  * câu phải nói ra điều đó. Gộp 4, không gộp 6. */
 const SYSTEM_ERROR = 'Không kết nối được máy chủ — thử lại sau'
+
+/** R11 / quyết định 23. Four sentences, one per `Stranding` shape — shortened from the three-`<p>`
+ * essay this used to be, and the email moves out of the button label into this line instead (see
+ * the abandon stage body). The zero-count sentence never mentions `mirrored`: whichever path got a
+ * profile counted with nothing local to show for it, the parent only needs to know there is
+ * nothing to lose by replacing it right now. */
+function abandonCopy(s: Stranding): string {
+  if (s.kind === 'unchecked') return 'Không đọc được dữ liệu trên máy này. Vẫn tiếp tục?'
+  if (s.stars === 0 && s.events === 0) return `Máy này có ${s.profiles} hồ sơ nhưng chưa học gì — thay được ngay.`
+  const base = `${s.profiles} hồ sơ, ${s.stars} sao và ${s.events} lượt luyện trên máy này sẽ bị thay`
+  return s.mirrored ? `${base} — một phần đã lưu lên máy chủ, có thể lấy lại sau.` : `${base}.`
+}
 
 /**
  * What signing in as another account would strand — or null ONLY when that has been established.
@@ -175,6 +187,11 @@ export function CloudStart() {
   /** The child a failed pull left un-restored, so the parent can try that same one again. */
   const [retryId, setRetryId] = useState<string | null>(null)
   const [candidates, setCandidates] = useState<Profile[] | null>(null)
+  /** The candidate currently being pulled from the picker — its cell spins in place of the fox
+   * (`ProfilePicker`'s `pendingId`), separate from `retryId`, which only ever names the single
+   * auto-restored child that landed on the `'result'` stage. */
+  const [pickingId, setPickingId] = useState<string | null>(null)
+  const navigate = useNavigate()
 
   /**
    * The profile this device minted for itself, if it is still empty (F4).
@@ -201,6 +218,11 @@ export function CloudStart() {
     setOtp('')
     setCode('')
     setStranding(null)
+    // Task 9: `info`/`retryId` are now read only inside the `'result'` stage's own body, so
+    // leaving either set would resurface a stale system message the next time this screen shows
+    // one — a card that has moved on must not still be carrying the previous failure.
+    setInfo(null)
+    setRetryId(null)
   }
 
   function openDoor(which: Door) {
@@ -245,9 +267,10 @@ export function CloudStart() {
     const restorable = merged.filter(p => remoteIds.has(p.id) && p.id !== mintedId)
 
     if (restorable.length === 0) {
-      setInfo('Tài khoản này chưa có hồ sơ nào trên máy chủ. Bắt đầu mới cho bé nhé.')
+      // Task 9 / R8: its own `'result'` stage now, not a `Notice` rattling around on top of the
+      // menu — the default title in that stage's body already says this.
       setCandidates(null)
-      setStage('menu')
+      setStage('result')
       return
     }
     if (restorable.length === 1) {
@@ -270,14 +293,23 @@ export function CloudStart() {
    */
   async function finishRestore(id: string) {
     setBusy(true)
+    // Only meaningful for the multi-candidate picker — spins that one cell in place of its fox
+    // while every other cell (and this one) is disabled underneath it.
+    setPickingId(id)
     setError(null)
     setErrorAction(null)
     const pulled = await pullProfile(id)
     setBusy(false)
+    setPickingId(null)
     if (!pulled) {
       setRetryId(id)
       setError(SYSTEM_ERROR)
       setErrorAction(() => () => { void finishRestore(id) })
+      // Task 9 / R8: the single auto-restored candidate has no picker still on screen to report
+      // next to — its failure gets the same `'result'` stage the "0 profiles" branch uses. A
+      // failure from the MULTI-candidate picker below never reaches here: `candidates` stays set,
+      // so the short-circuit return above keeps rendering that screen regardless of `stage`.
+      setStage('result')
       return
     }
     setRetryId(null)
@@ -398,25 +430,32 @@ export function CloudStart() {
     await attemptRecover()
   }
 
-  // The three stages whose error surfaces in their own `FieldRow` gutter now — the top-of-card
-  // `Notice` below is left for stages that have no field of their own to attach it to (`menu`,
-  // reached whenever `afterAuthenticated` bounces a system failure back there). Task 9 moves those
-  // into the `'result'` stage; until then this is the one place they still land.
-  const fieldStage = stage === 'email' || stage === 'email-otp' || stage === 'code'
+  // `email`/`email-otp`/`code` show their error in their own `FieldRow` gutter (`error` is passed
+  // straight to each `FieldRow` below). `retryAction` is also read directly by the top-of-card
+  // `Notice` further down, on the two stages (`menu`, `abandon`) that have no field of their own.
   const retryAction = errorAction ? { label: 'Thử lại', onClick: errorAction } : undefined
 
   if (candidates) {
     return (
       <PageShell>
         <PageBody center>
-          <Card className="flex w-full max-w-md flex-col gap-4 p-6 text-center">
-            <h1 className="font-display text-xl font-extrabold text-ink-900">Chọn hồ sơ của bé</h1>
-            <p className="text-sm font-semibold text-ink-500">Tài khoản này có {candidates.length} hồ sơ. Chọn một để khôi phục lên máy này.</p>
+          <GateCard>
+            <div>
+              <h1 className="font-display text-[18px] font-extrabold text-ink-900">Chọn hồ sơ của bé</h1>
+              <p className="mt-1 text-[13px] font-bold text-ink-500">Tài khoản này có {candidates.length} hồ sơ. Chạm để tải về máy.</p>
+            </div>
             {/* A failed pull says so HERE too, next to the picker that is still up — tapping the same
               * face again is the retry. */}
             {error && <Notice kind="error" adult role="alert" title={error} action={retryAction} />}
-            <ProfilePicker profiles={candidates} onSelect={finishRestore} busy={busy} />
-          </Card>
+            <ProfilePicker
+              profiles={candidates}
+              onSelect={finishRestore}
+              busy={busy}
+              density="compact"
+              pendingId={busy ? pickingId : null}
+            />
+            <LinkText onClick={() => { setCandidates(null); backToMenu() }}>← Chọn cách khác</LinkText>
+          </GateCard>
         </PageBody>
       </PageShell>
     )
@@ -433,19 +472,13 @@ export function CloudStart() {
             <p className="mt-1 text-[13px] font-bold text-ink-500">Khôi phục tiến độ của bé trên máy này.</p>
           </div>
 
-          {info && <Notice kind="info" adult title={info} />}
-          {!fieldStage && error && <Notice kind="error" adult role="alert" title={error} action={retryAction} />}
-          {/* A pull that failed leaves the parent one tap from trying again, on the same child —
-            * rather than back at a menu with no idea which door to take twice. Gated off on the
-            * field-owning stages: `finishRestore`'s own SYSTEM_ERROR already puts an equivalent
-            * "Thử lại" in that stage's `FieldRow` gutter (`errorAction`), and this floating button
-            * would otherwise duplicate it — exactly one retry control per failure. Stays here for
-            * `menu` (auto-restore can bounce back there) until Task 9 moves it into `'result'`. */}
-          {!fieldStage && retryId && (
-            <Button size="adult" disabled={busy} onClick={() => { void finishRestore(retryId) }} className="w-full">
-              Thử tải lại
-            </Button>
-          )}
+          {/* Task 9 / R8: `info`/`retryId` are read only inside the `'result'` stage's own body now
+            * — this used to rattle a `Notice`/floating "Thử tải lại" on top of every stage. `error`
+            * still lands here for the two stages with no field or `Notice` of their own to show it:
+            * `menu` (`afterAuthenticated`'s roster/pull-read failures) and `abandon` (the guard
+            * firing again on the confirmed retry). NOT `'result'`, which owns its own `Notice` and
+            * would otherwise show the retry control twice. */}
+          {(stage === 'menu' || stage === 'abandon') && error && <Notice kind="error" adult role="alert" title={error} action={retryAction} />}
 
           {stage === 'menu' && (
             <div className="flex flex-col gap-3">
@@ -502,67 +535,28 @@ export function CloudStart() {
             </form>
           )}
 
-        {/* The confirmation the auth contract asks for, in as many words: what is on this device,
-          * what happens to it, and the way to keep it instead. It is only ever reached when there
-          * is something real to lose — the numbers below are read off this device, not guessed. */}
+        {/* The confirmation the auth contract asks for, in as many words: what is on this device
+          * and the way to keep it instead. Only ever reached when there is something real to lose
+          * — the numbers `abandonCopy` prints are read off this device, not guessed.
+          *
+          * R11 / quyết định 23: one frame for all four `Stranding` shapes now, not a `<h2>` +
+          * 2–3 `<p>` that changed shape per branch. The email moves out of the button label
+          * ("Vẫn tiếp tục với {email}" used to grow three screens wide at 61 characters) into this
+          * copy line instead — never repeated on the button. */}
         {stage === 'abandon' && stranding && (
           <div className="flex flex-col gap-3 text-left">
-            {stranding.kind === 'holding' ? (
-              <>
-                {/* "hồ sơ", counted — the account can be holding a child who is not the one using
-                  * the iPad right now, and a parent reading "một bé" would picture the wrong one. */}
-                <h2 className="font-display text-base font-extrabold text-ink-900">
-                  Tài khoản trên máy này đang giữ tiến độ của {stranding.profiles} hồ sơ
-                </h2>
-                {/* A count is only printed when there IS one. The case this whole check exists for
-                  * — a child whose evidence is a row on the server, because the pull that would
-                  * have brought them down here failed — has zero of everything locally, and
-                  * "0 sao và 0 lượt luyện" under a warning is a reason to press on handed to a
-                  * parent who is looking for one. No line in this dialog may read as "there is
-                  * nothing here". */}
-                {stranding.stars > 0 || stranding.events > 0 ? (
-                  <p className="text-sm font-semibold text-ink-500">
-                    Tổng cộng {stranding.stars} sao và {stranding.events} lượt luyện, thuộc một tài khoản chưa liên kết email —
-                    kể cả hồ sơ của bé khác trên máy này.
-                    {stranding.mirrored && ' Một phần đã được lưu lên máy chủ dưới tài khoản đó.'}
-                  </p>
-                ) : (
-                  <p className="text-sm font-semibold text-ink-500">
-                    Tiến độ của hồ sơ này đang nằm trên máy chủ, dưới một tài khoản chưa liên kết email. Máy này chưa tải về
-                    được nên chưa hiện ra ở đây — chưa hiện không có nghĩa là không có.
-                  </p>
-                )}
-              </>
-            ) : (
-              <>
-                {/* Nothing was found and nothing was ruled out — and the parent is told which of
-                  * those two it is. Claiming "không có gì" here would be a guess wearing a fact's
-                  * clothes, in front of the one button in this app that cannot be undone. */}
-                <h2 className="font-display text-base font-extrabold text-ink-900">Chưa kiểm tra được tài khoản trên máy này</h2>
-                <p className="text-sm font-semibold text-ink-500">
-                  Máy chủ chưa trả lời, nên chưa biết tài khoản đang dùng ở đây có đang giữ tiến độ của bé nào không.
-                  Chưa kiểm tra được không có nghĩa là không có gì.
-                </p>
-              </>
-            )}
-            <p className="rounded-xl2 bg-fix-50 p-3 text-sm font-semibold text-fix-700">
-              {/* Worded to be true in both branches: with numbers above it names them, and
-                * without them it does not pretend to know what is being given up. */}
-              Nếu đăng nhập bằng {email}, máy này sẽ chuyển sang tài khoản đó, và những gì tài khoản cũ đang giữ sẽ không mở lại được nữa.
+            <h2 className="font-display text-base font-extrabold text-ink-900">Máy này đang có dữ liệu</h2>
+            <p className="text-sm font-semibold text-ink-500">Khôi phục sẽ thay bằng tài khoản của bố mẹ. Dữ liệu hiện tại:</p>
+            <p data-testid="abandon-copy" className="rounded-r10 bg-sun-50 px-2.5 py-2 text-[12px] font-bold leading-[1.45] text-sun-700">
+              {abandonCopy(stranding)} Tài khoản đăng nhập: <b>{email}</b>.
             </p>
-            <p className="text-sm font-semibold text-ink-500">
-              Muốn giữ lại? Vào <Link to="/parent" className="underline">Góc phụ huynh</Link> và liên kết email cho chính tài khoản đang có.
-            </p>
-            <Button
-              size="adult"
-              variant="outline"
-              disabled={busy}
-              onClick={() => { void sendOtp(true) }}
-              className="w-full"
-            >
-              Vẫn tiếp tục với {email}
+            <Button size="adult" disabled={busy} onClick={() => { void sendOtp(true) }} className="w-full">
+              Vẫn tiếp tục với email này
             </Button>
-            <LinkText onClick={() => { setStranding(null); setStage('email') }}>← Quay lại</LinkText>
+            <Button size="adult" variant="ghost" onClick={() => { setStranding(null); setStage('email') }} className="w-full">
+              Huỷ
+            </Button>
+            <LinkText to="/parent">Sao lưu trước ở Góc phụ huynh</LinkText>
           </div>
         )}
 
@@ -621,6 +615,28 @@ export function CloudStart() {
             <Button type="submit" size="adult" disabled={busy} className="w-full">Khôi phục</Button>
             <LinkText onClick={backToMenu}>← Chọn cách khác</LinkText>
           </form>
+        )}
+
+        {/* R8 / quyết định 21: the screen-level system failures that used to rattle a `Notice` and
+          * a floating "Thử tải lại" on top of every stage now land on their own stage instead —
+          * reached from `afterAuthenticated`'s "0 restorable profiles" branch and from
+          * `finishRestore`'s single-candidate pull failure. Both read as the same generic outcome
+          * (the design's own stage ⑧ uses one sentence for either), and "Thử tải lại" re-runs
+          * whichever one actually failed: the specific pull when `retryId` names it, the whole
+          * fetch-and-adopt round trip otherwise. */}
+        {stage === 'result' && (
+          <div className="flex flex-col gap-3">
+            <Notice
+              kind="warn"
+              adult
+              title={info ?? 'Tài khoản này chưa có hồ sơ nào để khôi phục. Bắt đầu mới cho bé hoặc thử email khác.'}
+            />
+            {retryId
+              ? <Button size="adult" variant="outline" disabled={busy} onClick={() => { void finishRestore(retryId) }} className="w-full">Thử tải lại</Button>
+              : <Button size="adult" variant="outline" disabled={busy} onClick={() => { void afterAuthenticated() }} className="w-full">Thử tải lại</Button>}
+            <Button size="adult" disabled={busy} onClick={() => navigate('/')} className="w-full">Bắt đầu mới cho bé</Button>
+            <LinkText onClick={backToMenu}>← Về menu</LinkText>
+          </div>
         )}
         </GateCard>
       </PageBody>

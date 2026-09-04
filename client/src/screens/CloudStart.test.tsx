@@ -58,6 +58,16 @@ import { CloudStart, describeAuthError, describeRecoverError } from './CloudStar
 const MINTED = '11111111-2222-4333-8444-555555555555'
 const SOC = '22222222-3333-4444-8555-666666666666'
 const CAO = '33333333-4444-4555-8666-777777777777'
+const GAU = '44444444-5555-4666-8777-888888888888'
+
+/** Bare aliases for the two mocks Task 9's own failing tests (brief §Step 1) call by these short
+ * names — same `vi.fn()` instances as `profileState.fetchRemoteProfiles` / `sync.pullProfile`. */
+const { fetchRemoteProfiles } = profileState
+const { pullProfile } = sync
+
+/** The 61-character email `shoot.mjs` also uses for the abandon screenshot — long enough that it
+ * used to make the abandon button three screens wide (R11 / quyết định 23). */
+const EMAIL61 = 'nguyenhoangbaongocanhthu.phuhuynh.speakup2026@examplemail.com'
 
 function renderStart() {
   return render(
@@ -109,6 +119,72 @@ async function reachOtp() {
   renderStart()
   openEmailDoor()
   fireEvent.change(screen.getByLabelText('Email của bố mẹ'), { target: { value: 'bome@example.com' } })
+  await act(async () => { fireEvent.submit(screen.getByLabelText('Email của bố mẹ').closest('form')!) })
+}
+
+/** `reachOtp`, then a successful OTP submit — carries the screen wherever `afterAuthenticated`
+ * sends it (menu, `'result'`, straight to a restore, or the multi-candidate picker). */
+async function passOtp(token = '123456') {
+  await reachOtp()
+  await act(async () => {
+    fireEvent.change(screen.getByLabelText('Mã 6 số'), { target: { value: token } })
+    fireEvent.submit(screen.getByLabelText('Mã 6 số').closest('form')!)
+  })
+}
+
+/** The account owns exactly one restorable profile, so `afterAuthenticated` auto-restores it —
+ * no picker ever shows, which is exactly what makes a failed pull here land on `'result'` rather
+ * than next to a still-open picker. */
+async function pickOneProfile() {
+  fetchRemoteProfiles.mockResolvedValue([profile(SOC, 'Sóc')])
+  await passOtp()
+}
+
+/** `n` restorable profiles, reached through the ordinary email+OTP flow — the multi-candidate
+ * picker (Task 9's `density='compact'` grid), not the single-profile auto-restore above. */
+async function reachPicker(n: number) {
+  const pool = [SOC, CAO, GAU].slice(0, n)
+  fetchRemoteProfiles.mockResolvedValue(pool.map((id, i) => profile(id, `Bé ${i + 1}`)))
+  await passOtp()
+}
+
+/**
+ * Reaches the `'abandon'` stage with a `Stranding` shaped exactly by `opts` — either the literal
+ * string `'unchecked'`, or `{ profiles, stars, events, mirrored }` for the `'holding'` kind.
+ *
+ * `assessStranding` counts a profile through any of three routes (real local history, "the server
+ * knows a profile this device doesn't", or `hasMirroredData`) — and the last two ALSO force its
+ * `mirrored` flag true, whatever `hasMirroredData` says on its own. So a caller asking for
+ * `mirrored: false` can only be built from real local history: `SOC` carries the stars, `CAO`
+ * carries the events (each alone is enough to count as "has history"), and neither is offered
+ * through `fetchRemoteProfiles`. The zero-count case has no such constraint — `abandonCopy` never
+ * reads `mirrored` once stars and events are both zero — so it is simpler to build through
+ * `fetchRemoteProfiles` alone (no local data to seed at all).
+ */
+async function reachAbandon(opts: { profiles: number; stars: number; events: number; mirrored: boolean } | 'unchecked') {
+  localStorage.clear()
+  bootDevice()
+  sync.hasMirroredData.mockReturnValue(false)
+  auth.signInWithEmail.mockResolvedValue({ ok: false, error: 'anonymous-session-in-use' })
+
+  if (opts === 'unchecked') {
+    fetchRemoteProfiles.mockResolvedValue(null)
+  } else if (opts.stars === 0 && opts.events === 0) {
+    fetchRemoteProfiles.mockResolvedValue([profile(SOC, 'Sóc'), profile(CAO, 'Cáo')].slice(0, opts.profiles))
+  } else {
+    fetchRemoteProfiles.mockResolvedValue([])
+    localStorage.setItem('speakup.profiles', JSON.stringify([profile(MINTED), profile(SOC, 'Sóc'), profile(CAO, 'Cáo')]))
+    localStorage.setItem('speakup.profile', MINTED)
+    localStorage.setItem(`speakup.${SOC}.stars`, JSON.stringify({ 'sword:cat': opts.stars }))
+    localStorage.setItem(`speakup.${CAO}.activity`, JSON.stringify(
+      Array.from({ length: opts.events }, (_, i) => ({ ts: 1000 + i, kind: 'word', id: `w-${i}` })),
+    ))
+    if (opts.mirrored) sync.hasMirroredData.mockImplementation((id: string) => id === CAO)
+  }
+
+  renderStart()
+  openEmailDoor()
+  fireEvent.change(screen.getByLabelText('Email của bố mẹ'), { target: { value: EMAIL61 } })
   await act(async () => { fireEvent.submit(screen.getByLabelText('Email của bố mẹ').closest('form')!) })
 }
 
@@ -231,12 +307,10 @@ describe('the email door', () => {
     // One attempt, without the flag, and it stopped there.
     expect(auth.signInWithEmail).toHaveBeenCalledTimes(1)
     expect(auth.signInWithEmail).toHaveBeenCalledWith('bome@example.com', {})
-    expect(screen.getByText(/đang giữ tiến độ của 1 hồ sơ/)).toBeInTheDocument()
     // Named, in numbers read off this account — not a vague warning.
-    expect(screen.getByText(/3 sao và 2 lượt luyện/)).toBeInTheDocument()
-    expect(screen.getByText(/sẽ không mở lại được nữa/)).toBeInTheDocument()
+    expect(screen.getByTestId('abandon-copy')).toHaveTextContent('1 hồ sơ, 3 sao và 2 lượt luyện trên máy này sẽ bị thay.')
     // …and the way to keep it.
-    expect(screen.getByRole('link', { name: 'Góc phụ huynh' })).toHaveAttribute('href', '/parent')
+    expect(screen.getByRole('link', { name: 'Sao lưu trước ở Góc phụ huynh' })).toHaveAttribute('href', '/parent')
   })
 
   /**
@@ -264,9 +338,7 @@ describe('the email door', () => {
     // Not abandoned by itself: one attempt, no flag, and a confirmation naming the sibling's work.
     expect(auth.signInWithEmail).toHaveBeenCalledTimes(1)
     expect(auth.signInWithEmail).toHaveBeenCalledWith('bome@example.com', {})
-    expect(screen.getByText(/đang giữ tiến độ của 1 hồ sơ/)).toBeInTheDocument()
-    expect(screen.getByText(/5 sao và 40 lượt luyện/)).toBeInTheDocument()
-    expect(screen.getByText(/kể cả hồ sơ của bé khác trên máy này/)).toBeInTheDocument()
+    expect(screen.getByTestId('abandon-copy')).toHaveTextContent('1 hồ sơ, 5 sao và 40 lượt luyện trên máy này sẽ bị thay.')
   })
 
   /**
@@ -289,7 +361,7 @@ describe('the email door', () => {
 
     expect(auth.signInWithEmail).toHaveBeenCalledTimes(1)
     expect(auth.signInWithEmail).not.toHaveBeenCalledWith('bome@example.com', { abandonAnonymous: true })
-    expect(screen.getByText(/8 sao và 200 lượt luyện/)).toBeInTheDocument()
+    expect(screen.getByTestId('abandon-copy')).toHaveTextContent('1 hồ sơ, 8 sao và 200 lượt luyện trên máy này sẽ bị thay.')
   })
 
   it('sees a child the account owns that this roster has forgotten', async () => {
@@ -301,8 +373,8 @@ describe('the email door', () => {
     await goToEmail()
 
     expect(auth.signInWithEmail).toHaveBeenCalledTimes(1)
-    // Nothing local to count, so the dialog says where the progress IS rather than counting it.
-    expect(screen.getByText(/đang nằm trên máy chủ/)).toBeInTheDocument()
+    // Nothing local to count — the zero-count sentence, not "0 sao và 0 lượt" under a warning.
+    expect(screen.getByTestId('abandon-copy')).toHaveTextContent('Máy này có 1 hồ sơ nhưng chưa học gì — thay được ngay.')
   })
 
   /**
@@ -325,7 +397,7 @@ describe('the email door', () => {
 
     expect(auth.signInWithEmail).toHaveBeenCalledTimes(1)
     expect(auth.signInWithEmail).not.toHaveBeenCalledWith('bome@example.com', { abandonAnonymous: true })
-    expect(screen.getByText(/đang giữ tiến độ của 1 hồ sơ/)).toBeInTheDocument()
+    expect(screen.getByTestId('abandon-copy')).toHaveTextContent('Máy này có 1 hồ sơ nhưng chưa học gì — thay được ngay.')
   })
 
   it('still continues by itself when the only row the account owns is the empty one', async () => {
@@ -356,11 +428,10 @@ describe('the email door', () => {
 
     expect(auth.signInWithEmail).toHaveBeenCalledTimes(1)
     expect(auth.signInWithEmail).not.toHaveBeenCalledWith('bome@example.com', { abandonAnonymous: true })
-    expect(screen.getByText('Chưa kiểm tra được tài khoản trên máy này')).toBeInTheDocument()
     // …and it does not dress the unknown up as a finding, in either direction.
-    expect(screen.getByText(/không có nghĩa là không có gì/)).toBeInTheDocument()
+    expect(screen.getByTestId('abandon-copy')).toHaveTextContent('Không đọc được dữ liệu trên máy này. Vẫn tiếp tục?')
     // The parent may still go ahead — knowing that nobody checked.
-    expect(screen.getByText(/Vẫn tiếp tục với bome@example.com/)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Vẫn tiếp tục với email này' })).toBeInTheDocument()
   })
 
   /**
@@ -411,14 +482,14 @@ describe('the email door', () => {
 
     await goToEmail()
 
-    expect(screen.getByText(/đang nằm trên máy chủ/)).toBeInTheDocument()
+    // Nothing local to count — the zero-count sentence, not "0 sao và 0 lượt" under a warning.
+    expect(screen.getByTestId('abandon-copy')).toHaveTextContent('Máy này có 1 hồ sơ nhưng chưa học gì — thay được ngay.')
   })
 
   /**
    * The dialog must never argue against its own warning. In the case round 3 exists for the
-   * evidence is a row on the server, so every local sum is zero — and "0 sao và 0 lượt luyện"
-   * printed under "sẽ không mở lại được nữa" is a reason to press on, handed to a parent who is
-   * already looking for one.
+   * evidence is a row on the server, so every local sum is zero — and the zero-count sentence
+   * (R11 / quyết định 23) says so plainly rather than printing "0 sao và 0 lượt luyện".
    */
   it('never prints a zero count next to the warning', async () => {
     sync.hasMirroredData.mockReturnValue(true)
@@ -426,10 +497,9 @@ describe('the email door', () => {
 
     await goToEmail()
 
-    const dialog = screen.getByText(/đang giữ tiến độ của/).closest('div')!
-    expect(dialog.textContent).not.toMatch(/(^|[^0-9])0 (sao|lượt)/)
-    // …and the irreversibility line is still the one thing it cannot lose.
-    expect(dialog.textContent).toMatch(/không mở lại được nữa/)
+    const copy = screen.getByTestId('abandon-copy')
+    expect(copy.textContent).not.toMatch(/(^|[^0-9])0 (sao|lượt)/)
+    expect(copy).toHaveTextContent('chưa học gì — thay được ngay')
   })
 
   it('passes the flag only after the parent says so in as many words', async () => {
@@ -438,7 +508,7 @@ describe('the email door', () => {
     await goToEmail()
 
     auth.signInWithEmail.mockResolvedValue({ ok: true, userId: 'u2' })
-    await act(async () => { fireEvent.click(screen.getByText(/Vẫn tiếp tục với bome@example.com/)) })
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Vẫn tiếp tục với email này' })) })
 
     expect(auth.signInWithEmail).toHaveBeenLastCalledWith('bome@example.com', { abandonAnonymous: true })
     expect(screen.getByText(/Nhập mã 6 số vừa gửi tới bome@example.com/)).toBeInTheDocument()
@@ -449,7 +519,7 @@ describe('the email door', () => {
     auth.signInWithEmail.mockResolvedValue({ ok: false, error: 'anonymous-session-in-use' })
     await goToEmail()
 
-    fireEvent.click(screen.getByText('← Quay lại'))
+    fireEvent.click(screen.getByRole('button', { name: 'Huỷ' }))
 
     expect(screen.getByLabelText('Email của bố mẹ')).toBeInTheDocument()
     expect(auth.signInWithEmail).toHaveBeenCalledTimes(1)
@@ -488,7 +558,7 @@ describe('the email door', () => {
     setStars('sword:cat', 3)
     auth.signInWithEmail.mockResolvedValue({ ok: false, error: 'anonymous-session-in-use' })
     await goToEmail()
-    await act(async () => { fireEvent.click(screen.getByText(/Vẫn tiếp tục với bome@example.com/)) })
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Vẫn tiếp tục với email này' })) })
 
     const alert = screen.getByRole('alert')
     expect(alert).toHaveTextContent('Góc phụ huynh')
@@ -672,22 +742,22 @@ describe('the email door', () => {
 
       expect(sync.pullProfile).toHaveBeenCalledWith(SOC)
       expect(profileState.switchProfile).not.toHaveBeenCalled()
-      // R10 / quyết định 22: the pull failure is one of the four merged system errors now, shown
-      // in the still-mounted 'email-otp' FieldRow rather than the top-of-card alert.
-      expect(screen.getByTestId('field-error')).toHaveTextContent('Không kết nối được máy chủ')
+      // Task 9 / R8: the one restorable candidate auto-restores with no picker on screen to
+      // report next to, so its failure lands on the screen-level `'result'` stage now, not the
+      // 'email-otp' FieldRow gutter.
+      expect(screen.getByRole('status')).toHaveTextContent('Tài khoản này chưa có hồ sơ nào để khôi phục')
     })
 
-    it('offers the same child again rather than the menu, through a single retry control', async () => {
+    it('offers the same child again rather than the menu, through the result stage', async () => {
       await restoreWithFailedPull()
 
-      // Fix round 1: the field-owning stage ('email-otp') no longer also floats the old
-      // unconditional "Thử tải lại" button — exactly one retry control per failure, the
-      // `FieldRow`'s own "Thử lại" (wired to `errorAction`, which re-runs `finishRestore`).
-      expect(screen.queryByText('Thử tải lại')).not.toBeInTheDocument()
-      expect(screen.getAllByRole('button', { name: 'Thử lại' })).toHaveLength(1)
+      // Exactly one retry control, and it is the `'result'` stage's own "Thử tải lại" — not the
+      // FieldRow's short "Thử lại" (there is no field left mounted to own one).
+      expect(screen.queryByRole('button', { name: 'Thử lại' })).toBeNull()
+      expect(screen.getAllByRole('button', { name: 'Thử tải lại' })).toHaveLength(1)
 
       sync.pullProfile.mockResolvedValue(true)
-      await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Thử lại' })) })
+      await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Thử tải lại' })) })
 
       expect(sync.pullProfile).toHaveBeenLastCalledWith(SOC)
       expect(profileState.switchProfile).toHaveBeenCalledWith(SOC)
@@ -950,5 +1020,68 @@ describe('the round-4 GateCard frame', () => {
         expect(el.className).not.toMatch(/min-h-\[64px\]|md:min-h-\[64px\]|md:h-16/)
       }
     }
+  })
+})
+
+/**
+ * Task 9 (brief §2 A2, R8/R11, decisions 21/23) — CloudStart part 2: the `'result'` stage that
+ * absorbs the top-of-card `info`/`retryId`, the four-line abandon copy with a fixed button label,
+ * and the 72px compact picker.
+ */
+describe('the result stage, abandon copy, and compact picker (Task 9)', () => {
+  it('an account with no restorable profile lands on its own result stage, not back at the menu', async () => {
+    fetchRemoteProfiles.mockResolvedValue([])
+    await passOtp()
+
+    expect(screen.getByRole('status')).toHaveTextContent('Tài khoản này chưa có hồ sơ nào để khôi phục')
+    expect(screen.getByRole('button', { name: 'Thử tải lại' })).toHaveClass('min-h-[44px]')
+    expect(screen.getByRole('button', { name: 'Bắt đầu mới cho bé' })).toHaveClass('bg-coral-500')
+    expect(screen.getByRole('button', { name: '← Về menu' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Tôi có email đã liên kết' })).toBeNull()
+  })
+
+  it('a failed pull shows its retry inside the result stage, never floating on top of every card', async () => {
+    pullProfile.mockResolvedValue(false)
+    await pickOneProfile()
+
+    const card = screen.getByTestId('gate-card')
+    expect(within(card).getByRole('button', { name: 'Thử tải lại' })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: '← Về menu' }))
+    expect(screen.getByRole('button', { name: 'Tôi có mã khôi phục' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Thử tải lại' })).toBeNull() // không còn nổi trên menu
+  })
+
+  it('abandon prints one of the four sun-tinted copy lines and never the email in the button', async () => {
+    await reachAbandon({ profiles: 2, stars: 128, events: 340, mirrored: false })
+
+    expect(screen.getByTestId('abandon-copy')).toHaveClass('rounded-r10', 'bg-sun-50', 'text-[12px]')
+    expect(screen.getByTestId('abandon-copy')).toHaveTextContent('2 hồ sơ, 128 sao và 340 lượt luyện trên máy này sẽ bị thay.')
+    const go = screen.getByRole('button', { name: 'Vẫn tiếp tục với email này' })
+    expect(go).not.toHaveTextContent(EMAIL61)
+    expect(screen.getByText(EMAIL61)).toBeInTheDocument() // email hiện ở dòng copy
+    expect(screen.getByRole('button', { name: 'Huỷ' })).toHaveClass('border-dashed')
+    expect(screen.getByRole('link', { name: 'Sao lưu trước ở Góc phụ huynh' })).toHaveAttribute('href', '/parent')
+  })
+
+  it('the other three abandon branches keep their own sentence', async () => {
+    await reachAbandon({ profiles: 2, stars: 128, events: 340, mirrored: true })
+    expect(screen.getByTestId('abandon-copy')).toHaveTextContent('một phần đã lưu lên máy chủ, có thể lấy lại sau')
+
+    cleanup()
+    await reachAbandon({ profiles: 1, stars: 0, events: 0, mirrored: false })
+    expect(screen.getByTestId('abandon-copy')).toHaveTextContent('chưa học gì — thay được ngay')
+
+    cleanup()
+    await reachAbandon('unchecked')
+    expect(screen.getByTestId('abandon-copy')).toHaveTextContent('Không đọc được dữ liệu trên máy này. Vẫn tiếp tục?')
+  })
+
+  it('the profile picker stage uses the 72px compact cells and the busy spinner', async () => {
+    await reachPicker(3)
+
+    expect(screen.getByText('Tài khoản này có 3 hồ sơ. Chạm để tải về máy.')).toBeInTheDocument()
+    expect(screen.getAllByRole('button')[0]).toHaveClass('h-[72px]')
+    fireEvent.click(screen.getAllByRole('button')[1])
+    expect(screen.getByTestId('cell-spinner')).toBeInTheDocument()
   })
 })

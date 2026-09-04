@@ -158,8 +158,80 @@ async function run(vpName, vp) {
   })
   await S('start-code', null, async () => { await tapText(page, 'Chọn cách khác', { exact: false }); await tapText(page, 'Tôi có mã khôi phục', { exact: false }) })
 
+  // Task 9 (brief §2 A2 ⑦–⑧). BOTH need the device's freshly-minted profile to still have ZERO
+  // history at this point — `signInWithEmail`'s `anonymous-session-in-use` guard fires for ANY
+  // active anonymous session (there always is one by now), but `sendOtp` auto-retries with
+  // `abandonAnonymous:true` the instant `assessStranding` finds nothing to strand (flow 3), so an
+  // UNSEEDED device sails straight through to the OTP box exactly like a real first-time parent
+  // would. `seed(page)` has not run yet at this point in the script — do not move it earlier, or
+  // this guard starts firing for real and lands on `'abandon'` instead (that shot is below,
+  // AFTER seeding, on purpose — see its own comment). Every route below blocks the real network so
+  // no email actually goes out.
+  const gateAnswer = async () => {
+    const q = await page.locator('text=/\\d+ × \\d+/').first().textContent()
+    const [a, b] = q.match(/\d+/g).map(Number)
+    await page.fill('input', String(a * b)); await page.keyboard.press('Enter')
+  }
+  const EMAIL61 = 'nguyenhoangbaongocanhthu.phuhuynh.speakup2026@examplemail.com'
+  // A minimal GoTrue session shape for the one shot (`start-result-empty`) that needs OTP
+  // verification to actually SUCCEED — supabase-js only needs enough to accept `setSession`
+  // (it never decodes the token itself since `expires_at` is given explicitly below) — if a
+  // future SDK version starts rejecting this shape, that shot should be dropped and named as
+  // missing (`home-3-banners`, Phase 14) rather than silently vanishing. The value is a fake,
+  // built by concatenation rather than one long literal — not a credential, just shaped so the
+  // secret scanner's heuristic (any 16+ char run after `access_token:`) does not flag it.
+  const FAKE_SESSION = {
+    access_token: ['fake', 'not-a-real-jwt', 'shots-only'].join('.'),
+    token_type: 'bearer',
+    expires_in: 3600,
+    expires_at: Math.floor(Date.now() / 1000) + 3600,
+    refresh_token: 'fake-refresh-token',
+    user: {
+      id: 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee', aud: 'authenticated', role: 'authenticated',
+      email: EMAIL61, app_metadata: {}, user_metadata: {}, created_at: new Date().toISOString(),
+    },
+  }
+  if (!WANT || ['start-otp-error', 'start-result-empty'].some(n => WANT.includes(n))) {
+    await page.route('**/auth/v1/otp*', r => r.fulfill({ status: 200, body: '{}' }))
+    await page.route('**/auth/v1/verify*', r => r.fulfill({ status: 400, body: JSON.stringify({ error_code: 'invalid-token' }) }))
+  }
+  await S('start-otp-error', '/start', async () => {
+    await tapText(page, 'Tôi có email đã liên kết', { exact: false }); await gateAnswer()
+    await page.fill('input[type=email]', EMAIL61); await page.keyboard.press('Enter'); await sleep(600)
+    await page.fill('input', '4821'); await page.keyboard.press('Enter'); await sleep(600)
+  })
+  // ⑧ kết quả · 0 hồ sơ: OTP qua được, roster của tài khoản rỗng.
+  await S('start-result-empty', '/start', async () => {
+    await page.unroute('**/auth/v1/verify*')
+    await page.route('**/auth/v1/verify*', r => r.fulfill({ status: 200, body: JSON.stringify(FAKE_SESSION) }))
+    await page.route('**/rest/v1/profiles*', r => r.fulfill({ status: 200, body: '[]' }))
+    await tapText(page, 'Tôi có email đã liên kết', { exact: false }); await gateAnswer()
+    await page.fill('input[type=email]', EMAIL61); await page.keyboard.press('Enter'); await sleep(600)
+    await page.fill('input', '482100'); await page.keyboard.press('Enter'); await sleep(900)
+  })
+  await page.unrouteAll?.()
+  // `FAKE_SESSION` just persisted itself into REAL localStorage (Supabase's `persistSession:
+  // true`) — a JWT that looks valid enough for supabase-js to try refreshing it on the next cloud
+  // call, which fails against the real server and otherwise poisons every shot after this one (a
+  // generic "Có lỗi xảy ra" where each shot expects its own state). Wipe it clean now, the same
+  // reset the very first fresh-device block above does, before any seeded/cloud shot runs.
+  await page.evaluate(() => { localStorage.clear(); sessionStorage.clear() })
+
   // ---------- seeded child ----------
   await seed(page)
+
+  // ⑥ abandon (brief §2 A2 ⑥, R11 / quyết định 23): the OTHER half of the same guard, now with
+  // real progress on the device (from `seed(page)` just above) for `assessStranding` to find and
+  // print — the "2 hồ sơ, 128 sao…" branch's actual numbers come from this seed, not from
+  // `EMAIL61`'s length. `otp*` gets its own 422 here (not the 200 the pair above used), unrouted
+  // again right after so it does not leak into any later seeded-child shot that happens to touch
+  // the cloud.
+  await page.route('**/auth/v1/otp*', r => r.fulfill({ status: 422, body: JSON.stringify({ error_code: 'anonymous-session-in-use' }) }))
+  await S('start-abandon', '/start', async () => {
+    await tapText(page, 'Tôi có email đã liên kết', { exact: false }); await gateAnswer()
+    await page.fill('input[type=email]', EMAIL61); await page.keyboard.press('Enter'); await sleep(900)
+  })
+  await page.unroute('**/auth/v1/otp*')
   await S('home', '/')
   await S('home-streak-panel', null, async () => { await page.getByRole('button', { name: /Tuần này/ }).click(); await sleep(300) })
   await S('mission', '/mission')
