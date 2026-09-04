@@ -340,3 +340,152 @@ describe('two children, one iPad', () => {
     expect(screen.getByText(/Ai đang học nào/)).toBeInTheDocument()
   })
 })
+
+/**
+ * Round 4 R5/R7 — the redraw: a cold open is a full-screen shape (decision 18), a resume is an
+ * overlay dimming the app rather than replacing it (decision 19), and a `sessionStorage` that
+ * cannot write says so instead of failing silently (R7 / decision 19's "storage lỗi" line).
+ */
+const BE1 = '11111111-0000-4000-8000-000000000001'
+const BE2 = '11111111-0000-4000-8000-000000000002'
+const BE3 = '11111111-0000-4000-8000-000000000003'
+const BE4 = '11111111-0000-4000-8000-000000000004'
+const BE5 = '11111111-0000-4000-8000-000000000005'
+const BE6 = '11111111-0000-4000-8000-000000000006'
+const BE7 = '11111111-0000-4000-8000-000000000007'
+const BE8 = '11111111-0000-4000-8000-000000000008'
+
+function seedEight() {
+  seedRoster([
+    { id: BE1, name: 'Sóc' }, { id: BE2, name: 'Cáo' }, { id: BE3, name: 'Gấu' }, { id: BE4, name: 'Thỏ' },
+    { id: BE5, name: 'Nai' }, { id: BE6, name: 'Dê' }, { id: BE7, name: 'Voi' }, { id: BE8, name: 'Hổ' },
+  ], BE1)
+}
+
+describe('the card itself (round 4 R5)', () => {
+  beforeEach(() => {
+    seedRoster([{ id: SOC, name: 'Sóc' }, { id: CAO, name: 'Cáo' }], SOC)
+  })
+
+  it('heads the card with Foxy beside the title and sub, both inside gate-card', () => {
+    renderGate()
+
+    expect(screen.getByTestId('gate-card')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Ai đang học nào? 👋')
+    expect(screen.getByText('Chạm vào tên của con nhé.')).toHaveClass('text-[13px]')
+    expect(screen.getByTestId('foxy')).toBeInTheDocument()
+  })
+})
+
+describe('cold open, full screen (decision 18)', () => {
+  it('a one-profile device never renders the gate, not even for a frame', () => {
+    seedRoster([{ id: SOC, name: 'Sóc' }], SOC)
+
+    renderGate()
+
+    expect(screen.queryByTestId('gate-card')).toBeNull()
+  })
+
+  it('a cold start with 3 profiles is a full screen: card + blobs, no app behind, no Back', () => {
+    seedRoster([{ id: SOC, name: 'Sóc' }, { id: CAO, name: 'Cáo' }, { id: BE1, name: 'Gấu' }], SOC)
+
+    renderGate()
+
+    expect(screen.getByTestId('gate-card')).toBeInTheDocument()
+    expect(screen.getByTestId('gate-blobs')).toBeInTheDocument()
+    expect(screen.queryByText('màn hình chính')).toBeNull()
+    expect(screen.queryByRole('link', { name: /Về/ })).toBeNull()
+    // 3 profiles is `ProfilePicker`'s `row` density: one row of 96px cells.
+    expect(screen.getByTestId('picker')).toHaveClass('flex')
+  })
+
+  it('8 profiles are the 2/4-column 88px grid inside a 380px scroller with a footer', () => {
+    seedEight()
+
+    renderGate()
+
+    expect(screen.getByTestId('picker')).toHaveClass('grid', 'grid-cols-2', 'md:grid-cols-4')
+    expect(screen.getByTestId('picker-scroll')).toHaveClass('max-h-[380px]')
+    expect(screen.getByText('8 hồ sơ · cuộn xem thêm')).toBeInTheDocument()
+  })
+})
+
+describe('resume overlay (decision 19)', () => {
+  beforeEach(() => {
+    seedRoster([{ id: SOC, name: 'Sóc' }, { id: CAO, name: 'Cáo' }, { id: BE1, name: 'Gấu' }], SOC)
+    chosenInSession(SOC)
+  })
+
+  it('is an overlay at z-40 — under Toast, not the old z-50 — with the app blurred behind it', () => {
+    renderGate()
+    expect(screen.queryByTestId('profile-reask')).not.toBeInTheDocument()
+
+    vi.spyOn(Date, 'now').mockReturnValue(Date.now() + 6 * 60_000)
+    fireEvent(document, new Event('visibilitychange'))
+
+    const overlay = screen.getByTestId('profile-reask')
+    expect(overlay).toHaveClass('fixed', 'inset-0', 'z-40', 'bg-[rgba(74,59,51,.45)]')
+    expect(overlay.className).not.toMatch(/z-50/)
+    expect(screen.getByTestId('app-behind')).toHaveClass('blur-[2px]', 'opacity-60')
+    expect(screen.getByText('màn hình chính')).toBeInTheDocument()
+  })
+})
+
+describe('selecting a profile (state ⑤)', () => {
+  beforeEach(() => {
+    seedRoster([{ id: SOC, name: 'Sóc' }, { id: CAO, name: 'Cáo' }, { id: BE1, name: 'Gấu' }], SOC)
+  })
+
+  it('closes at once for the profile already active — no pending cell, no reload', () => {
+    renderGate()
+
+    fireEvent.click(screen.getByRole('button', { name: /Sóc/ }))
+
+    expect(screen.queryByTestId('gate-card')).toBeNull()
+    expect(screen.queryByTestId('cell-spinner')).toBeNull()
+    expect(profileState.switchProfile).not.toHaveBeenCalled()
+  })
+
+  it('spins the tapped cell for another profile, then hands off to switchProfile', () => {
+    renderGate()
+
+    fireEvent.click(screen.getByRole('button', { name: /Cáo/ }))
+
+    expect(screen.getByTestId('cell-spinner')).toBeInTheDocument()
+    expect(profileState.switchProfile).toHaveBeenCalledWith(CAO)
+  })
+})
+
+describe('a broken sessionStorage (R7 / state ⑥)', () => {
+  beforeEach(() => {
+    // Seed the roster first, then break `setItem` — nothing under test writes to `localStorage`
+    // again after this point (the roster is only ever read, and `switchProfile` is mocked away),
+    // so a blanket `Storage.prototype` spy only ever bites the `sessionStorage.setItem` this state
+    // is actually about.
+    seedRoster([{ id: SOC, name: 'Sóc' }, { id: CAO, name: 'Cáo' }, { id: BE1, name: 'Gấu' }], SOC)
+    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new Error('quota') })
+  })
+
+  it('does not change the re-asking behaviour: the choice is never actually remembered', () => {
+    renderGate()
+
+    fireEvent.click(screen.getByRole('button', { name: /Sóc/ }))
+    expect(screen.queryByTestId('gate-card')).toBeNull()
+
+    // The mark could not be written, so a fresh mount (the next app start) still finds nothing —
+    // exactly the "sẽ hỏi lại lần sau" the notice promises.
+    expect(sessionStorage.getItem('speakup.profileChosen')).toBeNull()
+  })
+
+  it('adds one 12px info line inside the still-open card for a profile switch', () => {
+    renderGate()
+
+    // A non-active profile keeps the card open (pendingId branch) — the notice this state adds is
+    // only ever seen on a card that is still on screen.
+    fireEvent.click(screen.getByRole('button', { name: /Cáo/ }))
+
+    const notice = screen.getByTestId('storage-broken')
+    expect(notice).toHaveTextContent('Không nhớ được lựa chọn — sẽ hỏi lại lần sau')
+    expect(notice).toHaveClass('bg-teal-50')
+  })
+})

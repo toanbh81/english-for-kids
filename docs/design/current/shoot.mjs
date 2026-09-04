@@ -393,6 +393,41 @@ async function run(vpName, vp) {
   }
   await seed(page, { profiles: true })
   await S('profile-gate', '/')
+  // Vòng 4 §2 A1 — trường hợp xấu nhất: 8 hồ sơ, 5 tên "Bé" trùng, 1 tên 29 ký tự, 3 kiểu dòng phân
+  // biệt (ngày · ngày+giờ · mã). 4 hàng × 88 + 3 × gap 8 = 376 ≤ 380 ⇒ hồ sơ thứ 9 mới cuộn.
+  if (!WANT || WANT.includes('profile-gate-8')) {
+    await page.evaluate(() => {
+      const id = localStorage.getItem('speakup.profile')
+      const D = 24 * 3600e3, now = Date.now()
+      const mk = (name, created) => ({ id: crypto.randomUUID(), name, avatar: '🦊', created })
+      localStorage.setItem('speakup.profiles', JSON.stringify([
+        { id, name: 'Bé', avatar: '🦊', created: now - 10 * D },
+        mk('Nguyễn Hoàng Bảo Ngọc Anh Thư', now - 3 * D),
+        mk('Bé', now - 2 * D), mk('Bé', now - 2 * D + 3600e3), mk('Bé', now - 1 * D),
+        mk('Bé', 0), mk('Sóc', now - 5 * D), mk('Cáo', now - 4 * D),
+      ]))
+      sessionStorage.removeItem('speakup.profileChosen')
+    })
+    await S('profile-gate-8', '/')
+  }
+  // ④ quay lại sau ≥5 phút: mark MỚI trước khi nạp trang — để mount này vào thẳng app thật (không
+  // phải màn toàn màn hình) — rồi tự hoá cũ 6 phút ngay trên app đang sống (không `go()` lần 2: nạp
+  // lại là mount mới, `chosen` lại đọc mark đã cũ và vào thẳng màn toàn màn hình, `reasking` sinh ra
+  // sau đó chẳng còn gì để đè lên) + một `visibilitychange` để `resume()` chạy trên app thật.
+  if (!WANT || WANT.includes('profile-gate-reask')) {
+    await page.evaluate(() => {
+      const id = localStorage.getItem('speakup.profile')
+      sessionStorage.setItem('speakup.profileChosen', JSON.stringify({ id, at: Date.now() }))
+    })
+    await go(page, '/')
+    await page.evaluate(() => {
+      const id = localStorage.getItem('speakup.profile')
+      sessionStorage.setItem('speakup.profileChosen', JSON.stringify({ id, at: Date.now() - 6 * 60e3 }))
+    })
+    await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')))
+    await sleep(400)
+    await S('profile-gate-reask', null)
+  }
   await S('parent-dashboard-profiles', '/parent', async () => {
     await page.getByRole('button', { pressed: true }).first().click({ timeout: 5000 })
     await sleep(600)
