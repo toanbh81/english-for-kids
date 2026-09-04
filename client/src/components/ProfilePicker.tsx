@@ -1,21 +1,31 @@
 import type { Profile } from '../cloud/profileState'
-import { shortName } from '../cloud/profileState'
 
 /**
  * A grid of children to tap — flow 3/4's restore picker ("more than one profile came back, which
  * one?"), the parent screen's profile list, and flow 6's app-start "tap your face". One component,
  * because all three are the same question: which namespace should this device read next.
  *
- * Held to the 64 px tap floor: two of the three call sites sit behind the parent gate, but the
- * app-start one is the child's own screen, and a parent's thumb is not smaller than a child's
- * anyway.
+ * Held to the adult group's rule (round 4 / R3): visible boxes are 28/32/36/44, hit area ≥44 — no
+ * 56/64 child-sized targets in this group. `ProfileGate`'s app-start use is the child's own screen,
+ * but the other two call sites live behind the parent gate, and this is one component either way.
  */
+type Density = 'auto' | 'row' | 'grid' | 'compact'
+
 type Props = {
   profiles: Profile[]
   onSelect: (id: string) => void
   /** Marked, not disabled — tapping the active profile again is harmless. */
   activeId?: string | null
   busy?: boolean
+  /** `auto` (default) derives the layout from `profiles.length`: 2–3 is one row of 96px cells, 4–8
+   * is an 88px grid with a scroller. `compact` is CloudStart's 72px cell, forced regardless of
+   * count and never showing the "N hồ sơ" footer. `row`/`grid` are the explicit escape hatches. */
+  density?: Density
+  /** The id of the profile currently being switched to: its cell spins in place of the avatar and
+   * the whole grid dims while every button is disabled. */
+  pendingId?: string | null
+  /** Set `false` to suppress the "N hồ sơ · cuộn xem thêm" footer even in `grid` density. */
+  footer?: boolean
 }
 
 const pad = (n: number) => String(n).padStart(2, '0')
@@ -76,32 +86,92 @@ function distinguishAll(profiles: Profile[]): Map<string, string> {
   return labels
 }
 
-export function ProfilePicker({ profiles, onSelect, activeId, busy }: Props) {
-  const distinguished = distinguishAll(profiles)
+const pick = (d: Density, n: number): Exclude<Density, 'auto'> => (d !== 'auto' ? d : n <= 3 ? 'row' : 'grid')
 
-  return (
-    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+const WRAP: Record<Exclude<Density, 'auto'>, string> = {
+  row: 'flex gap-2',
+  grid: 'grid grid-cols-2 gap-2 md:grid-cols-4',
+  compact: 'grid grid-cols-2 gap-2 md:grid-cols-4',
+}
+const CELL: Record<Exclude<Density, 'auto'>, string> = {
+  row: 'h-24 flex-1 min-w-0',
+  grid: 'h-[88px]',
+  compact: 'h-[72px]',
+}
+const EMOJI: Record<Exclude<Density, 'auto'>, string> = {
+  row: 'text-[30px]',
+  grid: 'text-[26px]',
+  compact: 'text-[22px]',
+}
+
+export function ProfilePicker({ profiles, onSelect, activeId, busy, density = 'auto', pendingId, footer }: Props) {
+  const distinguished = distinguishAll(profiles)
+  const d = pick(density, profiles.length)
+  const disabled = busy || !!pendingId
+
+  const cells = (
+    <div data-testid="picker" className={`${WRAP[d]} ${pendingId ? 'opacity-50' : ''}`}>
       {profiles.map(p => {
         const active = p.id === activeId
+        const pending = p.id === pendingId
         const distinguisher = distinguished.get(p.id)
         return (
           <button
             key={p.id}
             type="button"
-            disabled={busy}
+            disabled={disabled}
             aria-pressed={active}
             title={p.name}
             onClick={() => onSelect(p.id)}
-            className={`flex min-h-[64px] flex-col items-center justify-center gap-1 rounded-xl2 border-2 px-3 py-3 font-display text-sm font-extrabold active:translate-y-[2px] disabled:opacity-50 ${
-              active ? 'border-teal-500 bg-teal-50 text-teal-700' : 'border-line-200 bg-white text-ink-900'
+            className={`relative flex ${CELL[d]} flex-col items-center justify-center gap-1 rounded-r14 border-2 px-1.5 py-2 active:translate-y-[2px] disabled:opacity-50 ${
+              active ? 'border-teal-500 bg-teal-50' : 'border-line-200 bg-white'
             }`}
           >
-            <span aria-hidden="true" className="text-3xl leading-none">{p.avatar}</span>
-            <span>{shortName(p.name)}</span>
-            {distinguisher && <span className="text-[11px] font-bold text-ink-500">{distinguisher}</span>}
+            {active && (
+              <span aria-hidden="true" className="absolute right-1 top-1 text-[12px] text-teal-600">✓</span>
+            )}
+            {pending ? (
+              <span
+                data-testid="cell-spinner"
+                className="h-[22px] w-[22px] animate-[spin_1.2s_linear_infinite] rounded-full border-2 border-teal-line border-t-teal-500"
+              />
+            ) : (
+              <span aria-hidden="true" className={`${EMOJI[d]} leading-none`}>{p.avatar}</span>
+            )}
+            <span
+              className={
+                d === 'compact'
+                  ? 'truncate text-[13px] font-extrabold leading-[1.2] text-ink-900'
+                  : 'line-clamp-2 text-[14px] font-extrabold leading-[1.2] text-ink-900'
+              }
+            >
+              {p.name}
+            </span>
+            {distinguisher && <span className="text-[11px] font-bold text-ink-300">{distinguisher}</span>}
           </button>
         )
       })}
+    </div>
+  )
+
+  if (d === 'row') return cells
+
+  // `grid` and `compact` both live inside a capped scroll region with a bottom fade; only `grid`
+  // ever grows the footer, and only past 4 profiles — `compact` (CloudStart's small picker) never
+  // shows it, whatever the count.
+  const showFooter = d === 'grid' && footer !== false && profiles.length > 4
+
+  return (
+    <div className="flex flex-col gap-1">
+      <div
+        data-testid="picker-scroll"
+        className="relative max-h-[380px] overflow-y-auto after:sticky after:bottom-0 after:mt-auto after:h-9 after:bg-gradient-to-b after:from-transparent after:to-white"
+      >
+        {cells}
+      </div>
+      {showFooter && (
+        <p className="text-center text-[12px] font-bold text-ink-300">{profiles.length} hồ sơ · cuộn xem thêm</p>
+      )}
     </div>
   )
 }

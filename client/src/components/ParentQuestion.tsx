@@ -26,24 +26,39 @@ type Props = {
   onPass: () => void
   /** The line above the question, so each door can say what it is asking for. */
   title?: string
+  /** An optional second line under the title, for a door that needs to say more (e.g. A2's
+   * restore gate explaining *why* it is asking). */
+  sub?: string
 }
 
-export function ParentQuestion({ onPass, title = 'Dành cho phụ huynh' }: Props) {
+export function ParentQuestion({ onPass, title = 'Dành cho phụ huynh', sub }: Props) {
   const [question, setQuestion] = useState(newQuestion)
   const [value, setValue] = useState('')
-  const [wrong, setWrong] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [shake, setShake] = useState(false)
 
   function handleAnswer(e: ChangeEvent<HTMLInputElement>) {
     setValue(e.target.value)
+    // The error band turns off the moment typing starts (round 4 / P1): the message was about the
+    // SUBMIT that just failed, not about the box as it stands now.
+    if (error) { setError(null); setShake(false) }
   }
 
   function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault()
+    // An empty submit is not a wrong answer: keep the same question, just nudge. Previously an
+    // empty box counted as wrong and rolled a new question — a parent who fat-fingered "Vào" had
+    // to read a fresh multiplication for no reason.
+    if (value.trim() === '') {
+      setError('Nhập kết quả trước nhé')
+      return
+    }
     if (Number(value.trim()) === question.a * question.b) {
       onPass()
       return
     }
-    setWrong(true)
+    setError('⛔ Chưa đúng — câu hỏi đã đổi, thử lại nhé.')
+    setShake(true)
     // A new question on every miss, so guessing cannot be done by repetition.
     setQuestion(newQuestion())
     setValue('')
@@ -51,22 +66,34 @@ export function ParentQuestion({ onPass, title = 'Dành cho phụ huynh' }: Prop
 
   return (
     <>
-      <h1 className="text-base font-bold text-ink-500">{title}</h1>
-      <p className="font-display text-[44px] font-extrabold text-ink-900">{question.a} × {question.b} = ?</p>
+      <h1 className="font-display text-[18px] font-extrabold text-ink-900">{title}</h1>
+      {sub && <p className="text-[13px] font-bold leading-[1.4] text-ink-500">{sub}</p>}
 
-      <form onSubmit={handleSubmit} className="flex flex-col items-center gap-6">
-        <input
-          aria-label="Đáp án"
-          inputMode="numeric"
-          type="text"
-          value={value}
-          onChange={handleAnswer}
-          className="h-16 w-32 rounded-2xl border-2 border-line-200 text-center font-display text-2xl font-extrabold text-ink-900"
-        />
+      <form onSubmit={handleSubmit} className="flex flex-col gap-2">
+        <div className="flex items-center gap-3 py-2">
+          <span className="font-display text-[32px] font-extrabold text-ink-900">
+            {question.a} × {question.b} =
+          </span>
+          <input
+            aria-label="Đáp án"
+            inputMode="numeric"
+            type="text"
+            value={value}
+            onChange={handleAnswer}
+            onAnimationEnd={() => setShake(false)}
+            className={`h-11 w-24 rounded-r12 border-2 text-center font-display text-[18px] font-extrabold text-ink-900 outline-none ${
+              error ? 'border-fix-700' : 'border-sand-edge'
+            } ${shake ? 'animate-shake' : ''}`}
+          />
+        </div>
 
-        {wrong && <p className="font-bold text-fix">Chưa đúng, thử lại</p>}
+        <p data-testid="question-error" className="min-h-[18px] text-[12px] font-extrabold leading-[1.4] text-fix-700">
+          {error}
+        </p>
 
-        <Button type="submit">Vào</Button>
+        <div className="flex justify-end">
+          <Button type="submit" size="adult">Vào</Button>
+        </div>
       </form>
     </>
   )
