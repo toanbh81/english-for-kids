@@ -436,8 +436,12 @@ export function CloudStart() {
           {info && <Notice kind="info" adult title={info} />}
           {!fieldStage && error && <Notice kind="error" adult role="alert" title={error} action={retryAction} />}
           {/* A pull that failed leaves the parent one tap from trying again, on the same child —
-            * rather than back at a menu with no idea which door to take twice. */}
-          {retryId && (
+            * rather than back at a menu with no idea which door to take twice. Gated off on the
+            * field-owning stages: `finishRestore`'s own SYSTEM_ERROR already puts an equivalent
+            * "Thử lại" in that stage's `FieldRow` gutter (`errorAction`), and this floating button
+            * would otherwise duplicate it — exactly one retry control per failure. Stays here for
+            * `menu` (auto-restore can bounce back there) until Task 9 moves it into `'result'`. */}
+          {!fieldStage && retryId && (
             <Button size="adult" disabled={busy} onClick={() => { void finishRestore(retryId) }} className="w-full">
               Thử tải lại
             </Button>

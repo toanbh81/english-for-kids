@@ -677,11 +677,17 @@ describe('the email door', () => {
       expect(screen.getByTestId('field-error')).toHaveTextContent('Không kết nối được máy chủ')
     })
 
-    it('offers the same child again rather than the menu', async () => {
+    it('offers the same child again rather than the menu, through a single retry control', async () => {
       await restoreWithFailedPull()
 
+      // Fix round 1: the field-owning stage ('email-otp') no longer also floats the old
+      // unconditional "Thử tải lại" button — exactly one retry control per failure, the
+      // `FieldRow`'s own "Thử lại" (wired to `errorAction`, which re-runs `finishRestore`).
+      expect(screen.queryByText('Thử tải lại')).not.toBeInTheDocument()
+      expect(screen.getAllByRole('button', { name: 'Thử lại' })).toHaveLength(1)
+
       sync.pullProfile.mockResolvedValue(true)
-      await act(async () => { fireEvent.click(screen.getByText('Thử tải lại')) })
+      await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Thử lại' })) })
 
       expect(sync.pullProfile).toHaveBeenLastCalledWith(SOC)
       expect(profileState.switchProfile).toHaveBeenCalledWith(SOC)
