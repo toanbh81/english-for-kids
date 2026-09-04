@@ -625,7 +625,7 @@ async function run(vpName, vp) {
   await S('parent-dashboard-sync-error', '/parent', async () => {
     await page.route('**/rest/v1/**', r => r.abort())
     await openDashboard()
-    await tapText(page, '30 phút')
+    await tapText(page, "30'")
     // The write is queued instantly but the flush it needs to actually FAIL sits behind a real
     // 30s debounce (`cloud/sync.ts` `DEBOUNCE_MS`) — sleeping past that would work but is a slow
     // way to shoot one frame. `onHidden`'s own trigger (a child putting the iPad down) fires an
@@ -644,6 +644,26 @@ async function run(vpName, vp) {
   await page.unroute('**/rest/v1/**')
   await unmockAnonSignIn()
   await page.evaluate(() => { localStorage.removeItem('speakup.auth') })
+
+  // Task 13 (R23): a limit outside {15,20,30} — the worst case for the panel's own "fourth seg
+  // lights up" rule. `progress/limit.ts`'s own key is `limit.minutes`, not the bare `limit` the
+  // brief's own pseudocode named — read via `storageKey()` there rather than guessed.
+  await S('parent-dashboard-limit-custom', '/parent', async () => {
+    await page.evaluate(() => {
+      const id = localStorage.getItem('speakup.profile')
+      localStorage.setItem((id ? `speakup.${id}.` : 'speakup.') + 'limit.minutes', '25')
+    })
+    await go(page, '/parent'); await openDashboard()
+  })
+  // Task 13 (R24): Bài học · Tự động — the current band must read MỜ (dim), never lit alongside
+  // "Tự động". `progress/band.ts`'s key is `band` (matches the brief's pseudocode as written).
+  await S('parent-dashboard-band-auto', '/parent', async () => {
+    await page.evaluate(() => {
+      const id = localStorage.getItem('speakup.profile')
+      localStorage.setItem((id ? `speakup.${id}.` : 'speakup.') + 'band', JSON.stringify({ value: 2, mode: 'auto' }))
+    })
+    await go(page, '/parent'); await openDashboard()
+  })
 
   // ---------- special Home states ----------
   await seed(page, { overLimit: true })

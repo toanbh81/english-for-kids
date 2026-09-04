@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import type { ChangeEvent } from 'react'
-import { getActivity, minutesPerDay, averageScoreByKind, weakPhonemes, clearActivity } from '../progress/activity'
+import { getActivity, minutesPerDay, minutesToday, averageScoreByKind, weakPhonemes, clearActivity } from '../progress/activity'
 import { clearBand, getBand, setBandAuto, setBandValue } from '../progress/band'
 import type { Band } from '../progress/band'
 import { clearLeitner } from '../progress/leitner'
@@ -42,8 +41,8 @@ import { isCloudConfigured } from '../cloud/supabase'
 import { ProfilePicker } from '../components/ProfilePicker'
 import { BackButton, Button, EmptyState, Notice, RemoteRowSkeleton, SyncPill } from '../components/ui'
 import { PageShell, PageHeader, PageBody } from '../components/ui/page'
-import { AccountCard, MinutesChart, Panel, PanelGrid } from '../components/adult'
-import type { AccountState } from '../components/adult'
+import { AccountCard, MinutesChart, Panel, PanelGrid, SegRow, Stepper } from '../components/adult'
+import type { AccountState, Seg } from '../components/adult'
 import { useDialog } from '../components/ui/useDialog'
 
 /**
@@ -77,9 +76,9 @@ const PENDING_RESET_NOTICE =
   + 'máy sẽ tự xoá nốt khi có mạng trở lại, trước khi tải bất cứ thứ gì về.'
 
 const LENGTH_LABEL: Record<LessonLength, string> = {
-  short: 'Ngắn ~8 phút',
-  medium: 'Vừa ~12 phút',
-  long: 'Dài ~18 phút',
+  short: "Ngắn ~8'",
+  medium: "Vừa ~12'",
+  long: "Dài ~18'",
 }
 
 /**
@@ -141,7 +140,9 @@ export function ParentDashboard({ onLock }: Props) {
   // One read of the activity log per mount (and per reset), shared by every query below; the
   // snapshot doubles as the reload key for the recordings list.
   const [snapshot, setSnapshot] = useState(() => ({ events: getActivity(), now: Date.now() }))
-  const [limit, setLimit] = useState<string>(() => String(getLimitMinutes()))
+  // The value itself is never read — `limitMinutes` below reads `getLimitMinutes()` fresh on every
+  // render — this setter exists purely to force that re-render after a write (chip, Stepper, reset).
+  const [, setLimit] = useState<string>(() => String(getLimitMinutes()))
   const [band, setBand] = useState(() => getBand())
   const [length, setLength] = useState<LessonLength>(() => getLessonLength())
 
@@ -308,6 +309,40 @@ export function ParentDashboard({ onLock }: Props) {
   const days = minutesPerDay(14, now, events)
   const todayKey = days[days.length - 1]?.day
   const limitMinutes = getLimitMinutes()
+  // R23 — a value the three presets don't cover must still read as CHOSEN, not as if the parent's
+  // limit went unheard: the fourth seg lights up instead of leaving all four dark.
+  const isCustom = !(LIMIT_CHIPS as readonly number[]).includes(limitMinutes)
+  const limitSegs: Seg[] = [
+    ...LIMIT_CHIPS.map(n => ({
+      key: String(n), label: `${n}'`, tone: limitMinutes === n ? 'on' : 'off',
+      onClick: () => handleLimitStep(n),
+    }) as const),
+    {
+      key: 'custom',
+      label: isCustom ? `Tuỳ chỉnh ${limitMinutes}'` : 'Tuỳ chỉnh',
+      tone: isCustom ? 'on' : 'off',
+      onClick: () => handleLimitStep(limitMinutes),
+    },
+  ]
+  const bandAuto = band.mode === 'auto'
+  // R24 — auto picking the current band is a RESULT the parent reads, not a choice they made: it
+  // gets its own third tone (`dim`), never `on` alongside "Tự động" (decision 34).
+  const lessonSegs: Seg[] = [
+    { key: 'auto', label: 'Tự động', tone: bandAuto ? 'on' : 'off', onClick: handleBandAuto },
+    ...BAND_VALUES.map(n => ({
+      key: String(n),
+      label: String(n),
+      ariaLabel: `Bậc ${n}`,
+      tone: bandAuto ? (band.value === n ? 'dim' : 'off') : (band.value === n ? 'on' : 'off'),
+      onClick: () => handleBandClick(n),
+    }) as const),
+  ]
+  const lengthSegs: Seg[] = LESSON_LENGTHS.map(value => ({
+    key: value,
+    label: LENGTH_LABEL[value],
+    tone: length === value ? 'on' : 'off',
+    onClick: () => handleLengthClick(value),
+  }) as const)
   const weekMinutes = minutesPerDay(7, now, events).reduce((sum, d) => sum + d.minutes, 0)
   const averages = averageScoreByKind(events)
   const kindAverages = Object.values(averages).filter((v): v is number => v != null)
@@ -337,17 +372,10 @@ export function ParentDashboard({ onLock }: Props) {
     return () => { cancelled = true }
   }, [snapshot])
 
-  function handleLimitChange(e: ChangeEvent<HTMLInputElement>) {
-    const raw = e.target.value
-    setLimit(raw)
-    setLimitMinutes(Number(raw))
-  }
-
-  function handleLimitBlur() {
-    setLimit(String(getLimitMinutes()))
-  }
-
-  function handleLimitChip(n: number) {
+  /** R23 / decision 6 — the one write path left for the daily limit now that the number input is
+   * gone: every preset chip, the fourth "Tuỳ chỉnh" seg (re-applying the current value, a no-op),
+   * and `Stepper`'s ±5 all funnel through here. */
+  function handleLimitStep(n: number) {
     setLimit(String(setLimitMinutes(n)))
   }
 
@@ -748,92 +776,33 @@ export function ParentDashboard({ onLock }: Props) {
           )}
         </Panel>
 
-        <Panel title="⏰ Giới hạn mỗi ngày">
-          <div className="flex gap-2">
-            {LIMIT_CHIPS.map(n => {
-              const active = Number(limit) === n
-              return (
-                <button
-                  key={n}
-                  type="button"
-                  onClick={() => handleLimitChip(n)}
-                  className={`min-h-[44px] flex-1 rounded-xl2 font-display text-sm font-extrabold active:translate-y-[2px] md:text-base ${
-                    active ? 'bg-coral-500 text-white shadow-chunky-coral' : 'border-2 border-line-200 bg-cream-50 text-ink-500'
-                  }`}
-                >
-                  {n} phút
-                </button>
-              )
-            })}
-          </div>
-          <label className="mt-3 flex items-center gap-2">
-            <input
-              type="number"
-              min={5}
-              max={60}
-              step={5}
-              value={limit}
-              onChange={handleLimitChange}
-              onBlur={handleLimitBlur}
-              className="h-11 w-20 rounded-xl2 border-2 border-line-200 px-3 text-center font-display text-base font-extrabold text-ink-900 md:h-16 md:w-24 md:text-lg"
-            />
-            <span className="font-semibold text-ink-500">phút / ngày</span>
-          </label>
+        <Panel
+          testId="limit-panel"
+          title="⏰ Giới hạn mỗi ngày"
+          collapsible
+          right={
+            <span className="text-[12px] font-extrabold text-teal-600">
+              Hôm nay: {minutesToday(now, events)}/{limitMinutes}'
+            </span>
+          }
+        >
+          <SegRow segs={limitSegs} />
+          <Stepper value={limitMinutes} onChange={handleLimitStep} label="Tuỳ chỉnh" />
         </Panel>
 
-        <Panel title="Bài học">
-          <div className="mb-2 flex items-center justify-between">
-            <span className="text-xs font-bold text-ink-500 md:text-sm">Độ khó</span>
-            <button
-              type="button"
-              onClick={handleBandAuto}
-              aria-pressed={band.mode === 'auto'}
-              className={`min-h-[44px] rounded-xl2 px-4 font-display text-sm font-extrabold active:translate-y-[2px] ${
-                band.mode === 'auto' ? 'bg-teal-500 text-white shadow-chunky-teal' : 'border-2 border-line-200 bg-cream-50 text-ink-500'
-              }`}
-            >
-              Tự động
-            </button>
-          </div>
-          <div className="mb-4 flex gap-2">
-            {BAND_VALUES.map(n => {
-              const active = band.value === n
-              return (
-                <button
-                  key={n}
-                  type="button"
-                  onClick={() => handleBandClick(n)}
-                  aria-pressed={active}
-                  aria-label={`Bậc ${n}`}
-                  className={`min-h-[44px] flex-1 rounded-xl2 font-display text-base font-extrabold active:translate-y-[2px] ${
-                    active ? 'bg-coral-500 text-white shadow-chunky-coral' : 'border-2 border-line-200 bg-cream-50 text-ink-500'
-                  }`}
-                >
-                  {n}
-                </button>
-              )
-            })}
-          </div>
+        <Panel testId="lesson-panel" title="Bài học" collapsible>
+          <span className="mb-2 block text-xs font-bold text-ink-500 md:text-sm">Độ khó</span>
+          <SegRow segs={lessonSegs} />
+          {/* R24 — auto ON means the current band is a RESULT, not a choice: the dim seg above
+            * says which by tone, and this line says it in words too, for the segs it dims. */}
+          {bandAuto && (
+            <p className="mt-2 text-[11px] font-bold text-ink-300">
+              Tự động đang chọn → bậc hiện tại ⭐ {band.value}
+            </p>
+          )}
 
-          <span className="mb-2 block text-xs font-bold text-ink-500 md:text-sm">Thời lượng</span>
-          <div className="flex gap-2">
-            {LESSON_LENGTHS.map(value => {
-              const active = length === value
-              return (
-                <button
-                  key={value}
-                  type="button"
-                  onClick={() => handleLengthClick(value)}
-                  aria-pressed={active}
-                  className={`min-h-[44px] flex-1 rounded-xl2 font-display text-xs font-extrabold active:translate-y-[2px] md:text-sm ${
-                    active ? 'bg-coral-500 text-white shadow-chunky-coral' : 'border-2 border-line-200 bg-cream-50 text-ink-500'
-                  }`}
-                >
-                  {LENGTH_LABEL[value]}
-                </button>
-              )
-            })}
-          </div>
+          <span className="mb-2 mt-4 block text-xs font-bold text-ink-500 md:text-sm">Độ dài nhiệm vụ</span>
+          <SegRow segs={lengthSegs} />
 
           {/* Today's lesson is generated once and then frozen, so a change made now shows up
             * tomorrow — without this line the buttons look broken. */}

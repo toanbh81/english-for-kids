@@ -6,7 +6,16 @@ import { DialogProvider } from '../components/ui/DialogProvider'
 import type { ActivityEvent } from '../progress/activity'
 import { getBand } from '../progress/band'
 import { getLessonLength } from '../progress/lesson'
+import { setLimitMinutes } from '../progress/limit'
 import type { Recording } from '../progress/recordings'
+
+// Task 13: `handleLimitStep` calls the real `setLimitMinutes` (clamp + localStorage write, same
+// as before) — this only wraps it in a spy so a test can assert the CALL without duplicating
+// `progress/limit.ts`'s own clamp tests here. `progress/limit.ts` itself stays byte-identical.
+vi.mock('../progress/limit', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../progress/limit')>()
+  return { ...actual, setLimitMinutes: vi.fn(actual.setLimitMinutes) }
+})
 
 // The recordings store round-trips Blobs through IndexedDB via structuredClone, which jsdom's
 // Blob implementation does not survive (see recordings.test.ts, which runs under the node
@@ -103,17 +112,47 @@ function renderGate() {
   return renderWithDialogs(<ParentGate />)
 }
 
+/** A single session spanning `total` minutes, starting "now" — gaps of at most 10 minutes so
+ * `sessionMinutes` (progress/activity.ts) folds every event into one session instead of several
+ * 1-minute ones. Task 13's `minutesToday` opt below is the only caller. */
+function minutesTodayEvents(total: number): ActivityEvent[] {
+  const now = Date.now()
+  const events: ActivityEvent[] = [{ ts: now, kind: 'speak', id: 'm0', score: 80 }]
+  let elapsed = 0
+  let i = 1
+  while (elapsed < total) {
+    elapsed += Math.min(10, total - elapsed)
+    events.push({ ts: now + elapsed * 60_000, kind: 'speak', id: `m${i}`, score: 80 })
+    i++
+  }
+  return events
+}
+
 /** Task 10's own shorthand for the shell tests below: cloud on by default (most of the ten panels
  * only exist with it), and one scored event this week by default so the header's summary line has
  * something to say — pass `events: []` explicitly for the genuinely-empty-week scenario. `events`
  * always seeds `speakup.activity` before the render so a caller can drive the header's weekly
  * summary or the chart without reaching for `localStorage.setItem` by hand. Task 11 adds `profiles`:
  * a count that seeds that many mock profiles (`listProfiles`/`activeProfileId`, active = the first)
- * for the "Hồ sơ" column's worst case — 8 rows — without every call site building the array by hand. */
-function renderDashboard(opts: { events?: ActivityEvent[]; cloud?: boolean; profiles?: number } = {}) {
+ * for the "Hồ sơ" column's worst case — 8 rows — without every call site building the array by hand.
+ * Task 13 adds `limit`/`band` (seeded straight into `progress/limit.ts`/`progress/band.ts`'s own
+ * legacy-namespace keys — no active profile in these tests, so `storageKey()` resolves to
+ * `speakup.limit.minutes`/`speakup.band`) and `minutesToday` (seeds a session totalling that many
+ * minutes instead of the default one-event/one-minute seed, for panel C's "Hôm nay: N/limit'" line). */
+function renderDashboard(opts: {
+  events?: ActivityEvent[]
+  cloud?: boolean
+  profiles?: number
+  limit?: number
+  band?: { mode: 'auto' | 'manual'; value: 1 | 2 | 3 | 4 | 5 }
+  minutesToday?: number
+} = {}) {
   cloud.configured = opts.cloud ?? true
-  const events = opts.events ?? [{ ts: Date.now(), kind: 'speak', id: 'seed', score: 80 }]
+  const events = opts.events
+    ?? (opts.minutesToday != null ? minutesTodayEvents(opts.minutesToday) : [{ ts: Date.now(), kind: 'speak', id: 'seed', score: 80 }])
   localStorage.setItem('speakup.activity', JSON.stringify(events))
+  if (opts.limit != null) localStorage.setItem('speakup.limit.minutes', String(opts.limit))
+  if (opts.band) localStorage.setItem('speakup.band', JSON.stringify(opts.band))
   if (opts.profiles) {
     const roster: MockProfile[] = Array.from({ length: opts.profiles }, (_, i) => ({
       id: `p${i + 1}`,
@@ -175,6 +214,7 @@ function deferred<T>() {
 beforeEach(() => {
   localStorage.clear()
   sessionStorage.clear()
+  vi.mocked(setLimitMinutes).mockClear()
   playerMock.playBlob.mockClear()
   recordingsMock.listRecordings.mockReset()
   recordingsMock.listRecordings.mockResolvedValue([])
@@ -414,7 +454,7 @@ describe('ParentDashboard', () => {
     renderWithDialogs(<ParentDashboard />)
     await flush()
 
-    fireEvent.click(screen.getByRole('button', { name: '30 phút' }))
+    fireEvent.click(screen.getByRole('button', { name: "30'" }))
 
     expect(localStorage.getItem('speakup.limit.minutes')).toBe('30')
     expect(screen.getByText("mục tiêu 30'")).toBeInTheDocument()
@@ -434,26 +474,35 @@ describe('ParentDashboard', () => {
     expect(playerMock.playBlob).toHaveBeenCalledWith(blob)
   })
 
-  it('persists a daily limit change to localStorage, clamped to the 5-60 range', async () => {
-    renderWithDialogs(<ParentDashboard />)
-    await flush()
+  /* ---- Task 13: panel C — the limit SegRow + Stepper, no number input any more ---- */
 
-    const input = screen.getByRole('spinbutton')
-    fireEvent.change(input, { target: { value: '999' } })
+  it('the limit panel is four segs, the fourth lighting up only for a custom value', () => {
+    renderDashboard({ limit: 25 })
+    const segs = within(screen.getByTestId('limit-panel')).getAllByTestId('seg')
+    expect(segs.map(s => s.textContent)).toEqual(["15'", "20'", "30'", "Tuỳ chỉnh 25'"])
+    expect(segs[3]).toHaveAttribute('data-tone', 'on')
+    expect(segs.slice(0, 3).every(s => s.dataset.tone === 'off')).toBe(true)
 
-    expect(localStorage.getItem('speakup.limit.minutes')).toBe('60')
+    cleanup()
+    renderDashboard({ limit: 20 })
+    const s2 = within(screen.getByTestId('limit-panel')).getAllByTestId('seg')
+    expect(s2[1]).toHaveAttribute('data-tone', 'on')
+    expect(s2[3]).toHaveTextContent('Tuỳ chỉnh') // no digit — the value is a preset
+    expect(s2[3]).toHaveAttribute('data-tone', 'off')
   })
 
-  it('re-syncs the displayed limit to the clamped stored value on blur', async () => {
-    renderWithDialogs(<ParentDashboard />)
-    await flush()
+  it('the limit panel prints today against the limit in its title row and steps by 5', () => {
+    renderDashboard({ limit: 25, minutesToday: 12 })
+    // `Panel`'s `right` slot renders twice — once in the phone-only fold row, once in the `md:flex`
+    // desktop row — both carry the same node, so this checks both rather than picking one.
+    for (const el of screen.getAllByText("Hôm nay: 12/25'")) {
+      expect(el).toHaveClass('text-[12px]', 'text-teal-600')
+    }
 
-    const input = screen.getByRole('spinbutton')
-    fireEvent.change(input, { target: { value: '999' } })
-    expect(input).toHaveValue(999)
-
-    fireEvent.blur(input)
-    expect(input).toHaveValue(60)
+    fireEvent.click(screen.getByRole('button', { name: 'Tăng' }))
+    expect(setLimitMinutes).toHaveBeenCalledWith(30)
+    // The only number input left is `Stepper`'s own a11y-only one — `sr-only`, never a visible field.
+    expect(screen.getByRole('spinbutton')).toHaveClass('sr-only')
   })
 
   it('resets progress and clears speakup.stars after the confirm dialog is accepted', async () => {
@@ -521,11 +570,13 @@ describe('ParentDashboard', () => {
     // Waiting on the DOM condition those setState calls actually drive makes the wait mean
     // something: by the time this resolves, the post-await state update has landed for real.
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: 'Bậc 1' })).toHaveAttribute('aria-pressed', 'true')
+      // R24: reset leaves the band in `auto` mode, so the reset-to-1 seg reads `dim` (a result),
+      // never `on` — `aria-pressed` only follows `on` now, so that is the DOM condition to wait on.
+      expect(screen.getByRole('button', { name: 'Bậc 1' })).toHaveAttribute('data-tone', 'dim')
     })
     // …and the card shows what the next read will find, without writing the keys back.
     expect(screen.getByRole('button', { name: 'Tự động' })).toHaveAttribute('aria-pressed', 'true')
-    expect(screen.getByRole('button', { name: 'Vừa ~12 phút' })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByRole('button', { name: "Vừa ~12'" })).toHaveAttribute('aria-pressed', 'true')
     expect(localStorage.getItem('speakup.band')).toBeNull()
     expect(localStorage.getItem('speakup.lesson.2026-08-23')).toBeNull()
     expect(localStorage.getItem('speakup.lesson.length')).toBeNull()
@@ -555,8 +606,8 @@ describe('ParentDashboard', () => {
     expect(screen.getByRole('button', { name: 'Bậc 3' })).toHaveAttribute('aria-pressed', 'true')
     expect(screen.getByRole('button', { name: 'Bậc 1' })).toHaveAttribute('aria-pressed', 'false')
     expect(screen.getByRole('button', { name: 'Tự động' })).toHaveAttribute('aria-pressed', 'false')
-    expect(screen.getByRole('button', { name: 'Dài ~18 phút' })).toHaveAttribute('aria-pressed', 'true')
-    expect(screen.getByRole('button', { name: 'Vừa ~12 phút' })).toHaveAttribute('aria-pressed', 'false')
+    expect(screen.getByRole('button', { name: "Dài ~18'" })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByRole('button', { name: "Vừa ~12'" })).toHaveAttribute('aria-pressed', 'false')
   })
 
   it('pressing a band button persists the value and switches to manual mode', async () => {
@@ -580,7 +631,56 @@ describe('ParentDashboard', () => {
 
     expect(getBand()).toEqual({ value: 2, mode: 'auto' })
     expect(screen.getByRole('button', { name: 'Tự động' })).toHaveAttribute('aria-pressed', 'true')
-    expect(screen.getByRole('button', { name: 'Bậc 2' })).toHaveAttribute('aria-pressed', 'true')
+    // R24: auto picking up the current band is a RESULT, not a choice — `dim`, never `on` next to
+    // "Tự động" (that would read as two things both being "chosen" at once).
+    expect(screen.getByRole('button', { name: 'Bậc 2' })).toHaveAttribute('data-tone', 'dim')
+    expect(screen.getByRole('button', { name: 'Bậc 2' })).toHaveAttribute('aria-pressed', 'false')
+    expect(screen.getByText('Tự động đang chọn → bậc hiện tại ⭐ 2')).toBeInTheDocument()
+  })
+
+  it('the lesson panel is six segs on one row; auto on leaves the current band dim, not lit', () => {
+    renderDashboard({ band: { mode: 'auto', value: 2 } })
+    const segs = within(screen.getByTestId('lesson-panel')).getAllByTestId('seg').slice(0, 6)
+    expect(segs.map(s => s.textContent)).toEqual(['Tự động', '1', '2', '3', '4', '5'])
+    expect(segs[0]).toHaveAttribute('data-tone', 'on')
+    expect(segs[2]).toHaveAttribute('data-tone', 'dim')
+    expect(segs.filter(s => s.dataset.tone === 'on')).toHaveLength(1)
+    expect(screen.getByText('Tự động đang chọn → bậc hiện tại ⭐ 2')).toHaveClass('text-[11px]')
+  })
+
+  it('picking a band by hand lights exactly that seg and drops the auto line', () => {
+    renderDashboard({ band: { mode: 'manual', value: 3 } })
+    const segs = within(screen.getByTestId('lesson-panel')).getAllByTestId('seg').slice(0, 6)
+    expect(segs[0]).toHaveAttribute('data-tone', 'off')
+    expect(segs[3]).toHaveAttribute('data-tone', 'on')
+    expect(screen.queryByText(/Tự động đang chọn/)).toBeNull()
+  })
+
+  it('the length row is renamed and shortened, and the tomorrow line stays', () => {
+    renderDashboard()
+    expect(screen.getByText('Độ dài nhiệm vụ')).toBeInTheDocument()
+    expect(screen.queryByText('Thời lượng')).toBeNull()
+    expect(screen.getAllByTestId('seg').map(s => s.textContent))
+      .toEqual(expect.arrayContaining(["Ngắn ~8'", "Vừa ~12'", "Dài ~18'"]))
+    expect(screen.getByText('Áp dụng từ bài học ngày mai.')).toBeInTheDocument()
+  })
+
+  it('both panels collapse to a 56px row on a phone, open from md up', () => {
+    renderDashboard()
+    const limitRow = screen.getByRole('button', { name: /Giới hạn mỗi ngày/ })
+    const lessonRow = screen.getByRole('button', { name: /Bài học/ })
+    expect(limitRow).toHaveClass('min-h-[56px]', 'md:hidden')
+    expect(lessonRow).toHaveClass('min-h-[56px]', 'md:hidden')
+    // The `right` slot (today-vs-limit) rides along in the phone summary row too.
+    expect(within(limitRow).getByText(/Hôm nay:/)).toBeInTheDocument()
+
+    // `Panel` folds its body under a plain Tailwind `hidden` class rather than the `hidden`
+    // attribute or an inline style — jsdom applies neither of those without a real stylesheet, so
+    // `toBeVisible()` cannot tell open from closed here; the class itself is the real assertion.
+    const lengthLabel = screen.getByText('Độ dài nhiệm vụ')
+    expect(lengthLabel.parentElement).toHaveClass('hidden', 'md:block')
+    fireEvent.click(lessonRow)
+    expect(lengthLabel.parentElement).not.toHaveClass('hidden')
   })
 
   it('says when a difficulty or length change takes effect', async () => {
@@ -621,19 +721,22 @@ describe('ParentDashboard', () => {
    * controls 28–44 px, tap target never below 44, nothing sized for a child's finger any more.
    * `size="adult"` `Button`s were already a fixed 44 at every width since Phase 12 task 15; Task 10
    * brought the screen's own raw chip buttons (band, length, limit) in line with them by dropping
-   * their `md:min-h-[64px]` pair — only the not-yet-`Stepper` number input keeps its old `md:h-16`
-   * (Task 13 replaces it outright).
+   * their `md:min-h-[64px]` pair. Task 13 replaces the number input outright with `SegRow` (44px
+   * segs, no `md:` variant at all) and `Stepper` (visible 36px ±, a 44px hit band via `after:-inset-1`
+   * — never `md:h-16`/`md:min-h-[64px]`).
    */
-  it('uses adult 44 px controls at every width on the screen\'s own buttons', async () => {
+  it('uses adult 28/32/36/44 px controls with no 56/64 leftovers on the screen\'s own buttons', async () => {
     renderWithDialogs(<ParentDashboard />)
     await flush()
 
-    for (const name of ['Bậc 3', 'Tự động', '30 phút', 'Vừa ~12 phút']) {
+    for (const name of ['Bậc 3', 'Tự động', "30'", "Vừa ~12'"]) {
       const btn = screen.getByRole('button', { name })
-      expect(btn, name).toHaveClass('min-h-[44px]')
-      expect(btn.className, name).not.toMatch(/md:min-h-\[64px\]/)
+      expect(btn, name).toHaveClass('h-11')
+      expect(btn.className, name).not.toMatch(/md:min-h-\[64px\]|md:h-16/)
     }
-    expect(screen.getByRole('spinbutton')).toHaveClass('h-11', 'md:h-16')
+    const stepUp = screen.getByRole('button', { name: 'Tăng' })
+    expect(stepUp).toHaveClass('h-9', 'w-9', 'relative', 'after:absolute', 'after:-inset-1')
+    expect(stepUp.className).not.toMatch(/md:h-16|min-h-\[64px\]/)
     // `size="adult"`: fixed 44 px, no `md:` override.
     expect(screen.getByRole('button', { name: '↺ Đặt lại tiến trình…' })).toHaveClass('min-h-[44px]')
     expect(screen.getByRole('button', { name: '↺ Đặt lại tiến trình…' }).className).not.toMatch(/md:min-h/)
@@ -733,10 +836,10 @@ describe('ParentDashboard', () => {
     renderWithDialogs(<ParentDashboard />)
     await flush()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Ngắn ~8 phút' }))
+    fireEvent.click(screen.getByRole('button', { name: "Ngắn ~8'" }))
 
     expect(getLessonLength()).toBe('short')
-    expect(screen.getByRole('button', { name: 'Ngắn ~8 phút' })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByRole('button', { name: "Ngắn ~8'" })).toHaveAttribute('aria-pressed', 'true')
   })
 
   /* ---- Task 10: the dashboard shell — one-row header, PanelGrid 1/2/3, danger reset row ---- */
@@ -760,8 +863,11 @@ describe('ParentDashboard', () => {
     renderDashboard()
     const grid = screen.getByTestId('panel-grid')
     expect(grid).toHaveClass('grid-cols-1', 'md:grid-cols-2', 'ipad:grid-cols-3')
+    // Task 13: `collapsible` panels (limit, lesson) render their own `<h2>` twice — once inside the
+    // phone-only fold button, once in the `md:flex` desktop row — so titles are de-duplicated
+    // (order-preserving) before comparing against the one-per-panel list.
     const titles = within(grid).getAllByRole('heading', { level: 2 }).map(h => h.textContent)
-    expect(titles).toEqual([
+    expect([...new Set(titles)]).toEqual([
       'Tài khoản', 'Phút luyện · 7 ngày', 'Điểm trung bình', 'Âm hay sai',
       '⏰ Giới hạn mỗi ngày', 'Bài học', 'Bản ghi gần đây', 'Tiến độ từ xa',
     ])
@@ -791,17 +897,29 @@ describe('ParentDashboard', () => {
     expect(screen.queryByTestId('account-card')).toBeNull()
     expect(screen.queryByText('Tiến độ từ xa')).toBeNull()
     expect(screen.queryByText('Hồ sơ')).toBeNull()
-    // The averages panel carries its own `averages-panel` testid (Task 12) alongside the generic
-    // `panel` every other panel keeps — both count as "a panel" here.
+    // The averages panel carries its own `averages-panel` testid (Task 12), and Task 13's limit/
+    // lesson panels carry `limit-panel`/`lesson-panel` (so a `within(...).getByTestId('limit-panel')`
+    // lookup elsewhere never has to disambiguate against the other nine) — all four count as
+    // "a panel" here alongside the generic `panel` every plain panel keeps.
     const grid = screen.getByTestId('panel-grid')
-    const panels = [...within(grid).queryAllByTestId('panel'), ...within(grid).queryAllByTestId('averages-panel')]
+    const panels = [
+      ...within(grid).queryAllByTestId('panel'),
+      ...within(grid).queryAllByTestId('averages-panel'),
+      ...within(grid).queryAllByTestId('limit-panel'),
+      ...within(grid).queryAllByTestId('lesson-panel'),
+    ]
     expect(panels).toHaveLength(6)
     expect(screen.getByTestId('panel-grid')).toHaveClass('grid-cols-1', 'md:grid-cols-2', 'ipad:grid-cols-3')
   })
 
-  it('no control on the screen is a 56/64 child target any more', () => {
+  it('no control on the screen is a 56/64 child target any more, apart from Panel\'s own fold row', () => {
     renderDashboard()
     for (const el of [...screen.queryAllByRole('button'), ...screen.queryAllByRole('link')]) {
+      // Task 13 (decision 29): `Panel`'s own phone-only collapse row (`min-h-[56px] ... md:hidden`,
+      // `client/src/components/adult/Panel.tsx`) is a structural fold affordance, not a
+      // child-sized control — it is `Panel`'s call, not this screen's, and it is already covered by
+      // `components/adult/adult.test.tsx`. Every other 56/64 pattern here still fails this check.
+      if (el.className.includes('min-h-[56px]') && el.className.includes('md:hidden')) continue
       expect(el.className).not.toMatch(/min-h-\[56px\]|min-h-\[64px\]|md:min-h-\[64px\]|md:h-16/)
     }
   })
