@@ -134,11 +134,11 @@ describe('the parent question in front of both doors', () => {
 
     fireEvent.click(screen.getByText('Tôi có email đã liên kết'))
     expect(screen.queryByLabelText('Email của bố/mẹ')).not.toBeInTheDocument()
-    expect(screen.getByText('3 × 3 = ?')).toBeInTheDocument()
+    expect(screen.getByText((_, el) => el?.children.length === 0 && el?.textContent?.replace(/\s+/g, ' ').trim() === '3 × 3 =')).toBeInTheDocument()
 
     fireEvent.change(screen.getByLabelText('Đáp án'), { target: { value: '5' } })
     fireEvent.click(screen.getByRole('button', { name: 'Vào' }))
-    expect(screen.getByText('Chưa đúng, thử lại')).toBeInTheDocument()
+    expect(screen.getByTestId('question-error')).toHaveTextContent('⛔ Chưa đúng — câu hỏi đã đổi, thử lại nhé.')
     expect(screen.queryByLabelText('Email của bố/mẹ')).not.toBeInTheDocument()
 
     answerTheQuestion()

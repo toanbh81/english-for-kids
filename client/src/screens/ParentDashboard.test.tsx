@@ -159,11 +159,11 @@ describe('ParentGate', () => {
     vi.spyOn(Math, 'random').mockReturnValue(0) // a = 3, b = 3 -> product 9
     renderWithDialogs(<ParentGate />)
 
-    expect(screen.getByText('3 × 3 = ?')).toBeInTheDocument()
+    expect(screen.getByText((_, el) => el?.children.length === 0 && el?.textContent?.replace(/\s+/g, ' ').trim() === '3 × 3 =')).toBeInTheDocument()
 
     fireEvent.change(screen.getByLabelText('Đáp án'), { target: { value: '1' } })
     fireEvent.click(screen.getByRole('button', { name: 'Vào' }))
-    expect(screen.getByText('Chưa đúng, thử lại')).toBeInTheDocument()
+    expect(screen.getByTestId('question-error')).toHaveTextContent('⛔ Chưa đúng — câu hỏi đã đổi, thử lại nhé.')
 
     fireEvent.change(screen.getByLabelText('Đáp án'), { target: { value: '9' } })
     fireEvent.click(screen.getByRole('button', { name: 'Vào' }))
