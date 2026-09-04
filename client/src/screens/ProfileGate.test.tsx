@@ -399,14 +399,18 @@ describe('cold open, full screen (decision 18)', () => {
     expect(screen.getByTestId('picker')).toHaveClass('flex')
   })
 
-  it('8 profiles are the 2/4-column 88px grid inside a 380px scroller with a footer', () => {
+  it('8 profiles are the 2/4-column 88px grid inside a 380px scroller, with no scroll hint yet', () => {
     seedEight()
 
     renderGate()
 
     expect(screen.getByTestId('picker')).toHaveClass('grid', 'grid-cols-2', 'md:grid-cols-4')
     expect(screen.getByTestId('picker-scroll')).toHaveClass('max-h-[380px]')
-    expect(screen.getByText('8 hồ sơ · cuộn xem thêm')).toBeInTheDocument()
+    // Fix round 1, ruled #2: 8 profiles fit the 380px cap exactly (4 rows × 88 + 3 × 8 = 376) — a
+    // "cuộn xem thêm" hint here would be pointing at nothing to scroll to. `ProfilePicker.test.tsx`
+    // covers the footer's own overflow threshold in detail (8 vs 9 profiles); this just confirms
+    // the gate doesn't force it back on.
+    expect(screen.queryByText(/cuộn xem thêm/)).toBeNull()
   })
 })
 
@@ -487,5 +491,8 @@ describe('a broken sessionStorage (R7 / state ⑥)', () => {
     const notice = screen.getByTestId('storage-broken')
     expect(notice).toHaveTextContent('Không nhớ được lựa chọn — sẽ hỏi lại lần sau')
     expect(notice).toHaveClass('bg-teal-50')
+    // Fix round 1, Important #3: the actual glyph size, not just the text — `Notice`'s `title`
+    // slot is 14px extrabold; this copy must land in the 12px `sub` slot instead.
+    expect(screen.getByText('Không nhớ được lựa chọn — sẽ hỏi lại lần sau')).toHaveClass('text-[12px]')
   })
 })

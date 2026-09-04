@@ -25,6 +25,16 @@ const eight: Profile[] = Array.from({ length: 8 }, (_, i) => ({
   created: i,
 }))
 
+// One more than `eight` — the 2-column phone grid's 5th row (88 + 4×gap-and-row) is the first to
+// push the scroll region past its 380px cap, so this is the smallest roster the footer's "cuộn xem
+// thêm" hint is actually true for.
+const nine: Profile[] = Array.from({ length: 9 }, (_, i) => ({
+  id: `q${i}`,
+  name: `Bé ${i}`,
+  avatar: '🦊',
+  created: i,
+}))
+
 describe('ProfilePicker', () => {
   it('marks the active profile', () => {
     render(<ProfilePicker profiles={profiles} activeId="p2" onSelect={noop} />)
@@ -56,7 +66,7 @@ describe('ProfilePicker', () => {
     expect(screen.queryByText(/^Mã /)).not.toBeInTheDocument()
   })
 
-  it('2–3 profiles are one row of 96px cells; 4–8 are an 88px grid 2/4 with a scroller and a footer', () => {
+  it('2–3 profiles are one row of 96px cells; 4–8 are an 88px grid 2/4 with a scroller', () => {
     const { rerender } = render(<ProfilePicker profiles={three} onSelect={noop} />)
     expect(screen.getByTestId('picker')).toHaveClass('flex', 'gap-2')
     expect(screen.getAllByRole('button')[0]).toHaveClass('h-24', 'flex-1', 'min-w-0')
@@ -69,7 +79,23 @@ describe('ProfilePicker', () => {
     // Tailwind only generates a `::before`/`::after` box when an explicit `content-*` utility is
     // present (fix round 2, Important #1) — without it every other `after:` class here is dead.
     expect(screen.getByTestId('picker-scroll')).toHaveClass("after:content-['']")
-    expect(screen.getByText('8 hồ sơ · cuộn xem thêm')).toHaveClass('text-[12px]', 'text-ink-300')
+  })
+
+  /**
+   * Fix round 1, ruled #2: the design's own artboard prints the "cuộn xem thêm" hint for exactly 8
+   * profiles even though the brief's own math (4 rows × 88 + 3 × 8 = 376 ≤ 380) says all 8 already
+   * fit with nothing left to scroll to — a hint that is never true. The footer now only shows once
+   * the grid genuinely overflows its 380px cap.
+   */
+  it('shows no scroll hint at 8 profiles — the 2-column grid already fits inside 380px', () => {
+    render(<ProfilePicker profiles={eight} onSelect={noop} />)
+    expect(screen.queryByText(/hồ sơ/)).toBeNull()
+    expect(screen.queryByText(/cuộn xem thêm/)).toBeNull()
+  })
+
+  it('shows "N hồ sơ · cuộn xem thêm" once a 9th profile overflows the 380px cap', () => {
+    render(<ProfilePicker profiles={nine} onSelect={noop} />)
+    expect(screen.getByText('9 hồ sơ · cuộn xem thêm')).toHaveClass('text-[12px]', 'text-ink-300')
   })
 
   it('density="compact" is CloudStart\'s 72px cell and never shows a footer', () => {
@@ -115,6 +141,24 @@ describe('ProfilePicker', () => {
 
       expect(screen.getByText('Tạo 04/03/2026')).toBeInTheDocument()
       expect(screen.getByText('Tạo 19/07/2026')).toBeInTheDocument()
+    })
+
+    /**
+     * Fix round 1, Important #1: at row density (2–3 profiles, `h-24` fixed cells) the distinguisher
+     * span had no bounded width, so it WRAPPED instead of truncating — two lines of "Tạo" /
+     * "25/08/2026" pushed the cell's content past its own 96px height and overlapped the name above
+     * it (confirmed in `docs/design/current-phase15/shots/phone/profile-gate.png`). It must render
+     * as one truncated line, with the full text still reachable via `title`.
+     */
+    it('keeps the distinguisher to one truncated line at row density', () => {
+      render(<ProfilePicker
+        profiles={[same('a', new Date('2026-03-04T09:00:00').getTime()), same('b', new Date('2026-07-19T15:00:00').getTime())]}
+        onSelect={noop}
+      />)
+
+      const distinguisher = screen.getByText('Tạo 04/03/2026')
+      expect(distinguisher).toHaveClass('truncate')
+      expect(distinguisher).toHaveAttribute('title', 'Tạo 04/03/2026')
     })
 
     it('steps up to the time when both were made the same day', () => {

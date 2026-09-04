@@ -201,8 +201,12 @@ export function ProfileGate({ children }: { children: ReactNode }) {
           <p className="text-[13px] font-bold text-ink-500">Chạm vào tên của con nhé.</p>
         </div>
       </div>
+      {/* Fix round 1, Important #3: spec decision 19 / brief §2 call this "một dòng 12px" — `Notice`'s
+        * `title` slot is 14px extrabold (`Notice.tsx:57`), so the copy goes through `sub` (12px,
+        * `Notice.tsx:58`) instead, with an empty `title` (a childless block, so it takes no line of
+        * its own) rather than inventing a second, unreviewed line of copy above it. */}
       {storageBroken && (
-        <Notice kind="info" adult testId="storage-broken" title="Không nhớ được lựa chọn — sẽ hỏi lại lần sau" />
+        <Notice kind="info" adult testId="storage-broken" title="" sub="Không nhớ được lựa chọn — sẽ hỏi lại lần sau" />
       )}
       <ProfilePicker profiles={profiles} activeId={activeProfileId()} pendingId={pendingId} onSelect={handleSelect} />
     </GateCard>

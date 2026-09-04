@@ -24,7 +24,8 @@ type Props = {
   /** The id of the profile currently being switched to: its cell spins in place of the avatar and
    * the whole grid dims while every button is disabled. */
   pendingId?: string | null
-  /** Set `false` to suppress the "N hồ sơ · cuộn xem thêm" footer even in `grid` density. */
+  /** Set `false` to suppress the "N hồ sơ · cuộn xem thêm" footer even once the grid overflows
+   * (>8 profiles) in `grid` density — it never shows below that count regardless of this prop. */
   footer?: boolean
 }
 
@@ -147,7 +148,16 @@ export function ProfilePicker({ profiles, onSelect, activeId, busy, density = 'a
             >
               {p.name}
             </span>
-            {distinguisher && <span className="text-[11px] font-bold text-ink-300">{distinguisher}</span>}
+            {/* Fix round 1, Important #1: as a flex-column child under `items-center` (not `stretch`)
+              * this span had no bounded width, so a long distinguisher WRAPPED instead of truncating
+              * — two lines of "Tạo"/"25/08/2026" pushed the row-density cell (fixed `h-24`) past its
+              * own height and overlapped the name above it. `w-full` gives `truncate` a box to clip
+              * against; the full text still reaches an assistive reader / a hover via `title`. */}
+            {distinguisher && (
+              <span className="w-full truncate text-center text-[11px] font-bold text-ink-300" title={distinguisher}>
+                {distinguisher}
+              </span>
+            )}
           </button>
         )
       })}
@@ -157,9 +167,15 @@ export function ProfilePicker({ profiles, onSelect, activeId, busy, density = 'a
   if (d === 'row') return cells
 
   // `grid` and `compact` both live inside a capped scroll region with a bottom fade; only `grid`
-  // ever grows the footer, and only past 4 profiles — `compact` (CloudStart's small picker) never
-  // shows it, whatever the count.
-  const showFooter = d === 'grid' && footer !== false && profiles.length > 4
+  // ever grows the footer — `compact` (CloudStart's small picker) never shows it, whatever the
+  // count. Fix round 1, ruled #2: the hint is only true once the grid actually has something to
+  // scroll TO. The 2-column phone layout is the tightest one (md: goes to 4), so it is also the one
+  // that overflows first — `ceil(n/2)` rows × 88 + `(rows-1)` × 8 stays ≤ the 380px cap exactly
+  // through 8 profiles (4 rows × 88 + 3 × 8 = 376) and first exceeds it at 9 (5 rows × 88 + 4 × 8 =
+  // 472). Below that there is nothing to scroll to, so "cuộn xem thêm" next to a fully-visible grid
+  // would be a lie — the footer simply does not render rather than invent a new, unreviewed bare
+  // "N hồ sơ" copy for that case.
+  const showFooter = d === 'grid' && footer !== false && profiles.length > 8
 
   return (
     <div className="flex flex-col gap-1">
