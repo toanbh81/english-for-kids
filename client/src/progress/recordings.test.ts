@@ -28,3 +28,11 @@ it('clearRecordings empties the store', async () => {
   await clearRecordings()
   expect(await listRecordings()).toEqual([])
 })
+
+it('reads back a recording with no score (old records) and one with a score (new writer)', async () => {
+  await saveRecording({ id: 'old', ts: BASE, text: 'hi', blob: new Blob(['x']) })
+  await saveRecording({ id: 'new', ts: BASE + 1, text: 'hi', blob: new Blob(['y']), score: 86 })
+  const list = await listRecordings()
+  expect(list.find(r => r.id === 'old')?.score).toBeUndefined()
+  expect(list.find(r => r.id === 'new')?.score).toBe(86)
+})

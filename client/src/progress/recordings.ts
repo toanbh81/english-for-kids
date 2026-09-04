@@ -3,7 +3,7 @@ const STORE_NAME = 'recordings'
 const DB_VERSION = 1
 const MAX_RECORDINGS = 20
 
-export type Recording = { id: string; ts: number; text: string; blob: Blob }
+export type Recording = { id: string; ts: number; text: string; blob: Blob; score?: number }
 
 function openDb(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {

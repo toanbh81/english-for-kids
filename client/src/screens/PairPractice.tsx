@@ -83,7 +83,7 @@ function PairRun({ pair }: { pair: PairItem }) {
 
   function handleResult(result: PronunciationResult, blob: Blob | null) {
     logActivity({ ts: Date.now(), kind: 'speak', id: pair.id, score: result.overall, phonemes: result.words.flatMap(w => w.phonemes) })
-    if (blob) saveRecording({ id: `${pair.id}:${Date.now()}`, ts: Date.now(), text: targetText, blob }).catch(() => {})
+    if (blob) saveRecording({ id: `${pair.id}:${Date.now()}`, ts: Date.now(), text: targetText, blob, score: result.overall }).catch(() => {})
   }
 
   const attempt = useSpeakingAttempt({
