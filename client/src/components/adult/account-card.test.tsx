@@ -75,20 +75,25 @@ describe('AccountCard', () => {
     expect(screen.getByTestId('sync-status')).toHaveTextContent('● Chưa đồng bộ 12 mục')
   })
 
-  it('⑤ busy dims the button, spins a 16px ring inside it and keeps the typed email', () => {
+  it('⑤ busy dims the button via `disabled` (Button owns the opacity), spins a 16px ring inside it and keeps the typed email', () => {
     render(<AccountCard {...base} state={{ kind: 'link', email: 'me@ex.com', busy: true }} />)
     const btn = screen.getByRole('button', { name: /Đang gửi…/ })
     expect(btn).toBeDisabled()
-    expect(btn).toHaveClass('opacity-70')
     expect(within(btn).getByTestId('button-spinner')).toHaveClass('h-4', 'w-4')
     expect(screen.getByLabelText('Email của bố mẹ')).toHaveValue('me@ex.com')
   })
 
-  it('⑥ OTP: the 61-char email sits inside the sentence, the code box is Baloo 20 tracking 6, "Sửa lại email" is 44', () => {
+  it('⑥ OTP: the 61-char email sits inside the sentence, the code box is Baloo 20 tracking 6 with exactly one font-size token, "Sửa lại email" is 44', () => {
     render(<AccountCard {...base} state={{ kind: 'otp', email: EMAIL61, otp: '4821' }} />)
     expect(screen.getByTestId('otp-sentence')).toHaveClass('truncate')
     expect(screen.getByTestId('otp-sentence')).toHaveAttribute('title', EMAIL61)
-    expect(screen.getByLabelText('Mã 6 số')).toHaveClass('text-center', 'font-display', 'text-[20px]', 'tracking-[6px]', 'border-teal-500')
+    const otpInput = screen.getByLabelText('Mã 6 số')
+    expect(otpInput).toHaveClass('text-center', 'font-display', 'text-[20px]', 'tracking-[6px]', 'border-teal-500')
+    // Fix round 1: `text-[20px]` must be the ONLY font-size utility on the box — a second one
+    // (e.g. a stacked `text-[22px]` from the shared A2 code-input style) makes the rendered size a
+    // stylesheet-order coin flip instead of a guarantee.
+    const sizeTokens = otpInput.className.split(/\s+/).filter(c => /^text-\[\d+px\]$/.test(c))
+    expect(sizeTokens).toEqual(['text-[20px]'])
     const edit = screen.getByRole('button', { name: 'Sửa lại email' })
     expect(edit).toHaveClass('min-h-[44px]')
     expect(edit.className).not.toMatch(/min-h-\[36px\]/)
@@ -124,12 +129,12 @@ describe('AccountCard', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Thử lại' })); expect(onRetrySync).toHaveBeenCalled()
   })
 
-  it('⑪ signing out: the syncing pill, the "đang lưu" sentence and a half-faded button', () => {
+  it('⑪ signing out: the syncing pill, the "đang lưu" sentence and a disabled button', () => {
     render(<AccountCard {...base} sync={SYNCING} state={{ kind: 'linked', email: EMAIL61, signingOut: true, pending: 3 }} />)
     expect(screen.getByTestId('sync-status')).toHaveTextContent('◌ Đang đồng bộ…')
     expect(screen.getByText('Đang lưu 3 mục còn lại trước khi đăng xuất…')).toBeInTheDocument()
     const btn = screen.getByRole('button', { name: 'Đăng xuất' })
-    expect(btn).toBeDisabled(); expect(btn).toHaveClass('opacity-50')
+    expect(btn).toBeDisabled()
   })
 
   it('no control in any of the eleven states is a 56/64 child button', () => {

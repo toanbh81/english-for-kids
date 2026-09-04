@@ -1,6 +1,16 @@
 import type { SyncStatus } from '../../cloud/sync'
 import { AccountCardSkeleton, Button, Notice, SyncPill } from '../ui'
-import { FIELD_INPUT, FIELD_INPUT_CODE, FIELD_INPUT_ERROR, FieldRow } from './FieldRow'
+import { FIELD_INPUT, FIELD_INPUT_ERROR, FieldRow } from './FieldRow'
+
+/**
+ * Fix round 1 — the OTP box's own input style, built from scratch rather than layered on
+ * `FIELD_INPUT_CODE` (`FieldRow.tsx:7`). That constant bakes in `text-[22px]` for A2's code/
+ * recovery boxes; brief §2's Account-card row ⑥ explicitly wants **20px**, not 22 ("ô 22 là của
+ * A2"). Stacking `text-[20px]` after `FIELD_INPUT_CODE` left two same-property utility classes in
+ * one `className` string — which one wins is stylesheet-generation order, not JSX order — so the
+ * size was never guaranteed. This string carries the size exactly once.
+ */
+const OTP_INPUT = 'h-11 w-full truncate rounded-r12 border-2 border-sand-edge px-3 text-center font-display text-[20px] font-extrabold tracking-[6px] text-ink-900 outline-none border-teal-500'
 
 /**
  * Task 4 (brief §2 "Thẻ Tài khoản — 11 trạng thái") — a PRESENTATIONAL extraction of
@@ -117,7 +127,7 @@ export function AccountCard({
               />
             }
           />
-          <Button type="submit" size="adult" disabled={state.busy} className={state.busy ? 'opacity-70' : ''}>
+          <Button type="submit" size="adult" disabled={state.busy}>
             <SubmitFace busy={state.busy} label="Liên kết" />
           </Button>
         </form>
@@ -144,7 +154,7 @@ export function AccountCard({
                 required
                 value={state.otp}
                 onChange={e => onOtpChange(e.target.value)}
-                className={`${FIELD_INPUT} ${FIELD_INPUT_CODE} text-[20px] border-teal-500 ${state.error ? FIELD_INPUT_ERROR : ''}`}
+                className={`${OTP_INPUT} ${state.error ? FIELD_INPUT_ERROR : ''}`}
               />
             }
           />
@@ -156,7 +166,7 @@ export function AccountCard({
             >
               Sửa lại email
             </button>
-            <Button type="submit" size="adult" disabled={state.busy} className={state.busy ? 'opacity-70' : ''}>
+            <Button type="submit" size="adult" disabled={state.busy}>
               <SubmitFace busy={state.busy} label="Xác nhận" />
             </Button>
           </div>
@@ -187,7 +197,6 @@ export function AccountCard({
               size="adult"
               variant="outline"
               disabled={state.signingOut}
-              className={state.signingOut ? 'opacity-50' : ''}
               onClick={onSignOut}
             >
               Đăng xuất
