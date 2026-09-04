@@ -66,6 +66,9 @@ describe('ProfilePicker', () => {
     expect(screen.getByTestId('picker').className).not.toMatch(/\bsm:|\blg:/)
     expect(screen.getAllByRole('button')[0]).toHaveClass('h-[88px]')
     expect(screen.getByTestId('picker-scroll')).toHaveClass('max-h-[380px]', 'overflow-y-auto')
+    // Tailwind only generates a `::before`/`::after` box when an explicit `content-*` utility is
+    // present (fix round 2, Important #1) — without it every other `after:` class here is dead.
+    expect(screen.getByTestId('picker-scroll')).toHaveClass("after:content-['']")
     expect(screen.getByText('8 hồ sơ · cuộn xem thêm')).toHaveClass('text-[12px]', 'text-ink-300')
   })
 

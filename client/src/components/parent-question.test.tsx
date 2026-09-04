@@ -25,13 +25,22 @@ describe('ParentQuestion', () => {
   })
 
   it('a wrong answer changes the question, reddens and shakes the box', () => {
+    // `newQuestion()` draws `a` and `b` independently from 3..9 (7 values each), so leaving
+    // `Math.random` unmocked gives the reroll a ~1/49 chance of landing back on the same pair and
+    // flaking the "changed" assertion below. Pin two distinct pairs the same way the sibling
+    // screen suites do (`CloudStart.test.tsx`, `ParentDashboard.test.tsx`): first question 3 × 3,
+    // reroll 9 × 9.
+    const random = vi.spyOn(Math, 'random')
+    random.mockReturnValueOnce(0).mockReturnValueOnce(0) // first question: 3 × 3
     render(<ParentQuestion onPass={noop} />)
     const before = screen.getByText(/× \d+ =/).textContent
+    random.mockReturnValueOnce(0.99).mockReturnValueOnce(0.99) // reroll: 9 × 9
     fireEvent.change(screen.getByLabelText('Đáp án'), { target: { value: '1' } })
     fireEvent.click(screen.getByRole('button', { name: 'Vào' }))
     expect(screen.getByTestId('question-error')).toHaveTextContent('⛔ Chưa đúng — câu hỏi đã đổi, thử lại nhé.')
     expect(screen.getByLabelText('Đáp án')).toHaveClass('border-fix-700', 'animate-shake')
     expect(screen.getByText(/× \d+ =/).textContent).not.toBe(before)
+    random.mockRestore()
   })
 
   it('an empty submit keeps the question and says so in its own words', () => {
@@ -48,6 +57,13 @@ describe('ParentQuestion', () => {
     fireEvent.change(screen.getByLabelText('Đáp án'), { target: { value: '2' } })
     expect(screen.getByTestId('question-error')).toBeEmptyDOMElement()
     expect(screen.getByLabelText('Đáp án').className).not.toMatch(/animate-shake|border-fix-700/)
+  })
+
+  it('names the input "Đáp án" and describes it with the equation, for screen readers', () => {
+    render(<ParentQuestion onPass={noop} />)
+    const input = screen.getByLabelText('Đáp án')
+    expect(input).toHaveAccessibleName('Đáp án')
+    expect(input).toHaveAccessibleDescription(/^\d+ × \d+ =$/)
   })
 
   it('the right answer passes exactly once', () => {

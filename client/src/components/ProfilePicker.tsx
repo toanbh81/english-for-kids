@@ -165,7 +165,7 @@ export function ProfilePicker({ profiles, onSelect, activeId, busy, density = 'a
     <div className="flex flex-col gap-1">
       <div
         data-testid="picker-scroll"
-        className="relative max-h-[380px] overflow-y-auto after:sticky after:bottom-0 after:mt-auto after:h-9 after:bg-gradient-to-b after:from-transparent after:to-white"
+        className="relative max-h-[380px] overflow-y-auto after:sticky after:bottom-0 after:mt-auto after:h-9 after:bg-gradient-to-b after:from-transparent after:to-white after:content-['']"
       >
         {cells}
       </div>

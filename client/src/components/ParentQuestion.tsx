@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useId, useState } from 'react'
 import type { ChangeEvent, FormEvent } from 'react'
 import { Button } from './ui'
 
@@ -32,6 +32,11 @@ type Props = {
 }
 
 export function ParentQuestion({ onPass, title = 'Dành cho phụ huynh', sub }: Props) {
+  // Referenced by the input's `aria-describedby` below, so a screen reader hears which
+  // multiplication it is answering. Kept out of the input's accessible NAME (which stays the
+  // static "Đáp án") because several screen tests key off `getByLabelText('Đáp án')` — a
+  // description adds the equation without moving that target.
+  const equationId = useId()
   const [question, setQuestion] = useState(newQuestion)
   const [value, setValue] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -71,11 +76,12 @@ export function ParentQuestion({ onPass, title = 'Dành cho phụ huynh', sub }:
 
       <form onSubmit={handleSubmit} className="flex flex-col gap-2">
         <div className="flex items-center gap-3 py-2">
-          <span className="font-display text-[32px] font-extrabold text-ink-900">
+          <span id={equationId} className="font-display text-[32px] font-extrabold text-ink-900">
             {question.a} × {question.b} =
           </span>
           <input
             aria-label="Đáp án"
+            aria-describedby={equationId}
             inputMode="numeric"
             type="text"
             value={value}
