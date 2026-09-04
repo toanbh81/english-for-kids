@@ -100,6 +100,11 @@ describe('Button', () => {
     expect(screen.getByRole('button')).toHaveClass('border-teal-line', 'shadow-edge-outline', 'disabled:opacity-45', 'disabled:shadow-none')
   })
 
+  it('danger is a pale-red outline on white — a real variant, not a className', () => {
+    render(<Button size="adult" variant="danger">↺ Đặt lại tiến trình…</Button>)
+    expect(screen.getByRole('button')).toHaveClass('bg-white', 'text-fix-700', 'border-2', 'border-fix-300', 'min-h-[44px]', 'rounded-r12')
+  })
+
   it('pulse uses the coral ring animation', () => {
     render(<Button pulse>Bắt đầu ▸</Button>)
     expect(screen.getByRole('button')).toHaveClass('animate-pulse-coral')
@@ -408,6 +413,16 @@ describe('EmptyState', () => {
     expect(screen.getByText('Hôm nay chưa có nhiệm vụ')).toHaveClass('text-[22px]')
     expect(screen.getByText(/luyện tự do/)).toHaveClass('text-[14px]')
   })
+
+  it('dashed is a 120px dashed box and leaves the card variant untouched', () => {
+    const { rerender } = render(<EmptyState adult variant="dashed" emoji="📈" title="Chưa có lịch sử luyện" sub="Biểu đồ hiện từ ngày học đầu tiên." />)
+    const box = screen.getByTestId('empty-state')
+    expect(box).toHaveClass('min-h-[120px]', 'rounded-r12', 'border-2', 'border-dashed', 'border-sand-edge', 'bg-transparent')
+    expect(box.className).not.toMatch(/bg-cream-50|min-h-\[150px\]/)
+
+    rerender(<EmptyState adult emoji="🎙️" title="Chưa có bản ghi nào" sub="Bản ghi xuất hiện sau khi bé luyện nói." />)
+    expect(screen.getByTestId('empty-state')).toHaveClass('min-h-[150px]', 'rounded-r18', 'bg-cream-50')
+  })
 })
 
 describe('Notice', () => {
@@ -443,6 +458,13 @@ describe('Notice', () => {
       expect(btn).toHaveClass('min-h-[44px]', 'min-w-[44px]')
       expect(btn.className).not.toMatch(/after:/)
     }
+  })
+
+  it('icon overrides the glyph and keeps the kind tone', () => {
+    render(<Notice kind="warn" adult icon="📡" title="Đang ngoại tuyến — sẽ tự kết nối khi có mạng." />)
+    expect(screen.getByRole('status')).toHaveClass('bg-sun-50', 'text-sun-700')
+    expect(screen.getByText('📡')).toBeInTheDocument()
+    expect(screen.queryByText('⚠️')).toBeNull()
   })
 })
 
@@ -527,7 +549,7 @@ describe('SyncPill', () => {
     expect(screen.getByRole('button', { name: 'Thử lại' })).toBeInTheDocument()
 
     rerender(<SyncPill status={{ ...base, lastSyncedAt: new Date(2026, 8, 2, 9, 41).getTime() } as SyncStatus} onRetry={() => {}} />)
-    expect(screen.getByTestId('sync-status')).toHaveTextContent('Đồng bộ lúc 09:41')
+    expect(screen.getByTestId('sync-status')).toHaveTextContent('Đã đồng bộ · 09:41')
 
     rerender(<SyncPill status={{ ...base, state: 'off' } as SyncStatus} onRetry={() => {}} />)
     expect(screen.queryByTestId('sync-status')).toBeNull()
@@ -539,12 +561,44 @@ describe('SyncPill', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Thử lại' }))
     expect(onRetry).toHaveBeenCalledTimes(1)
   })
+
+  it('keeps its six old states byte-identical at the default size', () => {
+    render(<SyncPill status={{ ...base } as SyncStatus} onRetry={() => {}} />)
+    expect(screen.getByTestId('sync-status')).toHaveClass('h-8', 'rounded-r10', 'px-2.5', 'text-[12px]')
+  })
+
+  it('merges the clock state into "✓ Đã đồng bộ · HH:MM" on good-50', () => {
+    render(<SyncPill status={{ ...base, lastSyncedAt: new Date(2026, 8, 2, 9, 41).getTime() } as SyncStatus} onRetry={() => {}} />)
+    const pill = screen.getByTestId('sync-status')
+    expect(pill).toHaveTextContent('✓ Đã đồng bộ · 09:41')
+    expect(pill).toHaveClass('bg-good-50', 'text-good-700')
+  })
+
+  it('says "Chưa kết nối" only when a session is known to be missing — never when cloud is off', () => {
+    const { rerender } = render(<SyncPill status={{ ...base } as SyncStatus} hasSession={false} onRetry={() => {}} />)
+    expect(screen.getByTestId('sync-status')).toHaveTextContent('⚡ Chưa kết nối')
+
+    rerender(<SyncPill status={{ ...base, state: 'offline' } as SyncStatus} hasSession={false} onRetry={() => {}} />)
+    expect(screen.getByTestId('sync-status')).toHaveTextContent('⚡ Ngoại tuyến') // offline wins over no-session
+
+    rerender(<SyncPill status={{ ...base, state: 'off' } as SyncStatus} hasSession={false} onRetry={() => {}} />)
+    expect(screen.queryByTestId('sync-status')).toBeNull() // cloud unconfigured stays silent
+
+    rerender(<SyncPill status={{ ...base } as SyncStatus} onRetry={() => {}} />)
+    expect(screen.getByTestId('sync-status')).toHaveTextContent('✓ Đã đồng bộ') // hasSession undefined = old behaviour
+  })
+
+  it('size sm is the 28px pill of the narrow panel', () => {
+    render(<SyncPill status={{ ...base } as SyncStatus} size="sm" onRetry={() => {}} />)
+    expect(screen.getByTestId('sync-status')).toHaveClass('h-7', 'rounded-lg', 'px-2', 'text-[11px]')
+  })
 })
 
 describe('Skeleton', () => {
   it('account skeleton keeps the card height', () => {
     render(<AccountCardSkeleton />)
-    expect(screen.getByTestId('skeleton-account')).toHaveClass('h-[168px]')
+    expect(screen.getByTestId('skeleton-account')).toHaveClass('h-[150px]')
+    expect(screen.getByTestId('skeleton-account').className).not.toMatch(/h-\[168px\]/)
     expect(screen.getAllByTestId('skeleton')[0]).toHaveClass('animate-shimmer')
   })
 })

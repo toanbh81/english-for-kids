@@ -14,7 +14,7 @@ export function Skeleton({ className = '' }: { className?: string }) {
  */
 export function AccountCardSkeleton() {
   return (
-    <div data-testid="skeleton-account" className="flex h-[168px] flex-col gap-2.5">
+    <div data-testid="skeleton-account" className="flex h-[150px] flex-col gap-2.5">
       <div className="flex justify-between">
         <Skeleton className="h-4 w-[120px]" />
         <Skeleton className="h-4 w-20" />

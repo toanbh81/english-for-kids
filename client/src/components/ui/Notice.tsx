@@ -27,6 +27,9 @@ export type NoticeProps = {
   /** Defaults to `status`. Pass `alert` where the existing screen already relied on the assertive
    * announcement (and tests query `getByRole('alert')`) — see CloudStart's error strip. */
   role?: 'status' | 'alert'
+  /** Overrides the kind's default glyph while keeping its tone — e.g. ③ of the Account card uses
+   * `warn` tone with 📡: tone says how severe, icon says *what happened*. */
+  icon?: string
   /**
    * Defaults to `false` — a CHILD screen. Every button (`action`, `onClose`, the credential's
    * "Chép mã") is `min-h-[44px] min-w-[44px]` regardless, but on a child screen that 44 px box
@@ -44,12 +47,12 @@ export type NoticeProps = {
  * button. */
 const CHILD_HIT_BAND = "relative after:absolute after:-inset-2.5 after:content-['']"
 
-export function Notice({ kind, title, sub, action, onClose, code, testId, role = 'status', adult = false }: NoticeProps) {
+export function Notice({ kind, title, sub, action, onClose, code, testId, role = 'status', icon, adult = false }: NoticeProps) {
   const k = KIND[kind]
   const btn = (cls: string) => `min-h-[44px] min-w-[44px] ${cls} ${adult ? '' : CHILD_HIT_BAND}`
   return (
     <div role={role} data-testid={testId} className={`flex items-start gap-3 rounded-r16 border-[3px] py-2.5 pl-3.5 pr-2.5 ${k.cls}`}>
-      <span aria-hidden="true" className="mt-px text-[20px] leading-none">{k.icon}</span>
+      <span aria-hidden="true" className="mt-px text-[20px] leading-none">{icon ?? k.icon}</span>
       <div className="min-w-0 flex-1">
         <div className="text-[14px] font-extrabold leading-snug">{title}</div>
         {sub && <div className="mt-0.5 text-[12px] font-bold leading-snug opacity-85 [overflow-wrap:anywhere]">{sub}</div>}

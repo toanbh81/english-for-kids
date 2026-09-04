@@ -1,6 +1,8 @@
+import { useEffect } from 'react'
 import { act, fireEvent, render, screen } from '@testing-library/react'
 import { DialogProvider } from './DialogProvider'
 import { useDialog } from './useDialog'
+import type { DialogContextValue } from './DialogContext'
 
 function Harness({ onDone, delOnConfirm }: { onDone: (v: unknown) => void; delOnConfirm?: () => Promise<unknown> }) {
   const d = useDialog()
@@ -16,6 +18,20 @@ function deferred<T>() {
   let resolve!: (v: T) => void
   const promise = new Promise<T>(r => { resolve = r })
   return { promise, resolve }
+}
+
+/** A ref-style harness for tests that need to call `prompt`/`confirm`/`destructive` directly
+ * (rather than through a button in the DOM), e.g. to exercise options `Harness` above doesn't
+ * take, such as `placeholder`. */
+const dialogRef: { current: DialogContextValue | null } = { current: null }
+function DialogRefHarness() {
+  const d = useDialog()
+  useEffect(() => { dialogRef.current = d }, [d])
+  return null
+}
+function renderWithProvider() {
+  dialogRef.current = null
+  render(<DialogProvider><DialogRefHarness /></DialogProvider>)
 }
 
 it('throws a clear error when useDialog is used outside the provider', () => {
@@ -201,4 +217,20 @@ it('a fresh dialog opened after the previous one closes is not disabled and is f
   const confirmButton = screen.getByRole('button', { name: 'Đăng xuất' })
   expect(confirmButton).not.toBeDisabled()
   expect(confirmButton).toHaveFocus()
+})
+
+it('a prompt renders its placeholder and nothing else about the dialog changes', async () => {
+  renderWithProvider()
+  act(() => { void dialogRef.current!.prompt({ title: 'Thêm hồ sơ mới', label: 'Tên của bé', maxLength: 40, placeholder: 'Ví dụ: Bé Su' }) })
+  const input = await screen.findByLabelText('Tên của bé')
+  expect(input).toHaveAttribute('placeholder', 'Ví dụ: Bé Su')
+  expect(input).toHaveClass('h-11', 'rounded-r12', 'border-2', 'border-teal-500')
+  expect(screen.getByText('0/40')).toBeInTheDocument()
+})
+
+it('a prompt without a placeholder has none', async () => {
+  renderWithProvider()
+  act(() => { void dialogRef.current!.prompt({ title: 'Đổi tên hồ sơ', label: 'Tên của bé', maxLength: 40 }) })
+  const input = await screen.findByLabelText('Tên của bé')
+  expect(input).not.toHaveAttribute('placeholder')
 })

@@ -1,7 +1,7 @@
 import type { AnchorHTMLAttributes, ButtonHTMLAttributes } from 'react'
 import { Link } from 'react-router-dom'
 
-export type ButtonVariant = 'primary' | 'secondary' | 'outline' | 'ghost'
+export type ButtonVariant = 'primary' | 'secondary' | 'outline' | 'ghost' | 'danger'
 /** `md` and `lg` are responsive (brief §1: phone 56, iPad 64; lg one step up). `adult` is the
  * parent area's fixed 44 (brief §2.1). `sm` is the 48px mission CTA — 48 already clears the 44px
  * tap-target floor and the MissionCard it lives in has no room for the usual 4px hit band, so it
@@ -15,6 +15,10 @@ const VARIANT: Record<ButtonVariant, string> = {
   secondary: 'bg-teal-500 text-white shadow-chunky-teal active:shadow-none',
   outline: 'bg-white text-teal-600 border-[3px] border-teal-line shadow-edge-outline active:shadow-none',
   ghost: 'bg-transparent text-ink-500 border-[3px] border-dashed border-sand-edge',
+  // R14 / quyết định 11: hàng "Đặt lại tiến trình" của dashboard. Viền 2px (không 3 như outline —
+  // brief §1.2 vẽ `2px #F8A3AE`), chữ #C2354B, nền trắng, không bóng: một nút phá huỷ không được
+  // trông "bấm được cho vui" như primary. Là VARIANT THẬT vì base class luôn thắng className đè.
+  danger: 'bg-white text-fix-700 border-2 border-fix-300',
 }
 
 // The phone button is 56 tall but its tap target is 64: an invisible 4 px band above and below,

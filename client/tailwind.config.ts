@@ -96,6 +96,12 @@ export default {
           '0%, 22%, 100%': { transform: 'rotateY(0deg)' },
           '11%': { transform: 'rotateY(-18deg)' },
         },
+        // 300ms, biên độ nhỏ: một ô nhập trả lời sai thì *lắc đầu*, không nhảy múa.
+        shake: {
+          '0%, 100%': { transform: 'translateX(0)' },
+          '20%, 60%': { transform: 'translateX(-5px)' },
+          '40%, 80%': { transform: 'translateX(5px)' },
+        },
       },
       animation: {
         'pulse-soft': 'pulse-soft 1.6s ease-in-out infinite',
@@ -116,6 +122,7 @@ export default {
         // 2.5 s of grace first: the hint is for a child who has stopped and is looking at the card,
         // not for one who is already tapping it.
         peek: 'peek 4s ease-in-out 2.5s infinite',
+        shake: 'shake .3s ease-in-out 1',
       },
     },
   },

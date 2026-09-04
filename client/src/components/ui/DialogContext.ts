@@ -23,6 +23,8 @@ export type PromptOptions = {
   initial?: string
   maxLength?: number
   confirmLabel?: string
+  /** Hint text shown in the empty input — e.g. "Ví dụ: Bé Su" on the add-profile prompt. */
+  placeholder?: string
   /** The prompt's equivalent of `DialogOptions.onConfirm`: given the trimmed value, keeps the
    * dialog open and busy until it settles, then resolves the dialog with that value and closes. */
   onSubmit?: (value: string) => Promise<unknown>

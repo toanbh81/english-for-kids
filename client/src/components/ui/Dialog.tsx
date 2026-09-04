@@ -15,7 +15,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
  */
 export type DialogRequest =
   | { id: number; kind: 'confirm' | 'destructive'; title: string; body: string; confirmLabel: string; cancelLabel?: string; onConfirm?: () => Promise<unknown>; resolve: (v: boolean) => void }
-  | { id: number; kind: 'prompt'; title: string; label: string; initial?: string; maxLength?: number; confirmLabel?: string; onSubmit?: (value: string) => Promise<unknown>; resolve: (v: string | null) => void }
+  | { id: number; kind: 'prompt'; title: string; label: string; initial?: string; maxLength?: number; confirmLabel?: string; placeholder?: string; onSubmit?: (value: string) => Promise<unknown>; resolve: (v: string | null) => void }
 
 /**
  * Adult UI (brief §2.8): 44 px controls, 12–14 px text, no Foxy — the same register as the rest
@@ -90,7 +90,7 @@ export function Dialog({ req, onBusyChange }: { req: DialogRequest; onBusyChange
           // would fold into that name ("Tên của bé2/40") otherwise.
           <div className="flex flex-col gap-1.5">
             <label htmlFor="dlg-prompt-input" className="text-[12px] font-extrabold text-ink-500">{req.label}</label>
-            <input id="dlg-prompt-input" ref={first as never} disabled={busy} value={value} maxLength={max} onChange={e => setValue(e.target.value.slice(0, max))} className="h-11 rounded-r12 border-2 border-teal-500 px-3 text-[15px] font-bold text-ink-900 outline-none disabled:opacity-50" />
+            <input id="dlg-prompt-input" ref={first as never} disabled={busy} value={value} maxLength={max} placeholder={req.placeholder} onChange={e => setValue(e.target.value.slice(0, max))} className="h-11 rounded-r12 border-2 border-teal-500 px-3 text-[15px] font-bold text-ink-900 outline-none disabled:opacity-50" />
             <span className="flex justify-between text-[11px] font-bold text-ink-300"><span>{short && short !== value.trim() ? `Hiện trong app dưới dạng "${short}" nếu quá dài` : ''}</span><span>{value.length}/{max}</span></span>
           </div>
         )}
