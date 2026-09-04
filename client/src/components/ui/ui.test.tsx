@@ -7,6 +7,7 @@ import { Chip } from './Chip'
 import { ChipPair } from './ChipPair'
 import { DialogProvider } from './DialogProvider'
 import { EmptyState } from './EmptyState'
+import { GateCard } from './GateCard'
 import { HomeLabel } from './HomeLabel'
 import { NotFound } from './NotFound'
 import { Notice } from './Notice'
@@ -422,6 +423,15 @@ describe('EmptyState', () => {
 
     rerender(<EmptyState adult emoji="🎙️" title="Chưa có bản ghi nào" sub="Bản ghi xuất hiện sau khi bé luyện nói." />)
     expect(screen.getByTestId('empty-state')).toHaveClass('min-h-[150px]', 'rounded-r18', 'bg-cream-50')
+  })
+})
+
+describe('GateCard', () => {
+  it('is Dialog.tsx:84 in another place: 420, r20, p20, gap 12, left-aligned', () => {
+    render(<GateCard><h1>Dành cho phụ huynh</h1></GateCard>)
+    const card = screen.getByTestId('gate-card')
+    expect(card).toHaveClass('flex', 'w-[min(420px,calc(100%-32px))]', 'flex-col', 'gap-3', 'rounded-r20', 'bg-white', 'p-5', 'shadow-[0_6px_0_#EFE2CC]', 'text-left')
+    expect(card.className).not.toMatch(/max-w-md|text-center|\blg:|\bsm:/)
   })
 })
 
