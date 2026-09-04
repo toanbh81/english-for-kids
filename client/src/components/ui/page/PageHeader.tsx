@@ -28,8 +28,20 @@ export function PageHeader({ back, right, engine, dimmed, title, sub, align, onB
   // below (`[&>a]:bg-white/[.92] [&>a]:text-teal-600`, line ~30) on the very same anchor — dropped
   // here since the cell-level rule is the more local, cheaper selector.
   const band = onBand ? ' bg-transparent' : ''
+  // Every `start` call site before Task 10 (Phase 14's list screens) passes the `child` `BackButton`
+  // — a 56/64 px circle, exactly the fixed track below — so a fixed track and an `auto` one size it
+  // identically and neither changes those screens' pixels. Task 10 is the first to pair `start` with
+  // the `adult` pill (a real, wider label, "Về nhà"/"Về bản đồ 🏝️"): a fixed 56/64 px track cannot
+  // hold it, and CSS grid does not reflow a track to fit an overflowing item, so the pill painted
+  // straight over the title next to it. `auto` sizes the track to whatever `back` actually is, in
+  // both branches — a no-op for a circle, the fix for a pill. Center mode keeps the exact fixed-track
+  // tokens, in the exact positions, its own "byte-identical" test asserts on (`toBe`, not
+  // `toHaveClass` — token order matters there); so does the right column, which no call site has hit
+  // this problem on yet.
+  const colsPhone = start ? 'grid-cols-[auto_1fr_56px]' : 'grid-cols-[56px_1fr_56px]'
+  const colsMd = start ? 'md:grid-cols-[auto_1fr_minmax(64px,auto)]' : 'md:grid-cols-[64px_1fr_minmax(64px,auto)]'
   return (
-    <header className={`grid h-14 grid-cols-[56px_1fr_56px] items-center ${gapStart} md:h-16 md:grid-cols-[64px_1fr_minmax(64px,auto)] ${gapMd}${band}`}>
+    <header className={`grid h-14 ${colsPhone} items-center ${gapStart} md:h-16 ${colsMd} ${gapMd}${band}`}>
       <div className={`justify-self-start ${onBand ? '[&>a]:bg-white/[.92] [&>a]:text-teal-600' : ''} ${dim}`}>{back}</div>
       <div className={start
         ? 'flex min-w-0 flex-1 items-center justify-self-stretch gap-2.5 text-left'

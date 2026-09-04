@@ -461,10 +461,18 @@ async function run(vpName, vp) {
   // Task 10: the "answer the parent-gate math, then wait for the dashboard to settle" tail three
   // shots below all repeated verbatim — pulled out once so a future fourth shot does not add a
   // fourth copy.
+  // The gate stays unlocked for 10 minutes (`sessionStorage`), so a shot run right after another
+  // one that already solved it lands straight on the dashboard with no equation to answer — this
+  // checks for the gate's own input before trying to solve it, rather than assuming it is there.
   const openDashboard = async () => {
-    const q = await page.locator('text=/\\d+ × \\d+/').first().textContent()
-    const [a, b] = q.match(/\d+/g).map(Number)
-    await page.fill('input', String(a * b)); await page.keyboard.press('Enter'); await sleep(1500)
+    const input = page.getByLabel('Đáp án')
+    if (await input.count()) {
+      const q = await page.locator('text=/\\d+ × \\d+/').first().textContent()
+      const [a, b] = q.match(/\d+/g).map(Number)
+      await page.fill('input', String(a * b)); await page.keyboard.press('Enter'); await sleep(1500)
+    } else {
+      await sleep(500)
+    }
   }
   await S('parent-dashboard', '/parent', openDashboard)
   // Round 4 §2 P2.3/P2.4/P2.8: the worst-case "0 events" state — the minutes chart, the weak-sound

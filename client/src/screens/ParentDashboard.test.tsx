@@ -102,6 +102,18 @@ function renderGate() {
   return renderWithDialogs(<ParentGate />)
 }
 
+/** Task 10's own shorthand for the shell tests below: cloud on by default (most of the ten panels
+ * only exist with it), and one scored event this week by default so the header's summary line has
+ * something to say — pass `events: []` explicitly for the genuinely-empty-week scenario. `events`
+ * always seeds `speakup.activity` before the render so a caller can drive the header's weekly
+ * summary or the chart without reaching for `localStorage.setItem` by hand. */
+function renderDashboard(opts: { events?: ActivityEvent[]; cloud?: boolean } = {}) {
+  cloud.configured = opts.cloud ?? true
+  const events = opts.events ?? [{ ts: Date.now(), kind: 'speak', id: 'seed', score: 80 }]
+  localStorage.setItem('speakup.activity', JSON.stringify(events))
+  return renderWithDialogs(<ParentDashboard />)
+}
+
 /** Reads whatever product this render's `ParentQuestion` is currently asking (no `Math.random`
  * mock needed) and submits it. */
 function answerCorrectly() {
@@ -335,14 +347,21 @@ describe('ParentDashboard', () => {
     renderWithDialogs(<ParentDashboard />)
     await flush()
 
-    expect(screen.getByText('Tuần này: 1 phút luyện · điểm phát âm trung bình 80/100')).toBeInTheDocument()
+    expect(screen.getByText('Tuần này: 1 phút · điểm TB 80/100')).toBeInTheDocument()
   })
 
-  it('shows a dash for the average score in the summary line when there is no data', async () => {
+  /** Task 10: with genuinely no activity this week the header says so instead of "0 phút" — see
+   * the "an empty week says so instead of printing zeros" test below. A dash for the average score
+   * is still reachable, though: an event with no `score` field still counts a minute (any event
+   * that day does) without counting toward any kind's average. */
+  it('shows a dash for the average score when the week has minutes but no scored event', async () => {
+    vi.useFakeTimers({ now: NOW })
+    seedActivity([{ ts: NOW, kind: 'speak', id: 'w1' }])
+
     renderWithDialogs(<ParentDashboard />)
     await flush()
 
-    expect(screen.getByText('Tuần này: 0 phút luyện · điểm phát âm trung bình —/100')).toBeInTheDocument()
+    expect(screen.getByText('Tuần này: 1 phút · điểm TB —/100')).toBeInTheDocument()
   })
 
   it('shows the target line label at the current daily limit', async () => {
@@ -405,7 +424,7 @@ describe('ParentDashboard', () => {
     renderWithDialogs(<ParentDashboard />)
     await flush()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Đặt lại tiến trình' }))
+    fireEvent.click(screen.getByRole('button', { name: '↺ Đặt lại tiến trình…' }))
     fireEvent.click(screen.getByRole('button', { name: 'Xoá tiến trình' }))
 
     await waitFor(() => expect(localStorage.getItem('speakup.stars')).toBeNull())
@@ -428,7 +447,7 @@ describe('ParentDashboard', () => {
     renderWithDialogs(<ParentDashboard />)
     await flush()
 
-    const trigger = screen.getByRole('button', { name: 'Đặt lại tiến trình' })
+    const trigger = screen.getByRole('button', { name: '↺ Đặt lại tiến trình…' })
     fireEvent.click(trigger)
     fireEvent.click(screen.getByRole('button', { name: 'Xoá tiến trình' }))
     await flush()
@@ -453,7 +472,7 @@ describe('ParentDashboard', () => {
     renderWithDialogs(<ParentDashboard />)
     await flush()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Đặt lại tiến trình' }))
+    fireEvent.click(screen.getByRole('button', { name: '↺ Đặt lại tiến trình…' }))
     fireEvent.click(screen.getByRole('button', { name: 'Xoá tiến trình' }))
 
     // `handleReset` clears `speakup.band` synchronously, before its `await clearRecordings()` —
@@ -479,7 +498,7 @@ describe('ParentDashboard', () => {
     renderWithDialogs(<ParentDashboard />)
     await flush()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Đặt lại tiến trình' }))
+    fireEvent.click(screen.getByRole('button', { name: '↺ Đặt lại tiến trình…' }))
     fireEvent.click(screen.getByRole('button', { name: 'Huỷ' }))
     await flush()
 
@@ -535,12 +554,14 @@ describe('ParentDashboard', () => {
   /* ---- Phase 10, design §12 M8c: the dense phone layout ---- */
 
   /**
-   * Spec decision 2: the design drops this card on a phone and we do not. It collapses into a
-   * disclosure instead — and jsdom's `matchMedia` reports every query unmatched, so what these
-   * tests see is exactly the phone state: closed, with the list still in the DOM behind a 64 px
-   * summary row (the one control on this adult screen held to the child tap floor).
+   * Spec decision 2: the design drops this card on a phone and we do not — the last 20 recordings
+   * stay a working feature, not a layout. Task 10 dropped the ad-hoc `<details>` disclosure that
+   * used to fold it on a phone (its 64 px summary row was the one control on this adult screen
+   * still held to the child tap floor — round 4's R3 ruling reversed that): the panel is plain and
+   * always open for now, and Task 14 restores a proper collapse using `Panel`'s own `collapsible`
+   * prop, this time at the adult 44 px convention throughout.
    */
-  it('keeps the recordings card on a phone, collapsed into a closed disclosure', async () => {
+  it('renders the recordings panel plainly — data-testid intact for Task 14 to build the collapse on', async () => {
     recordingsMock.listRecordings.mockResolvedValue([
       { id: 'r1', ts: NOW, text: 'apple', blob: new Blob(['x']) },
     ])
@@ -548,11 +569,7 @@ describe('ParentDashboard', () => {
     renderWithDialogs(<ParentDashboard />)
     const heading = await screen.findByText('Bản ghi gần đây')
 
-    const summary = heading.closest('summary')!
-    expect(summary).toHaveClass('min-h-[64px]')
-    // Closed below 768…
-    expect(summary.closest('details')).not.toHaveAttribute('open')
-    // …but never gone: the recording and its play button are still there to be disclosed.
+    expect(heading.closest('[data-testid="panel"]')).toBeInTheDocument()
     // findBy*, not getBy*: the heading renders synchronously while the row waits on
     // listRecordings, so a bare get here races the promise and fails under a loaded suite.
     expect(await screen.findByRole('button', { name: 'Phát' })).toBeInTheDocument()
@@ -560,22 +577,27 @@ describe('ParentDashboard', () => {
   })
 
   /**
-   * The design calls this screen an adult interface outright — "vùng chạm 36–48px (không cần 64)".
-   * Phase 12 task 15 pushed that further for the screen's own `Button` controls: they are
-   * `size="adult"`, a fixed 44 px at every width, not the earlier phone/md split. The raw chip
-   * buttons (band, length, limit) keep their own 44/64 responsive pair, untouched by this task.
+   * The design calls this screen an adult interface outright — "vùng chạm 36–48px (không cần 64)",
+   * and round 4's R3 ruling made that the whole screen's rule with no exception left: visible
+   * controls 28–44 px, tap target never below 44, nothing sized for a child's finger any more.
+   * `size="adult"` `Button`s were already a fixed 44 at every width since Phase 12 task 15; Task 10
+   * brought the screen's own raw chip buttons (band, length, limit) in line with them by dropping
+   * their `md:min-h-[64px]` pair — only the not-yet-`Stepper` number input keeps its old `md:h-16`
+   * (Task 13 replaces it outright).
    */
   it('uses adult 44 px controls at every width on the screen\'s own buttons', async () => {
     renderWithDialogs(<ParentDashboard />)
     await flush()
 
     for (const name of ['Bậc 3', 'Tự động', '30 phút', 'Vừa ~12 phút']) {
-      expect(screen.getByRole('button', { name }), name).toHaveClass('min-h-[44px]', 'md:min-h-[64px]')
+      const btn = screen.getByRole('button', { name })
+      expect(btn, name).toHaveClass('min-h-[44px]')
+      expect(btn.className, name).not.toMatch(/md:min-h-\[64px\]/)
     }
     expect(screen.getByRole('spinbutton')).toHaveClass('h-11', 'md:h-16')
     // `size="adult"`: fixed 44 px, no `md:` override.
-    expect(screen.getByRole('button', { name: 'Đặt lại tiến trình' })).toHaveClass('min-h-[44px]')
-    expect(screen.getByRole('button', { name: 'Đặt lại tiến trình' }).className).not.toMatch(/md:min-h/)
+    expect(screen.getByRole('button', { name: '↺ Đặt lại tiến trình…' })).toHaveClass('min-h-[44px]')
+    expect(screen.getByRole('button', { name: '↺ Đặt lại tiến trình…' }).className).not.toMatch(/md:min-h/)
     expect(screen.getByRole('main')).toHaveClass('px-6', 'md:px-6')
   })
 
@@ -617,6 +639,69 @@ describe('ParentDashboard', () => {
 
     expect(getLessonLength()).toBe('short')
     expect(screen.getByRole('button', { name: 'Ngắn ~8 phút' })).toHaveAttribute('aria-pressed', 'true')
+  })
+
+  /* ---- Task 10: the dashboard shell — one-row header, PanelGrid 1/2/3, danger reset row ---- */
+
+  it('the header is one left-aligned row: H1 20/24, the summary line as its sub, a 44px lock button', () => {
+    renderDashboard()
+    expect(screen.getByRole('heading', { level: 1 })).toHaveClass('text-[22px]', 'md:text-[28px]')
+    expect(screen.getByText(/Tuần này: \d+ phút · điểm TB/)).toHaveClass('truncate', 'text-[13px]', 'md:text-[15px]')
+    const lock = screen.getByRole('button', { name: 'Khoá lại' })
+    expect(lock).toHaveClass('h-11', 'rounded-r12', 'bg-sand', 'text-sand-text')
+    expect(lock.className).not.toMatch(/border-teal-line|bg-white/) // không còn `variant="outline"`
+    expect(within(lock).getByText('🔐 Khoá lại')).toHaveClass('hidden', 'md:inline')
+  })
+
+  it('an empty week says so instead of printing zeros', () => {
+    renderDashboard({ events: [] })
+    expect(screen.getByText('Chưa có buổi luyện nào tuần này')).toBeInTheDocument()
+  })
+
+  it('all ten panels live inside one grid, in phone order, and the grid is 1/2/3', () => {
+    renderDashboard()
+    const grid = screen.getByTestId('panel-grid')
+    expect(grid).toHaveClass('grid-cols-1', 'md:grid-cols-2', 'ipad:grid-cols-3')
+    const titles = within(grid).getAllByRole('heading', { level: 2 }).map(h => h.textContent)
+    expect(titles).toEqual([
+      'Tài khoản', 'Phút luyện mỗi ngày', 'Điểm trung bình', 'Âm hay sai',
+      '⏰ Giới hạn mỗi ngày', 'Bài học', 'Bản ghi gần đây', 'Tiến độ từ xa',
+    ])
+    expect(screen.queryByTestId('account-card')).toBe(within(grid).getByTestId('account-card'))
+  })
+
+  it('the account panel and the remote panel are full-width; remote is the last panel', () => {
+    renderDashboard()
+    expect(screen.getByTestId('account-card')).toHaveClass('md:col-span-2', 'ipad:col-span-3')
+    const panels = screen.getAllByTestId('panel')
+    expect(panels[panels.length - 1]).toHaveTextContent('Tiến độ từ xa')
+    expect(panels[panels.length - 1]).toHaveClass('md:col-span-2', 'ipad:col-span-3')
+  })
+
+  it('the reset row is the last thing on the screen: a description left, a danger button right', () => {
+    renderDashboard()
+    const row = screen.getByTestId('reset-row')
+    expect(row).toHaveClass('mt-6', 'flex', 'items-center', 'justify-between', 'gap-3')
+    expect(within(row).getByText(/Xoá sao, chuỗi ngày và bản ghi trên máy này/)).toHaveClass('text-[12px]', 'text-ink-300')
+    const btn = within(row).getByRole('button', { name: '↺ Đặt lại tiến trình…' })
+    expect(btn).toHaveClass('bg-white', 'text-fix-700', 'border-fix-300', 'min-h-[44px]')
+    expect(row.compareDocumentPosition(screen.getByTestId('panel-grid')) & Node.DOCUMENT_POSITION_PRECEDING).toBeTruthy()
+  })
+
+  it('a build with no cloud renders six panels and no account/profile/remote anywhere', () => {
+    renderDashboard({ cloud: false })
+    expect(screen.queryByTestId('account-card')).toBeNull()
+    expect(screen.queryByText('Tiến độ từ xa')).toBeNull()
+    expect(screen.queryByText('Hồ sơ')).toBeNull()
+    expect(within(screen.getByTestId('panel-grid')).getAllByTestId('panel')).toHaveLength(6)
+    expect(screen.getByTestId('panel-grid')).toHaveClass('grid-cols-1', 'md:grid-cols-2', 'ipad:grid-cols-3')
+  })
+
+  it('no control on the screen is a 56/64 child target any more', () => {
+    renderDashboard()
+    for (const el of [...screen.queryAllByRole('button'), ...screen.queryAllByRole('link')]) {
+      expect(el.className).not.toMatch(/min-h-\[56px\]|min-h-\[64px\]|md:min-h-\[64px\]|md:h-16/)
+    }
   })
 })
 
@@ -934,7 +1019,7 @@ describe('Phase 11: "Tài khoản"', () => {
     renderWithDialogs(<ParentDashboard />)
     await flush()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Đặt lại tiến trình' }))
+    fireEvent.click(screen.getByRole('button', { name: '↺ Đặt lại tiến trình…' }))
     fireEvent.click(screen.getByRole('button', { name: 'Xoá tiến trình' }))
     await waitFor(() => expect(syncMock.resetRemoteProgress).toHaveBeenCalledWith('p1'))
   })
@@ -1021,7 +1106,7 @@ describe('Phase 11: "Tài khoản"', () => {
     renderWithDialogs(<ParentDashboard />)
     await flush()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Đặt lại tiến trình' }))
+    fireEvent.click(screen.getByRole('button', { name: '↺ Đặt lại tiến trình…' }))
     fireEvent.click(screen.getByRole('button', { name: 'Xoá tiến trình' }))
 
     const notice = await screen.findByTestId('reset-notice')
@@ -1049,7 +1134,7 @@ describe('Phase 11: "Tài khoản"', () => {
     renderWithDialogs(<ParentDashboard />)
     await flush()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Đặt lại tiến trình' }))
+    fireEvent.click(screen.getByRole('button', { name: '↺ Đặt lại tiến trình…' }))
     fireEvent.click(screen.getByRole('button', { name: 'Xoá tiến trình' }))
     await waitFor(() => expect(syncMock.resetRemoteProgress).toHaveBeenCalled())
     await flush()
@@ -1101,7 +1186,7 @@ describe('Phase 11: "Tài khoản"', () => {
 
     const { unmount } = renderWithDialogs(<ParentDashboard />)
     await flush()
-    fireEvent.click(screen.getByRole('button', { name: 'Đặt lại tiến trình' }))
+    fireEvent.click(screen.getByRole('button', { name: '↺ Đặt lại tiến trình…' }))
     expect(screen.getByRole('dialog')).toHaveTextContent(/trên tài khoản/)
     fireEvent.click(screen.getByRole('button', { name: 'Huỷ' }))
     await flush()
@@ -1110,7 +1195,7 @@ describe('Phase 11: "Tài khoản"', () => {
     cloud.configured = false
     renderWithDialogs(<ParentDashboard />)
     await flush()
-    fireEvent.click(screen.getByRole('button', { name: 'Đặt lại tiến trình' }))
+    fireEvent.click(screen.getByRole('button', { name: '↺ Đặt lại tiến trình…' }))
     expect(screen.getByRole('dialog')).not.toHaveTextContent(/tài khoản/)
   })
 
@@ -1133,7 +1218,7 @@ describe('Phase 11: "Tài khoản"', () => {
     renderWithDialogs(<ParentDashboard />)
     await flush()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Đặt lại tiến trình' }))
+    fireEvent.click(screen.getByRole('button', { name: '↺ Đặt lại tiến trình…' }))
     fireEvent.click(screen.getByRole('button', { name: 'Xoá tiến trình' }))
     await flush()
     expect(syncMock.resetRemoteProgress).not.toHaveBeenCalled()

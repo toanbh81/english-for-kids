@@ -42,6 +42,7 @@ import { isCloudConfigured } from '../cloud/supabase'
 import { ProfilePicker } from '../components/ProfilePicker'
 import { AccountCardSkeleton, BackButton, Button, Card, EmptyState, Notice, RemoteRowSkeleton, SyncPill } from '../components/ui'
 import { PageShell, PageHeader, PageBody } from '../components/ui/page'
+import { Panel, PanelGrid } from '../components/adult'
 import { useDialog } from '../components/ui/useDialog'
 
 /**
@@ -49,11 +50,13 @@ import { useDialog } from '../components/ui/useDialog'
  * phase-10 idiom written out in full in `screens/SoundPractice.tsx`.
  *
  * This screen is the one place the app's 64 px tap floor does not apply, and the design says so
- * outright (§12 M8c): it is an **adult** interface — "chữ 12–14px, vùng chạm 36–48px (không cần
- * 64), mật độ cao hơn" — reached through a gate no child gets past. So the phone sizes below are
- * 44 px controls and 12–14 px text, not the child screens' 64 px and 19 px. The one control still
- * held to the child floor is the recordings disclosure's summary row, which spec decision 2 asks
- * for by name.
+ * outright (§12 M8c, and — round 4, R3 — as a deliberate **reversal** of an earlier reading of that
+ * same rule): it is an **adult** interface, reached through a gate no child gets past, and the
+ * ruling for the whole screen is now a single one: visible controls sit at 28/32/36/44 px, the tap
+ * target is never smaller than 44 px (a hit band widens a small box instead of growing it visibly),
+ * and nothing here is sized for a child's finger any more — not even the recordings disclosure,
+ * which used to be held to the child's 64 px floor by name (spec decision 2) and lost that
+ * exception in this same pass.
  */
 const KIND_LABEL = { speak: 'Nói', word: 'Từ vựng', sentence: 'Ghép câu' } as const
 const LIMIT_CHIPS = [15, 20, 30] as const
@@ -158,18 +161,6 @@ export function ParentDashboard({ onLock }: Props) {
   const [limit, setLimit] = useState<string>(() => String(getLimitMinutes()))
   const [band, setBand] = useState(() => getBand())
   const [length, setLength] = useState<LessonLength>(() => getLessonLength())
-  /**
-   * Spec decision 2: the design drops "Bản ghi gần đây" on a phone and we do not — the last 20
-   * recordings are a working feature, not a layout. It collapses into a disclosure there instead,
-   * closed, so the two cards under it are not twenty rows away.
-   *
-   * `open` is an attribute, not a class, so it cannot follow a breakpoint: it is decided once, on
-   * mount, by the same 768 px query the classes use. Once, deliberately — the value never changes,
-   * so React never re-applies the attribute and so never fights a parent's own tap on the summary.
-   * (A tablet rotated below 768 after mount keeps the state it opened with; re-entering the screen
-   * re-reads it, and the phone the design is aimed at has nothing to rotate into.)
-   */
-  const [recordingsOpen] = useState(() => window.matchMedia?.('(min-width: 768px)').matches ?? false)
 
   // A build with no cloud env vars renders none of what follows — read once, synchronously, so
   // this screen never even asks whether it is signed in (constraint: byte-identical without them).
@@ -520,31 +511,34 @@ export function ParentDashboard({ onLock }: Props) {
   return (
     <PageShell gutter="24">
       <PageHeader
-        back={<BackButton to="/" label="Về nhà" variant="adult" />}
+        back={<BackButton to="/" label="Về nhà" mdLabel="Về bản đồ 🏝️" variant="adult" />}
         right={
-          // Icon-only below `md`: the full "🔐 Khoá lại" pill is what was stealing the width the
-          // title needs in PageHeader's fixed 56 px side column — see the H1 below.
-          <Button size="adult" variant="outline" onClick={() => onLock?.()} aria-label="Khoá lại">
-            <span aria-hidden="true">🔐</span>
-            <span className="hidden md:inline">Khoá lại</span>
-          </Button>
+          // `Button` has no sand-background variant, and this is the one control on the whole
+          // screen that needs `#F3EADA`/`#A79781` — not worth a fifth `Button` variant for a
+          // single call-site (R25 / decision 25), so it draws its own 44 px pill instead.
+          <button
+            type="button"
+            onClick={() => onLock?.()}
+            aria-label="Khoá lại"
+            className="flex h-11 min-w-[44px] items-center justify-center gap-1.5 rounded-r12 bg-sand px-3 font-display text-[13px] font-extrabold text-sand-text"
+          >
+            <span aria-hidden="true" className="md:hidden">🔐</span>
+            <span className="hidden md:inline">🔐 Khoá lại</span>
+          </button>
         }
-      >
-        <h1 className="font-display text-[20px] font-extrabold leading-tight text-ink-900 md:text-[28px] whitespace-nowrap">Góc phụ huynh</h1>
-      </PageHeader>
+        title="Góc phụ huynh"
+        sub={weekMinutes > 0 ? `Tuần này: ${weekMinutes} phút · điểm TB ${avgScoreLabel}/100` : 'Chưa có buổi luyện nào tuần này'}
+      />
       <PageBody className="text-sm text-ink-500 md:text-base">
-      <div className="mx-auto flex w-full max-w-5xl flex-col gap-3 md:gap-6">
-        <p className="text-xs font-semibold text-ink-500 md:text-base">
-          Tuần này: {weekMinutes} phút luyện · điểm phát âm trung bình {avgScoreLabel}/100
-        </p>
-
+      <div className="flex flex-col">
+        <PanelGrid>
         {cloudAvailable && (
-          <Card data-testid="account-card" className="px-4 py-3.5 md:p-6">
-            <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-              <h2 className="font-display text-base font-extrabold text-ink-900 md:text-xl">Tài khoản</h2>
-              <SyncPill status={sync} onRetry={() => void flush()} />
-            </div>
-
+          <Panel
+            title="Tài khoản"
+            col="full"
+            testId="account-card"
+            right={<SyncPill status={sync} onRetry={() => void flush()} />}
+          >
             {!authReady ? (
               <AccountCardSkeleton />
             ) : !linked ? (
@@ -693,96 +687,22 @@ export function ParentDashboard({ onLock }: Props) {
                 </Button>
               )}
             </div>
-          </Card>
+          </Panel>
         )}
 
-        {/* A read that failed must never render as "no remote profiles" — the whole reason this is
-          * its own branch rather than folded into an empty list below. */}
-        {cloudAvailable && remoteProfiles.status === 'unknown' && (
-          <Card data-testid="remote-progress-unknown" className="px-4 py-3.5 md:p-6">
-            <p className="text-xs font-semibold text-ink-500 md:text-sm">
-              Chưa xem được tiến độ từ xa lúc này (máy chủ chưa trả lời). Thử tải lại trang sau nhé.
-            </p>
-          </Card>
-        )}
-
-        {/* Flow 5: per-profile read-only stats pulled straight from the server, computed with the
-          * same queries (`progress/activity.ts`) the numbers above use on local data. Shown once
-          * there is at least one profile to show — either a sibling this device is not currently
-          * showing, or this device's own child with "Xem từ xa" pressed. */}
-        {cloudAvailable && remoteProfilesToShow.length > 0 && (
-          <Card data-testid="remote-progress-card" className="px-4 py-3.5 md:p-6">
-            <h2 className="font-display text-base font-extrabold text-ink-900 md:text-xl">Tiến độ từ xa</h2>
-            <p className="mb-2 mt-1 text-xs font-semibold text-ink-500 md:text-sm">
-              Lấy từ máy chủ — có thể khác số trên chính máy này (máy có thể đã tự xoá bớt lịch sử cũ).
-            </p>
-            <ul className="flex flex-col gap-3">
-              {remoteProfilesToShow.map(p => {
-                const loaded = p.id in remoteStats
-                const entry = remoteStats[p.id]
-                // While the stats haven't loaded, the skeleton IS the row — no bordered/padded
-                // `<li>` around a real name line sat above a second, separately-framed skeleton
-                // box (that read as two stacked cards, not one loading row).
-                if (!loaded) {
-                  return (
-                    <li key={p.id} data-testid="remote-profile" className="overflow-hidden rounded-r16">
-                      <RemoteRowSkeleton />
-                    </li>
-                  )
-                }
-                return (
-                  <li key={p.id} data-testid="remote-profile" className="rounded-xl2 border border-line-200 p-3">
-                    <p className="font-semibold text-ink-900">
-                      {p.avatar} {p.name}
-                      {p.id === activeId && <span className="font-normal text-ink-500"> · đang dùng trên máy này</span>}
-                    </p>
-                    {entry === null ? (
-                      <p className="mt-1 text-xs font-semibold text-fix-700">Không tải được tiến độ của bé lúc này.</p>
-                    ) : (
-                      <div className="mt-1 flex flex-col gap-1 text-xs font-semibold text-ink-500 md:text-sm">
-                        {/* A profile the server holds nothing for gets a sentence, not a
-                          * measurement: "Chuỗi ngày: 0 · Tuần này: 0 phút" reads as a confident
-                          * statement about a child who has been idle, and it is exactly what an
-                          * empty placeholder row produces. Hiding such a profile instead would hide
-                          * a real child a parent added on another device and is checking arrived —
-                          * the same error class, pointing the other way. */}
-                        {entry.eventCount === 0 ? (
-                          <p data-testid="remote-empty">Chưa có dữ liệu nào trên máy chủ</p>
-                        ) : (
-                          <>
-                            <p>Chuỗi ngày: {entry.streak} · Tuần này: {entry.weekMinutes} phút</p>
-                            <p>
-                              Điểm trung bình — Nói {formatAvg(entry.averages.speak)} · Từ vựng {formatAvg(entry.averages.word)} · Ghép câu {formatAvg(entry.averages.sentence)}
-                            </p>
-                            {entry.weak.length === 0 ? (
-                              <p>Chưa đủ dữ liệu về âm sai</p>
-                            ) : (
-                              <p>Âm hay sai: {entry.weak.map(w => `/${w.phoneme}/ (${Math.round(w.avg)})`).join(', ')}</p>
-                            )}
-                          </>
-                        )}
-                      </div>
-                    )}
-                    <p className="mt-1 text-xs font-semibold text-ink-300">
-                      Bản ghi giọng nói của bé không đồng bộ — chỉ nghe được trên máy đã ghi.
-                    </p>
-                  </li>
-                )
-              })}
-            </ul>
-          </Card>
-        )}
-
-        <div className="grid grid-cols-1 gap-3 md:gap-6 ipad:grid-cols-[1.4fr_1fr]">
-          <div className="flex flex-col gap-3 md:gap-6">
-            <Card className="px-4 py-3.5 md:p-6">
-              {/* The chart holds the same fourteen days at every width; a phone draws the last seven
-                  of them (design §12 M8c). Fourteen date labels cannot share 300 px — at 320 they
-                  made the card wider than the screen — and `hidden` drops a day's column and its
-                  label together, so a bar and its date can never come apart. */}
-              <h2 className="font-display text-base font-extrabold text-ink-900 md:text-xl">
-                Phút luyện mỗi ngày <span className="md:hidden">(7 ngày)</span><span className="hidden md:inline">(14 ngày)</span>
-              </h2>
+        <Panel
+          title="Phút luyện mỗi ngày"
+          right={
+            // The chart holds the same fourteen days at every width; a phone draws the last seven
+            // of them (design §12 M8c). Fourteen date labels cannot share 300 px — at 320 they
+            // made the card wider than the screen — and `hidden` drops a day's column and its
+            // label together, so a bar and its date can never come apart.
+            <>
+              <span className="md:hidden">(7 ngày)</span>
+              <span className="hidden md:inline">(14 ngày)</span>
+            </>
+          }
+        >
               <p className="mb-3 mt-1 text-xs font-semibold text-ink-500 md:mb-4 md:text-sm">Mục tiêu {limitMinutes} phút/ngày</p>
 
               {events.length === 0 ? (
@@ -827,206 +747,265 @@ export function ParentDashboard({ onLock }: Props) {
                   </p>
                 </>
               )}
-            </Card>
+        </Panel>
 
-            <div>
-              <h2 className="mb-2 font-display text-base font-extrabold text-ink-900 md:mb-3 md:text-xl">Điểm trung bình</h2>
-              <div className="grid grid-cols-3 gap-2 md:gap-3">
-                {(['speak', 'word', 'sentence'] as const).map(kind => (
-                  <Card key={kind} className="flex flex-col items-center gap-1 p-3 text-center md:p-5">
-                    <span className="text-xs font-bold text-ink-500 md:text-sm">{KIND_LABEL[kind]}</span>
-                    <span className="font-display text-[26px] font-extrabold text-ink-900 md:text-[40px]">
-                      {averages[kind] != null ? Math.round(averages[kind]!) : '—'}
-                    </span>
-                  </Card>
-                ))}
-              </div>
-            </div>
+        <Panel title="Điểm trung bình">
+          <div className="grid grid-cols-3 gap-2 md:gap-3">
+            {(['speak', 'word', 'sentence'] as const).map(kind => (
+              <Card key={kind} className="flex flex-col items-center gap-1 p-3 text-center md:p-5">
+                <span className="text-xs font-bold text-ink-500 md:text-sm">{KIND_LABEL[kind]}</span>
+                <span className="font-display text-[26px] font-extrabold text-ink-900 md:text-[40px]">
+                  {averages[kind] != null ? Math.round(averages[kind]!) : '—'}
+                </span>
+              </Card>
+            ))}
           </div>
+        </Panel>
 
-          <div className="flex flex-col gap-3 md:gap-6">
-            <Card className="px-4 py-3.5 md:p-6">
-              <h2 className="mb-2 font-display text-base font-extrabold text-ink-900 md:mb-3 md:text-xl">Âm hay sai</h2>
-              {weak.length === 0 ? (
-                <EmptyState
-                  adult
-                  emoji="🔤"
-                  title="Chưa đủ dữ liệu"
-                  sub="Âm hay sai hiện ra sau vài lần bé luyện nói."
-                />
-              ) : (
-                <ul className="flex flex-col gap-2 md:gap-3">
-                  {weak.map(w => (
-                    <li key={w.phoneme} className="flex flex-col gap-2">
-                      <p className="inline-flex w-fit items-center rounded-full bg-fix-50 px-3 py-1.5 font-display text-sm font-extrabold text-fix-700 md:px-4 md:py-2 md:text-lg">
-                        /{w.phoneme}/ — trung bình {Math.round(w.avg)} ({w.count} lần)
-                      </p>
-                      {/* The design keeps the chips and drops the coaching paragraph on a phone: the
-                          chip carries the number already, and the tip is a paragraph of reading in a
-                          card that has to leave room for the three below it. Back from 768 up. */}
-                      {PHONEME_TIPS[w.phoneme] && (
-                        <p className="hidden rounded-xl2 bg-sun-50 px-4 py-3 text-sm font-semibold text-sun-700 md:block">{PHONEME_TIPS[w.phoneme]}</p>
-                      )}
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </Card>
-
-            <Card className="px-4 py-3.5 md:p-6">
-              {/* The disclosure of spec decision 2. The heading lives inside the `<summary>`, so the
-                  card is titled at both sizes; `list-none` and the webkit marker rule drop the
-                  triangle, and the 64 px row is the child floor this one control is held to. From
-                  768 up the summary is a plain heading line again (block, no minimum height, no
-                  chevron) and the details is open, which is the card exactly as it was. */}
-              <details open={recordingsOpen || undefined}>
-                <summary className="flex min-h-[64px] cursor-pointer list-none items-center justify-between gap-2 md:block md:min-h-0 md:cursor-default [&::-webkit-details-marker]:hidden">
-                  <h2 className="font-display text-base font-extrabold text-ink-900 md:text-xl">Bản ghi gần đây</h2>
-                  <span aria-hidden="true" className="font-display text-lg text-ink-300 md:hidden">▾</span>
-                </summary>
-                <div className="mt-2 md:mt-3">
-                  {recordings.length === 0 ? (
-                    <EmptyState
-                      adult
-                      emoji="🎙️"
-                      title="Chưa có bản ghi nào"
-                      sub="Bản ghi xuất hiện sau khi bé luyện nói."
-                    />
-                  ) : (
-                    <ul className="flex flex-col gap-2 md:gap-3">
-                      {recordings.map(r => (
-                        <li key={r.id} className="flex items-center gap-3 rounded-xl2 border border-line-200 p-2 md:p-3">
-                          <button
-                            type="button"
-                            aria-label="Phát"
-                            onClick={() => { playBlob(r.blob).catch(() => { /* ignore: playback unavailable */ }) }}
-                            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-teal-500 text-lg text-white shadow-chunky-teal active:translate-y-[2px] md:h-16 md:w-16 md:text-2xl"
-                          >
-                            ▶
-                          </button>
-                          <div>
-                            <p className="text-xs font-bold text-ink-300">{formatTs(r.ts)}</p>
-                            <p className="font-semibold text-ink-900">{r.text}</p>
-                          </div>
-                        </li>
-                      ))}
-                    </ul>
+        <Panel title="Âm hay sai">
+          {weak.length === 0 ? (
+            <EmptyState
+              adult
+              emoji="🔤"
+              title="Chưa đủ dữ liệu"
+              sub="Âm hay sai hiện ra sau vài lần bé luyện nói."
+            />
+          ) : (
+            <ul className="flex flex-col gap-2 md:gap-3">
+              {weak.map(w => (
+                <li key={w.phoneme} className="flex flex-col gap-2">
+                  <p className="inline-flex w-fit items-center rounded-full bg-fix-50 px-3 py-1.5 font-display text-sm font-extrabold text-fix-700 md:px-4 md:py-2 md:text-lg">
+                    /{w.phoneme}/ — trung bình {Math.round(w.avg)} ({w.count} lần)
+                  </p>
+                  {/* The design keeps the chips and drops the coaching paragraph on a phone: the
+                      chip carries the number already, and the tip is a paragraph of reading in a
+                      card that has to leave room for the three below it. Back from 768 up. */}
+                  {PHONEME_TIPS[w.phoneme] && (
+                    <p className="hidden rounded-xl2 bg-sun-50 px-4 py-3 text-sm font-semibold text-sun-700 md:block">{PHONEME_TIPS[w.phoneme]}</p>
                   )}
-                </div>
-              </details>
-            </Card>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Panel>
 
-            <Card className="px-4 py-3.5 md:p-6">
-              <h2 className="mb-2 font-display text-base font-extrabold text-ink-900 md:mb-3 md:text-xl">Giới hạn mỗi ngày</h2>
-              <div className="flex gap-2">
-                {LIMIT_CHIPS.map(n => {
-                  const active = Number(limit) === n
-                  return (
-                    <button
-                      key={n}
-                      type="button"
-                      onClick={() => handleLimitChip(n)}
-                      className={`min-h-[44px] flex-1 rounded-xl2 font-display text-sm font-extrabold active:translate-y-[2px] md:min-h-[64px] md:text-base ${
-                        active ? 'bg-coral-500 text-white shadow-chunky-coral' : 'border-2 border-line-200 bg-cream-50 text-ink-500'
-                      }`}
-                    >
-                      {n} phút
-                    </button>
-                  )
-                })}
-              </div>
-              <label className="mt-3 flex items-center gap-2">
-                <input
-                  type="number"
-                  min={5}
-                  max={60}
-                  step={5}
-                  value={limit}
-                  onChange={handleLimitChange}
-                  onBlur={handleLimitBlur}
-                  className="h-11 w-20 rounded-xl2 border-2 border-line-200 px-3 text-center font-display text-base font-extrabold text-ink-900 md:h-16 md:w-24 md:text-lg"
-                />
-                <span className="font-semibold text-ink-500">phút / ngày</span>
-              </label>
-            </Card>
-
-            <Card className="px-4 py-3.5 md:p-6">
-              <h2 className="mb-2 font-display text-base font-extrabold text-ink-900 md:mb-3 md:text-xl">Bài học</h2>
-
-              <div className="mb-2 flex items-center justify-between">
-                <span className="text-xs font-bold text-ink-500 md:text-sm">Độ khó</span>
+        <Panel title="⏰ Giới hạn mỗi ngày">
+          <div className="flex gap-2">
+            {LIMIT_CHIPS.map(n => {
+              const active = Number(limit) === n
+              return (
                 <button
+                  key={n}
                   type="button"
-                  onClick={handleBandAuto}
-                  aria-pressed={band.mode === 'auto'}
-                  className={`min-h-[44px] rounded-xl2 px-4 font-display text-sm font-extrabold active:translate-y-[2px] md:min-h-[64px] ${
-                    band.mode === 'auto' ? 'bg-teal-500 text-white shadow-chunky-teal' : 'border-2 border-line-200 bg-cream-50 text-ink-500'
+                  onClick={() => handleLimitChip(n)}
+                  className={`min-h-[44px] flex-1 rounded-xl2 font-display text-sm font-extrabold active:translate-y-[2px] md:text-base ${
+                    active ? 'bg-coral-500 text-white shadow-chunky-coral' : 'border-2 border-line-200 bg-cream-50 text-ink-500'
                   }`}
                 >
-                  Tự động
+                  {n} phút
                 </button>
-              </div>
-              <div className="mb-4 flex gap-2">
-                {BAND_VALUES.map(n => {
-                  const active = band.value === n
-                  return (
-                    <button
-                      key={n}
-                      type="button"
-                      onClick={() => handleBandClick(n)}
-                      aria-pressed={active}
-                      aria-label={`Bậc ${n}`}
-                      className={`min-h-[44px] flex-1 rounded-xl2 font-display text-base font-extrabold active:translate-y-[2px] md:min-h-[64px] ${
-                        active ? 'bg-coral-500 text-white shadow-chunky-coral' : 'border-2 border-line-200 bg-cream-50 text-ink-500'
-                      }`}
-                    >
-                      {n}
-                    </button>
-                  )
-                })}
-              </div>
-
-              <span className="mb-2 block text-xs font-bold text-ink-500 md:text-sm">Thời lượng</span>
-              <div className="flex gap-2">
-                {LESSON_LENGTHS.map(value => {
-                  const active = length === value
-                  return (
-                    <button
-                      key={value}
-                      type="button"
-                      onClick={() => handleLengthClick(value)}
-                      aria-pressed={active}
-                      className={`min-h-[44px] flex-1 rounded-xl2 font-display text-xs font-extrabold active:translate-y-[2px] md:min-h-[64px] md:text-sm ${
-                        active ? 'bg-coral-500 text-white shadow-chunky-coral' : 'border-2 border-line-200 bg-cream-50 text-ink-500'
-                      }`}
-                    >
-                      {LENGTH_LABEL[value]}
-                    </button>
-                  )
-                })}
-              </div>
-
-              {/* Today's lesson is generated once and then frozen, so a change made now shows up
-                * tomorrow — without this line the buttons look broken. */}
-              <p className="mt-3 text-xs font-semibold text-ink-500 md:text-sm">Áp dụng từ bài học ngày mai.</p>
-            </Card>
+              )
+            })}
           </div>
-        </div>
-
-        <div className="flex flex-col items-start gap-2">
-          <Button size="adult" variant="outline" disabled={resetBusy} onClick={() => { void handleReset() }} className="self-start">
-            Đặt lại tiến trình
-          </Button>
-          {resetNotice && (
-            <Notice
-              kind="pending"
-              adult
-              testId="reset-notice"
-              title={resetNotice}
-              action={{ label: 'Thử xoá lại', onClick: () => { void handleRetryReset() } }}
+          <label className="mt-3 flex items-center gap-2">
+            <input
+              type="number"
+              min={5}
+              max={60}
+              step={5}
+              value={limit}
+              onChange={handleLimitChange}
+              onBlur={handleLimitBlur}
+              className="h-11 w-20 rounded-xl2 border-2 border-line-200 px-3 text-center font-display text-base font-extrabold text-ink-900 md:h-16 md:w-24 md:text-lg"
             />
+            <span className="font-semibold text-ink-500">phút / ngày</span>
+          </label>
+        </Panel>
+
+        <Panel title="Bài học">
+          <div className="mb-2 flex items-center justify-between">
+            <span className="text-xs font-bold text-ink-500 md:text-sm">Độ khó</span>
+            <button
+              type="button"
+              onClick={handleBandAuto}
+              aria-pressed={band.mode === 'auto'}
+              className={`min-h-[44px] rounded-xl2 px-4 font-display text-sm font-extrabold active:translate-y-[2px] ${
+                band.mode === 'auto' ? 'bg-teal-500 text-white shadow-chunky-teal' : 'border-2 border-line-200 bg-cream-50 text-ink-500'
+              }`}
+            >
+              Tự động
+            </button>
+          </div>
+          <div className="mb-4 flex gap-2">
+            {BAND_VALUES.map(n => {
+              const active = band.value === n
+              return (
+                <button
+                  key={n}
+                  type="button"
+                  onClick={() => handleBandClick(n)}
+                  aria-pressed={active}
+                  aria-label={`Bậc ${n}`}
+                  className={`min-h-[44px] flex-1 rounded-xl2 font-display text-base font-extrabold active:translate-y-[2px] ${
+                    active ? 'bg-coral-500 text-white shadow-chunky-coral' : 'border-2 border-line-200 bg-cream-50 text-ink-500'
+                  }`}
+                >
+                  {n}
+                </button>
+              )
+            })}
+          </div>
+
+          <span className="mb-2 block text-xs font-bold text-ink-500 md:text-sm">Thời lượng</span>
+          <div className="flex gap-2">
+            {LESSON_LENGTHS.map(value => {
+              const active = length === value
+              return (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => handleLengthClick(value)}
+                  aria-pressed={active}
+                  className={`min-h-[44px] flex-1 rounded-xl2 font-display text-xs font-extrabold active:translate-y-[2px] md:text-sm ${
+                    active ? 'bg-coral-500 text-white shadow-chunky-coral' : 'border-2 border-line-200 bg-cream-50 text-ink-500'
+                  }`}
+                >
+                  {LENGTH_LABEL[value]}
+                </button>
+              )
+            })}
+          </div>
+
+          {/* Today's lesson is generated once and then frozen, so a change made now shows up
+            * tomorrow — without this line the buttons look broken. */}
+          <p className="mt-3 text-xs font-semibold text-ink-500 md:text-sm">Áp dụng từ bài học ngày mai.</p>
+        </Panel>
+
+        <Panel title="Bản ghi gần đây">
+          {recordings.length === 0 ? (
+            <EmptyState
+              adult
+              emoji="🎙️"
+              title="Chưa có bản ghi nào"
+              sub="Bản ghi xuất hiện sau khi bé luyện nói."
+            />
+          ) : (
+            <ul className="flex flex-col gap-2 md:gap-3">
+              {recordings.map(r => (
+                <li key={r.id} className="flex items-center gap-3 rounded-xl2 border border-line-200 p-2 md:p-3">
+                  <button
+                    type="button"
+                    aria-label="Phát"
+                    onClick={() => { playBlob(r.blob).catch(() => { /* ignore: playback unavailable */ }) }}
+                    className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-teal-500 text-lg text-white shadow-chunky-teal active:translate-y-[2px]"
+                  >
+                    ▶
+                  </button>
+                  <div>
+                    <p className="text-xs font-bold text-ink-300">{formatTs(r.ts)}</p>
+                    <p className="font-semibold text-ink-900">{r.text}</p>
+                  </div>
+                </li>
+              ))}
+            </ul>
           )}
+        </Panel>
+
+        {/* Flow 5: read-only progress from another device, computed with the same queries
+          * (`progress/activity.ts`) the numbers above use on local data. This panel is always in
+          * the grid whenever the account is; which of the three bodies below shows is the only
+          * thing that varies — an unread server ("unknown") must never look like "no remote
+          * profiles" (the whole reason it is its own branch), and an idle read (no profile to
+          * compare against yet) prints nothing more than the title. */}
+        {cloudAvailable && (
+          <Panel title="Tiến độ từ xa" col="full">
+            {remoteProfiles.status === 'unknown' && (
+              <p data-testid="remote-progress-unknown" className="text-xs font-semibold text-ink-500 md:text-sm">
+                Chưa xem được tiến độ từ xa lúc này (máy chủ chưa trả lời). Thử tải lại trang sau nhé.
+              </p>
+            )}
+            {remoteProfilesToShow.length > 0 && (
+              <div data-testid="remote-progress-card">
+                <p className="mb-2 text-xs font-semibold text-ink-500 md:text-sm">
+                  Lấy từ máy chủ — có thể khác số trên chính máy này (máy có thể đã tự xoá bớt lịch sử cũ).
+                </p>
+                <ul className="flex flex-col gap-3">
+                  {remoteProfilesToShow.map(p => {
+                    const loaded = p.id in remoteStats
+                    const entry = remoteStats[p.id]
+                    // While the stats haven't loaded, the skeleton IS the row — no bordered/padded
+                    // `<li>` around a real name line sat above a second, separately-framed skeleton
+                    // box (that read as two stacked cards, not one loading row).
+                    if (!loaded) {
+                      return (
+                        <li key={p.id} data-testid="remote-profile" className="overflow-hidden rounded-r16">
+                          <RemoteRowSkeleton />
+                        </li>
+                      )
+                    }
+                    return (
+                      <li key={p.id} data-testid="remote-profile" className="rounded-xl2 border border-line-200 p-3">
+                        <p className="font-semibold text-ink-900">
+                          {p.avatar} {p.name}
+                          {p.id === activeId && <span className="font-normal text-ink-500"> · đang dùng trên máy này</span>}
+                        </p>
+                        {entry === null ? (
+                          <p className="mt-1 text-xs font-semibold text-fix-700">Không tải được tiến độ của bé lúc này.</p>
+                        ) : (
+                          <div className="mt-1 flex flex-col gap-1 text-xs font-semibold text-ink-500 md:text-sm">
+                            {/* A profile the server holds nothing for gets a sentence, not a
+                              * measurement: "Chuỗi ngày: 0 · Tuần này: 0 phút" reads as a confident
+                              * statement about a child who has been idle, and it is exactly what an
+                              * empty placeholder row produces. Hiding such a profile instead would hide
+                              * a real child a parent added on another device and is checking arrived —
+                              * the same error class, pointing the other way. */}
+                            {entry.eventCount === 0 ? (
+                              <p data-testid="remote-empty">Chưa có dữ liệu nào trên máy chủ</p>
+                            ) : (
+                              <>
+                                <p>Chuỗi ngày: {entry.streak} · Tuần này: {entry.weekMinutes} phút</p>
+                                <p>
+                                  Điểm trung bình — Nói {formatAvg(entry.averages.speak)} · Từ vựng {formatAvg(entry.averages.word)} · Ghép câu {formatAvg(entry.averages.sentence)}
+                                </p>
+                                {entry.weak.length === 0 ? (
+                                  <p>Chưa đủ dữ liệu về âm sai</p>
+                                ) : (
+                                  <p>Âm hay sai: {entry.weak.map(w => `/${w.phoneme}/ (${Math.round(w.avg)})`).join(', ')}</p>
+                                )}
+                              </>
+                            )}
+                          </div>
+                        )}
+                        <p className="mt-1 text-xs font-semibold text-ink-300">
+                          Bản ghi giọng nói của bé không đồng bộ — chỉ nghe được trên máy đã ghi.
+                        </p>
+                      </li>
+                    )
+                  })}
+                </ul>
+              </div>
+            )}
+          </Panel>
+        )}
+        </PanelGrid>
+
+        <div data-testid="reset-row" className="mt-6 flex items-center justify-between gap-3">
+          <p className="text-[12px] font-bold leading-snug text-ink-300">
+            Xoá sao, chuỗi ngày và bản ghi trên máy này (và trên tài khoản nếu đã liên kết).
+          </p>
+          <Button size="adult" variant="danger" disabled={resetBusy} onClick={() => { void handleReset() }} className="shrink-0">
+            ↺ Đặt lại tiến trình…
+          </Button>
         </div>
+        {resetNotice && (
+          <Notice
+            kind="pending"
+            adult
+            testId="reset-notice"
+            title={resetNotice}
+            action={{ label: 'Thử xoá lại', onClick: () => { void handleRetryReset() } }}
+          />
+        )}
       </div>
       </PageBody>
     </PageShell>
