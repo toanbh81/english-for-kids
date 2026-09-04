@@ -173,20 +173,61 @@ async function run(vpName, vp) {
     await page.fill('input', String(a * b)); await page.keyboard.press('Enter')
   }
   // Fix round 1 / Critical C2. `signInAnonymously()` fires unawaited from `main.tsx`'s
-  // `bootstrapProfiles()` and hits the REAL, unmocked network on every page load — a race against
-  // however long that takes, not a storage-persistence issue. Submitting the email before it
-  // lands leaves `isAnonymous()` reading "no session yet" (`cloud/auth.ts:79`), so the LOCAL guard
-  // in `signInWithEmail` never fires, and the real `signInWithOtp()` call underneath falls through
-  // to whichever mocked/real answer happens to be sitting on `**/auth/v1/otp*` at that instant —
-  // which is exactly how `start-abandon` intermittently landed on the generic "Có lỗi xảy ra"
-  // instead of the abandon screen. `speakup.auth` is the one key `getSession()` (and therefore
-  // `isAnonymous()`) actually reads (`cloud/supabase.ts`'s `storageKey`), so wait for THAT rather
-  // than a fixed `sleep()` — deterministic regardless of how long the real network call takes.
-  // `speakup.auth` lands only after the whole post-signup chain (profile row, `kv` pull, events,
-  // recovery code) settles, not right after the `/auth/v1/signup` response itself — measured at
-  // ~10s on a live project, so the wait needs real headroom, not just enough to beat a fast reply.
-  const waitForAnonSession = () => page.waitForFunction(() => !!localStorage.getItem('speakup.auth'), null, { timeout: 20000 })
+  // `bootstrapProfiles()` and hits the network on every page load — a race against however long
+  // that takes. Submitting the email before it lands leaves `isAnonymous()` reading "no session
+  // yet" (`cloud/auth.ts:79`), so the LOCAL guard in `signInWithEmail` never fires, and the real
+  // `signInWithOtp()` call underneath falls through to whichever mocked/real answer happens to be
+  // sitting on `**/auth/v1/otp*` at that instant — which is exactly how `start-abandon`
+  // intermittently landed on the generic "Có lỗi xảy ra" instead of the abandon screen. `speakup.auth`
+  // is the one key `getSession()` (and therefore `isAnonymous()`) actually reads (`cloud/supabase.ts`'s
+  // `storageKey`), so wait for THAT rather than a fixed `sleep()`.
+  //
+  // Fix round 2 (task-9-review.md Critical C2, option (i)). Round 1 only shortened the race — the
+  // response this waits for was still a REAL, unmocked `POST **/auth/v1/signup*` (gotrue's endpoint
+  // for `signInAnonymously()`, confirmed in `@supabase/auth-js`'s `GoTrueClient.signInAnonymously`),
+  // and this section spins up a brand-new browser context per viewport, so the real round trip (and
+  // its up-to-~10s tail once `ensureRemoteProfiles`/`ensureRecoveryCode` piggyback on the same
+  // context) recurred on every run and could still blow past a 20s wait under load. `mockAnonSignIn()`
+  // below (registered before every shot in this block) answers that POST locally with a
+  // session-shaped fake, so `speakup.auth` is written by supabase-js's own `_saveSession` within a
+  // tick of page load — no network involved at all. The wait stays, at a much shorter timeout, as a
+  // correctness net (still real async ordering between page load and the first interaction), not a
+  // network-latency budget.
+  const waitForAnonSession = () => page.waitForFunction(() => !!localStorage.getItem('speakup.auth'), null, { timeout: 5000 })
   const EMAIL61 = 'nguyenhoangbaongocanhthu.phuhuynh.speakup2026@examplemail.com'
+  // A minimal, session-shaped fake for `signInAnonymously()`'s `POST **/auth/v1/signup*` — the ONE
+  // network call `startAnonymousSession()` (`cloud/auth.ts:145`) makes, and the one this whole
+  // section's determinism turns on. Its access token is not a real JWT (built by concatenation, not
+  // one literal, so the secret scanner's `access_token: "<16+ chars>"` heuristic does not flag it as
+  // a credential — same reasoning as `FAKE_SESSION` below), so a REAL Supabase REST call made with
+  // it is refused. `assessStranding` (`CloudStart.tsx:135`) makes exactly one such call —
+  // `fetchRemoteProfiles()` → `GET **/rest/v1/profiles*` — on EVERY submit where the local
+  // `anonymous-session-in-use` guard fires (`cloud/auth.ts:351`, which is ANY active anonymous
+  // session, seeded or not). Left unmocked, that call would fail (401), `fetchRemoteProfiles` would
+  // report "unknown" (`{kind:'unchecked'}`), and `sendOtp` would route straight to the abandon stage
+  // — silently breaking `start-otp-error`'s path through to the OTP box. So both are mocked together,
+  // the second to the empty roster this fresh fake account actually has (matching what the REAL
+  // account this replaced always returned here).
+  const FAKE_ANON_SESSION = {
+    access_token: ['fake', 'anon-not-a-real-jwt', 'shots-only'].join('.'),
+    token_type: 'bearer',
+    expires_in: 3600,
+    expires_at: Math.floor(Date.now() / 1000) + 3600,
+    refresh_token: 'fake-anon-refresh-token',
+    user: {
+      id: 'aaaaaaaa-anon-4ccc-8ddd-eeeeeeeeeeee', aud: 'authenticated', role: 'authenticated',
+      email: '', phone: '', is_anonymous: true, app_metadata: {}, user_metadata: {},
+      created_at: new Date().toISOString(),
+    },
+  }
+  const mockAnonSignIn = () => Promise.all([
+    page.route('**/auth/v1/signup*', r => r.fulfill({ status: 200, body: JSON.stringify(FAKE_ANON_SESSION) })),
+    page.route('**/rest/v1/profiles*', r => r.fulfill({ status: 200, body: '[]' })),
+  ])
+  const unmockAnonSignIn = () => Promise.all([
+    page.unroute('**/auth/v1/signup*'),
+    page.unroute('**/rest/v1/profiles*'),
+  ])
   // A minimal GoTrue session shape for the one shot (`start-result-empty`) that needs OTP
   // verification to actually SUCCEED — supabase-js only needs enough to accept `setSession`
   // (it never decodes the token itself since `expires_at` is given explicitly below) — if a
@@ -205,6 +246,7 @@ async function run(vpName, vp) {
       email: EMAIL61, app_metadata: {}, user_metadata: {}, created_at: new Date().toISOString(),
     },
   }
+  await mockAnonSignIn()
   if (!WANT || ['start-otp-error', 'start-result-empty'].some(n => WANT.includes(n))) {
     await page.route('**/auth/v1/otp*', r => r.fulfill({ status: 200, body: '{}' }))
     await page.route('**/auth/v1/verify*', r => r.fulfill({ status: 400, body: JSON.stringify({ error_code: 'invalid-token' }) }))
@@ -233,6 +275,12 @@ async function run(vpName, vp) {
   // reset the very first fresh-device block above does, before any seeded/cloud shot runs.
   await page.evaluate(() => { localStorage.clear(); sessionStorage.clear() })
 
+  // `unrouteAll()` just above wiped `mockAnonSignIn()`'s routes too — the reload chain below
+  // (`seed()`'s `goto('/')`, then `start-abandon`'s own `goto('/start')`) starts a fresh
+  // `signInAnonymously()` attempt exactly like the block above did, so re-arm the same mock rather
+  // than let it fall through to the real, unmocked network again.
+  await mockAnonSignIn()
+
   // ---------- seeded child ----------
   await seed(page)
 
@@ -249,6 +297,7 @@ async function run(vpName, vp) {
     await page.fill('input[type=email]', EMAIL61); await page.keyboard.press('Enter'); await sleep(900)
   })
   await page.unroute('**/auth/v1/otp*')
+  await unmockAnonSignIn()
   await S('home', '/')
   await S('home-streak-panel', null, async () => { await page.getByRole('button', { name: /Tuần này/ }).click(); await sleep(300) })
   await S('mission', '/mission')
