@@ -487,12 +487,11 @@ export function ParentDashboard({ onLock }: Props) {
     // Defensive, not load-bearing on its own: the trigger button below is also `disabled` while
     // this is true, which is what actually stops a double-tap from reaching this function twice.
     if (resetBusy) return
-    // The old wording was from the local-only era and stopped being true the moment this button
-    // also emptied the mirror: the cloud copy of this child goes with it, and no device gets it
-    // back. A parent may not find that out afterwards.
-    const body = cloudAvailable && activeId
-      ? 'Sao, chuỗi ngày và bản ghi trên máy này sẽ mất. Bản lưu trên tài khoản cũng bị xoá. Không khôi phục được.'
-      : 'Sao, chuỗi ngày và bản ghi trên máy này sẽ mất. Không khôi phục được.'
+    // R27 / decision 33: TWO titles, not one title with two bodies. The old wording asked "Xoá
+    // toàn bộ tiến trình của bé?" even when there was no other backup to lose — a question bigger
+    // than the actual deed. An account not actually linked has nothing remote to lose either way,
+    // so it gets the smaller question and the smaller answer.
+    const unlinked = !(cloudAvailable && activeId && linked)
     setResetBusy(true)
     // The clearing and the mirror call both live inside `onConfirm`: the dialog stays open and
     // busy (buttons disabled, confirm label "…", scrim/Escape ignored) for exactly as long as
@@ -500,9 +499,11 @@ export function ParentDashboard({ onLock }: Props) {
     // depends on the dialog's own resolved value; if the parent cancels, `onConfirm` never runs
     // and none of this fires, which is the whole of the "dismissed" behaviour.
     await dialog.destructive({
-      title: 'Xoá toàn bộ tiến trình của bé?',
-      body,
-      confirmLabel: 'Xoá tiến trình',
+      title: unlinked ? 'Xoá tiến trình trên máy này?' : 'Xoá toàn bộ tiến trình của bé?',
+      body: unlinked
+        ? 'Sao, chuỗi ngày và bản ghi trên máy này sẽ mất. Tài khoản chưa liên kết nên không có bản lưu nào khác.'
+        : 'Xoá trên máy này VÀ trên tài khoản đã liên kết. Không khôi phục được — kể cả bằng mã khôi phục.',
+      confirmLabel: unlinked ? 'Xoá trên máy này' : 'Xoá tất cả',
       onConfirm: async () => {
         setResetNotice(null)
         clearStars()
@@ -600,8 +601,8 @@ export function ParentDashboard({ onLock }: Props) {
     // Same shape as `handleReset`: the actual work is `onConfirm`, so the dialog stays open and
     // busy for exactly as long as `signOut()` takes, and closes itself once it settles.
     await dialog.confirm({
-      title: 'Đăng xuất khỏi tài khoản này?',
-      body: 'Bé vẫn học được, tiến độ sẽ không đồng bộ.',
+      title: 'Đăng xuất tài khoản?',
+      body: `Bé vẫn học được. Tiến độ mới sẽ chỉ lưu trên máy này cho tới khi liên kết lại.${sync.pending > 0 ? ` ${sync.pending} mục chưa đồng bộ sẽ được gửi trước.` : ''}`,
       confirmLabel: 'Đăng xuất',
       onConfirm: async () => {
         const result = await signOut()
@@ -614,7 +615,7 @@ export function ParentDashboard({ onLock }: Props) {
   }
 
   async function handleAddProfile() {
-    const name = await dialog.prompt({ title: 'Thêm hồ sơ', label: 'Tên của bé', maxLength: NAME_MAX })
+    const name = await dialog.prompt({ title: 'Thêm hồ sơ mới', label: 'Tên của bé', placeholder: 'Ví dụ: Bé Su', maxLength: NAME_MAX })
     if (name === null) return
     setProfileNotice(null)
     // `null` means the child is not on disk — an unreadable roster this must not write over, or a
@@ -635,7 +636,7 @@ export function ParentDashboard({ onLock }: Props) {
   async function handleRenameProfile(id: string) {
     const current = profiles.find(p => p.id === id)
     if (!current) return
-    const name = await dialog.prompt({ title: 'Đổi tên hồ sơ', label: 'Tên của bé', initial: current.name, maxLength: NAME_MAX })
+    const name = await dialog.prompt({ title: 'Đổi tên hồ sơ', label: 'Tên của bé', placeholder: 'Ví dụ: Bé Su', initial: current.name, maxLength: NAME_MAX })
     if (name === null || !name.trim()) return
     setProfiles(renameProfile(current.id, name))
     if (cloudAvailable) void renameRemoteProfile(current.id, name)

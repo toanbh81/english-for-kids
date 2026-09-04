@@ -549,7 +549,7 @@ describe('ParentDashboard', () => {
     await flush()
 
     fireEvent.click(screen.getByRole('button', { name: '↺ Đặt lại tiến trình…' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Xoá tiến trình' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Xoá trên máy này' }))
 
     await waitFor(() => expect(localStorage.getItem('speakup.stars')).toBeNull())
     expect(localStorage.getItem('speakup.activity')).toBeNull()
@@ -573,7 +573,7 @@ describe('ParentDashboard', () => {
 
     const trigger = screen.getByRole('button', { name: '↺ Đặt lại tiến trình…' })
     fireEvent.click(trigger)
-    fireEvent.click(screen.getByRole('button', { name: 'Xoá tiến trình' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Xoá trên máy này' }))
     await flush()
 
     expect(trigger).toBeDisabled()
@@ -597,7 +597,7 @@ describe('ParentDashboard', () => {
     await flush()
 
     fireEvent.click(screen.getByRole('button', { name: '↺ Đặt lại tiến trình…' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Xoá tiến trình' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Xoá trên máy này' }))
 
     // `handleReset` clears `speakup.band` synchronously, before its `await clearRecordings()` —
     // so a waitFor keyed on that key resolves on its very first (immediate) poll, before the
@@ -1310,7 +1310,7 @@ describe('Phase 11: "Tài khoản"', () => {
     await flush()
 
     fireEvent.click(screen.getByRole('button', { name: '↺ Đặt lại tiến trình…' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Xoá tiến trình' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Xoá trên máy này' }))
     await waitFor(() => expect(syncMock.resetRemoteProgress).toHaveBeenCalledWith('p1'))
   })
 
@@ -1398,7 +1398,7 @@ describe('Phase 11: "Tài khoản"', () => {
     await flush()
 
     fireEvent.click(screen.getByRole('button', { name: '↺ Đặt lại tiến trình…' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Xoá tiến trình' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Xoá trên máy này' }))
 
     const notice = await screen.findByTestId('reset-notice')
     expect(notice).toHaveTextContent('Đã xoá xong trên máy này')
@@ -1426,7 +1426,7 @@ describe('Phase 11: "Tài khoản"', () => {
     await flush()
 
     fireEvent.click(screen.getByRole('button', { name: '↺ Đặt lại tiến trình…' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Xoá tiến trình' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Xoá trên máy này' }))
     await waitFor(() => expect(syncMock.resetRemoteProgress).toHaveBeenCalled())
     await flush()
 
@@ -1470,24 +1470,35 @@ describe('Phase 11: "Tài khoản"', () => {
     expect(screen.getByTestId('reset-notice')).toHaveTextContent('chưa xoá được')
   })
 
-  /** F7: the confirm dialog was unchanged from the local-only era, and this button now deletes the
-   * child's cloud copy as well. It has to say so before the parent taps OK. */
-  it('warns that the reset deletes the cloud copy too, and only when there is one', async () => {
+  /** F7 → Task 15 / R27 decision 33: the confirm dialog now splits into two TITLES rather than one
+   * title with a conditional body — the cloud-copy warning only belongs to a parent who actually
+   * has a cloud copy to lose, i.e. a linked account. An account that is merely `cloudAvailable`
+   * (anonymous, never linked) has nothing remote worth warning about either. */
+  it('warns that the reset deletes the cloud copy too, and only when the account is linked', async () => {
     cloud.configured = true
+    authMock.isAnonymous.mockResolvedValue(false)
+    authMock.currentEmail.mockResolvedValue('bome@example.com')
 
     const { unmount } = renderWithDialogs(<ParentDashboard />)
     await flush()
     fireEvent.click(screen.getByRole('button', { name: '↺ Đặt lại tiến trình…' }))
-    expect(screen.getByRole('dialog')).toHaveTextContent(/trên tài khoản/)
+    expect(screen.getByRole('dialog')).toHaveTextContent('Xoá toàn bộ tiến trình của bé?')
+    expect(screen.getByRole('dialog')).toHaveTextContent(/tài khoản đã liên kết/)
     fireEvent.click(screen.getByRole('button', { name: 'Huỷ' }))
     await flush()
     unmount()
 
+    // No cloud at all: same smaller dialog as "cloud available but never linked" — nothing remote
+    // to lose in either case. Back to the default (anonymous, unlinked) auth mocks explicitly,
+    // since `mockResolvedValue` above otherwise carries over into this render.
     cloud.configured = false
+    authMock.isAnonymous.mockResolvedValue(true)
+    authMock.currentEmail.mockResolvedValue(null)
     renderWithDialogs(<ParentDashboard />)
     await flush()
     fireEvent.click(screen.getByRole('button', { name: '↺ Đặt lại tiến trình…' }))
-    expect(screen.getByRole('dialog')).not.toHaveTextContent(/tài khoản/)
+    expect(screen.getByRole('dialog')).toHaveTextContent('Xoá tiến trình trên máy này?')
+    expect(screen.getByRole('dialog')).not.toHaveTextContent(/tài khoản đã liên kết/)
   })
 
   /** F7: "an toàn trên mọi thiết bị" sat on the same screen as "Bản ghi gần đây", and recordings
@@ -1512,9 +1523,80 @@ describe('Phase 11: "Tài khoản"', () => {
     await flush()
 
     fireEvent.click(screen.getByRole('button', { name: '↺ Đặt lại tiến trình…' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Xoá tiến trình' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Xoá trên máy này' }))
     await flush()
     expect(syncMock.resetRemoteProgress).not.toHaveBeenCalled()
+  })
+})
+
+/**
+ * Task 15: the four `useDialog` call-sites in this screen (reset, sign-out, add-profile, rename) —
+ * copy only, no new API. R27 / decision 33 splits the reset confirm into two TITLES (not one title
+ * with a conditional body) keyed on whether the account is actually linked, not merely
+ * `cloudAvailable`; decision 35 gives add/rename the same "Ví dụ: Bé Su" placeholder. The Phase 12
+ * busy contract (dialog stays open/disabled until `onConfirm`/`onSubmit` settles) is unchanged —
+ * see the reset/sign-out busy tests above ("disables the reset trigger...", "keeps the sign-out
+ * dialog open and busy..."), which keep passing unmodified except for the confirm button's new name.
+ */
+describe('Task 15: dialog copy at the four call-sites', () => {
+  it('the two delete dialogs have two different titles and two different button labels', async () => {
+    cloud.configured = false // unlinked: no cloud at all
+
+    renderWithDialogs(<ParentDashboard />)
+    await flush()
+    fireEvent.click(screen.getByRole('button', { name: '↺ Đặt lại tiến trình…' }))
+    expect(await screen.findByRole('dialog')).toHaveTextContent('Xoá tiến trình trên máy này?')
+    expect(screen.getByRole('dialog')).toHaveTextContent('Tài khoản chưa liên kết nên không có bản lưu nào khác.')
+    expect(screen.getByRole('button', { name: 'Xoá trên máy này' })).toHaveClass('bg-fix-700')
+    cleanup()
+
+    cloud.configured = true // linked: an actual account with a cloud copy to lose
+    authMock.isAnonymous.mockResolvedValue(false)
+    authMock.currentEmail.mockResolvedValue('bome@example.com')
+    renderWithDialogs(<ParentDashboard />)
+    await flush()
+    fireEvent.click(screen.getByRole('button', { name: '↺ Đặt lại tiến trình…' }))
+    expect(await screen.findByRole('dialog')).toHaveTextContent('Xoá toàn bộ tiến trình của bé?')
+    expect(screen.getByRole('dialog')).toHaveTextContent('kể cả bằng mã khôi phục')
+    expect(screen.getByRole('button', { name: 'Xoá tất cả' })).toBeInTheDocument()
+  })
+
+  it('the sign-out dialog names the unsent items and its button is coral, not red', async () => {
+    cloud.configured = true
+    authMock.isAnonymous.mockResolvedValue(false)
+    authMock.currentEmail.mockResolvedValue('bome@example.com')
+    syncMock.syncStatus.mockReturnValue({ state: 'pending', pending: 3, lastSyncedAt: null, lastError: null, syncing: false })
+
+    renderWithDialogs(<ParentDashboard />)
+    await flush()
+    fireEvent.click(screen.getByRole('button', { name: 'Đăng xuất' }))
+    const d = await screen.findByRole('dialog')
+    expect(d).toHaveTextContent('Đăng xuất tài khoản?')
+    expect(d).toHaveTextContent('3 mục chưa đồng bộ sẽ được gửi trước.')
+    expect(within(d).getByRole('button', { name: 'Đăng xuất' })).toHaveClass('bg-coral-500')
+  })
+
+  it('add-profile is "mới", has the example placeholder and the 0/40 counter', async () => {
+    cloud.configured = true
+
+    renderWithDialogs(<ParentDashboard />)
+    await flush()
+    fireEvent.click(screen.getByRole('button', { name: '+ Thêm hồ sơ' }))
+    expect(await screen.findByRole('dialog')).toHaveTextContent('Thêm hồ sơ mới')
+    expect(screen.getByLabelText('Tên của bé')).toHaveAttribute('placeholder', 'Ví dụ: Bé Su')
+    expect(screen.getByText('0/40')).toBeInTheDocument()
+  })
+
+  it('rename follows the same pattern and keeps the current name as its initial value', async () => {
+    cloud.configured = true
+    profileStateMock.listProfiles.mockReturnValue([{ id: 'p1', name: 'Bé Su', avatar: '🦊', created: 1 }])
+
+    renderWithDialogs(<ParentDashboard />)
+    await flush()
+    fireEvent.click(screen.getByRole('button', { name: 'Đổi tên' }))
+    expect(await screen.findByRole('dialog')).toHaveTextContent('Đổi tên hồ sơ')
+    expect(screen.getByLabelText('Tên của bé')).toHaveValue('Bé Su')
+    expect(screen.getByLabelText('Tên của bé')).toHaveAttribute('placeholder', 'Ví dụ: Bé Su')
   })
 })
 
