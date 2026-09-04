@@ -24,17 +24,19 @@ const VARIANT: Record<BackVariant, string> = {
  * content is what names it.
  *
  * **The adult variant's own label is never hidden**, so `mdLabel` there swaps the VISIBLE text
- * instead (same `hidden`/`ipad:` pair, no `sr-only`) — round-4 fix wave 1's `ParentGate` is the
- * first caller to combine `variant='adult'` with `mdLabel`. Its accessible NAME stays pinned to
- * `label` throughout (a static `aria-label`, not content), rather than switching with the two
- * spans: an `aria-label` really can't follow a breakpoint (the paragraph above is the reason the
- * child variant never uses one for this), so a *changing* name was never on the table here either
- * — the choice is between a name that's ambiguous at the swap (both spans are on-screen content,
- * and a CSS-only visibility swap gives them no distinguishing DOM signal a screen reader — or a
- * test with no stylesheet loaded — can resolve) and a name that's simply stable. A pill whose own
- * printed text already carries the wording doesn't lose anything by keeping one fixed name; an
- * icon-only control (`child`/`onArt`) has nothing else to fall back on, which is why those two
- * keep the breakpoint-following `sr-only` pair instead.
+ * instead (same `hidden`/`ipad:` pair, no `sr-only` — round-4 fix wave 1's `ParentGate` is the
+ * first caller to combine `variant='adult'` with `mdLabel`). This is content, not `aria-label`,
+ * on purpose (round-4 fix wave 2, reverting wave 1's static `aria-label`): a real browser correctly
+ * drops a `display:none` descendant from the accessible-name computation, so exactly one of the two
+ * spans is ever in the name at a time, and that name IS the visible label — "Về nhà" off iPad
+ * landscape, "Về bản đồ 🏝️" on it. A static `aria-label` pinned the name to `label` regardless of
+ * breakpoint, which reads correctly in isolation but is wrong the moment it's checked against what
+ * a sighted user sees on iPad landscape: a screen-reader or voice-control user would be told a name
+ * that does not match the pill's own printed text, which is a worse defect than the one it avoided.
+ * jsdom loads no stylesheet, so `getByRole('link', { name })` there cannot resolve which of the two
+ * spans is "hidden" and reports both concatenated — a limitation of the test environment, not of
+ * the real component; the tests query the two spans directly instead, the same way `HomeLabel`'s
+ * own test does for this identical pattern.
  */
 export function BackButton({ to, label = 'Quay lại', mdLabel, variant = 'child', state, className = '' }: {
   to: string
@@ -55,12 +57,10 @@ export function BackButton({ to, label = 'Quay lại', mdLabel, variant = 'child
     <Link
       to={to}
       state={state}
-      // Every case but one names itself from content: `child`/`onArt` with no `mdLabel` are
-      // icon-only (no other text), so they still need the static `aria-label` here; `child`/
-      // `onArt` WITH `mdLabel`, and the plain adult pill, all leave it undefined and let their own
-      // (visible or sr-only) spans below supply the name instead. `adultSwap` is the one exception
-      // — see the doc comment above for why its name is pinned to `label` rather than swapping.
-      aria-label={adultSwap ? label : mdLabel === undefined && !visibleLabel ? label : undefined}
+      // Only the truly icon-only case (no visible label anywhere, no `mdLabel` pair to fall back
+      // on) needs a static name here; every other case — including `adultSwap` — names itself from
+      // its own (visible or sr-only) content below.
+      aria-label={mdLabel === undefined && !visibleLabel ? label : undefined}
       // `shrink-0`: it lives in flex headers next to content that can be much wider than the
       // viewport (a long level's progress dots), and a squeezed circle drops below the
       // 64 px tap-target floor exactly where a small finger needs it most.
@@ -69,11 +69,9 @@ export function BackButton({ to, label = 'Quay lại', mdLabel, variant = 'child
       <span aria-hidden="true" className={visibleLabel ? 'text-[18px]' : undefined}>←</span>
       {visibleLabel && mdLabel === undefined && <span>{label}</span>}
       {adultSwap && (
-        // `aria-hidden`: the `aria-label` above already names the link, so these two are purely
-        // the printed text swapping at `ipad:` — not a second, competing source of the name.
         <>
-          <span aria-hidden="true" className="ipad:hidden">{label}</span>
-          <span aria-hidden="true" className="hidden ipad:inline">{mdLabel}</span>
+          <span className="ipad:hidden">{label}</span>
+          <span className="hidden ipad:inline">{mdLabel}</span>
         </>
       )}
       {!visibleLabel && mdLabel !== undefined && (

@@ -154,15 +154,19 @@ describe('BackButton', () => {
     router(<BackButton to="/" label="Về nhà" mdLabel="Về bản đồ 🏝️" variant="adult" />)
     // The pill's own printed text carries the wording, so — unlike `mdLabel` on the icon-only
     // child variant above — this swap is plain visible text, not `sr-only`: exactly one of the two
-    // is ever `display:none` at a time (round-4 fix wave 1).
+    // is ever `display:none` at a time (round-4 fix wave 2: content, not a static `aria-label`, so
+    // the announced name always matches what's actually printed on screen at that breakpoint).
     expect(screen.getByText('Về nhà')).toHaveClass('ipad:hidden')
     expect(screen.getByText('Về nhà').className).not.toMatch(/sr-only/)
     expect(screen.getByText('Về bản đồ 🏝️')).toHaveClass('hidden', 'ipad:inline')
     expect(screen.getByText('Về bản đồ 🏝️').className).not.toMatch(/sr-only/)
-    // The accessible NAME still can't follow a breakpoint (no stylesheet needed to prove it —
-    // an `aria-label` is just one string), so it's pinned to `label` rather than left ambiguous
-    // between the two on-screen spans.
-    expect(screen.getByRole('link', { name: 'Về nhà' })).toBeInTheDocument()
+    // jsdom loads no stylesheet, so it can't tell which span is `display:none` and reports the
+    // accessible name as both concatenated — the same limitation `HomeLabel`'s own test (below)
+    // works around by asserting the two spans directly rather than a role/name query; a prefix
+    // match on the un-swapped label is enough here to confirm it still leads the jsdom-rendered
+    // name, without claiming jsdom can resolve the real, single-label accessible name a browser
+    // computes once its stylesheet excludes the `display:none` span.
+    expect(screen.getByRole('link', { name: /^Về nhà/ })).toBeInTheDocument()
   })
 
   it('onArt variant is 48 on a translucent white disc', () => {

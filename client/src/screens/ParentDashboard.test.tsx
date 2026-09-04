@@ -255,14 +255,22 @@ describe('ParentGate', () => {
 
   it('the header is the adult Back with a landscape-only label, and no LessonChip on the right', () => {
     renderGate()
-    // Exact name, not a regex: fix round 1 made the adult pill's VISIBLE label breakpoint-aware
-    // (mirroring the child variant's sr-only pair) instead of always showing `label` alongside a
-    // merely visually-hidden `mdLabel` — below `ipad:` exactly one of the two spans is in the
-    // accessibility tree, so the accessible name is `label` alone, with no duplicate.
-    const back = screen.getByRole('link', { name: 'Về nhà' })
+    // Fix round 1 made the adult pill's VISIBLE label breakpoint-aware (mirroring the child
+    // variant's `sr-only` pair, but as real content) instead of always showing `label` alongside a
+    // merely visually-hidden `mdLabel`; fix round 2 dropped a static `aria-label` that round 1 had
+    // added on top — it kept the announced name pinned to "Về nhà" even on iPad landscape, where
+    // the printed text is "Về bản đồ 🏝️", a label-in-name mismatch worse than the problem it
+    // solved. A real browser excludes the `display:none` span from the accessible-name computation,
+    // so exactly one of the two is ever in it — but jsdom loads no stylesheet, so it cannot tell
+    // which span is `display:none` and reports both concatenated ("Về nhàVề bản đồ 🏝️"). A prefix
+    // match confirms the un-swapped label leads that jsdom-rendered name; the two spans' own
+    // classes (below) are what actually pin down the breakpoint behaviour.
+    const back = screen.getByRole('link', { name: /^Về nhà/ })
     expect(back).toHaveClass('h-11', 'rounded-r14')
     expect(within(back).getByText('Về nhà')).toHaveClass('ipad:hidden')
+    expect(within(back).getByText('Về nhà').className).not.toMatch(/sr-only/)
     expect(within(back).getByText('Về bản đồ 🏝️')).toHaveClass('hidden', 'ipad:inline')
+    expect(within(back).getByText('Về bản đồ 🏝️').className).not.toMatch(/sr-only/)
     expect(screen.getByTestId('header-right')).toBeEmptyDOMElement()
   })
 
