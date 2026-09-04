@@ -41,8 +41,8 @@ import { isCloudConfigured } from '../cloud/supabase'
 import { ProfilePicker } from '../components/ProfilePicker'
 import { BackButton, Button, EmptyState, Notice, RemoteRowSkeleton, SyncPill } from '../components/ui'
 import { PageShell, PageHeader, PageBody } from '../components/ui/page'
-import { AccountCard, MinutesChart, Panel, PanelGrid, SegRow, Stepper } from '../components/adult'
-import type { AccountState, Seg } from '../components/adult'
+import { AccountCard, MinutesChart, Panel, PanelGrid, RecordingRow, RemoteRow, SegRow, Stepper } from '../components/adult'
+import type { AccountState, RemoteRowState, Seg } from '../components/adult'
 import { useDialog } from '../components/ui/useDialog'
 
 /**
@@ -111,13 +111,48 @@ const online = (): boolean => typeof navigator === 'undefined' || navigator.onLi
 
 const formatAvg = (n: number | null): string => (n == null ? '—' : String(Math.round(n)))
 
-function formatTs(ts: number): string {
-  const d = new Date(ts)
-  const dd = String(d.getDate()).padStart(2, '0')
-  const mm = String(d.getMonth() + 1).padStart(2, '0')
-  const hh = String(d.getHours()).padStart(2, '0')
-  const min = String(d.getMinutes()).padStart(2, '0')
-  return `${dd}/${mm} ${hh}:${min}`
+const DAY_MS = 24 * 3600e3
+
+/**
+ * `RemoteStats` (`cloud/remote.ts`, read-only for this task) carries neither a last-updated nor an
+ * audio-sync signal — there is nowhere honest to derive `stale`/`noAudio` from yet. Reading them
+ * off a locally widened type (rather than inventing a field on the imported type) keeps a real
+ * fetch — where both are always `undefined` — from ever being misread as "definitely stale": the
+ * guards below only fire on a genuine value, never on a missing one. Only this screen's own tests
+ * (task-14-report.md) exercise either branch today, via a mocked `fetchRemoteStats`; a future task
+ * that teaches `cloud/remote.ts` to compute these for real lights them up with no further change
+ * here.
+ */
+type RemoteEntry = RemoteStats & { updatedAt?: number; noAudioSync?: boolean }
+
+/** R18 — the 2–3 free-standing `<p>` lines the old remote card drew, squeezed into the ONE string
+ * `RemoteRow` truncates rather than wraps. */
+function composeRemoteSub(entry: RemoteStats): string {
+  const a = entry.averages
+  const first = entry.weak[0]
+  return `🔥 ${entry.streak} ngày · ${entry.weekMinutes}'/tuần · Nói ${formatAvg(a.speak)} · Từ ${formatAvg(a.word)} · Câu ${formatAvg(a.sentence)}`
+    + (first ? ` · Âm sai /${first.phoneme}/ ${Math.round(first.avg)}` : '')
+}
+
+/** decision 30/31: a stale row leads with WHEN, not with the numbers a parent already stopped
+ * trusting. `now` is the caller's own render-stable clock (`snapshot.now`), not a fresh
+ * `Date.now()` read mid-render. */
+function composeStaleSub(entry: RemoteStats, now: number, updatedAt: number): string {
+  const daysAgo = Math.floor((now - updatedAt) / DAY_MS)
+  return `Cập nhật ${daysAgo} ngày trước · 🔥 ${entry.streak} · ${entry.weekMinutes}'/tuần`
+}
+
+/** "Chi tiết" → the numbers the row's own one-line `sub` had no room for. */
+function remoteDetailBody(entry: RemoteStats): string {
+  const a = entry.averages
+  return [
+    `Chuỗi ngày: ${entry.streak}`,
+    `Tuần này: ${entry.weekMinutes} phút`,
+    `Điểm trung bình — Nói ${formatAvg(a.speak)} · Từ vựng ${formatAvg(a.word)} · Ghép câu ${formatAvg(a.sentence)}`,
+    entry.weak.length === 0
+      ? 'Chưa đủ dữ liệu về âm sai'
+      : `Âm hay sai: ${entry.weak.map(w => `/${w.phoneme}/ (${Math.round(w.avg)})`).join(', ')}`,
+  ].join('\n')
 }
 
 type Props = {
@@ -129,6 +164,10 @@ type Props = {
 export function ParentDashboard({ onLock }: Props) {
   const dialog = useDialog()
   const [recordings, setRecordings] = useState<Recording[]>([])
+  // Task 14 (decision 30): the panel shows 5 rows by default and expands IN PLACE, never a dialog.
+  const [recordingsExpanded, setRecordingsExpanded] = useState(false)
+  const [playingId, setPlayingId] = useState<string | null>(null)
+  const [playErrorId, setPlayErrorId] = useState<string | null>(null)
   // Disables the "Đặt lại tiến trình"/"Đăng xuất" triggers for the whole span their own
   // confirm dialog is open AND busy (see `Dialog`'s `onConfirm`). `DialogProvider` itself now
   // refuses to replace a busy dialog (fix round 2), so this is belt-and-braces rather than the
@@ -230,7 +269,16 @@ export function ParentDashboard({ onLock }: Props) {
    * re-run since — the only thing that should ever suppress an update is the component being gone.
    */
   const remoteStatsMounted = useRef(true)
-  useEffect(() => () => { remoteStatsMounted.current = false }, [])
+  useEffect(() => {
+    // Task 14 fix: StrictMode's dev-only mount→cleanup→remount cycle used to run just the
+    // cleanup below on its first pass, latching `.current` to `false` for the component's real,
+    // lasting mount too — silently dropping every `setRemoteStats` call forever (confirmed live:
+    // the panel's fetches all resolve, correctly, over the real network, and the DOM simply never
+    // updates). Setting it back to `true` here — the standard fix for exactly this StrictMode
+    // shape — is what makes the SECOND (real) mount's cleanup the one that actually matters.
+    remoteStatsMounted.current = true
+    return () => { remoteStatsMounted.current = false }
+  }, [])
 
   useEffect(() => {
     if (!cloudAvailable || !authReady || !hasSession) return undefined
@@ -304,6 +352,10 @@ export function ParentDashboard({ onLock }: Props) {
   /** decision 28 — which weak-sound chip's tip is pinned open on a phone; `null` until a chip is
    * tapped. From `md:` up the first chip's tip shows regardless of this (see `isWide` below). */
   const [openTip, setOpenTip] = useState<string | null>(null)
+  /** Task 14 — the recordings panel's own `defaultOpen`, read once at mount exactly like
+   * `chartRange` above: open from `md:`/`ipad:` up, folded on a phone. `Panel`'s own toggle owns
+   * everything after that; this is only ever the starting point. */
+  const [recordingsOpen] = useState(() => window.matchMedia?.('(min-width: 768px)').matches ?? false)
 
   const { events, now } = snapshot
   const days = minutesPerDay(14, now, events)
@@ -371,6 +423,43 @@ export function ParentDashboard({ onLock }: Props) {
     })
     return () => { cancelled = true }
   }, [snapshot])
+
+  /**
+   * R22 — the old `playBlob(...).catch(() => {})` swallowed every failure: a parent tapped ▶ and
+   * nothing happened, with no sentence anywhere saying why. A failed play is now a red row with
+   * words, not silence.
+   */
+  function handlePlay(r: Recording) {
+    setPlayErrorId(null)
+    setPlayingId(r.id)
+    playBlob(r.blob).then(() => setPlayingId(null)).catch(() => { setPlayingId(null); setPlayErrorId(r.id) })
+  }
+
+  /** The "Thử lại" action on an errored remote row — a fresh fetch for just that one profile,
+   * without touching `fetchedRemoteIds` (that bookkeeping only guards the mount-time effect
+   * against re-fetching an id it already asked for; a parent's own retry bypasses it directly).
+   * Clearing the entry first drops the row back to its loading skeleton for the span of the retry. */
+  function handleRetryRemote(id: string) {
+    setRemoteStats(prev => {
+      const next = { ...prev }
+      delete next[id]
+      return next
+    })
+    void fetchRemoteStats(id).then(stats => {
+      if (remoteStatsMounted.current) setRemoteStats(prev => ({ ...prev, [id]: stats }))
+    })
+  }
+
+  /** "Chi tiết" — the numbers a squeezed one-line `sub` had no room for, in the one dialog surface
+   * this screen already has (decision 31: no new surface for this). */
+  function handleRemoteDetail(p: Profile, entry: RemoteStats) {
+    void dialog.confirm({
+      title: p.name,
+      body: remoteDetailBody(entry),
+      confirmLabel: 'Đóng',
+      cancelLabel: 'Đóng',
+    })
+  }
 
   /** R23 / decision 6 — the one write path left for the daily limit now that the number input is
    * gone: every preset chip, the fourth "Tuỳ chỉnh" seg (re-applying the current value, a no-op),
@@ -809,7 +898,12 @@ export function ParentDashboard({ onLock }: Props) {
           <p className="mt-3 text-xs font-semibold text-ink-500 md:text-sm">Áp dụng từ bài học ngày mai.</p>
         </Panel>
 
-        <Panel title="Bản ghi gần đây">
+        <Panel
+          testId="recordings-panel"
+          title={`Bản ghi gần đây · ${recordings.length}`}
+          collapsible
+          defaultOpen={recordingsOpen}
+        >
           {recordings.length === 0 ? (
             <EmptyState
               adult
@@ -818,24 +912,31 @@ export function ParentDashboard({ onLock }: Props) {
               sub="Bản ghi xuất hiện sau khi bé luyện nói."
             />
           ) : (
-            <ul className="flex flex-col gap-2 md:gap-3">
-              {recordings.map(r => (
-                <li key={r.id} className="flex items-center gap-3 rounded-xl2 border border-line-200 p-2 md:p-3">
-                  <button
-                    type="button"
-                    aria-label="Phát"
-                    onClick={() => { playBlob(r.blob).catch(() => { /* ignore: playback unavailable */ }) }}
-                    className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-teal-500 text-lg text-white shadow-chunky-teal active:translate-y-[2px]"
-                  >
-                    ▶
-                  </button>
-                  <div>
-                    <p className="text-xs font-bold text-ink-300">{formatTs(r.ts)}</p>
-                    <p className="font-semibold text-ink-900">{r.text}</p>
-                  </div>
-                </li>
-              ))}
-            </ul>
+            <>
+              <div className="flex flex-col">
+                {recordings.slice(0, recordingsExpanded ? recordings.length : 5).map(r => (
+                  <RecordingRow
+                    key={r.id}
+                    ts={r.ts}
+                    text={r.text}
+                    score={r.score}
+                    playing={playingId === r.id}
+                    error={playErrorId === r.id}
+                    onPlay={() => handlePlay(r)}
+                  />
+                ))}
+              </div>
+              {/* Q18 (đã chốt: giữ) / decision 30 — 5 hàng mặc định, mở rộng TẠI CHỖ, không dialog. */}
+              {recordings.length > 5 && !recordingsExpanded && (
+                <button
+                  type="button"
+                  onClick={() => setRecordingsExpanded(true)}
+                  className="h-11 text-[12px] font-extrabold text-teal-600 underline"
+                >
+                  Xem tất cả {recordings.length} bản ghi ▾
+                </button>
+              )}
+            </>
           )}
         </Panel>
 
@@ -846,7 +947,15 @@ export function ParentDashboard({ onLock }: Props) {
           * profiles" (the whole reason it is its own branch), and an idle read (no profile to
           * compare against yet) prints nothing more than the title. */}
         {cloudAvailable && (
-          <Panel title="Tiến độ từ xa" col="full">
+          <Panel
+            title="Tiến độ từ xa"
+            col="full"
+            right={
+              remoteViewOn
+                ? <span className="h-8 rounded-r10 bg-teal-50 px-2.5 text-[12px] font-extrabold leading-8 text-teal-600">👁 Đang xem</span>
+                : undefined
+            }
+          >
             {remoteProfiles.status === 'unknown' && (
               <p data-testid="remote-progress-unknown" className="text-xs font-semibold text-ink-500 md:text-sm">
                 Chưa xem được tiến độ từ xa lúc này (máy chủ chưa trả lời). Thử tải lại trang sau nhé.
@@ -857,60 +966,58 @@ export function ParentDashboard({ onLock }: Props) {
                 <p className="mb-2 text-xs font-semibold text-ink-500 md:text-sm">
                   Lấy từ máy chủ — có thể khác số trên chính máy này (máy có thể đã tự xoá bớt lịch sử cũ).
                 </p>
-                <ul className="flex flex-col gap-3">
+                <div className="flex flex-col">
                   {remoteProfilesToShow.map(p => {
                     const loaded = p.id in remoteStats
-                    const entry = remoteStats[p.id]
-                    // While the stats haven't loaded, the skeleton IS the row — no bordered/padded
-                    // `<li>` around a real name line sat above a second, separately-framed skeleton
-                    // box (that read as two stacked cards, not one loading row).
+
+                    // While the stats haven't loaded, the skeleton IS the row — see R18's own
+                    // fix note on the old two-stacked-cards look. `RemoteRow` itself only ever
+                    // draws the skeleton for `state === 'loading'` with no `remote-row` wrapper
+                    // (there is nothing to click yet), so this one state gets its own — every
+                    // OTHER state's wrapper comes from `RemoteRow` itself, below.
                     if (!loaded) {
                       return (
-                        <li key={p.id} data-testid="remote-profile" className="overflow-hidden rounded-r16">
+                        <div key={p.id} data-testid="remote-row">
                           <RemoteRowSkeleton />
-                        </li>
+                        </div>
                       )
                     }
-                    return (
-                      <li key={p.id} data-testid="remote-profile" className="rounded-xl2 border border-line-200 p-3">
-                        <p className="font-semibold text-ink-900">
-                          {p.avatar} {p.name}
-                          {p.id === activeId && <span className="font-normal text-ink-500"> · đang dùng trên máy này</span>}
-                        </p>
-                        {entry === null ? (
-                          <p className="mt-1 text-xs font-semibold text-fix-700">Không tải được tiến độ của bé lúc này.</p>
-                        ) : (
-                          <div className="mt-1 flex flex-col gap-1 text-xs font-semibold text-ink-500 md:text-sm">
-                            {/* A profile the server holds nothing for gets a sentence, not a
-                              * measurement: "Chuỗi ngày: 0 · Tuần này: 0 phút" reads as a confident
-                              * statement about a child who has been idle, and it is exactly what an
-                              * empty placeholder row produces. Hiding such a profile instead would hide
-                              * a real child a parent added on another device and is checking arrived —
-                              * the same error class, pointing the other way. */}
-                            {entry.eventCount === 0 ? (
-                              <p data-testid="remote-empty">Chưa có dữ liệu nào trên máy chủ</p>
-                            ) : (
-                              <>
-                                <p>Chuỗi ngày: {entry.streak} · Tuần này: {entry.weekMinutes} phút</p>
-                                <p>
-                                  Điểm trung bình — Nói {formatAvg(entry.averages.speak)} · Từ vựng {formatAvg(entry.averages.word)} · Ghép câu {formatAvg(entry.averages.sentence)}
-                                </p>
-                                {entry.weak.length === 0 ? (
-                                  <p>Chưa đủ dữ liệu về âm sai</p>
-                                ) : (
-                                  <p>Âm hay sai: {entry.weak.map(w => `/${w.phoneme}/ (${Math.round(w.avg)})`).join(', ')}</p>
-                                )}
-                              </>
-                            )}
-                          </div>
-                        )}
-                        <p className="mt-1 text-xs font-semibold text-ink-300">
-                          Bản ghi giọng nói của bé không đồng bộ — chỉ nghe được trên máy đã ghi.
-                        </p>
-                      </li>
-                    )
+                    // Only reached once `p.id in remoteStats` is true, so this is a real recorded
+                    // fetch result — `RemoteEntry | null`, never `undefined`, despite the index
+                    // signature's own wider type.
+                    const entry = remoteStats[p.id] as RemoteEntry | null
+
+                    const state: RemoteRowState =
+                      entry === null ? 'error'
+                      : entry.eventCount === 0 ? 'empty'
+                      // R18 / decision 30 — a new mark, read off the clock: `updatedAt` is only
+                      // ever set by a test today (see `RemoteEntry`'s own doc comment above), so
+                      // this never fires against a live fetch until `cloud/remote.ts` grows a
+                      // real signal for it.
+                      : entry.updatedAt != null && now - entry.updatedAt > 7 * DAY_MS ? 'stale'
+                      : p.id === activeId ? 'thisDevice'
+                      : entry.noAudioSync ? 'noAudio'
+                      : 'data'
+
+                    const name = state === 'thisDevice' ? `${p.name} · máy này` : p.name
+                    const sub =
+                      state === 'error' ? 'Không tải được — kiểm tra mạng.'
+                      : state === 'empty' ? 'Chưa có dữ liệu trên máy chủ.'
+                      : state === 'stale' ? composeStaleSub(entry!, now, entry!.updatedAt!)
+                      : composeRemoteSub(entry!) + (state === 'noAudio' ? ' — bản ghi giọng không đồng bộ' : '')
+
+                    const onAction =
+                      state === 'error' ? () => handleRetryRemote(p.id)
+                      : state === 'empty' ? undefined
+                      : () => handleRemoteDetail(p, entry!)
+
+                    return <RemoteRow key={p.id} name={name} sub={sub} state={state} onAction={onAction} />
                   })}
-                </ul>
+                </div>
+                {/* R18 — the sync caveat lives here ONCE, never repeated per row. */}
+                <p className="mt-2 text-xs font-semibold text-ink-300">
+                  Bản ghi giọng nói của bé không đồng bộ — chỉ nghe được trên máy đã ghi.
+                </p>
               </div>
             )}
           </Panel>

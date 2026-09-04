@@ -73,6 +73,10 @@ type MockRemoteStats = {
   averages: { story: number | null; speak: number | null; word: number | null; sentence: number | null }
   weak: { phoneme: string; avg: number; count: number }[]
   eventCount: number
+  // Task 14 — not part of the real `RemoteStats` (`cloud/remote.ts` is read-only for that task);
+  // see `ParentDashboard.tsx`'s own `RemoteEntry` doc comment for why these ride along only here.
+  updatedAt?: number
+  noAudioSync?: boolean
 }
 const remoteMock = vi.hoisted(() => ({
   fetchRemoteStats: vi.fn<(id: string) => Promise<MockRemoteStats | null>>(async () => null),
@@ -139,6 +143,24 @@ function minutesTodayEvents(total: number): ActivityEvent[] {
  * legacy-namespace keys — no active profile in these tests, so `storageKey()` resolves to
  * `speakup.limit.minutes`/`speakup.band`) and `minutesToday` (seeds a session totalling that many
  * minutes instead of the default one-event/one-minute seed, for panel C's "Hôm nay: N/limit'" line). */
+/**
+ * Task 14 — one entry of the remote-progress panel's 7-state demo. `stats: null` is a failed
+ * fetch (the "error" row); `stats: 'pending'` is a fetch that never resolves (the "loading" row —
+ * a resolved value, even a slow one, would eventually settle out of it, which is exactly the state
+ * this fixture needs to hold still). `updatedAt`/`noAudioSync` ride along on the resolved object
+ * exactly as `RemoteEntry` (`ParentDashboard.tsx`) reads them — see that type's own doc comment for
+ * why `cloud/remote.ts` itself carries neither field yet. An id of `'p1'` is this file's own
+ * convention for "the profile active on this device" (`ACTIVE_PROFILE.id`, `beforeEach`'s default
+ * `activeProfileId()` — every other `renderDashboard` option already assumes it).
+ */
+type RemoteFixture = {
+  id: string
+  name: string
+  stats: MockRemoteStats | null | 'pending'
+  updatedAt?: number
+  noAudioSync?: boolean
+}
+
 function renderDashboard(opts: {
   events?: ActivityEvent[]
   cloud?: boolean
@@ -146,6 +168,8 @@ function renderDashboard(opts: {
   limit?: number
   band?: { mode: 'auto' | 'manual'; value: 1 | 2 | 3 | 4 | 5 }
   minutesToday?: number
+  recordings?: Recording[]
+  remote?: RemoteFixture[]
 } = {}) {
   cloud.configured = opts.cloud ?? true
   const events = opts.events
@@ -162,6 +186,18 @@ function renderDashboard(opts: {
     }))
     profileStateMock.listProfiles.mockReturnValue(roster)
     profileStateMock.activeProfileId.mockReturnValue(roster[0].id)
+  }
+  if (opts.recordings) recordingsMock.listRecordings.mockResolvedValue(opts.recordings)
+  if (opts.remote) {
+    const fixtures = opts.remote
+    const roster: MockProfile[] = fixtures.map((r, i) => ({ id: r.id, name: r.name, avatar: '🦊', created: i }))
+    profileStateMock.fetchRemoteProfiles.mockResolvedValue(roster)
+    remoteMock.fetchRemoteStats.mockImplementation(async (id: string) => {
+      const f = fixtures.find(x => x.id === id)
+      if (!f || f.stats === null) return null
+      if (f.stats === 'pending') return new Promise<MockRemoteStats | null>(() => { /* never resolves */ })
+      return { ...f.stats, updatedAt: f.updatedAt, noAudioSync: f.noAudioSync }
+    })
   }
   return renderWithDialogs(<ParentDashboard />)
 }
@@ -696,23 +732,28 @@ describe('ParentDashboard', () => {
    * Spec decision 2: the design drops this card on a phone and we do not — the last 20 recordings
    * stay a working feature, not a layout. Task 10 dropped the ad-hoc `<details>` disclosure that
    * used to fold it on a phone (its 64 px summary row was the one control on this adult screen
-   * still held to the child tap floor — round 4's R3 ruling reversed that): the panel is plain and
-   * always open for now, and Task 14 restores a proper collapse using `Panel`'s own `collapsible`
-   * prop, this time at the adult 44 px convention throughout.
+   * still held to the child tap floor — round 4's R3 ruling reversed that); Task 14 gives the
+   * panel a proper collapse via `Panel`'s own `collapsible` prop instead, at the adult 44/56
+   * convention throughout — see the "Task 14: recordings panel" describe block below for the
+   * five-rows/expand/play/error/empty coverage this test used to carry alone.
    */
-  it('renders the recordings panel plainly — data-testid intact for Task 14 to build the collapse on', async () => {
+  it('renders the recordings panel as RecordingRow rows, one per recording', async () => {
     recordingsMock.listRecordings.mockResolvedValue([
-      { id: 'r1', ts: NOW, text: 'apple', blob: new Blob(['x']) },
+      { id: 'r1', ts: NOW, text: 'apple', blob: new Blob(['x']), score: 80 },
     ])
 
     renderWithDialogs(<ParentDashboard />)
-    const heading = await screen.findByText('Bản ghi gần đây')
+    // `Panel`'s own `collapsible` prop renders the `<h2>` twice — once in the phone-only fold
+    // button, once in the `md:flex` desktop row (both carry the same text) — so this takes
+    // whichever copy `findAllByText` returns first rather than a bare (ambiguous) `findByText`.
+    const heading = (await screen.findAllByText('Bản ghi gần đây · 1'))[0]
 
-    expect(heading.closest('[data-testid="panel"]')).toBeInTheDocument()
+    expect(heading.closest('[data-testid="recordings-panel"]')).toBeInTheDocument()
     // findBy*, not getBy*: the heading renders synchronously while the row waits on
     // listRecordings, so a bare get here races the promise and fails under a loaded suite.
     expect(await screen.findByRole('button', { name: 'Phát' })).toBeInTheDocument()
     expect(screen.getByText('apple')).toBeInTheDocument()
+    expect(screen.getByTestId('recording-score')).toHaveTextContent('80')
   })
 
   /**
@@ -867,9 +908,12 @@ describe('ParentDashboard', () => {
     // phone-only fold button, once in the `md:flex` desktop row — so titles are de-duplicated
     // (order-preserving) before comparing against the one-per-panel list.
     const titles = within(grid).getAllByRole('heading', { level: 2 }).map(h => h.textContent)
+    // Task 14: the recordings panel's own title now carries a count — `renderDashboard()` seeds no
+    // `recordings` option, and `listRecordings` resolves to `[]` by default (`beforeEach`), so it
+    // reads `· 0` here (before that promise even settles: `recordings.length` starts at 0 either way).
     expect([...new Set(titles)]).toEqual([
       'Tài khoản', 'Phút luyện · 7 ngày', 'Điểm trung bình', 'Âm hay sai',
-      '⏰ Giới hạn mỗi ngày', 'Bài học', 'Bản ghi gần đây', 'Tiến độ từ xa',
+      '⏰ Giới hạn mỗi ngày', 'Bài học', 'Bản ghi gần đây · 0', 'Tiến độ từ xa',
     ])
     expect(screen.queryByTestId('account-card')).toBe(within(grid).getByTestId('account-card'))
   })
@@ -897,16 +941,18 @@ describe('ParentDashboard', () => {
     expect(screen.queryByTestId('account-card')).toBeNull()
     expect(screen.queryByText('Tiến độ từ xa')).toBeNull()
     expect(screen.queryByText('Hồ sơ')).toBeNull()
-    // The averages panel carries its own `averages-panel` testid (Task 12), and Task 13's limit/
-    // lesson panels carry `limit-panel`/`lesson-panel` (so a `within(...).getByTestId('limit-panel')`
-    // lookup elsewhere never has to disambiguate against the other nine) — all four count as
-    // "a panel" here alongside the generic `panel` every plain panel keeps.
+    // The averages panel carries its own `averages-panel` testid (Task 12), Task 13's limit/
+    // lesson panels carry `limit-panel`/`lesson-panel`, and Task 14's recordings panel carries
+    // `recordings-panel` (so a `within(...).getByTestId('limit-panel')` lookup elsewhere never has
+    // to disambiguate against the other nine) — all five count as "a panel" here alongside the
+    // generic `panel` every plain panel keeps.
     const grid = screen.getByTestId('panel-grid')
     const panels = [
       ...within(grid).queryAllByTestId('panel'),
       ...within(grid).queryAllByTestId('averages-panel'),
       ...within(grid).queryAllByTestId('limit-panel'),
       ...within(grid).queryAllByTestId('lesson-panel'),
+      ...within(grid).queryAllByTestId('recordings-panel'),
     ]
     expect(panels).toHaveLength(6)
     expect(screen.getByTestId('panel-grid')).toHaveClass('grid-cols-1', 'md:grid-cols-2', 'ipad:grid-cols-3')
@@ -1548,6 +1594,12 @@ describe('Task 11: account panel is AccountCard, with a profile column', () => {
  * child did nothing" — so every negative assertion below ("no remote card") is paired, in this same
  * describe block, with a positive one proving the exact same selector renders when the data says it
  * should (F5's own guidance against a `queryBy*` that can never fail).
+ *
+ * Task 14 (R18): the panel's per-profile markup is now `RemoteRow` — `data-testid="remote-row"`,
+ * not the old `remote-profile` `<li>`, and its three free-standing `<p>` lines are squeezed into
+ * one `sub` string (`composeRemoteSub`, `ParentDashboard.tsx`), so every text assertion below reads
+ * that string's own shape (`🔥 N ngày · M'/tuần · Nói …`) rather than the retired "Chuỗi ngày: N"
+ * wording. The recordings caveat also moved OUT of each row to once under the whole list.
  */
 describe('Phase 11 task 5: remote progress view', () => {
   const SIBLING: MockProfile = { id: 'p2', name: 'Sóc', avatar: '🐿️', created: 1 }
@@ -1606,9 +1658,9 @@ describe('Phase 11 task 5: remote progress view', () => {
     renderWithDialogs(<ParentDashboard />)
     await flush()
 
-    const cards = await screen.findAllByTestId('remote-profile')
-    expect(cards).toHaveLength(1)
-    expect(cards[0]).toHaveTextContent('Sóc')
+    const rows = await screen.findAllByTestId('remote-row')
+    expect(rows).toHaveLength(1)
+    expect(rows[0]).toHaveTextContent('Sóc')
     expect(remoteMock.fetchRemoteStats).toHaveBeenCalledWith('p2')
     // The active device's own profile is not duplicated here without being asked for.
     expect(remoteMock.fetchRemoteStats).not.toHaveBeenCalledWith('p1')
@@ -1623,7 +1675,7 @@ describe('Phase 11 task 5: remote progress view', () => {
    * `fetchedRemoteIds`) without re-fetching it, so when the original promise finally resolved it
    * updated nothing — the card was stuck on "Đang tải…" forever, with no reload-free way out.
    */
-  it('does not get stuck on "Đang tải…" when a sibling\'s fetch resolves only after the toggle changes which profiles are shown', async () => {
+  it('does not get stuck loading when a sibling\'s fetch resolves only after the toggle changes which profiles are shown', async () => {
     cloud.configured = true
     profileStateMock.fetchRemoteProfiles.mockResolvedValue([ACTIVE_PROFILE, SIBLING])
     let resolveSibling!: (stats: MockRemoteStats | null) => void
@@ -1633,16 +1685,14 @@ describe('Phase 11 task 5: remote progress view', () => {
     renderWithDialogs(<ParentDashboard />)
     await flush()
 
-    // The sibling's card is up and its fetch is in flight (the toggle is off, so only the sibling —
+    // The sibling's row is up and its fetch is in flight (the toggle is off, so only the sibling —
     // the one profile differing from the active device profile — is shown at all).
-    let cards = await screen.findAllByTestId('remote-profile')
-    expect(cards).toHaveLength(1)
+    let rows = await screen.findAllByTestId('remote-row')
+    expect(rows).toHaveLength(1)
     // The skeleton (Task 13) replaced the "Đang tải…" text — its presence is the loading signal now.
-    expect(within(cards[0]).getAllByTestId('skeleton').length).toBeGreaterThan(0)
-    // Fix round 1: the skeleton IS the row while loading — no real name line drawn above it, and
-    // no second, separately-bordered `<li>` around it (the skeleton draws its own outline).
-    expect(cards[0]).not.toHaveTextContent(SIBLING.name)
-    expect(cards[0].className).not.toMatch(/border-line-200/)
+    expect(within(rows[0]).getAllByTestId('skeleton').length).toBeGreaterThan(0)
+    // Fix round 1: the skeleton IS the row while loading — no real name line drawn above it.
+    expect(rows[0]).not.toHaveTextContent(SIBLING.name)
 
     // The parent presses "Xem từ xa" WHILE the sibling's fetch is still unresolved. This changes
     // `remoteShowKey` (now includes the active device profile too) and re-runs the stats effect —
@@ -1658,13 +1708,13 @@ describe('Phase 11 task 5: remote progress view', () => {
       await Promise.resolve()
     })
 
-    cards = screen.getAllByTestId('remote-profile')
-    const siblingCard = cards.find(c => c.textContent?.includes('Sóc'))
-    expect(siblingCard).toBeDefined()
-    // The positive assertion this bug made impossible: the card resolves out of the skeleton on its
+    rows = screen.getAllByTestId('remote-row')
+    const siblingRow = rows.find(r => r.textContent?.includes('Sóc'))
+    expect(siblingRow).toBeDefined()
+    // The positive assertion this bug made impossible: the row resolves out of the skeleton on its
     // own, with no remount and no page reload.
-    expect(within(siblingCard!).queryAllByTestId('skeleton')).toHaveLength(0)
-    expect(siblingCard).toHaveTextContent('Chuỗi ngày: 3')
+    expect(within(siblingRow!).queryAllByTestId('skeleton')).toHaveLength(0)
+    expect(siblingRow).toHaveTextContent('🔥 3 ngày')
   })
 
   it('stays quiet when the account holds only the profile already active here, until "Xem từ xa" is pressed', async () => {
@@ -1683,13 +1733,18 @@ describe('Phase 11 task 5: remote progress view', () => {
     fireEvent.click(toggle)
 
     expect(toggle).toHaveAttribute('aria-pressed', 'true')
-    const cards = await screen.findAllByTestId('remote-profile')
-    expect(cards).toHaveLength(1)
-    expect(cards[0]).toHaveTextContent('đang dùng trên máy này')
+    await screen.findAllByTestId('remote-row')
+    expect(screen.getAllByTestId('remote-row')).toHaveLength(1)
+    // The loading wrapper and the resolved `RemoteRow` are different subtrees, so React remounts
+    // rather than updates in place — a `remote-row` reference captured before the fetch lands is a
+    // detached node once it resolves. Re-querying fresh inside `waitFor`, not a captured `rows[0]`,
+    // is what actually observes the update.
+    // decision 31: "· máy này" — shorter than the old " · đang dùng trên máy này".
+    await waitFor(() => { expect(screen.getAllByTestId('remote-row')[0]).toHaveTextContent('· máy này') })
     expect(remoteMock.fetchRemoteStats).toHaveBeenCalledWith('p1')
   })
 
-  it('renders streak, weekly minutes, averages and weak phonemes computed from the fetched events, plus the recordings caveat', async () => {
+  it('renders streak, weekly minutes, averages and weak phonemes squeezed into one line, plus the recordings caveat once under the list', async () => {
     cloud.configured = true
     profileStateMock.fetchRemoteProfiles.mockResolvedValue([ACTIVE_PROFILE, SIBLING])
     remoteMock.fetchRemoteStats.mockResolvedValue(REMOTE_STATS)
@@ -1697,16 +1752,14 @@ describe('Phase 11 task 5: remote progress view', () => {
     renderWithDialogs(<ParentDashboard />)
     await flush()
 
-    const card = (await screen.findAllByTestId('remote-profile'))[0]
-    expect(card).toHaveTextContent('Chuỗi ngày: 3')
-    expect(card).toHaveTextContent('42 phút')
-    expect(card).toHaveTextContent('Nói 80')
-    expect(card).toHaveTextContent('Từ vựng 70')
-    expect(card).toHaveTextContent('/th/ (35)')
-    expect(card).toHaveTextContent('không đồng bộ')
+    const row = (await screen.findAllByTestId('remote-row'))[0]
+    expect(row).toHaveTextContent("🔥 3 ngày · 42'/tuần · Nói 80 · Từ 70 · Câu — · Âm sai /th/ 35")
+    // The sync caveat is no longer part of any individual row — it lives once under the list.
+    expect(row).not.toHaveTextContent('không đồng bộ')
+    expect(screen.getByText(/Bản ghi giọng nói của bé không đồng bộ/)).toBeInTheDocument()
   })
 
-  it('reports a per-profile fetch failure honestly, never as zero progress', async () => {
+  it('reports a per-profile fetch failure honestly, never as zero progress, with a retry action', async () => {
     cloud.configured = true
     profileStateMock.fetchRemoteProfiles.mockResolvedValue([ACTIVE_PROFILE, SIBLING])
     remoteMock.fetchRemoteStats.mockResolvedValue(null)
@@ -1714,20 +1767,21 @@ describe('Phase 11 task 5: remote progress view', () => {
     renderWithDialogs(<ParentDashboard />)
     await flush()
 
-    const card = (await screen.findAllByTestId('remote-profile'))[0]
-    expect(card).toHaveTextContent('Không tải được tiến độ của bé lúc này.')
+    const row = (await screen.findAllByTestId('remote-row'))[0]
+    expect(row).toHaveTextContent('Không tải được — kiểm tra mạng.')
+    expect(within(row).getByRole('button', { name: 'Thử lại' })).toBeInTheDocument()
     // The failure message and a real (possibly zero) streak line must never coexist.
-    expect(card).not.toHaveTextContent('Chuỗi ngày:')
+    expect(row).not.toHaveTextContent('🔥')
   })
 
   /**
    * A successful fetch that found nothing is still not a measurement of a child.
    *
-   * "Chuỗi ngày: 0 · Tuần này: 0 phút" reads as a confident statement about a child who has been
-   * idle, and the row that produces it is just as often an empty placeholder profile — a phantom
-   * the parent has no way to interpret. The profile stays on screen either way: hiding a row with
-   * no events would also hide a real child a parent added on another device and is checking
-   * arrived, which is the same error class pointing the other way.
+   * "🔥 0 ngày · 0'/tuần" reads as a confident statement about a child who has been idle, and the
+   * row that produces it is just as often an empty placeholder profile — a phantom the parent has
+   * no way to interpret. The profile stays on screen either way: hiding a row with no events would
+   * also hide a real child a parent added on another device and is checking arrived, which is the
+   * same error class pointing the other way.
    */
   it('says the server holds nothing rather than measuring a child who is not there', async () => {
     cloud.configured = true
@@ -1739,13 +1793,12 @@ describe('Phase 11 task 5: remote progress view', () => {
     renderWithDialogs(<ParentDashboard />)
     await flush()
 
-    const card = (await screen.findAllByTestId('remote-profile'))[0]
-    expect(card).toHaveTextContent('Chưa có dữ liệu nào trên máy chủ')
-    expect(card).not.toHaveTextContent('Chuỗi ngày')
-    expect(card).not.toHaveTextContent('Tuần này')
+    const row = (await screen.findAllByTestId('remote-row'))[0]
+    expect(row).toHaveTextContent('Chưa có dữ liệu trên máy chủ.')
+    expect(row).not.toHaveTextContent('🔥')
     // …and the child is still listed, name and all: a row with nothing on the server may be a
     // phantom, and may equally be the sibling a parent added elsewhere ten minutes ago.
-    expect(card).toHaveTextContent(SIBLING.name)
+    expect(row).toHaveTextContent(SIBLING.name)
   })
 
   it('still measures a child the server does have events for', async () => {
@@ -1758,8 +1811,167 @@ describe('Phase 11 task 5: remote progress view', () => {
     renderWithDialogs(<ParentDashboard />)
     await flush()
 
-    const card = (await screen.findAllByTestId('remote-profile'))[0]
-    expect(card).toHaveTextContent('Chuỗi ngày: 3 · Tuần này: 21 phút')
-    expect(card).not.toHaveTextContent('Chưa có dữ liệu nào trên máy chủ')
+    const row = (await screen.findAllByTestId('remote-row'))[0]
+    expect(row).toHaveTextContent("🔥 3 ngày · 21'/tuần")
+    expect(row).not.toHaveTextContent('Chưa có dữ liệu trên máy chủ.')
+  })
+})
+
+/**
+ * Task 14: panel D — 5 recordings + "Xem tất cả 20" expanding in place, playback errors, and the
+ * remote-progress panel's 7 `RemoteRow` states.
+ *
+ * `stale`/`noAudio` (`ParentDashboard.tsx`'s `RemoteEntry`) read an `updatedAt`/`noAudioSync` that
+ * the real `RemoteStats` (`cloud/remote.ts`, read-only for this task) does not carry yet — see that
+ * type's own doc comment. `SEVEN` below is the only place either field is ever set; a real fetch
+ * always leaves both `undefined`, so those two branches are exercised here and nowhere live yet.
+ */
+describe('Task 14: recordings panel (5 + expand) and remote progress (7 states)', () => {
+  // 60 chars — the design's own "câu dài nhất vẽ: 61 ký tự" — one line, ellipsis, everywhere.
+  const LONG_SENTENCE = 'My sister has a baby doll and she plays with it every day.'
+
+  const TWENTY: Recording[] = Array.from({ length: 20 }, (_, i) => ({
+    id: `r${i}`,
+    ts: Date.now() - i * 3600e3,
+    text: LONG_SENTENCE,
+    blob: new Blob(['x']),
+    score: [86, 72, 48][i % 3],
+  }))
+
+  const ONE: RemoteFixture = {
+    id: 'r1',
+    name: 'An',
+    stats: { streak: 1, weekMinutes: 12, averages: { story: null, speak: 65, word: null, sentence: null }, weak: [], eventCount: 5 },
+  }
+
+  // Index 4's id is `'p1'` — this file's convention for "the profile active on this device"
+  // (`ACTIVE_PROFILE.id`, `beforeEach`'s default `activeProfileId()`) — so it is the one row that
+  // needs "Xem từ xa" pressed before it joins the other six (see the test below).
+  const SEVEN: RemoteFixture[] = [
+    { id: 'r1', name: 'Một cái tên hồ sơ dài hai mươi chín ký tự', stats: 'pending' },
+    { id: 'r2', name: 'Bé', stats: null },
+    { id: 'r3', name: 'Bé', stats: { streak: 0, weekMinutes: 0, averages: { story: null, speak: null, word: null, sentence: null }, weak: [], eventCount: 0 } },
+    { id: 'r4', name: 'Minh', stats: { streak: 4, weekMinutes: 58, averages: { story: null, speak: 79, word: 77, sentence: 70 }, weak: [], eventCount: 20 } },
+    { id: 'p1', name: 'Bé', stats: { streak: 2, weekMinutes: 20, averages: { story: null, speak: 81, word: null, sentence: null }, weak: [], eventCount: 8 } },
+    {
+      id: 'r6',
+      name: 'Minh',
+      stats: { streak: 5, weekMinutes: 30, averages: { story: null, speak: 70, word: 60, sentence: 55 }, weak: [], eventCount: 15 },
+      updatedAt: Date.now() - 12 * 24 * 3600e3,
+    },
+    {
+      id: 'r7',
+      name: 'An',
+      stats: { streak: 1, weekMinutes: 12, averages: { story: null, speak: 65, word: null, sentence: null }, weak: [], eventCount: 6 },
+      noAudioSync: true,
+    },
+  ]
+
+  it('20 recordings render five rows plus a "Xem tất cả 20 bản ghi ▾" that expands in place', async () => {
+    renderDashboard({ recordings: TWENTY })
+    await settle()
+
+    expect(screen.getAllByTestId('recording-row')).toHaveLength(5)
+    const more = screen.getByRole('button', { name: 'Xem tất cả 20 bản ghi ▾' })
+    expect(more).toHaveClass('h-11', 'text-[12px]')
+
+    fireEvent.click(more)
+
+    expect(screen.getAllByTestId('recording-row')).toHaveLength(20)
+    expect(screen.queryByRole('dialog')).toBeNull() // mở TẠI CHỖ, không dialog
+  })
+
+  it('a playing row swaps its glyph and draws the 3px bar; a failed play says so instead of failing silently', async () => {
+    playerMock.playBlob.mockRejectedValueOnce(new Error('no audio'))
+    renderDashboard({ recordings: TWENTY })
+    await settle()
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Phát' })[0])
+    await screen.findByText('Không phát được')
+    expect(screen.getAllByTestId('recording-row')[0]).toHaveClass('bg-fix-50')
+
+    // A promise this test controls by hand (the same `deferred<T>()` shape the reset/sign-out
+    // tests above already use for exactly this problem): the default mock resolves on the very
+    // next microtask, which a `findBy*` — itself flushing microtasks as part of its own polling —
+    // can race and never observe the bar mid-flight. Holding the resolve back until AFTER a plain
+    // synchronous `getByTestId` proves the bar is drawn removes the race outright.
+    const play = deferred<void>()
+    playerMock.playBlob.mockReturnValueOnce(play.promise)
+    fireEvent.click(screen.getAllByRole('button', { name: 'Phát' })[1])
+    expect(screen.getByTestId('recording-progress')).toBeInTheDocument()
+
+    await act(async () => { play.resolve(); await Promise.resolve() })
+    expect(screen.queryByTestId('recording-progress')).toBeNull()
+  })
+
+  it('no recordings is the 🎙️ empty state, and the panel is a 56px row on a phone', async () => {
+    matchMedia(false)
+    renderDashboard({ recordings: [] })
+    await settle()
+
+    expect(screen.getByRole('button', { name: /Bản ghi gần đây/ })).toHaveClass('min-h-[56px]')
+    expect(screen.getByRole('button', { name: /Bản ghi gần đây/ }).className).not.toMatch(/min-h-\[64px\]/)
+
+    fireEvent.click(screen.getByRole('button', { name: /Bản ghi gần đây/ }))
+    expect(screen.getByText('Chưa có bản ghi nào')).toBeInTheDocument()
+  })
+
+  it('remote rows cover all seven states in one panel', async () => {
+    renderDashboard({ remote: SEVEN })
+    fireEvent.click(await screen.findByTestId('remote-view-toggle'))
+
+    // Every non-`'pending'` fetch resolves on its own microtask, independently of the other six —
+    // `waitFor` (not a one-shot `findByText`, which does an EXACT match by default and would
+    // never match "Bé · máy này" against the string "· máy này" alone) polls until every one of
+    // them has actually landed in the DOM, not merely until each row's OWN wrapper — present from
+    // the very first render, loading or not — exists.
+    await waitFor(() => {
+      const polled = screen.getAllByTestId('remote-row')
+      expect(polled).toHaveLength(7)
+      expect(polled[3]).toHaveTextContent('🔥 4 ngày') // 'data'
+      expect(polled[4]).toHaveTextContent('· máy này') // 'thisDevice'
+      expect(polled[5]).toHaveTextContent(/Cập nhật \d+ ngày trước/) // 'stale'
+      expect(polled[6]).toHaveTextContent('bản ghi giọng không đồng bộ') // 'noAudio'
+    })
+
+    const rows = screen.getAllByTestId('remote-row')
+    expect(rows).toHaveLength(7)
+    expect(within(rows[0]).getAllByTestId('skeleton').length).toBeGreaterThan(0) // đang tải
+    expect(within(rows[1]).getByRole('button', { name: 'Thử lại' })).toBeInTheDocument() // lỗi tải
+    expect(rows[2]).toHaveTextContent('Chưa có dữ liệu trên máy chủ.') // chưa có
+    expect(rows[3]).toHaveTextContent(/🔥 4 ngày · 58'\/tuần · Nói 79/) // có dữ liệu, MỘT dòng
+    expect(rows[4]).toHaveTextContent('· máy này')
+    expect(rows[5]).toHaveTextContent(/Cập nhật \d+ ngày trước/) // cũ >7 ngày
+    expect(rows[6]).toHaveTextContent('bản ghi giọng không đồng bộ')
+    expect(screen.getAllByText(/Bản ghi giọng nói của bé không đồng bộ/)).toHaveLength(1) // chú thích MỘT lần
+  })
+
+  it('a stale row is decided by the clock, not by a flag', async () => {
+    renderDashboard({ remote: [{ ...ONE, updatedAt: Date.now() - 12 * 24 * 3600e3 }] })
+    await settle()
+
+    // `findByTestId` alone only proves the row's wrapper exists — while loading that is the same
+    // `remote-row` div around the skeleton, with no text yet.
+    await waitFor(() => {
+      expect(screen.getByTestId('remote-row')).toHaveTextContent('Cập nhật 12 ngày trước')
+    })
+  })
+
+  it('"Chi tiết" opens a dialog with the numbers the row could not fit', async () => {
+    renderDashboard({ remote: SEVEN })
+    await settle()
+    await screen.findByText(/🔥 4 ngày/) // the 'data' row's own fetch has landed
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Chi tiết' })[0])
+
+    expect(await screen.findByRole('dialog')).toHaveTextContent('Điểm trung bình')
+  })
+
+  it('a failed remote read still says so instead of reading as "no remote profiles"', async () => {
+    profileStateMock.fetchRemoteProfiles.mockResolvedValue(null)
+    renderDashboard()
+    await settle()
+
+    expect(await screen.findByTestId('remote-progress-unknown')).toHaveTextContent('máy chủ chưa trả lời')
   })
 })

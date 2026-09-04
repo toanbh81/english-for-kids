@@ -123,6 +123,21 @@ async function run(vpName, vp) {
   const ctx = await browser.newContext({ ...vp, reducedMotion: 'reduce', locale: 'vi-VN', ignoreHTTPSErrors: true })
   const page = await ctx.newPage()
   page.on('dialog', d => d.accept())
+  // Opt-in (`DEBUG_REST=1`) network/console trace — built while chasing Task 14's `parent-remote-7`
+  // (a stale/fake session token from an earlier section 401ing background sync mid-scenario), left
+  // in for whoever next has to work out which mocked route a scenario's request actually matched.
+  if (process.env.DEBUG_REST) {
+    page.on('request', req => { if (req.url().includes('/rest/v1/')) log('REQ', req.method(), req.url()) })
+    page.on('response', async res => {
+      if (!res.url().includes('/rest/v1/')) return
+      let bodySnippet = ''
+      try { bodySnippet = (await res.text()).slice(0, 200) } catch { /* ignore */ }
+      log('RES', res.status(), res.url(), bodySnippet)
+    })
+    page.on('requestfailed', req => { if (req.url().includes('/rest/v1/')) log('REQFAIL', req.url(), req.failure()?.errorText) })
+    page.on('console', msg => log('CONSOLE', msg.type(), msg.text()))
+    page.on('pageerror', err => log('PAGEERROR', err.message))
+  }
   // Phase 13 Task 4 (`voice-recording`): a silent MediaStream stands in for a real mic so the
   // recording state can be shot headless — registered once, before any navigation, so it is in
   // place for every route this page ever loads.
@@ -664,6 +679,117 @@ async function run(vpName, vp) {
     })
     await go(page, '/parent'); await openDashboard()
   })
+
+  // Task 14 (R22/decision 30): 20 recordings, seeded straight into IndexedDB `speakup-recordings`
+  // (the store `progress/recordings.ts` owns) so the panel's own 5-row default and "Xem tất cả 20"
+  // expansion draw against a real `MAX_RECORDINGS = 20` shelf. The sentence is 60 characters — the
+  // brief's own "câu dài nhất vẽ: 61 ký tự" — so every frame proves the one-line ellipsis, not a
+  // wrap.
+  await S('parent-dashboard-recordings-20', '/parent', async () => {
+    await page.evaluate(async () => {
+      const db = await new Promise((res, rej) => {
+        const q = indexedDB.open('speakup-recordings', 1)
+        q.onupgradeneeded = () => q.result.createObjectStore('recordings', { keyPath: 'id' })
+        q.onsuccess = () => res(q.result)
+        q.onerror = () => rej(q.error)
+      })
+      const tx = db.transaction('recordings', 'readwrite')
+      const text = 'My sister has a baby doll and she plays with it every day.' // 60 ký tự
+      for (let i = 0; i < 20; i++) {
+        tx.objectStore('recordings').put({ id: `r${i}`, ts: Date.now() - i * 3600e3, text, blob: new Blob(['x']), score: [86, 72, 48][i % 3] })
+      }
+      await new Promise(r => { tx.oncomplete = r })
+    })
+    await go(page, '/parent'); await openDashboard()
+    // Phone-only: `Panel`'s own fold button (`min-h-[56px] ... md:hidden`) starts CLOSED here
+    // (`recordingsOpen`'s mount-time `matchMedia` read), which really hides "Xem tất cả 20" behind
+    // real CSS in a browser — unlike the unit tests, where jsdom loads no stylesheet at all. From
+    // `md:` up the fold button itself is the hidden one (content always shows), so this only ever
+    // fires on the phone frame.
+    const foldButton = page.getByRole('button', { name: /Bản ghi gần đây/ })
+    if (await foldButton.isVisible()) await foldButton.click()
+    await page.getByRole('button', { name: /Xem tất cả 20/ }).click(); await sleep(300)
+  })
+
+  // Task 14 (R18): the remote-progress panel's 7-state table, stubbing PostgREST directly rather
+  // than a real second account — `profiles`/`events`/`kv` keyed by `profile_id` in the query
+  // string, same shape `cloud/profileState.ts`/`cloud/remote.ts` actually call. Five of the seven
+  // states are reachable through the REAL app this way (loading/error/empty/data/thisDevice); the
+  // other two (`stale`/`noAudio`) read a last-updated/audio-sync signal `RemoteStats` does not
+  // carry yet (`ParentDashboard.tsx`'s own `RemoteEntry` doc comment — cloud/remote.ts is
+  // read-only for Task 14) — genuinely unreachable from live data until a later task teaches
+  // `cloud/remote.ts` to compute them, not something this script can fake without inventing a
+  // network shape the real client never sends.
+  await S('parent-remote-7', '/parent', async () => {
+    // The REAL anonymous sign-in this device would otherwise attempt (unmocked, like the rest of
+    // this section relies on the surrounding real session) mints a brand-new Supabase user on
+    // every single run of this script — harmless once, but this scenario has been re-run enough
+    // times while tuning it that the real backend started answering slowly or with stray 401s
+    // ("JWT cryptographic operation failed") on an EARLIER section's now-stale fake token, and the
+    // panel never made it past its skeleton before the shoot's own timeout. `mockAnonSignIn()` (the
+    // same helper `/start`'s own shots already lean on) sidesteps that account churn entirely —
+    // deterministic, no live network for the session itself.
+    await page.evaluate(() => { localStorage.removeItem('speakup.auth') })
+    await mockAnonSignIn()
+    const deviceId = await page.evaluate(() => localStorage.getItem('speakup.profile'))
+    // `cloud/profileState.ts`'s own `isProfileId` only accepts real UUIDs (`toProfile` silently
+    // drops anything else) — a readable slug like `'r2-error'` would map to `null` and vanish
+    // before it ever reaches `RemoteRow`, so every fixture id below is UUID-shaped.
+    const LOADING_ID = 'aaaaaaaa-0000-4000-8000-000000000001'
+    const ERROR_ID = 'aaaaaaaa-0000-4000-8000-000000000002'
+    const EMPTY_ID = 'aaaaaaaa-0000-4000-8000-000000000003'
+    const DATA_ID = 'aaaaaaaa-0000-4000-8000-000000000004'
+    const NOW_ISO = new Date().toISOString()
+    const SEVEN_PROFILES = [
+      { id: LOADING_ID, name: 'Một cái tên hồ sơ dài hai mươi chín ký tự', avatar: '🦊', created_at: NOW_ISO },
+      { id: ERROR_ID, name: 'Bé', avatar: '🦊', created_at: NOW_ISO },
+      { id: EMPTY_ID, name: 'Bé', avatar: '🦊', created_at: NOW_ISO },
+      { id: DATA_ID, name: 'Minh', avatar: '🦊', created_at: NOW_ISO },
+      { id: deviceId, name: 'Bé', avatar: '🦊', created_at: NOW_ISO },
+    ]
+    const NOW = Date.now()
+    const rowsFor = (id) => (
+      (id === DATA_ID || id === deviceId)
+        ? Array.from({ length: 20 }, (_, i) => ({
+          ts: NOW - i * 2 * 3600e3, kind: 'speak', item_id: `e${i}`, score: 75 + (i % 10),
+        }))
+        : [] // EMPTY_ID — ERROR_ID never reaches this (its route 500s below)
+    )
+    // Registered AFTER `mockAnonSignIn()` — Playwright tries the newest matching handler first —
+    // so this replaces its own blanket `'[]'` profiles stub with the real 7-row fixture, and every
+    // OTHER REST call the mocked session still makes (kv/recovery_codes/events for the device's
+    // own profile) is free to keep hitting the real, already-working backend.
+    await page.route('**/rest/v1/profiles*', r => r.fulfill({ status: 200, body: JSON.stringify(SEVEN_PROFILES) }))
+    await page.route('**/rest/v1/events*', r => {
+      const id = new URL(r.request().url()).searchParams.get('profile_id')?.replace(/^eq\./, '')
+      if (id === ERROR_ID) { r.fulfill({ status: 500, body: JSON.stringify({ message: 'boom' }) }); return }
+      if (id === LOADING_ID) return // never resolves — the loading row
+      if (id !== DATA_ID && id !== deviceId && id !== EMPTY_ID) { r.continue(); return } // the device's OWN push/pull
+      r.fulfill({ status: 200, body: JSON.stringify(rowsFor(id)) })
+    })
+    await page.route('**/rest/v1/kv*', r => {
+      const id = new URL(r.request().url()).searchParams.get('profile_id')?.replace(/^eq\./, '')
+      if (id && id !== EMPTY_ID && id !== DATA_ID) { r.continue(); return } // the device's own kv traffic
+      r.fulfill({ status: 200, body: '[]' })
+    })
+    await go(page, '/parent')
+    await waitForAnonSession()
+    await openDashboard()
+    await page.waitForSelector('[data-testid="remote-view-toggle"]', { state: 'visible', timeout: 15000 })
+    await page.getByTestId('remote-view-toggle').click()
+    // Every fetch above resolves on its own microtask over a stubbed, local response — no real
+    // network latency left to race — but the panel still has five independent promises to settle,
+    // so this polls for the 'data' row's own signal rather than trusting a single fixed sleep.
+    await page.waitForFunction(
+      () => document.body.innerText.includes('🔥'),
+      null,
+      { timeout: 8000 },
+    ).catch(() => {})
+    await sleep(600)
+    await unmockAnonSignIn()
+    await page.evaluate(() => { localStorage.removeItem('speakup.auth') })
+  })
+  await page.unrouteAll?.()
 
   // ---------- special Home states ----------
   await seed(page, { overLimit: true })
