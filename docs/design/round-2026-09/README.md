@@ -11,4 +11,28 @@ Project: `claude.ai/design/p/9c792842-beb0-4158-a5d7-a3ac91730d3c` ("Speak Up", 
 
 `tokens/` — 4 file CSS token của design system trong project (colors, effects, spacing, typography). Project còn có `components/*.jsx|.d.ts|.prompt.md` (Button, Chip, Stars, GameCard, SpeechBubble, Foxy, MicButton) và `guidelines/*.card.html` — chưa kéo, kéo khi viết brief vòng 1.
 
-Bước tiếp: brief vòng 1 đã viết → `../2026-09-02-round1-foundation-brief.md`; spec + plan Phase 12 đã viết và **Phase 12 đã triển khai xong** (2026-09-03, nhánh `phase12-foundation`, tasks 1–16 — xem `docs/superpowers/specs/2026-09-02-phase12-foundation-redesign-design.md` và README.md §"Phase 12 — Nền tảng redesign"). **Phase 13 (vòng 2) cũng đã triển khai xong** (2026-09-03, nhánh `phase13-practice`, tasks 1–12 — xem `docs/superpowers/specs/2026-09-03-phase13-practice-frame-design.md` và README.md §"Phase 13 — Khung luyện nói (vòng 2)"). **Phase 14 (vòng 3) cũng đã triển khai xong** (2026-09-04, nhánh `phase14-lists-nav`, tasks 1–16 — xem `docs/superpowers/specs/2026-09-03-phase14-lists-nav-design.md` và README.md §"Phase 14 — Danh sách và điều hướng (vòng 3)"). Tiếp theo là Phase 15 (vòng 4 — khu người lớn, từ `Speak Up Parent Zone.dc.html`). Hai việc còn treo từ vòng 3: xoá `xl2/xl3/xl4` + `components/Stars.tsx` (alias đã deprecated, ghi "Removed in Phase 15") và tách `useCountdown`/`useTeachCollapse` (Phase 13 hoãn vì không màn nào bị đụng, Phase 14 cũng không đụng màn luyện nói nên vẫn hoãn tiếp).
+Bước tiếp: brief vòng 1 đã viết → `../2026-09-02-round1-foundation-brief.md`; spec + plan Phase 12 đã viết và **Phase 12 đã triển khai xong** (2026-09-03, nhánh `phase12-foundation`, tasks 1–16 — xem `docs/superpowers/specs/2026-09-02-phase12-foundation-redesign-design.md` và README.md §"Phase 12 — Nền tảng redesign"). **Phase 13 (vòng 2) cũng đã triển khai xong** (2026-09-03, nhánh `phase13-practice`, tasks 1–12 — xem `docs/superpowers/specs/2026-09-03-phase13-practice-frame-design.md` và README.md §"Phase 13 — Khung luyện nói (vòng 2)"). **Phase 14 (vòng 3) cũng đã triển khai xong** (2026-09-04, nhánh `phase14-lists-nav`, tasks 1–16 — xem `docs/superpowers/specs/2026-09-03-phase14-lists-nav-design.md` và README.md §"Phase 14 — Danh sách và điều hướng (vòng 3)"). **Phase 15 (vòng 4 — khu người lớn) cũng đã triển khai xong** (2026-09-05, nhánh `phase15-parent-zone`, tasks 1–16 — xem `docs/superpowers/specs/2026-09-04-phase15-parent-zone-design.md` và README.md §"Phase 15 — Khu người lớn (vòng 4)") ⇒ **cả bốn vòng của redesign 2026-09 đã triển khai**.
+
+Hai việc còn treo từ vòng 3 vẫn CHƯA đụng tới — Phase 15 không chạm màn trẻ em nên không có lý do
+buộc phải làm: xoá alias `xl2/xl3/xl4` + `components/Stars.tsx` (deprecated, nay đã tới cột mốc
+"Phase 15" mà ghi chú deprecate từng hứa, nhưng cả hai alias vẫn còn được `PlayerControls.tsx`,
+`Card.tsx`, `DailyMission.tsx`, `Home.tsx`, `PairPractice.tsx`, `SentenceBuilder.tsx` và các test
+liên quan dùng trực tiếp — xoá đòi phải sửa từng call site đó trước) và tách
+`useCountdown`/`useTeachCollapse` (countdown lặp 8×, collapse lặp 6× trên các màn luyện nói của
+Phase 13; Phase 15 chỉ đụng 4 màn người lớn nên vẫn không có màn luyện nói nào ép buộc việc tách).
+
+Việc để lại mới của Phase 15 (chi tiết ở README.md §Phase 15 "Việc để lại"):
+- `ipad/parent-dashboard-full.png` vẫn tràn 122px so với mục tiêu ≤834px (956px đo được) — panel
+  "Tài khoản" (gồm cả cột "Hồ sơ") là ứng viên cao nhất chịu trách nhiệm; controller quyết định có
+  nén panel này ở làn cuối hay không.
+- `RemoteRowState.noAudio` không còn một `it(...)` hay kịch bản `shoot.mjs` nào ép được nữa (test
+  ép nó bị xoá ở Task 14 fix round 1 vì phải giả một tín hiệu sản phẩm không tồn tại) — nên thêm
+  lại một test đơn giản chỉ để khoá hình dạng UI, tách bạch khỏi việc giả tín hiệu.
+- `AccountCard.tsx`'s `OTP_INPUT` lặp lại phần khung của `FieldRow` — nên gộp thành một biến thể
+  cỡ chữ của `FieldRow`'s code style.
+- `ProfilePicker.tsx`'s `byDate` in "Tạo dd/mm/yyyy" — nên bỏ năm thành "Tạo dd/mm" để hàng 3-lên
+  ở phone không bị ép chữ.
+- `ParentDashboard.tsx`'s `CHIP(w.avg)` (tô màu chip âm sai) chưa có test khoá ranh giới 49/50/70/71.
+- Flaky test đã biết `'the limit panel prints today against the limit in its title row and steps
+  by 5'` (`ParentDashboard.test.tsx:528`, nêu tên từ `task-14-review.md`) — không thuộc phạm vi
+  Phase 15, không tái hiện được trong môi trường cô lập.

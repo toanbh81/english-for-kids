@@ -82,4 +82,4 @@ Phase 12 dựng khung trang và bộ component người lớn (`Button size='adu
 - Mỗi task: tests + lint + typecheck; chụp màn liên quan ở 3 frame (+`VIEWPORTS=short` cho 3 cổng và dashboard); probe `PageBody` phải hạ ba mốc ở "Luật ràng buộc".
 - Cuối phase: sheet trước/sau (`current-phase14/shots` → `current-phase15`); README "Phase 15"; checklist iPad 6 hàng: **mọi control người lớn chạm được ở 44** (đo bằng ngón, không bằng mắt — hộp 28/32/36 vẫn phải bắt) · **thẻ cổng căn giữa ở cả 3 frame** (+375×667), không lệch trái · **dashboard đúng 1/2/3 cột** theo frame và Tài khoản có 2 cột trong ở iPad dọc · **thẻ Tài khoản qua đủ 11 trạng thái** (ép từng nhánh bằng kịch bản `shoot.mjs`) · **`SyncPill` 7 trạng thái, "⚡ Chưa kết nối" không hiện khi cloud chưa cấu hình** · **hai dialog xoá có hai tiêu đề và hai nhãn nút khác nhau**.
 
-Trạng thái: chưa triển khai (spec chốt 2026-09-04; nhánh dự kiến `phase15-parent-zone`).
+Trạng thái: đã triển khai (2026-09-05, nhánh `phase15-parent-zone`, 16 task, commit `5b81d73`..head — xem `README.md` §"Phase 15 — Khu người lớn (vòng 4)").

@@ -1673,6 +1673,229 @@ Continuing the numbering from the table above.
 | 90 (header StoryPlayer trên tranh) | StoryPlayer `/story/little-fox` | The header row sits above the picture, not overlaid on it | ⏳ pending |
 | 91 (quiz 0/3 không lưu sao) | StoryQuiz — answer every question wrong once | Shows 0★ with an idle Foxy; checking `speakup.*.stars` in devtools afterward shows no entry written for that quiz | ⏳ pending |
 
+## Phase 15 — Khu người lớn (vòng 4)
+
+Round 4 of the redesign (`docs/design/round-2026-09/README.md`) rebuilds the **adult zone** — the
+parent gate, the profile gate, cloud restore, and the parent dashboard — on top of Phase 12's page
+shell. Implemented 2026-09-05 on branch `phase15-parent-zone` (tasks 1–16); every "làm theo đề
+xuất"/"Ruling" decision is recorded in
+`.superpowers/sdd/2026-09-04-phase15-parent-zone/progress.md`, sourced from
+`docs/superpowers/specs/2026-09-04-phase15-parent-zone-design.md` and
+`docs/design/2026-09-04-round4-parent-zone-brief.md`. Vòng 4 gom **bốn màn người lớn** về một ngôn
+ngữ; không đụng màn trẻ em.
+
+- **Khung mới.** `GateCard`/`GateBlobs` (`components/ui/`, dùng chung với `Dialog`) — thẻ 420px
+  bo r20, căn giữa trên một cặp blob nền mờ — cộng `client/src/components/adult/`: `Panel` (khung
+  r16 gập được 56px trên phone), `PanelGrid` (lưới 1/2/3 cột, một cây DOM), `FieldRow` (nhãn +
+  input 44 + gutter lỗi 18 luôn giữ chỗ), `SegRow` (3 tone `on`/`off`/`dim`), `Stepper` (±5, 36
+  trong hộp 44), `MinutesChart` (biểu đồ phút luyện 4 màu), `RecordingRow` (hàng 44, ▶36, điểm màu
+  băng), `RemoteRow` (hàng 56, một dòng phụ nén), `AccountCard` (11 trạng thái, trình bày thuần
+  tuý — handler ở lại màn).
+- **Bảy component sửa (thêm prop, mặc định không đổi)**: `Button` (`variant='danger'`), `SyncPill`
+  (7 trạng thái + `size`), `Notice` (`icon?`), `EmptyState` (`variant='dashed'`), `Skeleton`
+  (`AccountCardSkeleton` 150px), `Dialog` (`placeholder?` — chỉ vậy), `ProfilePicker` (`density`,
+  `pendingId`, `line-clamp-2`, bỏ `sm:`) — **mặc định của cả bảy không đổi, 33 màn ngoài nhóm người
+  lớn render y hệt trước phase này**. `ParentQuestion` được **viết lại** theo §2 P1 (32px câu hỏi,
+  ô 96×44, thêm `sub`) chứ không chỉ thêm prop, nên tách riêng khỏi danh sách bảy. `tailwind.
+  config.ts` thêm `animate-shake` cho câu trả lời sai.
+
+### Bốn màn
+
+| Màn | What changed |
+|---|---|
+| ParentGate (P1) | `GateCard`/`GateBlobs` thay khung cũ; `BackButton` dùng `mdLabel="Về bản đồ 🏝️"` (nhãn hiện khác nhau theo bề rộng, cùng một tên truy cập); thẻ căn giữa dọc lẫn ngang ở cả 4 khung hình (kể cả 375×667); thêm kịch bản "trả lời rỗng" (`parent-gate-empty`) — câu hỏi giữ nguyên, không đổi |
+| ProfileGate (A1) | Hai hình dạng (overlay toàn màn hình mới cài / thẻ hỏi lại sau ≥5 phút `storageBroken`); thang z 40 (blob) < 50 < 60; sáu trạng thái kể cả `storageBroken` khi `writeMark` trả `false`; không có Back (khung chung ba cổng, quyết định 17); mật độ `ProfilePicker` xấu nhất — 8 hồ sơ, 5 tên "Bé" trùng, 1 tên 29 ký tự — vẫn vừa 4 hàng × 88 trước khi cuộn |
+| CloudStart (A2) | `Stage` hiện có 7 giá trị (`menu`/`gate`/`email`/`email-otp`/`code`/`abandon`/`result`), thêm `'result'` cho nhánh ⑦–⑧; khung ba cổng dùng chung + `FieldRow` cho mọi ô nhập; 4 lỗi hệ thống gộp làm một (giữ nguyên câu roster); màn "abandon" 4 dòng copy + nhãn nút cố định; ô 44px qua `FieldRow` thay `<input>` trần |
+| ParentDashboard (P2) | Toàn bộ thân thay bằng `PanelGrid` + `Panel` — 8 panel khi cloud khả dụng (Tài khoản gồm cột Hồ sơ trong cùng một panel, Phút luyện, Điểm trung bình, Âm hay sai, Giới hạn mỗi ngày, Bài học, Bản ghi gần đây, Tiến độ từ xa áp chót) và **6 panel khi `cloudAvailable === false`** (ruling 35 — Tài khoản và Tiến độ từ xa biến mất cùng nhau, hai panel duy nhất còn cổng cloud); header một hàng `title`/`sub` + nút 🔐 tự vẽ; hàng "↺ Đặt lại tiến trình…" đứng riêng, cuối trang |
+
+### Mốc `-full.png` đã hạ
+
+Số đo dưới đây lấy từ lần chạy đủ của Task 16 (`SHOTS_DIR=docs/design/current-phase15/shots`, cả 3
+frame, không lọc `SHOTS` — log đầy đủ trong
+`.superpowers/sdd/2026-09-04-phase15-parent-zone/task-16-report.md`). "Before" là số đo Task 1
+(seed 5 ngày luyện, chưa có `Panel`/`PanelGrid`).
+
+| Frame | Before (Task 1) | Mục tiêu (spec) | After (Task 16, lần chạy đủ) | Kết quả |
+|---|---|---|---|---|
+| phone/parent-dashboard-full.png | 1661px | ≈1100px | **1171px** | Gần đạt — cao hơn mục tiêu 71px, nhưng giảm 490px (30%) so với baseline |
+| ipad/parent-dashboard-full.png | 1715px | ≤834px (biến mất) | **956px** | **Trượt** — vẫn tràn 122px, tuy đã giảm 759px (44%) so với baseline; xem "Việc để lại" |
+| ipadp/parent-dashboard-full.png | 2179px | ≤1194px (biến mất... hoặc `-full` không cần sinh) | **1172px** | **Đạt** — dưới mục tiêu 22px (tệp `-full` vẫn được sinh vì 1172 > 1070 `clientHeight`, nhưng nằm trong ngân sách ≤1194 spec đặt ra) |
+
+Một quan sát khi đo lại: chạy riêng `VIEWPORTS=phone SHOTS=parent-dashboard` (không có gì chạy
+trước nó trong cùng context) cho **1129px** — khớp hệt số Task 14/15 đã báo cáo — trong khi chạy
+**đủ** (mọi màn trẻ em phía trước nó trong cùng một trang/`context` Playwright) luôn cho **1171px**,
+tái lập được 100% qua 2 lần chạy đủ độc lập. Chênh lệch 42px này không đến từ bất kỳ thay đổi code
+nào của Task 16 — nó có trước Task 16 (cùng họ với phát hiện "±48/98/98" Task 12's review từng nêu)
+và đến từ việc các màn luyện tập/từ/câu phía trước `/parent` trong kịch bản đủ ghi lại hoạt động
+thật (localStorage `activity`) trước khi `/parent` được mở, nên nội dung "hôm nay"/biểu đồ phút của
+dashboard khi đó dày hơn một chút so với khi `/parent` được chụp một mình. Số **1171px** là số thật
+của bước "chạy đủ" mà spec yêu cầu đo — được báo cáo trung thực ở đây thay vì con số 1129px "sạch"
+dễ nhìn hơn. `ipad`/`ipadp` không cho thấy chênh lệch tương tự (956/1172 khớp cả hai lần chạy đủ).
+
+### Mọi `-full.png` còn lại ở 4 màn người lớn (Step 2)
+
+| Màn/kịch bản | phone | ipad | ipadp | short (375×667) | Lý do |
+|---|---|---|---|---|---|
+| parent-dashboard | 1171 | 956 | 1172 | 1129 | Mốc chính — xem bảng trên |
+| parent-dashboard-empty | 1235 | 908 | 1104 | — | 0 sự kiện — cả 3 panel dữ liệu (biểu đồ, âm sai, bản ghi) cùng vẽ empty-state một lúc, cao hơn bản có dữ liệu ở phone |
+| parent-dashboard-otp | 1129 | 956 | 1172 | — | Thẻ Tài khoản đang ở form OTP (⑥/⑦) |
+| parent-dashboard-linked | 1109 | 928 | 1144 | — | Thẻ Tài khoản ở trạng thái ⑨, email 61 ký tự |
+| parent-dashboard-sync-error | 1249\* | 928 | 1144 | — | Trạng thái ⑩ — xem ghi chú sửa `shoot.mjs` bên dưới |
+| parent-dashboard-limit-custom | 1348 | 1082 | 1317 | — | Giới hạn tuỳ chỉnh 25' — seg thứ 4 sáng đèn |
+| parent-dashboard-band-auto | 1348 | 1082 | 1317 | — | Bậc tự động — dòng "Tự động đang chọn…" thêm 1 dòng |
+| parent-dashboard-recordings-20 | 2236 | 1738 | 1973 | 1997 | Dự kiến — 20 bản ghi mở "Xem tất cả 20" tại chỗ (câu 60 ký tự) |
+| parent-remote-7 | 1619 | 1425 | 1641 | — | 6 hàng Tiến độ từ xa (loading/error/empty/data/thisDevice/stale) cùng hiện một lúc |
+| parent-dashboard-profiles | 1779\*\* | 1383\*\* | 2286\*\* | — | Pre-existing từ Phase 12 (`ProfilePicker` mở, không thuộc phạm vi vòng 4) |
+| profile-gate-reask | 896 (phone only) | fits | fits | — | Pre-existing — hỏi lại sau ≥5 phút, chỉ tràn ở phone |
+
+\* `parent-dashboard-sync-error` ở phone thất bại 100% (5/5 lần) trước khi sửa `shoot.mjs` — xem
+Ruling bên dưới; sau khi sửa, tái lập ổn định (1249px ở phone) qua 3 lần chạy độc lập, kể cả lần
+chạy đủ cuối cùng dùng để lấy số trong bảng này.
+\*\* `parent-dashboard-profiles` dao động mạnh qua các lần chạy đủ (phone: 2429px rồi 1779px; ipad:
+2070px rồi 1383px; ipadp giữ nguyên 2286px cả hai lần) vì kịch bản bấm vào bất kỳ hồ sơ nào đang
+`pressed` — hồ sơ được chọn (và do đó lượng hoạt động/sao mà panel vẽ ra) không cố định giữa các
+lần chạy; số trong bảng là từ lần chạy đủ cuối cùng (dùng để chốt các mốc chính). Không phải một
+milestone của vòng 4 — màn/kịch bản này có từ Phase 12.
+
+Không còn `-full.png` nào cho `parent-gate`, `parent-gate-wrong`, `parent-gate-empty`,
+`profile-gate`, `profile-gate-8`, hay bất kỳ kịch bản `start-*` nào (kể cả `start-abandon` với đoạn
+copy 4 dòng dài nhất) — cả ba cổng vừa khung ở cả 4 kích thước màn hình được kiểm (390×844, 1194×834,
+834×1194, 375×667).
+
+### 11 trạng thái thẻ Tài khoản (`AccountCard`)
+
+Mỗi trạng thái được ép bằng một `it(...)` trong `client/src/components/adult/account-card.test.tsx`
+(luôn tái lập được); các cột "Kịch bản `shoot.mjs`" chỉ ghi khi trạng thái đó **cũng** lộ diện qua
+app thật trong một ảnh chụp (không phải mọi trạng thái đều cần — 5/11 đã đủ để chứng minh khung vẽ
+đúng qua ảnh thật, phần còn lại được test đơn vị bảo đảm).
+
+| # | Trạng thái | Cách ép | Kịch bản `shoot.mjs` |
+|---|---|---|---|
+| ① `loading` | `it('① loading is the 150px skeleton under a "…" pill', …)` | Chỉ thoáng qua lúc mount thật — không có ảnh ổn định |
+| ② `noSession` (online) | `it('② no session online: info notice + "Thử kết nối"…', …)` | — |
+| ③ `noSession` (offline) | `it('③ no session offline is its own state…', …)` | — |
+| ④ `link` (rỗng) | `it('④ the link form is one sentence, a 44px field…', …)` | `parent-dashboard` mặc định (phiên ẩn danh đã có, chưa liên kết) |
+| ⑤ `link` (busy) | `it('⑤ busy dims the button via disabled…', …)` | — (busy quá ngắn để chụp ổn định) |
+| ⑥ `otp` (rỗng) | `it('⑥ OTP: the 61-char email sits inside the sentence…', …)` | `parent-dashboard-otp` |
+| ⑦ `otp` (error) | `it('⑦ an error reddens the field…', …)` | — |
+| ⑧ Mã khôi phục (rides alongside ④–⑦) | `it('⑧ the recovery code keeps the Phase 12 credential Notice', …)` | `parent-dashboard`/`-otp` mặc định (phiên ẩn danh luôn có mã khôi phục riêng) |
+| ⑨ `linked` | `it('⑨ linked: a 61-char email in a 44px read-only box…', …)` | `parent-dashboard-linked` |
+| ⑩ `syncError` | `it('⑩ sync error: the ⚠ pill, the count sentence…', …)` | `parent-dashboard-sync-error` |
+| ⑪ `linked` (signingOut) | `it('⑪ signing out: the syncing pill, the "đang lưu" sentence…', …)` | — (bấm Đăng xuất rồi hoàn tất quá nhanh để chụp) |
+
+Riêng test `'no control in any of the eleven states is a 56/64 child button'` kiểm cả 11 trạng thái
+cùng lúc theo checklist row 92 (không control nào là nút 56/64 kiểu trẻ em).
+
+### 7 trạng thái Tiến độ từ xa (`RemoteRow`)
+
+| # | Trạng thái | Cách ép |
+|---|---|---|
+| 1 | `loading` | `parent-remote-7`: hàng có id không bao giờ trả lời (`LOADING_ID`'s `events*` route không `fulfill`) |
+| 2 | `error` | `parent-remote-7`: `ERROR_ID`'s `events*` trả 500 |
+| 3 | `empty` | `parent-remote-7`: `EMPTY_ID` không có sự kiện nào |
+| 4 | `data` | `parent-remote-7`: `DATA_ID` có 20 sự kiện gần (giờ) |
+| 5 | `thisDevice` | `parent-remote-7`: hồ sơ trùng `deviceId` của chính máy |
+| 6 | `stale` | `parent-remote-7`: `STALE_ID` có đúng 1 sự kiện **12 ngày trước** — `fetchRemoteStats` đọc thẳng `ts` đó vào `RemoteStats.updatedAt`, dashboard so với đồng hồ thật (`now - updatedAt > 7 ngày`), không phải một cờ giả |
+| 7 | `noAudio` | **Không kịch bản/test nào ép được hiện tại** — xem Ruling (i) bên dưới |
+
+### Sai lệch so với brief (Ruling)
+
+- **(a) Ruling người lớn — chạm 44, hộp 28–36, không 56/64.** `ParentDashboard.tsx:47-56` đảo
+  chiều doc-comment cũ (spec §12 M8c từng đọc là dashboard PHẢI theo chuẩn trẻ em 64px) thành: đây
+  là màn người lớn, hộp visible 28/32/36/44px là đủ miễn vùng chạm không dưới 44px (hit band mở
+  rộng, không cần hộp to ra); `:877-881`'s comment cũ về "recordings disclosure giữ chuẩn trẻ em"
+  cũng đảo theo — dòng đó không còn ngoại lệ nữa, nó theo luật chung của cả màn.
+- **(b) Ruling T3-1 — `Recording.score?: number`.** Thêm ở writer duy nhất `PairPractice.tsx:86`
+  (`score: result.overall`, đã có `result.overall` trong scope một dòng trên); 7 writer còn lại
+  (`saveRecording` gọi từ PracticeCard, SentenceBuilder, SoundPractice, StarPractice, StoryRetell,
+  VoicePractice, WordCard) giữ nguyên, tiếp tục bỏ qua trường `score` tuỳ chọn. `averageScoreByKind`
+  ô "Truyện" luôn "—" vì `StoryQuiz.tsx:90` không ghi `score` cho event `story` — artboard vẽ đúng
+  như vậy, không hứa một con số không tồn tại.
+- **(c) `#D9CBB4` và `#FFF6E0`** là hai hex không có token trong `tailwind.config.ts`, được chấp
+  nhận dùng thẳng (`SegRow.tsx` viền `dim` đứt nét; `ParentDashboard.tsx` nền `weak-tip`).
+- **(d)** Brief ghi nhầm `#F1E7D4` là `line-200`; token thật là `line-200 = #EFE2CC` — dùng token
+  `line-200` cho mọi hairline mà brief gọi tên đó (`AccountCard.tsx`'s ô email đọc-only, mã khôi
+  phục border).
+- **(e)** Fade đáy của `Panel` dùng `to-white` chứ không `to-cream-50` như brief — panel nền TRẮNG,
+  brief ghi gradient tới màu nền TRANG (`#FFF7EA`), một vệt kem trên nền trắng sẽ là một đường kẻ
+  nhìn thấy được (`Panel.tsx:7-9`).
+- **(f)** Chip mã khôi phục giữ nguyên 24px của `Notice` hiện có (design vẽ 22px) vì `Notice` chỉ
+  được thêm `icon?` trong vòng này, không đổi kích thước `code`.
+- **(g)** "Gửi lại mã" (nút trong `FieldRow.action` của form OTP) **không có bộ đếm ngược** — nút
+  không đếm ngược ở vòng này (brief vẽ "Gửi lại mã (0:42)").
+- **(h)** `averageScoreByKind` có chữ ký `(events = getActivity())`, không phải `('story')` như một
+  cách đọc brief gợi ý — nhận mảng sự kiện, không nhận tên loại; ô "Truyện" luôn "—" vì lý do ở (b).
+- **(i) Trạng thái không ép được trong dev.** `RemoteRowState`'s `noAudio` không có tín hiệu thật
+  nào trong `RemoteStats` — dashboard không bao giờ phát ra trạng thái này (`ParentDashboard.tsx`'s
+  own comment tại nhánh tính `state`) — và **hiện không còn một `it(...)` hay kịch bản `shoot.mjs`
+  nào ép nó nữa** (bài test ép `noAudio` bị xoá ở Task 14 fix round 1 vì nó phải nới rộng kiểu cục
+  bộ để giả một tín hiệu sản phẩm không hề phát ra — xem Ruling kế tiếp). `RemoteRow.tsx` vẫn giữ
+  `noAudio` trong kiểu/`SUB`/`ACTION` của nó (một trạng thái component CÓ THỂ vẽ), chỉ là không nơi
+  nào trong app hay bộ test hiện tại còn dựng nó lên — ghi vào "Việc để lại" bên dưới thay vì âm
+  thầm bỏ qua.
+- **`RemoteStats.updatedAt?: number`** (Task 14 fix round 1) là ngoại lệ DUY NHẤT của "cloud/* chỉ
+  đọc": thêm vào `cloud/remote.ts`'s `RemoteStats` và gán từ `data[0]`'s `ts` (hàng mới nhất,
+  `fetchRemoteStats` đã sắp xếp giảm dần) trong `fetchRemoteStats` — chỉ đọc `data[0]`, nên một
+  `ts` không phân tích được ở hàng mới nhất không bao giờ tạo ra một `stale` giả (bảo thủ, không
+  fabricate).
+- Cùng chính sách không gian làm việc như Phase 12–14 — làm trong cây chính, không tách worktree.
+- **Sửa `shoot.mjs` (sanctioned, ghi ở đây theo yêu cầu brief):**
+  - Hạt giống âm yếu (`shoot.mjs:87`) từng dùng ký hiệu IPA `'θ'`/`'ɪ'` — hai khoá không khớp bất kỳ
+    mục nào trong `PHONEME_TIPS` (`client/src/scoring/feedback.ts`, khoá là chữ cái ASCII thường:
+    `th`/`dh`/`v`/`f`/`z`/`sh`/`ch`/`r`/`l`) — nên chip âm sai tappable trên dashboard không bao giờ
+    có tip thật để hiện (Task 12 review Important #2). Đổi `'θ'` → `'th'`, `'ɪ'` → `'l'`; giữ `'r'`
+    (đã là khoá thật). Không đổi hành vi sản phẩm, chỉ đổi dữ liệu seed của script chụp ảnh.
+  - `parent-dashboard-sync-error` ở khung **phone** gọi thẳng `tapText(page, "30'")` mà không mở
+    fold-row của panel "⏰ Giới hạn mỗi ngày" trước — panel đó `collapsible` và không có
+    `defaultOpen`, nên trên phone thân panel (gồm cả chip "30'") ẩn sau hàng gập 56px cho tới khi
+    được bấm mở (`Panel.tsx:68`, `hidden md:block`); `ipad`/`ipadp` không gập panel này nên không
+    lộ lỗi. Đây là một lỗi kịch bản thật, tái lập 100% (5/5 lần chạy phone trước khi sửa), không
+    phải cờ hên xui — sửa bằng cách mở fold-row trước khi bấm "30'" nếu nó đang hiện, cùng khuôn
+    `parent-dashboard-recordings-20` đã dùng cho panel "Bản ghi gần đây".
+
+### Việc để lại
+
+- **`ipad/parent-dashboard-full.png` vẫn tràn 122px** (956px > mục tiêu ≤834px). Panel cao nhất
+  chịu trách nhiệm: so hai cột nội dung trong panel "Tài khoản" (col="full", chứa cả `AccountCard`
+  và cột "Hồ sơ") — cột Hồ sơ liệt kê đủ 3 hồ sơ theo hàng 40px + `ProfilePicker density="grid"` +
+  nút "Xem từ xa", cộng với 2 panel `col="full"` khác ("Phút luyện"/áp dụng cho panel không gập) —
+  đây là panel/cụm panel dài nhất theo chiều dọc trên iPad landscape khi cả 8 panel đều mở. Controller
+  quyết định ở làn cuối có nén panel Tài khoản/Hồ sơ hay không; Task 16 không tự ý thiết kế lại theo
+  đúng chỉ dẫn brief.
+- **`RemoteRowState.noAudio` không còn được ép ở bất kỳ đâu** (xem Ruling (i)) — nên bổ sung lại một
+  `it(...)` đơn giản trong `client/src/components/adult/adult-rows.test.tsx` (render thẳng
+  `<RemoteRow state="noAudio">`) chỉ để khoá lại hình dạng UI của trạng thái này, tách bạch khỏi việc
+  giả một tín hiệu sản phẩm không tồn tại.
+- **`OTP_INPUT` duplicate FieldRow's base chrome** (`AccountCard.tsx:13`, ghi chú ngay trong code) —
+  gộp vào một biến thể cỡ chữ của `FieldRow`'s code style khi A2 cần đến, thay vì hai chuỗi class
+  cùng thuộc tính chồng nhau.
+- **`byDate` hiển thị "Tạo dd/mm/yyyy"** (`ProfilePicker.tsx` ~38) — bỏ năm thành "Tạo dd/mm" để
+  hàng 3-lên ở phone không bị ép chữ (parked từ Task 7 review).
+- **Chip-tone boundary test còn thiếu** — `CHIP(w.avg)` (`ParentDashboard.tsx`, tô màu chip âm sai)
+  chưa có test khoá ranh giới 49/50/70/71 (parked từ Task 12 review Minor).
+- **Flaky test đã biết, không thuộc phạm vi vòng này**: `'the limit panel prints today against the
+  limit in its title row and steps by 5'` (`ParentDashboard.test.tsx:528`) — nêu tên trong
+  `task-14-review.md` (vii), tái hiện 0/5 lần trong môi trường cô lập của review đó; không chạm ở
+  Task 16 (1538/1538 xanh trong lần chạy đủ của gate này, xem bên dưới).
+- **Hai việc còn treo từ vòng 3, Phase 15 vẫn không đụng tới** (đúng như spec đã ghi phạm vi
+  "Không làm"): xoá alias `xl2`/`xl3`/`xl4` + `components/Stars.tsx` (vẫn còn dùng ở
+  `PlayerControls.tsx`, `Card.tsx`, `DailyMission.tsx`, `Home.tsx`, `PairPractice.tsx`,
+  `SentenceBuilder.tsx` và các test liên quan); tách `useCountdown`/`useTeachCollapse` (Phase 15
+  không đụng màn luyện nói nên không có lý do buộc phải tách).
+
+### Checklist iPad (6 hàng)
+
+Continuing the numbering from the table above.
+
+| # | Step | Expected result | Result |
+|---|------|------------------|--------|
+| 92 (chạm 44) | Mở A1/A2/P1/P2 trên iPad, chạm **bằng ngón** vào pill sync, "+ Thêm hồ sơ", "Đổi tên", ▶ bản ghi, −/+ giới hạn, "Chi tiết"/"Thử lại" | Mọi control bắt được ngón tay ngay lần chạm đầu, dù hộp thấy chỉ 28/32/36 | ⏳ pending |
+| 93 (thẻ cổng căn giữa) | P1 và A2 ở cả 4 frame (kể cả 375×667) | Thẻ 420 **căn giữa** dọc và ngang, không lệch trái, không tràn | ⏳ pending |
+| 94 (lưới 1/2/3) | P2 ở phone · iPad dọc · iPad ngang | Đúng 1/2/3 cột, thẻ Tài khoản **có 2 cột trong** ở iPad dọc, Tiến độ từ xa full-width áp chót, "Đặt lại" cuối | ⏳ pending |
+| 95 (11 trạng thái) | Ép từng nhánh thẻ Tài khoản theo bảng README | Cả 11 trạng thái vẽ đúng và **không nhảy chiều cao** (150 giữ nguyên) | ⏳ pending |
+| 96 (`SyncPill` 7) | Máy đã cấu hình cloud nhưng chưa có phiên; rồi máy **chưa** cấu hình cloud | Máy 1 hiện "⚡ Chưa kết nối"; máy 2 **không hiện pill nào** | ⏳ pending |
+| 97 (hai dialog xoá) | Bấm "↺ Đặt lại tiến trình…" khi chưa liên kết, rồi khi đã liên kết | Hai tiêu đề khác nhau và hai nhãn nút khác nhau ("Xoá trên máy này" / "Xoá tất cả") | ⏳ pending |
+
 ## Architecture
 
 ```

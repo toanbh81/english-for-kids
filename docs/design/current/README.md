@@ -46,6 +46,7 @@ cd docs/design/current && npm i playwright-core@1.47.2 && node shoot.mjs        
 SHOTS=home,mission node shoot.mjs phone                                          # chỉ vài ảnh
 VIEWPORTS=short SHOTS=practice-idle node shoot.mjs                               # spot-check 375×667 (tailwind `short:`), opt-in — mặc định vẫn chỉ phone,ipad,ipadp
 SHOTS_DIR=../current-phase14/shots node shoot.mjs                                # Phase 14 before/after set (10 kịch bản mới — xem README.md §Phase 14)
+SHOTS_DIR=../current-phase15/shots node shoot.mjs                                # Phase 15 before/after set (15 kịch bản mới — xem README.md §Phase 15)
 node sheet.mjs                                                                   # ghép sheet
 ```
 Cần Edge cài sẵn (`channel: 'msedge'`), không tải browser.
@@ -57,3 +58,23 @@ tập), `stories`, `sentences-topic` (`?topic=family`), `mission-empty`, `missio
 audio` (mp3 bị chặn để bắt trạng thái lỗi), `home-3-banners` (chỉ 2 banner hiện được ở dev, xem README.md
 §Phase 14), và `levels` được thêm vào tập `ipadp` (`IPADP_ONLY`). Chi tiết: README.md §"Phase 14 — Danh
 sách và điều hướng (vòng 3)".
+
+## Phase 15 (2026-09-05)
+15 kịch bản chụp mới (`SHOTS_DIR=../current-phase15/shots`), cộng `start-code` được mở rộng
+(scenario cũ, nay đi qua nhánh "Chọn cách khác" thật thay vì chỉ mở màn): `profile-gate-8` (seed 8
+hồ sơ, 5 tên "Bé" trùng, 1 tên 29 ký tự), `profile-gate-reask` (`sessionStorage` mark 6 phút cũ +
+`visibilitychange`), `parent-gate-empty` (trả lời rỗng), `start-otp-error`, `start-abandon`,
+`start-result-empty`, `parent-dashboard-empty`, `parent-dashboard-linked` (email 61 ký tự),
+`parent-dashboard-otp`, `parent-dashboard-sync-error`, `parent-dashboard-limit-custom` (giới hạn
+25'), `parent-dashboard-band-auto`, `parent-dashboard-recordings-20` (20 bản ghi vào IndexedDB),
+`parent-remote-7` (7 trạng thái Tiến độ từ xa qua PostgREST giả lập). `parent-dashboard` cũng được
+thêm vào `IPADP_ONLY` (đã có sẵn).
+
+**Mọi kịch bản chạm tới luồng xác thực đều stub mạng**, không đi qua Supabase thật:
+`start-otp-error`/`start-result-empty`/`start-abandon` mock `signInAnonymously()`
+(`**/auth/v1/signup*`) và tự trả lời `**/auth/v1/otp*`/`**/auth/v1/verify*`; `parent-dashboard-otp`/
+`parent-dashboard-linked` mock `**/auth/v1/user*` (liên kết email) và `**/auth/v1/verify*` (xác
+thực OTP); `parent-dashboard-sync-error` chặn toàn bộ `**/rest/v1/**`; `parent-remote-7` stub
+`**/rest/v1/profiles*`/`events*`/`kv*` bằng dữ liệu giả. **Không kịch bản nào gửi một email thật** —
+mọi phản hồi OTP/xác thực là một `route().fulfill()` cục bộ, không round-trip nào chạm tới mạng
+thật của Supabase. Chi tiết: README.md §"Phase 15 — Khu người lớn (vòng 4)".

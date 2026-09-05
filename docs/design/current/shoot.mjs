@@ -83,8 +83,14 @@ async function seed(page, { overLimit = false, profiles = false } = {}) {
       for (let i = 0; i < 8; i++) {
         const t = base + i * 90e3
         const k = ['speak', 'word', 'sentence', 'story'][i % 4]
+        // Task 16: these two keys used to be IPA symbols ('θ', 'ɪ') that never matched
+        // `PHONEME_TIPS` (client/src/scoring/feedback.ts), which is keyed by lowercase ASCII
+        // digraphs ('th', 'dh', 'v', 'f', 'z', 'sh', 'ch', 'r', 'l') — so the weak-sound chip's tip
+        // never rendered in any shot (task-12-review.md Important #2). 'r' stays as-is (already a
+        // real key); 'θ' → 'th' and 'ɪ' → 'l' are the closest existing keys, chosen only so the
+        // tappable chip has a real tip to show, not for phonetic accuracy.
         push(t, k, k === 'story' ? 'little-fox' : `x${i}`, k === 'story' ? undefined : 55 + ((i * 7 + d * 3) % 45),
-          k === 'speak' ? [{ phoneme: 'θ', score: 40 + i * 3 }, { phoneme: 'ɪ', score: 62 }] : undefined)
+          k === 'speak' ? [{ phoneme: 'th', score: 40 + i * 3 }, { phoneme: 'l', score: 62 }] : undefined)
       }
     }
     if (overLimit) {
@@ -643,6 +649,15 @@ async function run(vpName, vp) {
   await S('parent-dashboard-sync-error', '/parent', async () => {
     await page.route('**/rest/v1/**', r => r.abort())
     await openDashboard()
+    // Task 16 fix: the limit panel is `collapsible` with no `defaultOpen` (`ParentDashboard.tsx`'s
+    // own `<Panel testId="limit-panel">`), so on the PHONE frame its body — the "30'" chip this
+    // scenario needs to tap — starts `hidden` behind the 56px fold row (`Panel.tsx:68`), same
+    // mechanism the `parent-dashboard-recordings-20` scenario already opens explicitly below. Left
+    // unopened, `tapText(page, "30'")` raced an invisible element and timed out on phone only (ipad/
+    // ipadp never collapse this panel, `Panel.tsx:68`'s `md:block`) — a real, reproducible scenario
+    // bug, not a flake (5/5 phone runs failed identically before this fix).
+    const limitFold = page.getByRole('button', { name: /Giới hạn mỗi ngày/ })
+    if (await limitFold.isVisible()) await limitFold.click()
     await tapText(page, "30'")
     // The write is queued instantly but the flush it needs to actually FAIL sits behind a real
     // 30s debounce (`cloud/sync.ts` `DEBOUNCE_MS`) — sleeping past that would work but is a slow
