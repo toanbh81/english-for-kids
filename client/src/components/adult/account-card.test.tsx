@@ -111,7 +111,13 @@ describe('AccountCard', () => {
 
   it('⑦ an error reddens the field and puts the sentence in the field gutter, not after the form', () => {
     render(<AccountCard {...base} state={{ kind: 'otp', email: EMAIL61, otp: '48', error: 'Mã sai hoặc đã hết hạn — gửi lại mã mới nhé.' }} />)
-    expect(screen.getByLabelText('Mã 6 số')).toHaveClass('border-fix-700')
+    const box = screen.getByLabelText('Mã 6 số')
+    expect(box).toHaveClass('border-fix-700')
+    // Final wave / C1: `toHaveClass('border-fix-700')` on its own CANNOT FAIL — it passed for the
+    // whole branch while the box rendered teal, because the error class was appended to a string
+    // that already named a border colour and the winner is stylesheet order, not JSX order. The
+    // absence check is what makes this test able to fail.
+    expect(box.className).not.toMatch(/border-(sand-edge|teal-500)/)
     expect(screen.getByTestId('field-error')).toHaveTextContent('Mã sai hoặc đã hết hạn — gửi lại mã mới nhé.')
     expect(screen.getByRole('button', { name: 'Gửi lại mã' })).toBeInTheDocument()
   })

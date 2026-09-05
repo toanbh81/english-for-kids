@@ -17,7 +17,9 @@ function formatDayLabel(day: string): string {
   return `${d}/${m}`
 }
 
-const RANGE_BTN = 'h-[26px] rounded-lg px-2 text-[12px] font-extrabold'
+// I3: 26px visible, 46px tapped — `after:-inset-2.5` is the adult zone's hit band, mandatory on
+// every control whose visible box is under 44.
+const RANGE_BTN = "relative h-[26px] rounded-lg px-2 text-[12px] font-extrabold after:absolute after:-inset-2.5 after:content-['']"
 
 export function MinutesChart({ days, limitMinutes, range, todayKey, onRangeChange }: {
   days: { day: string; minutes: number }[]

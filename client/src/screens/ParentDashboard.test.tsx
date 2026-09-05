@@ -855,8 +855,34 @@ describe('ParentDashboard', () => {
     renderDashboard({ events: WEAK_EVENTS })
     const chips = screen.getAllByTestId('weak-chip')
     expect(chips[0]).toHaveClass('h-9', 'rounded-r12', 'whitespace-nowrap', 'text-[13px]', 'bg-fix-50', 'text-fix-700')
+    // I3 — 36px visible, 44px tapped: the adult rule allows the small box only with a hit band.
+    expect(chips[0]).toHaveClass('relative', 'after:absolute', "after:content-['']", 'after:-inset-1')
     expect(chips[0]).toHaveTextContent(/^\/[^/]+\/ · \d+ \(\d+ lần\)$/)
     expect(chips.find(c => c.className.includes('bg-ok-50'))).toBeTruthy() // 50–70 → sun
+  })
+
+  /**
+   * M4 / parked item — the chip-tone boundary, pinned at each edge of `CHIP(avg)`
+   * (`ParentDashboard.tsx`): under 50 reads as something to fix, 50 and up as a soft nudge. Only
+   * the "a `bg-ok-50` chip exists somewhere" assertion above stood before, which passes for any
+   * threshold between 45 and 65.
+   */
+  it('tones the chip at exactly 49/50 and 70/71 — the band edges, not just somewhere in the middle', () => {
+    // Two phoneme readings per sound (weakPhonemes needs count >= 2); each pair averages exactly
+    // the number the chip prints.
+    const at = (phoneme: string, a: number, b: number): ActivityEvent[] => [
+      { ts: Date.now(), kind: 'speak', id: `${phoneme}1`, score: 80, phonemes: [{ phoneme, score: a }] },
+      { ts: Date.now(), kind: 'speak', id: `${phoneme}2`, score: 80, phonemes: [{ phoneme, score: b }] },
+    ]
+    renderDashboard({ events: [...at('th', 48, 50), ...at('r', 50, 50), ...at('v', 70, 70), ...at('z', 70, 72)] })
+
+    const tone = (n: number) => screen.getAllByTestId('weak-chip').find(c => c.textContent?.includes(`· ${n} (`))!.className
+    expect(tone(49)).toContain('bg-fix-50')
+    expect(tone(49)).not.toContain('bg-ok-50')
+    expect(tone(50)).toContain('bg-ok-50')
+    expect(tone(50)).not.toContain('bg-fix-50')
+    expect(tone(70)).toContain('bg-ok-50')
+    expect(tone(71)).toContain('bg-ok-50')
   })
 
   it('on a phone the chip is a button that opens its tip; the tip is not hidden away', () => {
@@ -925,7 +951,7 @@ describe('ParentDashboard', () => {
   it('all ten panels live inside one grid, in phone order, and the grid is 1/2/3', () => {
     renderDashboard()
     const grid = screen.getByTestId('panel-grid')
-    expect(grid).toHaveClass('grid-cols-1', 'md:grid-cols-2', 'ipad:grid-cols-3')
+    expect(grid).toHaveClass('grid-cols-1', 'md:grid-cols-2', 'ipad:block', 'ipad:columns-3')
     // Task 13: `collapsible` panels (limit, lesson) render their own `<h2>` twice — once inside the
     // phone-only fold button, once in the `md:flex` desktop row — so titles are de-duplicated
     // (order-preserving) before comparing against the one-per-panel list.
@@ -942,10 +968,10 @@ describe('ParentDashboard', () => {
 
   it('the account panel and the remote panel are full-width; remote is the last panel', () => {
     renderDashboard()
-    expect(screen.getByTestId('account-card')).toHaveClass('md:col-span-2', 'ipad:col-span-3')
+    expect(screen.getByTestId('account-card')).toHaveClass('md:col-span-2', 'ipad:[column-span:all]')
     const panels = screen.getAllByTestId('panel')
     expect(panels[panels.length - 1]).toHaveTextContent('Tiến độ từ xa')
-    expect(panels[panels.length - 1]).toHaveClass('md:col-span-2', 'ipad:col-span-3')
+    expect(panels[panels.length - 1]).toHaveClass('md:col-span-2', 'ipad:[column-span:all]')
   })
 
   it('the reset row is the last thing on the screen: a description left, a danger button right', () => {
@@ -977,7 +1003,7 @@ describe('ParentDashboard', () => {
       ...within(grid).queryAllByTestId('recordings-panel'),
     ]
     expect(panels).toHaveLength(6)
-    expect(screen.getByTestId('panel-grid')).toHaveClass('grid-cols-1', 'md:grid-cols-2', 'ipad:grid-cols-3')
+    expect(screen.getByTestId('panel-grid')).toHaveClass('grid-cols-1', 'md:grid-cols-2', 'ipad:block', 'ipad:columns-3')
   })
 
   it('no control on the screen is a 56/64 child target any more, apart from Panel\'s own fold row', () => {
@@ -1103,7 +1129,9 @@ describe('Phase 11: "Tài khoản"', () => {
     fireEvent.change(screen.getByLabelText('Email của bố mẹ'), { target: { value: 'bome@example.com' } })
     await act(async () => { fireEvent.submit(screen.getByLabelText('Email của bố mẹ').closest('form')!) })
 
-    expect(screen.getByTestId('field-error')).toHaveTextContent('Không có kết nối mạng')
+    // I6: the canonical zone-wide sentence (`screens/authErrorCopy.ts`), not this screen's own
+    // older "Không có kết nối mạng, thử lại nhé." — one vocabulary across all four adult screens.
+    expect(screen.getByTestId('field-error')).toHaveTextContent('Mất kết nối — kiểm tra mạng rồi thử lại.')
     expect(screen.getByLabelText('Email của bố mẹ')).toBeInTheDocument()
   })
 
@@ -1925,13 +1953,13 @@ describe('Phase 11 task 5: remote progress view', () => {
  * Task 14: panel D — 5 recordings + "Xem tất cả 20" expanding in place, playback errors, and the
  * remote-progress panel's `RemoteRow` states.
  *
- * `RemoteRowState` has seven members, but the dashboard only ever emits six of them for real data:
- * `loading`, `error`, `empty`, `data`, `thisDevice`, `stale` (decided by `entry.updatedAt`, the
- * real `RemoteStats.updatedAt` from `cloud/remote.ts` — the newest event's `ts`, not a flag).
- * `noAudio` has no real signal behind it — nothing in `RemoteStats` says whether a recording's
- * audio failed to sync — so the dashboard never produces it, and no test here forces it through
- * the dashboard the way an earlier round did with a locally-widened test type; that state stays on
- * `RemoteRowState` (`RemoteRow.tsx`) for a future task with a real signal to light it up.
+ * `RemoteRowState` has six members and the dashboard emits all six for real data: `loading`,
+ * `error`, `empty`, `data`, `thisDevice`, `stale` (decided by `entry.updatedAt`, the real
+ * `RemoteStats.updatedAt` from `cloud/remote.ts` — the newest event's `ts`, not a flag). The
+ * design's seventh, `noAudio`, was deleted in the final wave (I7): nothing in `RemoteStats` says
+ * whether a recording's audio failed to sync — no read returns that per profile — so no product
+ * path could ever produce it, and the panel's one caveat line already tells the parent that
+ * recordings never sync at all.
  */
 describe('Task 14: recordings panel (5 + expand) and remote progress (6 reachable states)', () => {
   // 60 chars — the design's own "câu dài nhất vẽ: 61 ký tự" — one line, ellipsis, everywhere.
@@ -2062,7 +2090,13 @@ describe('Task 14: recordings panel (5 + expand) and remote progress (6 reachabl
 
     fireEvent.click(screen.getAllByRole('button', { name: 'Chi tiết' })[0])
 
-    expect(await screen.findByRole('dialog')).toHaveTextContent('Điểm trung bình')
+    // I5: ONE line joined with " · ". `Dialog`'s body is a plain `<p>` with no
+    // `whitespace-pre-line` and may not gain one this phase, so a `'\n'`-joined body rendered as
+    // "Chuỗi ngày: 4Tuần này: 58 phút…" — every separator must be a visible character.
+    expect(await screen.findByRole('dialog')).toHaveTextContent('Điểm TB — Nói')
+    const body = screen.getByText(/Điểm TB — Nói/)
+    expect(body.textContent).toMatch(/^🔥 \d+ ngày · \d+'\/tuần · Điểm TB — Nói .+ · (Âm hay sai|Chưa đủ dữ liệu)/)
+    expect(body.textContent).not.toContain('\n')
   })
 
   it('a failed remote read still says so instead of reading as "no remote profiles"', async () => {

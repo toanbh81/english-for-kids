@@ -49,6 +49,8 @@ describe('MinutesChart', () => {
     render(<MinutesChart days={DAYS14} limitMinutes={20} range={7} todayKey={DAYS14[13].day} onRangeChange={() => {}} />)
     expect(screen.getAllByTestId('minute-bar')).toHaveLength(7)
     expect(screen.getByTestId('range-switch')).toHaveClass('hidden', 'md:inline-flex')
+    // I3 — 26px visible, 46px tapped.
+    expect(screen.getByRole('button', { name: '14' })).toHaveClass('relative', 'after:absolute', "after:content-['']", 'after:-inset-2.5')
     fireEvent.click(screen.getByRole('button', { name: '14' }))
   })
 

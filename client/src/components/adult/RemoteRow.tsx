@@ -5,7 +5,13 @@ import { RemoteRowSkeleton } from '../ui'
 // handed in as `sub` — this component only truncates it; it never wraps free text onto a second
 // line. Likewise "· máy này" for `thisDevice` is baked into `name`/`sub` by the caller, not added
 // here — see `adult-rows.test.tsx`'s error-state case, which already carries the suffix.
-export type RemoteRowState = 'loading' | 'error' | 'empty' | 'data' | 'thisDevice' | 'stale' | 'noAudio'
+// SIX states, not the design's seven (final wave / I7): `noAudio` is gone. Nothing in the product
+// can produce it — the recordings never sync at all, so "this profile's audio didn't sync" is not a
+// per-row fact any read returns, and the one caveat line under the panel already says it once for
+// every row (`ParentDashboard.tsx`, decision 31). A union member with no producer and no test is
+// dead code the next reader either deletes blind or invents a signal for. Recorded in README's
+// rulings as an amendment to spec decision 31.
+export type RemoteRowState = 'loading' | 'error' | 'empty' | 'data' | 'thisDevice' | 'stale'
 
 const SUB: Record<RemoteRowState, string> = {
   data: 'text-ink-500',
@@ -13,7 +19,6 @@ const SUB: Record<RemoteRowState, string> = {
   error: 'text-fix-700',
   empty: 'text-ink-300',
   stale: 'text-ink-300',
-  noAudio: 'text-ink-500',
   loading: 'text-ink-300',
 }
 
@@ -22,7 +27,6 @@ const ACTION: Partial<Record<RemoteRowState, string>> = {
   data: 'Chi tiết',
   thisDevice: 'Chi tiết',
   stale: 'Chi tiết',
-  noAudio: 'Chi tiết',
 }
 
 export function RemoteRow({ name, sub, state, onAction }: {

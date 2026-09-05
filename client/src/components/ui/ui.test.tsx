@@ -600,6 +600,17 @@ describe('SyncPill', () => {
     expect(onRetry).toHaveBeenCalledTimes(1)
   })
 
+  // I3 — the adult rule: a visible box under 44 must carry a hit band that reaches 44. `md` (32px)
+  // used to have none at all while `sm` (28px) did.
+  it('both retry sizes carry a hit band that reaches 44', () => {
+    const { rerender } = render(<SyncPill status={{ ...base, lastError: 'x' } as SyncStatus} size="md" onRetry={() => {}} />)
+    const md = screen.getByRole('button', { name: 'Thử lại' })
+    expect(md).toHaveClass('h-8', 'relative', 'after:absolute', "after:content-['']", 'after:-inset-1.5')
+
+    rerender(<SyncPill status={{ ...base, lastError: 'x' } as SyncStatus} size="sm" onRetry={() => {}} />)
+    expect(screen.getByRole('button', { name: 'Thử lại' })).toHaveClass('h-7', 'relative', 'after:-inset-2')
+  })
+
   it('keeps its six old states byte-identical at the default size', () => {
     render(<SyncPill status={{ ...base } as SyncStatus} onRetry={() => {}} />)
     expect(screen.getByTestId('sync-status')).toHaveClass('h-8', 'rounded-r10', 'px-2.5', 'text-[12px]')

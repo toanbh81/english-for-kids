@@ -139,8 +139,8 @@ describe('ProfilePicker', () => {
         onSelect={noop}
       />)
 
-      expect(screen.getByText('Tạo 04/03/2026')).toBeInTheDocument()
-      expect(screen.getByText('Tạo 19/07/2026')).toBeInTheDocument()
+      expect(screen.getByText('Tạo 04/03')).toBeInTheDocument()
+      expect(screen.getByText('Tạo 19/07')).toBeInTheDocument()
     })
 
     /**
@@ -156,9 +156,9 @@ describe('ProfilePicker', () => {
         onSelect={noop}
       />)
 
-      const distinguisher = screen.getByText('Tạo 04/03/2026')
+      const distinguisher = screen.getByText('Tạo 04/03')
       expect(distinguisher).toHaveClass('truncate')
-      expect(distinguisher).toHaveAttribute('title', 'Tạo 04/03/2026')
+      expect(distinguisher).toHaveAttribute('title', 'Tạo 04/03')
     })
 
     it('steps up to the time when both were made the same day', () => {

@@ -1,10 +1,7 @@
 import type { ReactNode } from 'react'
 
-/** Standard input class string — 6 call sites share this instead of each re-typing it (brief §1.1). */
-export const FIELD_INPUT = 'h-11 w-full truncate rounded-r12 border-2 border-sand-edge px-3 text-[14px] font-bold text-ink-900 outline-none focus:border-teal-500'
-export const FIELD_INPUT_ERROR = 'border-fix-700'
-/** OTP / recovery-code input: Baloo 22, tracking 6, centered (brief §2 A2 ④⑤). */
-export const FIELD_INPUT_CODE = 'text-center font-display text-[22px] font-extrabold tracking-[6px]'
+// The input class strings themselves live in `./fieldStyles` (one definition each, C1) — a `.tsx`
+// that exports both a component and helper functions trips `react(only-export-components)`.
 
 /**
  * A labelled form row (brief §1.1, decision 5). The error gutter ALWAYS reserves 18px, even empty

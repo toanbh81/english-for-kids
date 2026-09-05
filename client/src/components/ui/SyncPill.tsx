@@ -45,7 +45,10 @@ export function SyncPill({ status, hasSession, size = 'md', onRetry }: { status:
         <button
           type="button"
           onClick={onRetry}
-          className={`${size === 'sm' ? 'h-7' : 'h-8'} rounded-r10 border-2 border-sand-edge px-2.5 text-[12px] font-extrabold text-ink-500 ${size === 'sm' ? "relative after:absolute after:-inset-2 after:content-['']" : ''}`}
+          // I3: BOTH sizes carry a hit band — 28 → 44 needs `-inset-2`, 32 → 44 needs `-inset-1.5`.
+          // `md` used to get none at all, which left a 32px tap target on an adult screen whose
+          // own rule is "visible 28/32/36/44, never tapped below 44".
+          className={`${size === 'sm' ? 'h-7' : 'h-8'} relative rounded-r10 border-2 border-sand-edge px-2.5 text-[12px] font-extrabold text-ink-500 after:absolute after:content-[''] ${size === 'sm' ? 'after:-inset-2' : 'after:-inset-1.5'}`}
         >
           Thử lại
         </button>

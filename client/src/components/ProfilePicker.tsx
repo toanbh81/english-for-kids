@@ -35,7 +35,10 @@ const pad = (n: number) => String(n).padStart(2, '0')
 const byDate = (p: Profile): string | null => {
   if (p.created <= 0) return null
   const d = new Date(p.created)
-  return `Tạo ${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}`
+  // M3 / parked item: no year. "Tạo 04/03/2026" is 14 characters under a 72px avatar in the 3-up
+  // phone row and truncated there; the day and month are what actually tell two profiles apart,
+  // and `byTime` below already covers two made on the same day.
+  return `Tạo ${pad(d.getDate())}/${pad(d.getMonth() + 1)}`
 }
 const byTime = (p: Profile): string | null => {
   if (p.created <= 0) return null
@@ -181,7 +184,9 @@ export function ProfilePicker({ profiles, onSelect, activeId, busy, density = 'a
     <div className="flex flex-col gap-1">
       <div
         data-testid="picker-scroll"
-        className="relative max-h-[380px] overflow-y-auto after:sticky after:bottom-0 after:mt-auto after:h-9 after:bg-gradient-to-b after:from-transparent after:to-white after:content-['']"
+        // M9: `after:mt-auto` dropped — this scroller is `display:block`, so an auto margin does
+        // nothing; `sticky bottom-0` is what pins the fade.
+        className="relative max-h-[380px] overflow-y-auto after:sticky after:bottom-0 after:h-9 after:bg-gradient-to-b after:from-transparent after:to-white after:content-['']"
       >
         {cells}
       </div>

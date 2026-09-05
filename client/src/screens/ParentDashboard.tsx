@@ -44,6 +44,9 @@ import { PageShell, PageHeader, PageBody } from '../components/ui/page'
 import { AccountCard, MinutesChart, Panel, PanelGrid, RecordingRow, RemoteRow, SegRow, Stepper } from '../components/adult'
 import type { AccountState, RemoteRowState, Seg } from '../components/adult'
 import { useDialog } from '../components/ui/useDialog'
+// Final wave / I6: ONE `describeAuthError` for the whole adult zone — this screen used to carry its
+// own, older, diverging sentences for the very same `AuthResult` codes and the very same OTP flow.
+import { describeAuthError } from './authErrorCopy'
 
 /**
  * Phone styles sit at the default breakpoint and `md:` (768) puts the tablet/iPad value back — the
@@ -82,27 +85,6 @@ const LENGTH_LABEL: Record<LessonLength, string> = {
 }
 
 /**
- * Vietnamese copy for an `AuthResult`'s error code.
- *
- * `invalid-email`, `invalid-token`, `cloud-unconfigured` and `anonymous-session-in-use` are this
- * app's own codes (`cloud/auth.ts` never guesses at Supabase's wording for those). Everything else
- * is a raw Supabase message — never shown verbatim to a Vietnamese parent, and a wrong or expired
- * OTP is exactly the shape that lands here (Supabase's own wording for both is some variant of
- * "invalid/expired token").
- */
-function describeAuthError(code: string): string {
-  const lower = code.toLowerCase()
-  if (code === 'invalid-email') return 'Email chưa đúng định dạng.'
-  if (code === 'cloud-unconfigured') return 'Chưa thể kết nối lúc này, thử lại sau nhé.'
-  if (code === 'anonymous-session-in-use') return 'Máy này đang có hồ sơ khác, thử lại nhé.'
-  if (code === 'invalid-token' || /invalid|expired|not\s*found/.test(lower)) {
-    return 'Mã chưa đúng hoặc đã hết hạn, thử lại nhé.'
-  }
-  if (/network|fetch/.test(lower)) return 'Không có kết nối mạng, thử lại nhé.'
-  return 'Có lỗi xảy ra, thử lại nhé.'
-}
-
-/**
  * `navigator.onLine === false` is the reliable half of that flag — it really does mean no network,
  * while true only ever meant an interface is up. Used here to say WHY there is no account yet, so
  * an offline device gets an explanation instead of a form that cannot work.
@@ -130,17 +112,25 @@ function composeStaleSub(entry: RemoteStats, now: number, updatedAt: number): st
   return `Cập nhật ${daysAgo} ngày trước · 🔥 ${entry.streak} · ${entry.weekMinutes}'/tuần`
 }
 
-/** "Chi tiết" → the numbers the row's own one-line `sub` had no room for. */
+/**
+ * "Chi tiết" → the numbers the row's own one-line `sub` had no room for.
+ *
+ * I5: joined with " · " on ONE line, not with `'\n'`. `Dialog`'s body is a plain `<p>` with no
+ * `whitespace-pre-line`, and `Dialog` may not gain anything but `placeholder?` this phase
+ * (decision 16), so the newlines collapsed and the parent read "Chuỗi ngày: 4Tuần này: 58 phút…"
+ * as one run-on block. The separator has to live on the caller, and the first two entries are
+ * shortened to the row's own shorthand so the single line stays readable.
+ */
 function remoteDetailBody(entry: RemoteStats): string {
   const a = entry.averages
   return [
-    `Chuỗi ngày: ${entry.streak}`,
-    `Tuần này: ${entry.weekMinutes} phút`,
-    `Điểm trung bình — Nói ${formatAvg(a.speak)} · Từ vựng ${formatAvg(a.word)} · Ghép câu ${formatAvg(a.sentence)}`,
+    `🔥 ${entry.streak} ngày`,
+    `${entry.weekMinutes}'/tuần`,
+    `Điểm TB — Nói ${formatAvg(a.speak)} · Từ vựng ${formatAvg(a.word)} · Ghép câu ${formatAvg(a.sentence)}`,
     entry.weak.length === 0
       ? 'Chưa đủ dữ liệu về âm sai'
       : `Âm hay sai: ${entry.weak.map(w => `/${w.phoneme}/ (${Math.round(w.avg)})`).join(', ')}`,
-  ].join('\n')
+  ].join(' · ')
 }
 
 type Props = {
@@ -164,6 +154,12 @@ export function ParentDashboard({ onLock }: Props) {
   // still in flight.
   const [resetBusy, setResetBusy] = useState(false)
   const [signOutBusy, setSignOutBusy] = useState(false)
+  // M1 — the SECOND flag, and the only one the card reads. `signOutBusy` is the trigger guard and
+  // goes up the moment the button is tapped, i.e. while the confirm dialog is still asking; driving
+  // the card's ⑪ face off it made "Đang lưu N mục còn lại trước khi đăng xuất…" appear behind the
+  // scrim before the parent had answered, and un-appear if they cancelled. This one is set inside
+  // `onConfirm`, so ⑪ describes work that is actually happening.
+  const [signingOut, setSigningOut] = useState(false)
   // One read of the activity log per mount (and per reset), shared by every query below; the
   // snapshot doubles as the reload key for the recordings list.
   const [snapshot, setSnapshot] = useState(() => ({ events: getActivity(), now: Date.now() }))
@@ -444,7 +440,11 @@ export function ParentDashboard({ onLock }: Props) {
     void dialog.confirm({
       title: p.name,
       body: remoteDetailBody(entry),
-      confirmLabel: 'Đóng',
+      // M2 — the two buttons had the SAME name ("Đóng"/"Đóng"), which reads as a choice that is not
+      // one and gives a screen reader two identically-named controls. This dialog has nothing to
+      // confirm: "Xong" closes it, "Đóng" closes it, and `Dialog` may not lose its cancel button
+      // (decision 16 — it gains `placeholder?` and nothing else).
+      confirmLabel: 'Xong',
       cancelLabel: 'Đóng',
     })
   }
@@ -593,12 +593,14 @@ export function ParentDashboard({ onLock }: Props) {
       body: `Bé vẫn học được. Tiến độ mới sẽ chỉ lưu trên máy này cho tới khi liên kết lại.${sync.pending > 0 ? ` ${sync.pending} mục chưa đồng bộ sẽ được gửi trước.` : ''}`,
       confirmLabel: 'Đăng xuất',
       onConfirm: async () => {
+        setSigningOut(true)
         const result = await signOut()
         // Signing out leaves this device with NO session, which is the third state above — not
         // an anonymous one. Saying otherwise is what drew a link form that could not work.
         if (result.ok) { setEmail(null); setHasSession(false) }
       },
     })
+    setSigningOut(false)
     setSignOutBusy(false)
   }
 
@@ -642,8 +644,12 @@ export function ParentDashboard({ onLock }: Props) {
   const accountState: AccountState =
     !authReady ? { kind: 'loading' }
     : !hasSession ? { kind: 'noSession', online: online() }
-    : sync.lastError ? { kind: 'syncError', email, pending: sync.pending }
-    : linked ? { kind: 'linked', email: email!, signingOut: signOutBusy, pending: sync.pending }
+    // M8 — `linkStage !== 'otp'`: a sync error arriving while the parent is typing the code they
+    // were just emailed used to replace the whole OTP form with state ⑩, taking the typed digits
+    // with it. The error is not lost — the panel header's `SyncPill` shows it throughout — it just
+    // no longer evicts a form the parent is mid-way through.
+    : sync.lastError && linkStage !== 'otp' ? { kind: 'syncError', email, pending: sync.pending }
+    : linked ? { kind: 'linked', email: email!, signingOut, pending: sync.pending }
     : linkStage === 'otp' ? { kind: 'otp', email: linkEmailValue, otp: linkOtp, busy: linkBusy, error: linkError ?? undefined }
     : { kind: 'link', email: linkEmailValue, busy: linkBusy, error: linkError ?? undefined }
 
@@ -835,7 +841,10 @@ export function ParentDashboard({ onLock }: Props) {
                     type="button"
                     aria-expanded={openTip === w.phoneme}
                     onClick={() => setOpenTip(t => (t === w.phoneme ? null : w.phoneme))}
-                    className={`inline-flex h-9 items-center whitespace-nowrap rounded-r12 px-3 font-display text-[13px] font-extrabold ${CHIP(w.avg)}`}
+                    // I3: 36px visible, 44px tapped — `after:-inset-1` is the hit band the adult
+                    // rule requires of every control under 44 (same idiom as "+ Thêm hồ sơ",
+                    // "Đổi tên", the Stepper and the RemoteRow action).
+                    className={`relative inline-flex h-9 items-center whitespace-nowrap rounded-r12 px-3 font-display text-[13px] font-extrabold after:absolute after:-inset-1 after:content-[''] ${CHIP(w.avg)}`}
                   >
                     /{w.phoneme}/ · {Math.round(w.avg)} ({w.count} lần)
                   </button>
@@ -985,10 +994,6 @@ export function ParentDashboard({ onLock }: Props) {
                     // signature's own wider type.
                     const entry = remoteStats[p.id]
 
-                    // `noAudio` (in `RemoteRowState`, `RemoteRow.tsx`) has no real signal behind
-                    // it today — the dashboard never emits it, deliberately, per the controller's
-                    // ruling: a state the UI can render but the product cannot produce, rather than
-                    // a fabricated flag.
                     const state: RemoteRowState =
                       entry === null ? 'error'
                       : entry.eventCount === 0 ? 'empty'
@@ -1000,11 +1005,6 @@ export function ParentDashboard({ onLock }: Props) {
                       : 'data'
 
                     const name = state === 'thisDevice' ? `${p.name} · máy này` : p.name
-                    // No 'noAudio' branch here: the dashboard never produces that state (see the
-                    // comment on `state` above), so `composeRemoteSub` is the only thing left for
-                    // 'data'/'thisDevice' — the old `— bản ghi giọng không đồng bộ` suffix it once
-                    // appended for 'noAudio' would be dead code, checking a value `state` can no
-                    // longer hold.
                     const sub =
                       state === 'error' ? 'Không tải được — kiểm tra mạng.'
                       : state === 'empty' ? 'Chưa có dữ liệu trên máy chủ.'
