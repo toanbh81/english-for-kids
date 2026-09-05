@@ -11,7 +11,8 @@ import { ProfilePicker } from '../components/ProfilePicker'
 import { ParentQuestion } from '../components/ParentQuestion'
 import { BackButton, Button, GateBlobs, GateCard, LinkText, Notice } from '../components/ui'
 import { PageShell, PageHeader, PageBody } from '../components/ui/page'
-import { FieldRow, FIELD_INPUT, FIELD_INPUT_CODE, FIELD_INPUT_ERROR } from '../components/adult'
+import { FieldRow, codeInput, fieldInput } from '../components/adult'
+import { describeAuthError, describeRecoverError } from './authErrorCopy'
 
 /**
  * The start screen's other door (spec flows 3 and 4): "Đã dùng Speak Up rồi?" — for a device whose
@@ -48,41 +49,6 @@ type Door = 'email' | 'code'
 type Stranding =
   | { kind: 'holding'; profiles: number; stars: number; events: number; mirrored: boolean }
   | { kind: 'unchecked' }
-
-/** Round-4 wording (R10 / brief §2 "14 câu lỗi"). Signature and the seven identifying branches are
- * unchanged from before this pass — only the sentence each branch returns — so callers and tests
- * that key off the CODE rather than the copy keep working. */
-export function describeAuthError(code: string): string {
-  const lower = code.toLowerCase()
-  if (code === 'invalid-email') return 'Email chưa đúng định dạng.'
-  if (code === 'cloud-unconfigured') return 'Tính năng tài khoản chưa bật trên bản này.'
-  // Never "thử lại": a retry reproduces this exactly. The way out is the parent screen, where the
-  // email is linked to the account this device already has instead of replacing it.
-  if (code === 'anonymous-session-in-use') {
-    return 'Máy này đang có hồ sơ của tài khoản khác — đăng xuất ở Góc phụ huynh trước.'
-  }
-  // The honest answer to "Tôi có email đã liên kết" when it turns out this one is not linked. It
-  // must never read as a network hiccup: the parent has to try their other address, or the
-  // recovery code, rather than the same email again.
-  if (code === 'email-not-linked') {
-    return 'Email này chưa liên kết với Speak Up — thử mã khôi phục.'
-  }
-  if (code === 'invalid-token' || /invalid|expired|not\s*found/.test(lower)) {
-    return 'Mã sai hoặc đã hết hạn — gửi lại mã mới nhé.'
-  }
-  if (/network|fetch/.test(lower)) return 'Mất kết nối — kiểm tra mạng rồi thử lại.'
-  return 'Có lỗi xảy ra — thử lại sau ít phút.'
-}
-
-export function describeRecoverError(status: number): string {
-  if (status === 400) return 'Mã phải đủ 8 chữ và số.'
-  if (status === 401) return 'Mã không đúng — kiểm tra lại chữ O và số 0.'
-  if (status === 403) return 'Mã này thuộc tài khoản khác đang dùng máy này.'
-  if (status === 404) return 'Không tìm thấy mã — có thể đã được thay mã mới.'
-  if (status === 409) return 'Mã đã dùng trên máy khác — tạo mã mới ở máy đó.'
-  if (status === 429) return 'Thử quá nhiều lần — đợi 5 phút rồi thử lại.'
-  return 'Không kết nối được máy chủ — thử lại sau.'
-}
 
 /** R10 / quyết định 22. Bốn nguồn khác nhau, một hậu quả: chưa nói chuyện được với máy chủ và
  * KHÔNG có gì bị tiêu — `afterAuthenticated` (fetchRemoteProfiles null), `finishRestore` (pull
@@ -458,8 +424,13 @@ export function CloudStart() {
     )
   }
 
+  // `isolate`, not a bare `relative` (I4): `GateBlobs` paints at `-z-10`, and a positioned box with
+  // no `isolation`/`z-index` establishes NO stacking context — so the blobs escaped to the next
+  // ancestor that does and painted behind the page, invisible. `ParentGate` and `ProfileGate` both
+  // carry `relative isolate` and their shots show the blobs; this screen's showed plain cream. See
+  // `ParentGate.tsx`'s doc comment for the full rule.
   return (
-    <PageShell className="relative">
+    <PageShell className="relative isolate">
       <GateBlobs />
       <PageHeader right={null} back={<BackButton to="/" label="Về nhà" mdLabel="Về bản đồ 🏝️" variant="adult" />} />
       <PageBody center>
@@ -517,7 +488,7 @@ export function CloudStart() {
                     autoFocus
                     value={email}
                     onChange={e => setEmail(e.target.value)}
-                    className={`${FIELD_INPUT} ${error ? FIELD_INPUT_ERROR : ''}`}
+                    className={fieldInput(!!error)}
                   />
                 }
               />
@@ -542,8 +513,10 @@ export function CloudStart() {
           * copy line instead — never repeated on the button. */}
         {stage === 'abandon' && stranding && (
           <div className="flex flex-col gap-3 text-left">
-            <h2 className="font-display text-base font-extrabold text-ink-900">Máy này đang có dữ liệu</h2>
-            <p className="text-sm font-semibold text-ink-500">Khôi phục sẽ thay bằng tài khoản của bố mẹ. Dữ liệu hiện tại:</p>
+            {/* M7 — the zone's own scale: 18px card title, 13px sub (decision 1). These were
+              * `text-base` (16) and `text-sm` (14), the only two drifts left in the adult zone. */}
+            <h2 className="font-display text-[18px] font-extrabold text-ink-900">Máy này đang có dữ liệu</h2>
+            <p className="text-[13px] font-semibold text-ink-500">Khôi phục sẽ thay bằng tài khoản của bố mẹ. Dữ liệu hiện tại:</p>
             {/* `break-all`, not `break-words`: the 61-char email has no spaces, and a flex child's
               * default `min-width:auto` resolves to its min-content width — `break-words`
               * (`overflow-wrap:break-word`) does not reliably shrink that in every browser, so the
@@ -567,7 +540,8 @@ export function CloudStart() {
           <form onSubmit={handleVerifyEmail} className="flex flex-col gap-4">
             {/* Fix round 1 / Important I2: same overflow as `abandon-copy` (C1) — the 61-char email
               * has no spaces, so `break-all` is what actually keeps it inside the card on phone. */}
-            <p className="break-all text-sm font-semibold text-ink-500">Nhập mã 6 số vừa gửi tới {email}</p>
+            {/* M7: 13px sub, the zone's scale — was `text-sm` (14). */}
+            <p className="break-all text-[13px] font-semibold text-ink-500">Nhập mã 6 số vừa gửi tới {email}</p>
             <FieldRow
               label="Mã 6 số"
               htmlFor="cloud-start-otp"
@@ -582,7 +556,7 @@ export function CloudStart() {
                   autoFocus
                   value={otp}
                   onChange={e => setOtp(e.target.value)}
-                  className={`${FIELD_INPUT} ${FIELD_INPUT_CODE} ${error ? FIELD_INPUT_ERROR : ''}`}
+                  className={codeInput(!!error)}
                 />
               }
             />
@@ -613,7 +587,7 @@ export function CloudStart() {
                   maxLength={8}
                   value={code}
                   onChange={e => setCode(e.target.value.toUpperCase())}
-                  className={`${FIELD_INPUT} ${FIELD_INPUT_CODE} uppercase ${error ? FIELD_INPUT_ERROR : ''}`}
+                  className={`${codeInput(!!error)} uppercase`}
                 />
               }
             />
@@ -625,17 +599,28 @@ export function CloudStart() {
         {/* R8 / quyết định 21: the screen-level system failures that used to rattle a `Notice` and
           * a floating "Thử tải lại" on top of every stage now land on their own stage instead —
           * reached from `afterAuthenticated`'s "0 restorable profiles" branch and from
-          * `finishRestore`'s single-candidate pull failure. Both read as the same generic outcome
-          * (the design's own stage ⑧ uses one sentence for either — the title is fixed, not
-          * `info`-driven, on purpose: there is nothing left to distinguish the two by), and "Thử
-          * tải lại" re-runs whichever one actually failed: the specific pull when `retryId` names
-          * it, the whole fetch-and-adopt round trip otherwise. */}
+          * `finishRestore`'s single-candidate pull failure. "Thử tải lại" re-runs whichever one
+          * actually failed: the specific pull when `retryId` names it, the whole fetch-and-adopt
+          * round trip otherwise.
+          *
+          * **Final wave / C2 — the two outcomes are NOT the same sentence.** They were, and the
+          * shared one was the empty-account sentence: a parent whose restore failed on a network
+          * blip was told "Tài khoản này chưa có hồ sơ nào để khôi phục" and pointed at "Bắt đầu mới
+          * cho bé", which is exactly how the account holding the real child gets abandoned. That is
+          * the sentence this file's own doc comments twice forbid ("a read that failed must never
+          * be announced as 'this account has no profiles'", `afterAuthenticated`). `retryId` is set
+          * only by `finishRestore`'s failure, so it is the discriminator: with it, the merged
+          * system-error wording (`SYSTEM_ERROR`, decision 22) with its single retry below; without
+          * it, the genuinely-empty account. */}
         {stage === 'result' && (
           <div className="flex flex-col gap-3">
             <Notice
               kind="warn"
               adult
-              title="Tài khoản này chưa có hồ sơ nào để khôi phục. Bắt đầu mới cho bé hoặc thử email khác."
+              testId="result-notice"
+              title={retryId
+                ? 'Chưa tải được tiến độ của bé — máy chủ chưa trả lời. Mã và hồ sơ vẫn còn nguyên, thử lại nhé.'
+                : 'Tài khoản này chưa có hồ sơ nào để khôi phục. Bắt đầu mới cho bé hoặc thử email khác.'}
             />
             {retryId
               ? <Button size="adult" variant="outline" disabled={busy} onClick={() => { void finishRestore(retryId) }} className="w-full">Thử tải lại</Button>

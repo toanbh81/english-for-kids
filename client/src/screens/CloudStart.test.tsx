@@ -52,7 +52,10 @@ vi.mock('../cloud/sync', () => sync)
 import { listProfiles } from '../cloud/profileState'
 import { logActivity } from '../progress/activity'
 import { setStars } from '../progress/store'
-import { CloudStart, describeAuthError, describeRecoverError } from './CloudStart'
+import { CloudStart } from './CloudStart'
+// Final wave / I6: the 14-sentence table moved out of the screen into the one module both adult
+// screens import (`ParentDashboard` used to carry a diverging copy of it).
+import { describeAuthError, describeRecoverError } from './authErrorCopy'
 
 /** Real UUIDs, because the real roster refuses anything else (`isProfileId`). */
 const MINTED = '11111111-2222-4333-8444-555555555555'
@@ -745,7 +748,33 @@ describe('the email door', () => {
       // Task 9 / R8: the one restorable candidate auto-restores with no picker on screen to
       // report next to, so its failure lands on the screen-level `'result'` stage now, not the
       // 'email-otp' FieldRow gutter.
-      expect(screen.getByRole('status')).toHaveTextContent('Tài khoản này chưa có hồ sơ nào để khôi phục')
+      expect(screen.getByRole('status')).toHaveTextContent('Chưa tải được tiến độ của bé')
+    })
+
+    /**
+     * Final wave / C2. This stage is reached two ways and they mean opposite things. The failed
+     * pull used to borrow the empty-account sentence — telling a parent whose child IS on the
+     * server that the account holds nothing, and steering them at "Bắt đầu mới cho bé", which is
+     * how the account with the real data gets abandoned. The two must never re-merge.
+     */
+    it('never tells a parent whose restore failed that the account is empty', async () => {
+      await restoreWithFailedPull()
+
+      const notice = screen.getByTestId('result-notice')
+      expect(notice).toHaveTextContent('Chưa tải được tiến độ của bé — máy chủ chưa trả lời. Mã và hồ sơ vẫn còn nguyên, thử lại nhé.')
+      expect(notice).not.toHaveTextContent('chưa có hồ sơ nào để khôi phục')
+      expect(notice.textContent).not.toMatch(/chưa có hồ sơ/)
+      // The empty-account branch of the same stage still says its own sentence — proof the two
+      // titles are actually branched, not both rewritten to one new string.
+      cleanup()
+      profileState.fetchRemoteProfiles.mockResolvedValue([])
+      sync.pullProfile.mockResolvedValue(true)
+      await goToEmail()
+      await act(async () => {
+        fireEvent.change(screen.getByLabelText('Mã 6 số'), { target: { value: '123456' } })
+        fireEvent.submit(screen.getByLabelText('Mã 6 số').closest('form')!)
+      })
+      expect(screen.getByTestId('result-notice')).toHaveTextContent('Tài khoản này chưa có hồ sơ nào để khôi phục')
     })
 
     it('offers the same child again rather than the menu, through the result stage', async () => {
@@ -808,8 +837,8 @@ describe('the email door', () => {
       fireEvent.submit(screen.getByLabelText('Mã 6 số').closest('form')!)
     })
 
-    expect(await screen.findByText('Tạo 04/03/2026')).toBeInTheDocument()
-    expect(screen.getByText('Tạo 19/07/2026')).toBeInTheDocument()
+    expect(await screen.findByText('Tạo 04/03')).toBeInTheDocument()
+    expect(screen.getByText('Tạo 19/07')).toBeInTheDocument()
   })
 
   it('is honest when the account has no profiles at all', async () => {
@@ -988,6 +1017,24 @@ describe('the round-4 GateCard frame', () => {
     expect(input.className).not.toMatch(/min-h-\[64px\]|text-base/)
     expect(screen.getByTestId('field-error')).toHaveClass('min-h-[18px]')
     expect(screen.getByText(/Không gửi quảng cáo/)).toHaveClass('text-[11px]')
+  })
+
+  /**
+   * Final wave / C1. `border-fix-700` used to be APPENDED to a string that already said
+   * `border-sand-edge`; both set `border-color`, Tailwind emits sand later, so every error field in
+   * this zone rendered sand while a `toHaveClass('border-fix-700')` assertion happily passed. The
+   * absence half is the half that can fail.
+   */
+  it('an error paints the field red — and leaves no competing border colour on it', async () => {
+    auth.signInWithEmail.mockResolvedValue({ ok: false, error: 'Failed to fetch' })
+    renderStart()
+    openEmailDoor()
+    fireEvent.change(screen.getByLabelText('Email của bố mẹ'), { target: { value: 'bome@example.com' } })
+    await act(async () => { fireEvent.submit(screen.getByLabelText('Email của bố mẹ').closest('form')!) })
+
+    const input = screen.getByLabelText('Email của bố mẹ')
+    expect(input).toHaveClass('border-fix-700')
+    expect(input.className).not.toMatch(/border-(sand-edge|teal-500)/)
   })
 
   it('the OTP and the recovery code are the 22px tracked boxes', async () => {
