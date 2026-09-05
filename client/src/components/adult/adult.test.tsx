@@ -15,7 +15,7 @@ describe('Panel', () => {
   it('right slot sits on the title row; col=full spans every frame', () => {
     render(<Panel title="⏰ Giới hạn mỗi ngày" col="full" right={<span>Hôm nay: 12/25'</span>}><i /></Panel>)
     expect(screen.getByText("Hôm nay: 12/25'").parentElement).toHaveClass('flex', 'items-center', 'justify-between', 'gap-2')
-    expect(screen.getByTestId('panel')).toHaveClass('md:col-span-2', 'ipad:col-span-3')
+    expect(screen.getByTestId('panel')).toHaveClass('md:col-span-2', 'ipad:[column-span:all]')
   })
 
   it('a collapsible Panel is a 56px row with a chevron on the phone and open from md up', () => {
@@ -57,10 +57,16 @@ describe('Panel', () => {
 })
 
 describe('PanelGrid', () => {
-  it('is 1/2/3 columns with gap 10/14 and no lg:', () => {
+  // I1: still 1/2/3 columns, but the third frame packs its panels down CSS multi-columns instead of
+  // grid bands — a grid row is as tall as its tallest cell, which is what put 250px of paid-for
+  // white space inside the short panels.
+  it('is 1/2/3 columns with gap 10/14, multi-column at ipad, and no lg:', () => {
     render(<PanelGrid><i /></PanelGrid>)
     const grid = screen.getByTestId('panel-grid')
-    expect(grid).toHaveClass('grid', 'grid-cols-1', 'gap-2.5', 'md:grid-cols-2', 'md:gap-3.5', 'ipad:grid-cols-3')
+    expect(grid).toHaveClass('grid', 'grid-cols-1', 'gap-2.5', 'md:grid-cols-2', 'md:gap-3.5')
+    expect(grid).toHaveClass('ipad:block', 'ipad:columns-3', 'ipad:gap-3.5')
+    // A panel split across a column boundary is this lever's one failure mode.
+    expect(grid).toHaveClass('ipad:[&>*]:break-inside-avoid', 'ipad:[&>*]:mb-3.5')
     expect(grid.className).not.toMatch(/\blg:|\bsm:/)
   })
 })

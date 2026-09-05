@@ -6,7 +6,9 @@ const BOX = 'flex flex-col gap-2 rounded-r16 bg-white px-3.5 py-3 shadow-card-xs
 const TITLE = 'font-display text-[13px] font-extrabold text-ink-900 md:text-[14px]'
 // Fade đáy 40 của vùng cuộn. Brief ghi gradient tới `#FFF7EA` (nền TRANG); panel nền TRẮNG, nên
 // dùng `to-white` — vệt kem trên nền trắng là một đường kẻ nhìn thấy được.
-const SCROLL = "min-h-0 flex-1 overflow-y-auto after:pointer-events-none after:sticky after:bottom-0 after:mt-auto after:block after:h-10 after:shrink-0 after:bg-gradient-to-b after:from-transparent after:to-white after:content-['']"
+// M9: no `after:mt-auto`/`after:shrink-0` — the scroller is `display:block`, so an auto margin and
+// a flex shrink token do nothing at all. `sticky bottom-0` is what pins the fade.
+const SCROLL = "min-h-0 flex-1 overflow-y-auto after:pointer-events-none after:sticky after:bottom-0 after:block after:h-10 after:bg-gradient-to-b after:from-transparent after:to-white after:content-['']"
 
 /**
  * The parent-dashboard panel frame (brief §1.2 P2): white r16 card, `col='full'` spans the whole
@@ -36,7 +38,9 @@ export function Panel({
   children: ReactNode
 }) {
   const [open, setOpen] = useState(defaultOpen)
-  const colClass = col === 'full' ? 'md:col-span-2 ipad:col-span-3' : ''
+  // I1: `[column-span:all]` at `ipad:`, where `PanelGrid` is a multi-column block rather than a
+  // grid — same meaning ("this panel owns the full width"), the mechanism the container needs.
+  const colClass = col === 'full' ? 'md:col-span-2 ipad:[column-span:all]' : ''
 
   return (
     <div data-testid={testId} className={`${BOX} ${colClass} ${className}`}>
@@ -62,10 +66,16 @@ export function Panel({
             {right}
           </div>
         )}
-      {scroll
-        ? <div data-testid="panel-scroll" className={SCROLL}>{children}</div>
-        : collapsible
-          ? <div className={open ? '' : 'hidden md:block'}>{children}</div>
+      {/* M11 — `scroll` used to SHORT-CIRCUIT `collapsible`: a panel given both rendered its body
+        * on a phone even while folded. The fold decides visibility; the scroller lives inside it. */}
+      {collapsible
+        ? (
+          <div className={open ? '' : 'hidden md:block'}>
+            {scroll ? <div data-testid="panel-scroll" className={SCROLL}>{children}</div> : children}
+          </div>
+        )
+        : scroll
+          ? <div data-testid="panel-scroll" className={SCROLL}>{children}</div>
           : children}
     </div>
   )
