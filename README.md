@@ -1686,8 +1686,10 @@ ngữ; không đụng màn trẻ em.
 
 - **Khung mới.** `GateCard`/`GateBlobs` (`components/ui/`, dùng chung với `Dialog`) — thẻ 420px
   bo r20, căn giữa trên một cặp blob nền mờ — cộng `client/src/components/adult/`: `Panel` (khung
-  r16 gập được 56px trên phone), `PanelGrid` (lưới 1/2/3 cột, một cây DOM), `FieldRow` (nhãn +
-  input 44 + gutter lỗi 18 luôn giữ chỗ), `SegRow` (3 tone `on`/`off`/`dim`), `Stepper` (±5, 36
+  r16 gập được 56px trên phone), `PanelGrid` (1/2/3 cột, một cây DOM; ở `ipad:` là multi-column chứ
+  không phải lưới — Ruling (j)), `FieldRow` (nhãn + input 44 + gutter lỗi 18 luôn giữ chỗ) cùng
+  `fieldStyles.ts` (`fieldInput`/`codeInput`/`otpInput` — mỗi trạng thái đúng MỘT màu viền, Ruling
+  (m)), `SegRow` (3 tone `on`/`off`/`dim`), `Stepper` (±5, 36
   trong hộp 44), `MinutesChart` (biểu đồ phút luyện 4 màu), `RecordingRow` (hàng 44, ▶36, điểm màu
   băng), `RemoteRow` (hàng 56, một dòng phụ nén), `AccountCard` (11 trạng thái, trình bày thuần
   tuý — handler ở lại màn).
@@ -1703,50 +1705,72 @@ ngữ; không đụng màn trẻ em.
 
 | Màn | What changed |
 |---|---|
-| ParentGate (P1) | `GateCard`/`GateBlobs` thay khung cũ; `BackButton` dùng `mdLabel="Về bản đồ 🏝️"` (nhãn hiện khác nhau theo bề rộng, cùng một tên truy cập); thẻ căn giữa dọc lẫn ngang ở cả 4 khung hình (kể cả 375×667); thêm kịch bản "trả lời rỗng" (`parent-gate-empty`) — câu hỏi giữ nguyên, không đổi |
 | ProfileGate (A1) | Hai hình dạng (overlay toàn màn hình mới cài / thẻ hỏi lại sau ≥5 phút `storageBroken`); thang z 40 (blob) < 50 < 60; sáu trạng thái kể cả `storageBroken` khi `writeMark` trả `false`; không có Back (khung chung ba cổng, quyết định 17); mật độ `ProfilePicker` xấu nhất — 8 hồ sơ, 5 tên "Bé" trùng, 1 tên 29 ký tự — vẫn vừa 4 hàng × 88 trước khi cuộn |
-| CloudStart (A2) | `Stage` hiện có 7 giá trị (`menu`/`gate`/`email`/`email-otp`/`code`/`abandon`/`result`), thêm `'result'` cho nhánh ⑦–⑧; khung ba cổng dùng chung + `FieldRow` cho mọi ô nhập; 4 lỗi hệ thống gộp làm một (giữ nguyên câu roster); màn "abandon" 4 dòng copy + nhãn nút cố định; ô 44px qua `FieldRow` thay `<input>` trần |
-| ParentDashboard (P2) | Toàn bộ thân thay bằng `PanelGrid` + `Panel` — 8 panel khi cloud khả dụng (Tài khoản gồm cột Hồ sơ trong cùng một panel, Phút luyện, Điểm trung bình, Âm hay sai, Giới hạn mỗi ngày, Bài học, Bản ghi gần đây, Tiến độ từ xa áp chót) và **6 panel khi `cloudAvailable === false`** (ruling 35 — Tài khoản và Tiến độ từ xa biến mất cùng nhau, hai panel duy nhất còn cổng cloud); header một hàng `title`/`sub` + nút 🔐 tự vẽ; hàng "↺ Đặt lại tiến trình…" đứng riêng, cuối trang |
+| ParentGate (P1) | `GateCard`/`GateBlobs` thay khung cũ; `BackButton` dùng `mdLabel="Về bản đồ 🏝️"` (nhãn hiện khác nhau theo bề rộng, cùng một tên truy cập); thẻ căn giữa dọc lẫn ngang ở cả 4 khung hình (kể cả 375×667); thêm kịch bản "trả lời rỗng" (`parent-gate-empty`) — câu hỏi giữ nguyên, không đổi |
+| CloudStart (A2) | `Stage` hiện có 7 giá trị (`menu`/`gate`/`email`/`email-otp`/`code`/`abandon`/`result`), thêm `'result'` cho nhánh ⑦–⑧; khung ba cổng dùng chung + `FieldRow` cho mọi ô nhập; 4 lỗi hệ thống gộp làm một (giữ nguyên câu roster); màn "abandon" 4 dòng copy + nhãn nút cố định; ô 44px qua `FieldRow` thay `<input>` trần; `'result'` **rẽ hai câu theo `retryId`** — pull hỏng ≠ tài khoản rỗng, và câu "chưa có hồ sơ nào" chỉ dành cho tài khoản thật sự rỗng (làn sửa cuối / C2); `PageShell` là `relative isolate` để `GateBlobs` (`-z-10`) thật sự vẽ ra (I4) |
+| ParentDashboard (P2) | Toàn bộ thân thay bằng `PanelGrid` + `Panel` — 8 panel khi cloud khả dụng (Tài khoản gồm cột Hồ sơ trong cùng một panel, Phút luyện, Điểm trung bình, Âm hay sai, Giới hạn mỗi ngày, Bài học, Bản ghi gần đây, Tiến độ từ xa áp chót) và **6 panel khi `cloudAvailable === false`** (ruling 35 — Tài khoản và Tiến độ từ xa biến mất cùng nhau, hai panel duy nhất còn cổng cloud); header một hàng `title`/`sub` + nút 🔐 tự vẽ; hàng "↺ Đặt lại tiến trình…" đứng riêng, cuối trang; ở iPad ngang `PanelGrid` xếp cột (multi-column) thay vì lưới, giữ nguyên thứ tự (Ruling (j)) |
 
-### Mốc `-full.png` đã hạ
+### Mốc `-full.png` — hai đơn vị, và mốc được chấm bằng đơn vị của spec
 
-Số đo dưới đây lấy từ lần chạy đủ của Task 16 (`SHOTS_DIR=docs/design/current-phase15/shots`, cả 3
-frame, không lọc `SHOTS` — log đầy đủ trong
-`.superpowers/sdd/2026-09-04-phase15-parent-zone/task-16-report.md`). "Before" là số đo Task 1
-(seed 5 ngày luyện, chưa có `Panel`/`PanelGrid`).
+**Hai con số khác nhau, phải gọi đúng tên.** `shoot.mjs` in ra chiều cao `scrollHeight` của
+`[data-testid="page-body"]` (phần thực sự cuộn) — đó là con số bảng này từng ghi, dưới nhãn
+`…-full.png`. Nhưng mốc mà spec đặt ra là **chiều cao pixel của chính tệp `-full.png`** (baseline
+1821/1643 của brief R30 là kích thước ảnh: "`ipad/parent-dashboard-full.png` = 1194×**1643**"). Hai
+đại lượng lệch nhau một hằng số theo frame — header + padding của shell: phone **106**, ipad
+**124**, ipadp **124** — nên bảng này ghi **cả hai** và **chấm đạt/trượt bằng đơn vị của spec**
+(ảnh PNG, đo bằng byte IHDR, chia 2 vì `deviceScaleFactor: 2`).
 
-| Frame | Before (Task 1) | Mục tiêu (spec) | After (Task 16, lần chạy đủ) | Kết quả |
-|---|---|---|---|---|
-| phone/parent-dashboard-full.png | 1661px | ≈1100px | **1171px** | Gần đạt — cao hơn mục tiêu 71px, nhưng giảm 490px (30%) so với baseline |
-| ipad/parent-dashboard-full.png | 1715px | ≤834px (biến mất) | **956px** | **Trượt** — vẫn tràn 122px, tuy đã giảm 759px (44%) so với baseline; xem "Việc để lại" |
-| ipadp/parent-dashboard-full.png | 2179px | ≤1194px (biến mất... hoặc `-full` không cần sinh) | **1172px** | **Đạt** — dưới mục tiêu 22px (tệp `-full` vẫn được sinh vì 1172 > 1070 `clientHeight`, nhưng nằm trong ngân sách ≤1194 spec đặt ra) |
+Số "after" đo lại ở làn sửa cuối (2026-09-05), sau khi `PanelGrid` chuyển sang xếp cột ở `ipad:`
+(xem Ruling (j)). Chạy lọc `SHOTS=parent-dashboard,parent-dashboard-recordings-20,parent-remote-7`
+— tức **bản chụp cô lập**, không phải lần chạy đủ.
 
-Một quan sát khi đo lại: chạy riêng `VIEWPORTS=phone SHOTS=parent-dashboard` (không có gì chạy
-trước nó trong cùng context) cho **1129px** — khớp hệt số Task 14/15 đã báo cáo — trong khi chạy
-**đủ** (mọi màn trẻ em phía trước nó trong cùng một trang/`context` Playwright) luôn cho **1171px**,
-tái lập được 100% qua 2 lần chạy đủ độc lập. Chênh lệch 42px này không đến từ bất kỳ thay đổi code
-nào của Task 16 — nó có trước Task 16 (cùng họ với phát hiện "±48/98/98" Task 12's review từng nêu)
-và đến từ việc các màn luyện tập/từ/câu phía trước `/parent` trong kịch bản đủ ghi lại hoạt động
-thật (localStorage `activity`) trước khi `/parent` được mở, nên nội dung "hôm nay"/biểu đồ phút của
-dashboard khi đó dày hơn một chút so với khi `/parent` được chụp một mình. Số **1171px** là số thật
-của bước "chạy đủ" mà spec yêu cầu đo — được báo cáo trung thực ở đây thay vì con số 1129px "sạch"
-dễ nhìn hơn. `ipad`/`ipadp` không cho thấy chênh lệch tương tự (956/1172 khớp cả hai lần chạy đủ).
+| Frame | Before (Task 1, probe) | Mục tiêu spec (PNG) | After — probe `page-body` | After — **PNG `-full.png`** | Kết quả (đơn vị spec) |
+|---|---|---|---|---|---|
+| phone/parent-dashboard-full.png | 1661px | ≈1100px | 1129px | **1235px** | **Trượt 135px** (giảm 426px so với baseline) |
+| ipad/parent-dashboard-full.png | 1715px | ≤834px | 908px | **1032px** | **Trượt 198px** (giảm 683px; lever cột ăn thêm 48px, xem Ruling (j)) |
+| ipadp/parent-dashboard-full.png | 2179px | ≤1194px | 1172px | **1296px** | **Trượt 102px** — bản README trước ghi "Đạt" vì so 1172 (probe) với 1194 (PNG); hai đơn vị khác nhau, và đúng đơn vị thì đây là trượt |
+
+Panel nào đẩy từng con số (đo trên chính ba tệp `-full.png` ở trên):
+
+- **phone (1235):** một cột, nên tổng = tổng mọi panel. Nặng nhất là "Tài khoản" (~330: form email
+  + `Notice` mã khôi phục + cột Hồ sơ xếp dọc dưới nó) và "Phút luyện" (~250: title + plot 86 +
+  nhãn). Lever cột ở `ipad:` không chạm gì tới frame này.
+- **ipad (1032):** "Tài khoản" full-width ~244 + ba cột panel ~480 (cột cao nhất: Bài học + Bản ghi)
+  + "Tiến độ từ xa" full-width + hàng reset + header ~100. Sau khi bỏ băng lưới, chiều cao còn lại
+  là chiều cao của **cột dài nhất**, không còn là tổng các cực đại theo băng.
+- **ipadp (1296):** 834px là `md:` (2 cột), lever `ipad:` không áp dụng — con số y hệt trước làn
+  sửa. Đẩy nó là "Tài khoản" (2 cột trong, ~300) cộng bốn băng 2-cột phía dưới.
+
+Ba mốc đều **trượt**; không có thay đổi ≤20 dòng nào đóng được khoảng cách còn lại, và mọi chiều
+cao còn lại (plot 120, seg 44, padding panel) đều do brief quy định từng con số. Ghi vào "Việc để
+lại" như một đề nghị **đặt lại baseline**, không giả vờ đã đạt.
+
+Một quan sát khi đo (giữ nguyên từ Task 16, vẫn đúng): chạy riêng
+`VIEWPORTS=phone SHOTS=parent-dashboard` cho **1129px** probe, trong khi lần chạy **đủ** (mọi màn
+trẻ em phía trước nó trong cùng context Playwright) cho **1171px** — chênh 42px đến từ hoạt động
+thật mà các màn phía trước ghi vào `localStorage` trước khi `/parent` mở, không từ code. Bảng trên
+dùng bản cô lập (1129 probe / 1235 PNG) vì đó là bản làn sửa này thực sự chụp lại; con số của lần
+chạy đủ ở 45ff160 là 1171 probe / **1277** PNG. `ipad`/`ipadp` không có chênh lệch kiểu này.
 
 ### Mọi `-full.png` còn lại ở 4 màn người lớn (Step 2)
 
+Đo lại toàn bộ ở làn sửa cuối (2026-09-05). **Đơn vị: pixel của chính tệp `-full.png`** (đúng đơn
+vị spec) — cộng probe `page-body` trong ngoặc, để đối chiếu với các bản README trước; hằng số
+chênh là 106 (phone) / 124 (ipad, ipadp).
+
 | Màn/kịch bản | phone | ipad | ipadp | short (375×667) | Lý do |
 |---|---|---|---|---|---|
-| parent-dashboard | 1171 | 956 | 1172 | 1129 | Mốc chính — xem bảng trên |
-| parent-dashboard-empty | 1235 | 908 | 1104 | — | 0 sự kiện — cả 3 panel dữ liệu (biểu đồ, âm sai, bản ghi) cùng vẽ empty-state một lúc, cao hơn bản có dữ liệu ở phone |
-| parent-dashboard-otp | 1129 | 956 | 1172 | — | Thẻ Tài khoản đang ở form OTP (⑥/⑦) |
-| parent-dashboard-linked | 1109 | 928 | 1144 | — | Thẻ Tài khoản ở trạng thái ⑨, email 61 ký tự |
-| parent-dashboard-sync-error | 1249\* | 928 | 1144 | — | Trạng thái ⑩ — xem ghi chú sửa `shoot.mjs` bên dưới |
-| parent-dashboard-limit-custom | 1348 | 1082 | 1317 | — | Giới hạn tuỳ chỉnh 25' — seg thứ 4 sáng đèn |
-| parent-dashboard-band-auto | 1348 | 1082 | 1317 | — | Bậc tự động — dòng "Tự động đang chọn…" thêm 1 dòng |
-| parent-dashboard-recordings-20 | 2236 | 1738 | 1973 | 1997 | Dự kiến — 20 bản ghi mở "Xem tất cả 20" tại chỗ (câu 60 ký tự) |
-| parent-remote-7 | 1619 | 1425 | 1641 | — | 6 hàng Tiến độ từ xa (loading/error/empty/data/thisDevice/stale) cùng hiện một lúc |
-| parent-dashboard-profiles | 1779\*\* | 1383\*\* | 2286\*\* | — | Pre-existing từ Phase 12 (`ProfilePicker` mở, không thuộc phạm vi vòng 4) |
-| profile-gate-reask | 896 (phone only) | fits | fits | — | Pre-existing — hỏi lại sau ≥5 phút, chỉ tràn ở phone |
+| parent-dashboard | 1235 (1129) | 1032 (908) | 1296 (1172) | 1235\*\*\* | Mốc chính — xem bảng trên |
+| parent-dashboard-empty | 1341 (1235) | 1032 (908) | 1228 (1104) | — | 0 sự kiện — cả 3 panel dữ liệu (biểu đồ, âm sai, bản ghi) cùng vẽ empty-state một lúc, cao hơn bản có dữ liệu ở phone |
+| parent-dashboard-otp | 1235 (1129) | 1032 (908) | 1296 (1172) | — | Thẻ Tài khoản đang ở form OTP (⑥/⑦) |
+| parent-dashboard-linked | 1215 (1109) | 1004 (880) | 1268 (1144) | — | Thẻ Tài khoản ở trạng thái ⑨, email 61 ký tự |
+| parent-dashboard-sync-error | 1355 (1249)\* | 1004 (880) | 1268 (1144) | — | Trạng thái ⑩ — xem ghi chú sửa `shoot.mjs` bên dưới |
+| parent-dashboard-limit-custom | 1454 (1348) | 1158 (1034) | 1441 (1317) | — | Giới hạn tuỳ chỉnh 25' — seg thứ 4 sáng đèn |
+| parent-dashboard-band-auto | 1454 (1348) | 1158 (1034) | 1441 (1317) | — | Bậc tự động — dòng "Tự động đang chọn…" thêm 1 dòng |
+| parent-dashboard-recordings-20 | 2342 (2236) | 1588 (1464) | 2097 (1973) | 2103\*\*\* | Trường hợp xấu nhất — 20 bản ghi mở "Xem tất cả 20" tại chỗ (câu 60 ký tự); ipad giảm 274px nhờ lever cột |
+| parent-remote-7 | 1725 (1619) | 1546 (1422) | 1765 (1641) | — | 6 hàng Tiến độ từ xa (loading/error/empty/data/thisDevice/stale) cùng hiện một lúc |
+| parent-dashboard-profiles | 2758 (2652)\*\* | 2106 (1982)\*\* | 2370 (2246)\*\* | — | Pre-existing từ Phase 12 (`ProfilePicker` mở, không thuộc phạm vi vòng 4) |
+| profile-gate-reask | 1002 (896) (phone only) | fits | fits | — | Pre-existing — hỏi lại sau ≥5 phút, chỉ tràn ở phone |
 
 \* `parent-dashboard-sync-error` ở phone thất bại 100% (5/5 lần) trước khi sửa `shoot.mjs` — xem
 Ruling bên dưới; sau khi sửa, tái lập ổn định (1249px ở phone) qua 3 lần chạy độc lập, kể cả lần
@@ -1754,8 +1778,11 @@ chạy đủ cuối cùng dùng để lấy số trong bảng này.
 \*\* `parent-dashboard-profiles` dao động mạnh qua các lần chạy đủ (phone: 2429px rồi 1779px; ipad:
 2070px rồi 1383px; ipadp giữ nguyên 2286px cả hai lần) vì kịch bản bấm vào bất kỳ hồ sơ nào đang
 `pressed` — hồ sơ được chọn (và do đó lượng hoạt động/sao mà panel vẽ ra) không cố định giữa các
-lần chạy; số trong bảng là từ lần chạy đủ cuối cùng (dùng để chốt các mốc chính). Không phải một
-milestone của vòng 4 — màn/kịch bản này có từ Phase 12.
+lần chạy; số trong bảng là từ lần chạy lại của làn sửa cuối. Không phải một milestone của vòng 4 —
+màn/kịch bản này có từ Phase 12.
+\*\*\* Cột `short` (375×667) **không** được chụp lại ở làn sửa cuối — nó là viewport opt-in
+(`VIEWPORTS=short`) và không có gì trong làn này đụng tới bố cục một cột dưới `md:`, nên hai con số
+đó vẫn là của lần chạy Task 16 (đã quy về đơn vị PNG).
 
 Không còn `-full.png` nào cho `parent-gate`, `parent-gate-wrong`, `parent-gate-empty`,
 `profile-gate`, `profile-gate-8`, hay bất kỳ kịch bản `start-*` nào (kể cả `start-abandon` với đoạn
@@ -1786,7 +1813,10 @@ app thật trong một ảnh chụp (không phải mọi trạng thái đều c�
 Riêng test `'no control in any of the eleven states is a 56/64 child button'` kiểm cả 11 trạng thái
 cùng lúc theo checklist row 92 (không control nào là nút 56/64 kiểu trẻ em).
 
-### 7 trạng thái Tiến độ từ xa (`RemoteRow`)
+### 6 trạng thái Tiến độ từ xa (`RemoteRow`)
+
+Design vẽ **7**; bản ship có **6** — trạng thái thứ 7 (`noAudio`) đã bị xoá ở làn sửa cuối, xem
+Ruling (i). Sáu trạng thái dưới đây đều ép được qua app thật trong một ảnh chụp.
 
 | # | Trạng thái | Cách ép |
 |---|---|---|
@@ -1796,15 +1826,17 @@ cùng lúc theo checklist row 92 (không control nào là nút 56/64 kiểu tr�
 | 4 | `data` | `parent-remote-7`: `DATA_ID` có 20 sự kiện gần (giờ) |
 | 5 | `thisDevice` | `parent-remote-7`: hồ sơ trùng `deviceId` của chính máy |
 | 6 | `stale` | `parent-remote-7`: `STALE_ID` có đúng 1 sự kiện **12 ngày trước** — `fetchRemoteStats` đọc thẳng `ts` đó vào `RemoteStats.updatedAt`, dashboard so với đồng hồ thật (`now - updatedAt > 7 ngày`), không phải một cờ giả |
-| 7 | `noAudio` | **Không kịch bản/test nào ép được hiện tại** — xem Ruling (i) bên dưới |
+| ~~7~~ | ~~`noAudio`~~ | **Đã xoá** (làn sửa cuối / I7) — không có nguồn phát nào tồn tại; xem Ruling (i) |
 
 ### Sai lệch so với brief (Ruling)
 
-- **(a) Ruling người lớn — chạm 44, hộp 28–36, không 56/64.** `ParentDashboard.tsx:47-56` đảo
-  chiều doc-comment cũ (spec §12 M8c từng đọc là dashboard PHẢI theo chuẩn trẻ em 64px) thành: đây
-  là màn người lớn, hộp visible 28/32/36/44px là đủ miễn vùng chạm không dưới 44px (hit band mở
-  rộng, không cần hộp to ra); `:877-881`'s comment cũ về "recordings disclosure giữ chuẩn trẻ em"
-  cũng đảo theo — dòng đó không còn ngoại lệ nữa, nó theo luật chung của cả màn.
+- **(a) Ruling người lớn — chạm 44, hộp 28–36, không 56/64.** Toàn bộ ruling nằm trong **một**
+  doc-comment duy nhất, `ParentDashboard.tsx:51-63` (số dòng kiểm lại sau làn sửa cuối; bản README
+  trước ghi thêm `:877-881`, đó là JSX của `<Panel testId="lesson-panel">`, không phải doc-comment —
+  không hề có khối thứ hai). Nó đảo chiều cách đọc cũ (spec §12 M8c từng đọc là dashboard PHẢI theo
+  chuẩn trẻ em 64px) thành: đây là màn người lớn, hộp visible 28/32/36/44px là đủ miễn vùng chạm
+  không dưới 44px (hit band mở rộng, không cần hộp to ra) — kể cả "recordings disclosure", câu cuối
+  của chính doc-comment đó nói rõ dòng ấy **mất** ngoại lệ 64px trong cùng lượt này.
 - **(b) Ruling T3-1 — `Recording.score?: number`.** Thêm ở writer duy nhất `PairPractice.tsx:86`
   (`score: result.overall`, đã có `result.overall` trong scope một dòng trên); 7 writer còn lại
   (`saveRecording` gọi từ PracticeCard, SentenceBuilder, SoundPractice, StarPractice, StoryRetell,
@@ -1825,14 +1857,44 @@ cùng lúc theo checklist row 92 (không control nào là nút 56/64 kiểu tr�
   không đếm ngược ở vòng này (brief vẽ "Gửi lại mã (0:42)").
 - **(h)** `averageScoreByKind` có chữ ký `(events = getActivity())`, không phải `('story')` như một
   cách đọc brief gợi ý — nhận mảng sự kiện, không nhận tên loại; ô "Truyện" luôn "—" vì lý do ở (b).
-- **(i) Trạng thái không ép được trong dev.** `RemoteRowState`'s `noAudio` không có tín hiệu thật
-  nào trong `RemoteStats` — dashboard không bao giờ phát ra trạng thái này (`ParentDashboard.tsx`'s
-  own comment tại nhánh tính `state`) — và **hiện không còn một `it(...)` hay kịch bản `shoot.mjs`
-  nào ép nó nữa** (bài test ép `noAudio` bị xoá ở Task 14 fix round 1 vì nó phải nới rộng kiểu cục
-  bộ để giả một tín hiệu sản phẩm không hề phát ra — xem Ruling kế tiếp). `RemoteRow.tsx` vẫn giữ
-  `noAudio` trong kiểu/`SUB`/`ACTION` của nó (một trạng thái component CÓ THỂ vẽ), chỉ là không nơi
-  nào trong app hay bộ test hiện tại còn dựng nó lên — ghi vào "Việc để lại" bên dưới thay vì âm
-  thầm bỏ qua.
+- **(i) Quyết định 31 được sửa: trạng thái thứ 7 (`noAudio`) bị XOÁ.** Design vẽ 7 trạng thái
+  `RemoteRow`; bản ship có 6. Không có nguồn phát nào tồn tại — `RemoteStats` không mang, và không
+  một lệnh đọc nào trả về, một dữ kiện "bản ghi giọng của hồ sơ này chưa đồng bộ" theo từng hồ sơ
+  (bản ghi giọng **không bao giờ** đồng bộ, và panel đã nói đúng một lần cho mọi hàng bằng dòng
+  caveat dưới cùng). Một thành viên union không sản phẩm nào dựng lên được và không test nào ghim
+  là code chết: người đọc kế tiếp hoặc xoá mù hoặc bịa ra một tín hiệu cho nó. Làn sửa cuối xoá
+  `'noAudio'` khỏi kiểu + hai bảng `SUB`/`ACTION` của `RemoteRow.tsx` (3 dòng, khôi phục lại dễ nếu
+  sau này có tín hiệu thật). Khoá kịch bản `shoot.mjs` vẫn tên `parent-remote-7` — tên lịch sử,
+  không phải số trạng thái đang hiện.
+- **(j) `PanelGrid` xếp cột (multi-column) ở `ipad:`, không còn là lưới.** Quyết định 24 giữ nguyên
+  (3 cột ở iPad ngang, "Tài khoản" đầu, "Tiến độ từ xa" full-width áp chót, "Đặt lại" cuối) nhưng
+  cơ chế đổi: một **hàng** lưới cao bằng ô cao nhất của nó, nên ~250px khoảng trắng bên trong "Điểm
+  trung bình"/"Âm hay sai" là do panel cùng băng trả tiền. `ipad:columns-3` + `break-inside-avoid`
+  (và `[column-span:all]` cho `col='full'`) cho panel chảy **xuống** cột, nên panel ngắn chỉ tốn
+  đúng chiều cao của nó. Kiểm trên ảnh chụp lại: thứ tự brief giữ nguyên, không panel nào bị cắt
+  ngang biên cột, không chồng lấn. Ăn được 48px ở `parent-dashboard` và 274px ở
+  `parent-dashboard-recordings-20` (ipad).
+- **(k) Spec quyết định 23 ghi `sun-100`; token thật là `sun-50` (#FFF1C9).** Lỗi đánh máy trong
+  spec — `tailwind.config.ts` không có `sun-100`, và nền dải copy của màn "abandon"
+  (`CloudStart.tsx`'s `abandon-copy`) dùng `bg-sun-50` là đúng. Code đúng, spec sai; ghi lại ở đây
+  theo Ruling đã chốt ở Task 9 review ("recorded, README ruling later").
+- **(l) Một `describeAuthError` cho cả khu người lớn** (làn sửa cuối / I6). Bảng 14 câu của quyết
+  định 22 (viết ở vòng 4 cho `CloudStart`) là bản chuẩn; `ParentDashboard` từng giữ một bản riêng,
+  cũ hơn, cho **cùng** mã lỗi `AuthResult` và **cùng** luồng OTP (phụ huynh nhập sai mã ở `/start`
+  đọc "Mã sai hoặc đã hết hạn — gửi lại mã mới nhé.", cũng lỗi ấy ở thẻ Tài khoản đọc "Mã chưa đúng
+  hoặc đã hết hạn, thử lại nhé."). Bản chuẩn chuyển sang `client/src/screens/authErrorCopy.ts` —
+  ngoài `cloud/*` (chỉ đọc trong phase này) và ngoài file màn (một `.tsx` vừa export component vừa
+  export hàm sẽ dính cảnh báo `react(only-export-components)`, đúng hai cảnh báo lint mới của
+  nhánh) — và cả hai màn import từ đó.
+- **(m) Viền lỗi: một màu, không chồng hai class** (làn sửa cuối / C1). `FIELD_INPUT` (có sẵn
+  `border-sand-edge`) cộng thêm `FIELD_INPUT_ERROR` (`border-fix-700`) là hai class **cùng thuộc
+  tính** — thắng thua do thứ tự trong stylesheet, không phải thứ tự trong JSX, và Tailwind sinh
+  `.border-sand-edge` **sau** `.border-fix-700`, nên mọi ô lỗi trong khu người lớn vẽ màu cát, còn
+  ô OTP của thẻ Tài khoản (có thêm `border-teal-500`) vẽ màu ngọc. Ba builder trong
+  `client/src/components/adult/fieldStyles.ts` (`fieldInput`/`codeInput`/`otpInput`) quyết định
+  **một** màu viền và **một** token cỡ chữ cho mỗi trạng thái; `OTP_INPUT` chép tay trong
+  `AccountCard.tsx` biến mất theo. Test cũ (`toHaveClass('border-fix-700')`) không thể fail — mọi
+  bài test viền giờ kiểm thêm **vắng mặt** của class đối thủ.
 - **`RemoteStats.updatedAt?: number`** (Task 14 fix round 1) là ngoại lệ DUY NHẤT của "cloud/* chỉ
   đọc": thêm vào `cloud/remote.ts`'s `RemoteStats` và gán từ `data[0]`'s `ts` (hàng mới nhất,
   `fetchRemoteStats` đã sắp xếp giảm dần) trong `fetchRemoteStats` — chỉ đọc `data[0]`, nên một
@@ -1855,28 +1917,30 @@ cùng lúc theo checklist row 92 (không control nào là nút 56/64 kiểu tr�
 
 ### Việc để lại
 
-- **`ipad/parent-dashboard-full.png` vẫn tràn 122px** (956px > mục tiêu ≤834px). Panel cao nhất
-  chịu trách nhiệm: so hai cột nội dung trong panel "Tài khoản" (col="full", chứa cả `AccountCard`
-  và cột "Hồ sơ") — cột Hồ sơ liệt kê đủ 3 hồ sơ theo hàng 40px + `ProfilePicker density="grid"` +
-  nút "Xem từ xa", cộng với 2 panel `col="full"` khác ("Phút luyện"/áp dụng cho panel không gập) —
-  đây là panel/cụm panel dài nhất theo chiều dọc trên iPad landscape khi cả 8 panel đều mở. Controller
-  quyết định ở làn cuối có nén panel Tài khoản/Hồ sơ hay không; Task 16 không tự ý thiết kế lại theo
-  đúng chỉ dẫn brief.
-- **`RemoteRowState.noAudio` không còn được ép ở bất kỳ đâu** (xem Ruling (i)) — nên bổ sung lại một
-  `it(...)` đơn giản trong `client/src/components/adult/adult-rows.test.tsx` (render thẳng
-  `<RemoteRow state="noAudio">`) chỉ để khoá lại hình dạng UI của trạng thái này, tách bạch khỏi việc
-  giả một tín hiệu sản phẩm không tồn tại.
-- **`OTP_INPUT` duplicate FieldRow's base chrome** (`AccountCard.tsx:13`, ghi chú ngay trong code) —
-  gộp vào một biến thể cỡ chữ của `FieldRow`'s code style khi A2 cần đến, thay vì hai chuỗi class
-  cùng thuộc tính chồng nhau.
-- **`byDate` hiển thị "Tạo dd/mm/yyyy"** (`ProfilePicker.tsx` ~38) — bỏ năm thành "Tạo dd/mm" để
-  hàng 3-lên ở phone không bị ép chữ (parked từ Task 7 review).
-- **Chip-tone boundary test còn thiếu** — `CHIP(w.avg)` (`ParentDashboard.tsx`, tô màu chip âm sai)
-  chưa có test khoá ranh giới 49/50/70/71 (parked từ Task 12 review Minor).
+- **Cả ba mốc chiều cao đều trượt trong đơn vị của spec** — phone 1235 (mục tiêu ≈1100), ipad 1032
+  (≤834), ipadp 1296 (≤1194); xem bảng và phân tích panel ở trên. Lever `PanelGrid` cột (Ruling (j))
+  đã lấy hết phần dễ lấy; phần còn lại là chiều cao brief quy định từng con số (plot 120, seg 44,
+  padding panel 12/14). **Đề nghị: đặt lại baseline trong một đơn vị duy nhất**, ví dụ "ipad ≤834 đo
+  trên `[data-testid=page-body]` scrollHeight (tương đương ≤958 tính theo `-full.png`)" — mốc ipad
+  hiện tại (908 probe) sẽ đạt, còn phone thì mốc ≈1100 vốn suy ra từ baseline 1821 đã cũ của brief,
+  không phải từ danh sách panel mà phase này thật sự ship.
+- **`Panel`'s `scroll` + fade 40px được ship, được test, nhưng không màn nào dùng**
+  (`Panel.tsx`'s `SCROLL`, `adult.test.tsx`'s `'a scroll Panel gets the flex-1 scroller…'`;
+  `grep -n "scroll" ParentDashboard.tsx CloudStart.tsx` = 0). Ruling của làn sửa cuối: **park** —
+  quyết định 30 ("mở rộng tại chỗ" cho panel Bản ghi) thắng §1.2's scroll body, nên prop ở lại như
+  một API đã có test, không xoá. Việc để lại: hoặc có một màn thật dùng nó, hoặc xoá cả prop lẫn bài
+  test — đừng để mãi trạng thái "có test mà không ai dùng".
+- **`Recording.score` mới được ghi ở 1 trong 8 call site `saveRecording`** (`PairPractice.tsx:86`;
+  bảy màn còn lại — PracticeCard, SentenceBuilder, SoundPractice, StarPractice, StoryRetell,
+  VoicePractice, WordCard — không ghi), nên cột "điểm" của panel Bản ghi trống với mọi bản ghi tạo
+  từ bảy màn đó. `RecordingRow` xử lý đúng (không vẽ gì), và phạm vi này là ruling đã chốt — nhưng
+  với phụ huynh, panel đọc ra vẻ không nhất quán. Mở rộng sang bảy writer còn lại ở một phase sau.
 - **Flaky test đã biết, không thuộc phạm vi vòng này**: `'the limit panel prints today against the
-  limit in its title row and steps by 5'` (`ParentDashboard.test.tsx:528`) — nêu tên trong
-  `task-14-review.md` (vii), tái hiện 0/5 lần trong môi trường cô lập của review đó; không chạm ở
-  Task 16 (1538/1538 xanh trong lần chạy đủ của gate này, xem bên dưới).
+  limit in its title row and steps by 5'` (`ParentDashboard.test.tsx`, ~dòng 528 ở 45ff160) — nêu
+  tên trong `.superpowers/sdd/2026-09-04-phase15-parent-zone/task-14-review.md` mục (vii), tái hiện
+  0/5 lần trong môi trường cô lập của review đó và xanh ở mọi lần chạy gate từ đó tới nay. **Không
+  sửa ở làn này** (không có lỗi tái hiện được để sửa) — chỉ nêu tên để lần đỏ tiếp theo không bị
+  chẩn đoán lại từ đầu.
 - **Hai việc còn treo từ vòng 3, Phase 15 vẫn không đụng tới** (đúng như spec đã ghi phạm vi
   "Không làm"): xoá alias `xl2`/`xl3`/`xl4` + `components/Stars.tsx` (vẫn còn dùng ở
   `PlayerControls.tsx`, `Card.tsx`, `DailyMission.tsx`, `Home.tsx`, `PairPractice.tsx`,

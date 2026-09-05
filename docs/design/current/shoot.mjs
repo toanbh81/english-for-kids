@@ -736,10 +736,10 @@ async function run(vpName, vp) {
   // thisDevice, plus (as of fix round 1) `stale`, which now comes from a genuinely old `ts` in
   // STALE_ID's mocked `events` row rather than a flag: `cloud/remote.ts`'s `fetchRemoteStats`
   // computes `updatedAt` off that row itself, same as it would for a real account, and the
-  // dashboard's own clock (`now - entry.updatedAt > 7 * DAY_MS`) does the rest. `noAudio` has no
-  // real signal behind it anywhere in `RemoteStats` — the dashboard never emits it — so it stays
-  // absent from this table on purpose, not as a gap to fill later. (Scenario key kept as
-  // `parent-remote-7` — historical, not a live count of states shown.)
+  // dashboard's own clock (`now - entry.updatedAt > 7 * DAY_MS`) does the rest. The design's
+  // seventh state, `noAudio`, was DELETED in the final wave (I7) — no read anywhere returns a
+  // per-profile audio-sync fact, so nothing could ever produce it. Six states is the whole table.
+  // (Scenario key kept as `parent-remote-7` — historical, not a live count of states shown.)
   await S('parent-remote-7', '/parent', async () => {
     // The REAL anonymous sign-in this device would otherwise attempt (unmocked, like the rest of
     // this section relies on the surrounding real session) mints a brand-new Supabase user on

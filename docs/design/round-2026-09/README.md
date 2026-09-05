@@ -21,18 +21,20 @@ liên quan dùng trực tiếp — xoá đòi phải sửa từng call site đó
 `useCountdown`/`useTeachCollapse` (countdown lặp 8×, collapse lặp 6× trên các màn luyện nói của
 Phase 13; Phase 15 chỉ đụng 4 màn người lớn nên vẫn không có màn luyện nói nào ép buộc việc tách).
 
-Việc để lại mới của Phase 15 (chi tiết ở README.md §Phase 15 "Việc để lại"):
-- `ipad/parent-dashboard-full.png` vẫn tràn 122px so với mục tiêu ≤834px (956px đo được) — panel
-  "Tài khoản" (gồm cả cột "Hồ sơ") là ứng viên cao nhất chịu trách nhiệm; controller quyết định có
-  nén panel này ở làn cuối hay không.
-- `RemoteRowState.noAudio` không còn một `it(...)` hay kịch bản `shoot.mjs` nào ép được nữa (test
-  ép nó bị xoá ở Task 14 fix round 1 vì phải giả một tín hiệu sản phẩm không tồn tại) — nên thêm
-  lại một test đơn giản chỉ để khoá hình dạng UI, tách bạch khỏi việc giả tín hiệu.
-- `AccountCard.tsx`'s `OTP_INPUT` lặp lại phần khung của `FieldRow` — nên gộp thành một biến thể
-  cỡ chữ của `FieldRow`'s code style.
-- `ProfilePicker.tsx`'s `byDate` in "Tạo dd/mm/yyyy" — nên bỏ năm thành "Tạo dd/mm" để hàng 3-lên
-  ở phone không bị ép chữ.
-- `ParentDashboard.tsx`'s `CHIP(w.avg)` (tô màu chip âm sai) chưa có test khoá ranh giới 49/50/70/71.
+Việc để lại mới của Phase 15, **sau làn sửa cuối** (chi tiết ở README.md §Phase 15 "Việc để lại"):
+- Cả ba mốc chiều cao đều **trượt** khi chấm bằng đơn vị của spec (pixel của `-full.png`): phone
+  1235 (≈1100), ipad 1032 (≤834), ipadp 1296 (≤1194). Lever `PanelGrid` xếp cột ở `ipad:` đã lấy
+  hết phần dễ lấy (−48 ở `parent-dashboard`, −274 ở `parent-dashboard-recordings-20`); phần còn lại
+  là các chiều cao brief quy định từng con số. Đề nghị đặt lại baseline trong MỘT đơn vị duy nhất.
+- `Panel`'s `scroll` + fade 40px được ship và có test nhưng **không màn nào truyền prop đó** — park
+  theo ruling (quyết định 30 "mở rộng tại chỗ" thắng §1.2's scroll body); hoặc dùng thật, hoặc xoá
+  cả prop lẫn bài test.
+- `Recording.score` mới được ghi ở 1/8 call site `saveRecording` (`PairPractice.tsx`), nên cột
+  "điểm" trống với bản ghi từ bảy màn còn lại — mở rộng ở một phase sau.
 - Flaky test đã biết `'the limit panel prints today against the limit in its title row and steps
-  by 5'` (`ParentDashboard.test.tsx:528`, nêu tên từ `task-14-review.md`) — không thuộc phạm vi
-  Phase 15, không tái hiện được trong môi trường cô lập.
+  by 5'` (`ParentDashboard.test.tsx`, nêu tên từ `task-14-review.md` mục (vii)) — không thuộc phạm
+  vi Phase 15, không tái hiện được trong môi trường cô lập, **không sửa ở làn cuối**.
+
+Đã đóng ở làn sửa cuối (trước đây nằm trong danh sách này): `RemoteRowState.noAudio` (xoá hẳn —
+không có nguồn phát), `AccountCard`'s `OTP_INPUT` (gộp vào `adult/fieldStyles.ts`),
+`ProfilePicker`'s `byDate` (nay in "Tạo dd/mm"), test ranh giới tone chip 49/50/70/71 (đã thêm).

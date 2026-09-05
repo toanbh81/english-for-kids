@@ -60,15 +60,17 @@ audio` (mp3 bị chặn để bắt trạng thái lỗi), `home-3-banners` (ch�
 sách và điều hướng (vòng 3)".
 
 ## Phase 15 (2026-09-05)
-15 kịch bản chụp mới (`SHOTS_DIR=../current-phase15/shots`), cộng `start-code` được mở rộng
-(scenario cũ, nay đi qua nhánh "Chọn cách khác" thật thay vì chỉ mở màn): `profile-gate-8` (seed 8
-hồ sơ, 5 tên "Bé" trùng, 1 tên 29 ký tự), `profile-gate-reask` (`sessionStorage` mark 6 phút cũ +
+**15 kịch bản** trong danh sách của spec (`SHOTS_DIR=../current-phase15/shots`) — 14 kịch bản mới,
+cộng `start-code` là kịch bản thứ 15: nó có sẵn từ trước và được **mở rộng** ở vòng này (nay đi qua
+nhánh "Chọn cách khác" thật thay vì chỉ mở màn). Mười bốn cái mới: `profile-gate-8` (seed 8 hồ sơ,
+5 tên "Bé" trùng, 1 tên 29 ký tự), `profile-gate-reask` (`sessionStorage` mark 6 phút cũ +
 `visibilitychange`), `parent-gate-empty` (trả lời rỗng), `start-otp-error`, `start-abandon`,
 `start-result-empty`, `parent-dashboard-empty`, `parent-dashboard-linked` (email 61 ký tự),
 `parent-dashboard-otp`, `parent-dashboard-sync-error`, `parent-dashboard-limit-custom` (giới hạn
 25'), `parent-dashboard-band-auto`, `parent-dashboard-recordings-20` (20 bản ghi vào IndexedDB),
-`parent-remote-7` (7 trạng thái Tiến độ từ xa qua PostgREST giả lập). `parent-dashboard` cũng được
-thêm vào `IPADP_ONLY` (đã có sẵn).
+`parent-remote-7` (Tiến độ từ xa qua PostgREST giả lập — khoá kịch bản là tên lịch sử; bản ship có
+**6** trạng thái, xem README.md Ruling (i)). `parent-dashboard` cũng được thêm vào `IPADP_ONLY`
+(đã có sẵn).
 
 **Mọi kịch bản chạm tới luồng xác thực đều stub mạng**, không đi qua Supabase thật:
 `start-otp-error`/`start-result-empty`/`start-abandon` mock `signInAnonymously()`
