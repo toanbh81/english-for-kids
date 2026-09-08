@@ -839,6 +839,19 @@ it('nests the 8 islands + Speak Lab in their own 150px-row grid, apart from Miss
   expect(within(grid).queryByRole('link', { name: 'Bắt đầu ▸' })).not.toBeInTheDocument()
 })
 
+/**
+ * The map frame (the grid's parent from `ipad` up) must carry an explicit width next to its
+ * aspect ratio. With an auto width, WebKit transfers the `max-height` cap to the width through
+ * `aspect-ratio`, so a real 1024×768 iPad drew the map ~727 px wide against the left edge and
+ * left the right third empty — a Safari-only bug the Chromium screenshot tool never showed.
+ */
+it('gives the iPad map frame an explicit full width so WebKit cannot shrink it via aspect-ratio', () => {
+  renderHome()
+
+  const frame = screen.getByTestId('home-island-grid').parentElement!
+  expect(frame).toHaveClass('ipad:aspect-[1194/834]', 'ipad:w-full', 'ipad:max-h-[calc(100vh-260px)]')
+})
+
 it('phone islands drop to 110 so two rows survive two banners', () => {
   renderHome()
   expect(screen.getByTestId('island-animals')).toHaveClass('h-[110px]', 'md:h-[150px]')

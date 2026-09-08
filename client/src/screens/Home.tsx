@@ -449,7 +449,14 @@ export function Home() {
           * md:space-y-3` reproduces the old grid `gap` between these three blocks without putting
           * them in a shared grid; from `ipad` up MissionCard is `ipad:absolute` and the heading is
           * `ipad:hidden`, so this container is the map's own 1194×834 frame exactly as before. */}
-        <div className="relative space-y-2.5 md:space-y-3 ipad:aspect-[1194/834] ipad:max-h-[calc(100vh-260px)]">
+        {/* `ipad:w-full` is load-bearing on a real iPad. With `aspect-ratio` and an *auto* width,
+          * WebKit transfers the `max-height` cap to the width through the ratio (css-sizing-4
+          * "transferred size"), so on a 1024×768 iPad the frame shrank to (768−260)×1194/834 ≈ 727
+          * px and sat against the left edge, leaving the right third of the map empty. Chromium
+          * (the screenshot tool) keeps the stretched width and only clamps the height, which is the
+          * layout every review shot shows. An explicit 100 % width is not `auto`, so no transfer
+          * happens in either engine and both render the same full-width band. */}
+        <div className="relative space-y-2.5 md:space-y-3 ipad:aspect-[1194/834] ipad:w-full ipad:max-h-[calc(100vh-260px)]">
           {/* First under the greeting: on a phone the one thing the child is here to do must not
             * sit below the fold. It used to be last, which put "Bắt đầu" at y≈1221 on an 844 px
             * screen (design M1b). From `ipad` up it goes back to the bottom-left corner of the
