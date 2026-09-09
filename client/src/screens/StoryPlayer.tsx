@@ -61,7 +61,7 @@ function StoryPlayerInner({ story, id, mission }: { story: Story; id: string; mi
           <Chip tone="teal" size="header">Cảnh {p.sceneIndex + 1}/{story.scenes.length}</Chip>
           {/* No margin between the two lines on a phone: the chip's own padding already separates
               them, and 2 px more put the stack (37 + 18) over the 56 px row. */}
-          <span className="text-[13px] font-bold text-ink-500 md:text-[15px]">{story.emoji} {story.title}</span>
+          <span className="text-[13px] font-bold text-ink-500 md:text-[18px] md:font-extrabold md:text-ink-900">{story.emoji} {story.title}</span>
         </div>
         {/* Decorative, and it disappears below `md` — the chip above already spells the position
             out in words at every width. */}
@@ -119,7 +119,12 @@ function StoryPlayerInner({ story, id, mission }: { story: Story; id: string; mi
             it and washed the teal circle out. Lifting the controls into their own layer keeps the
             fade doing its job over the cream beside them without touching the one control on this
             screen a child actually presses. */}
-        <div className="relative z-10 shrink-0">
+        {/* `pb-2.5` is what stops the ▶ button looking sliced off at the bottom. The controls are
+            the last thing in `page-body`, whose `overflow-y: auto` clips at its padding box — and
+            a box shadow is not scrollable overflow, so the button's chunky `0 8px 0` bottom edge
+            fell outside the clip box and simply was not painted. 10 px of padding puts the shadow
+            back inside the scroller. */}
+        <div className="relative z-10 shrink-0 pb-2.5">
         <PlayerControls
           playing={p.playing}
           rate={p.rate}

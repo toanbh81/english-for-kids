@@ -91,7 +91,7 @@ it('the header carries the scene chip over the story name, above the picture', (
   expect(sceneChip).toHaveClass('text-[15px]', 'rounded-r12', 'px-3.5', 'py-[7px]')
   expect(sceneChip).not.toHaveClass('text-lg', 'px-4', 'py-2', 'rounded-full')
   const name = within(banner).getByText('🦊 The Little Fox')
-  expect(name).toHaveClass('text-[13px]', 'md:text-[15px]', 'text-ink-500')
+  expect(name).toHaveClass('text-[13px]', 'md:text-[18px]', 'md:text-ink-900')
   // Stacked, chip + name came to 61 px inside a 64 px header row: the name sat flush on the
   // header's bottom edge, 17 px above the picture, and ran into the scene-dots pill beside it.
   // One row from `md` up — 37 px tall — is what gives it room and clears the dots.
@@ -248,10 +248,13 @@ it('does not flash the playback-failed note while the next scene is still loadin
   expect(screen.getByText('👆 Chạm 1 từ để nghe lại')).toBeInTheDocument()
 })
 
-it('lifts the transport controls above the footer fade and keeps the skip button off them', () => {
+it('lifts the transport controls above the footer fade and leaves room for the button shadow', () => {
   renderPlayer()
   const controls = screen.getByRole('button', { name: 'Phát' }).closest('div.relative.z-10')
   expect(controls).not.toBeNull()
+  // `page-body` clips at its padding box (`overflow-y: auto`) and a box shadow is not scrollable
+  // overflow, so without this padding the ▶ button's chunky `0 8px 0` bottom edge was cut off.
+  expect(controls).toHaveClass('pb-2.5')
   expect(screen.getByRole('link', { name: /Bỏ qua/ }).closest('footer')).toHaveClass('mt-6')
 })
 

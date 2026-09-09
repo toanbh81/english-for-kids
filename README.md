@@ -1946,7 +1946,8 @@ Vòng hai của cùng đợt (2026-09-09, người dùng thử trên web desktop
 | Lỗi | Nguyên nhân | Sửa |
 |---|---|---|
 | Tên truyện "bị đè" | Ngăn xếp chip + tên cao 61 px trong hàng header 64 px: tên không còn chỗ để căn giữa nên nằm sát mép dưới header (cách ảnh 17 px), và góc phải của nó chạm dải chấm cảnh bên cạnh (cách 10 px, chồng dọc 22 px) | Từ `md` trở lên header là **một hàng**: chip · tên · dải chấm cùng dòng, cao 37 px, tên cách ảnh 37 px và cách dải chấm 10 px theo chiều ngang. Điện thoại giữ hai dòng, bỏ `mt-0.5` cho khít 56 px |
-| Nút Play "bị đè" | Nút cách nút "Bỏ qua" 28 px, và dải mờ 40 px của chân trang quét ngang qua nó | `mt-6` cho chân trang → khoảng cách 34 px; `z-10` (vòng trước) giữ cụm điều khiển vẽ trên dải mờ |
+| Nút Play "bị đè" / "bị cắt" | (a) Nút cách nút "Bỏ qua" 28 px và dải mờ 40 px của chân trang quét ngang qua nó. (b) **Nút là phần tử cuối của `page-body`, mà `overflow-y: auto` cắt tại padding box — bóng đổ KHÔNG tính là tràn cuộn**, nên viền dày `0 8px 0` của nút bị cắt mất, trông như nút bị xén đáy | `mt-6` cho chân trang → 44 px; `z-10` giữ cụm điều khiển trên dải mờ; `pb-2.5` cho khung bọc để bóng đổ nằm trong vùng cắt |
+| Tên truyện vẫn bé | 15 px, cùng cỡ chữ trong chip, màu nhạt hơn | 18 px `font-extrabold` màu `ink-900` từ `md` trở lên — là chữ đậm nhất trong header, đúng vai trò tên truyện. Điện thoại giữ 13 px |
 | Màn hỏi: một câu trả lời hiện **hai lần**, bong bóng trên không thẳng hàng với khung câu hỏi | Bong bóng của cáo và dải băng dưới cùng in đúng một câu, ở hai chỗ | **Bỏ hẳn bong bóng**, giữ dải băng dưới deck (đã có ô cố định nên thẻ không nhúc nhích). Cáo vẫn đổi nét mặt |
 
 Đo sau khi sửa (Chrome 1024×748): chiều cao ảnh cảnh **không đổi** suốt lúc phát và khi sang cảnh (286 px), hàng chữ giữ 56 px, hàng thẻ đáp án dịch **0 px** khi phản hồi hiện ra.
