@@ -456,10 +456,29 @@ export function Home() {
           * (the screenshot tool) keeps the stretched width and only clamps the height, which is the
           * layout every review shot shows. An explicit 100 % width is not `auto`, so no transfer
           * happens in either engine and both render the same full-width band. */}
-        {/* `100vh-120px`: the map now starts right under the one-row header (20 px page top +
-          * 64 px header + 12 px body gap = 96) and keeps 24 px at the foot; the old 260 reserved
-          * the streak row that no longer renders from `md` up and left ~160 px of cream below. */}
-        <div className="relative space-y-2.5 md:space-y-3 ipad:aspect-[1194/834] ipad:w-full ipad:max-h-[calc(100vh-120px)]">
+        {/* No `vh` and no `aspect-ratio` here, and both bans are load-bearing on a real iPad.
+          *
+          * `vh` is not the space this page has. `PageShell` is `h-full` with safe-area padding, so
+          * the frame's real budget is "whatever is left in `page-body`" — smaller than `100vh` by
+          * the status bar, the shell's own padding and the header, and by a different amount in a
+          * browser tab than on a Home-Screen icon. Every fixed subtrahend (`100vh-260px`, then
+          * `-120px`) was right on one device and wrong on the next: too small left a band of cream
+          * under the map, too large pushed the mission card off the bottom edge and made the page
+          * scroll under the header.
+          *
+          * `aspect-ratio` was worse: with an auto width WebKit transfers a `max-height` cap back
+          * through the ratio to the *width* (css-sizing-4 "transferred size"), so the map drew
+          * 727 px wide against the left edge with the right third of the screen empty — while
+          * Chromium, which keeps the stretched width, showed the intended layout in every
+          * screenshot we took.
+          *
+          * `page-body` is a flex column with a definite height, so `flex-1 min-h-0` gives this
+          * frame exactly the leftover space on every device with no arithmetic at all. The map
+          * inside is resolution-independent already: the islands are positioned in percentages of
+          * the band and the trail SVG is `preserveAspectRatio="none"`, so it stretches to whatever
+          * shape the frame ends up. `ipad:mt-4` is the breathing room under the header the streak
+          * row used to provide. */}
+        <div className="relative space-y-2.5 md:space-y-3 ipad:mt-4 ipad:w-full ipad:min-h-0 ipad:flex-1">
           {/* First under the greeting: on a phone the one thing the child is here to do must not
             * sit below the fold. It used to be last, which put "Bắt đầu" at y≈1221 on an 844 px
             * screen (design M1b). From `ipad` up it goes back to the bottom-left corner of the
@@ -494,9 +513,16 @@ export function Home() {
           >
             {/* `contents` in the stacked grid, so the islands stay plain grid items; from `ipad` up it
               * becomes the top band of the map and the percentages resolve against it. The band stops
-              * 244 px short of the bottom, which is the strip the mission card and the parent link
-              * occupy — that keeps the trail and the island labels clear of them at any frame size. */}
-            <div className="contents ipad:absolute ipad:inset-x-0 ipad:bottom-[244px] ipad:top-0 ipad:block">
+              * short of the bottom by the strip the mission card, the restore link and Speak Lab
+              * occupy — that keeps the trail and the island labels clear of them at any frame size.
+              *
+              * That reserve is a percentage, not the design's flat 244 px. 244 of the design's own
+              * 834-tall frame is 29 %, and the frame is no longer 834 tall: on a real iPad 6 it
+              * comes out around 610, where a fixed 244 ate 40 % of the map and left a band of
+              * empty cream between the second row of islands and the mission card. The `max()`
+              * floor is the tallest thing in the strip — the 128 px mission card at `bottom-2`,
+              * plus room to breathe — so a shorter frame can never fold the islands onto it. */}
+            <div className="contents ipad:absolute ipad:inset-x-0 ipad:bottom-[max(29%,156px)] ipad:top-0 ipad:block">
               <svg
                 aria-hidden="true"
                 viewBox="0 0 1194 834"

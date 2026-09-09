@@ -845,16 +845,20 @@ it('nests the 8 islands + Speak Lab in their own 150px-row grid, apart from Miss
 })
 
 /**
- * The map frame (the grid's parent from `ipad` up) must carry an explicit width next to its
- * aspect ratio. With an auto width, WebKit transfers the `max-height` cap to the width through
- * `aspect-ratio`, so a real 1024×768 iPad drew the map ~727 px wide against the left edge and
- * left the right third empty — a Safari-only bug the Chromium screenshot tool never showed.
+ * The map frame (the grid's parent from `ipad` up) is sized by flex, never by arithmetic on the
+ * viewport. Both banned constructs cost a round on a real iPad 6: `aspect-ratio` with an auto
+ * width let WebKit transfer the height cap back to the width (a 727 px map against the left edge,
+ * right third empty), and every `calc(100vh - Npx)` was wrong on some device — `vh` counts space
+ * the shell's safe-area padding, the status bar and the header have already taken, so the mission
+ * card fell off the bottom and the page scrolled under the header.
  */
-it('gives the iPad map frame an explicit full width so WebKit cannot shrink it via aspect-ratio', () => {
+it('sizes the iPad map frame by flex, with no vh arithmetic and no aspect-ratio', () => {
   renderHome()
 
   const frame = screen.getByTestId('home-island-grid').parentElement!
-  expect(frame).toHaveClass('ipad:aspect-[1194/834]', 'ipad:w-full', 'ipad:max-h-[calc(100vh-120px)]')
+  expect(frame).toHaveClass('ipad:flex-1', 'ipad:min-h-0', 'ipad:w-full')
+  expect(frame.className).not.toContain('vh')
+  expect(frame.className).not.toContain('aspect-')
 })
 
 it('phone islands drop to 110 so two rows survive two banners', () => {

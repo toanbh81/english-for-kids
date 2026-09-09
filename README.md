@@ -1922,11 +1922,14 @@ Hai lỗi chỉ hiện trên iPad thế hệ 6 (Safari, 1024×768) mà mọi ả
 | Lỗi trên iPad | Nguyên nhân | Sửa |
 |---|---|---|
 | Bản đồ chỉ rộng ~727 px, dồn trái, trống 1/3 bên phải | Khung `aspect-[1194/834]` + `max-h-[calc(100vh-…)]` với width *auto*: WebKit chuyển cap chiều cao sang chiều rộng qua tỉ lệ (css-sizing-4 "transferred size"), Chromium thì giữ full width và chỉ cắt chiều cao | `ipad:w-full` — width tường minh thì không engine nào chuyển đổi (`13bb0d6`) |
-| Cụm streak/⭐ đè lên Foxy, lời chào lệch trái 45 px, ⭐ nằm dưới cáo | Header `md:h-16` nhưng Foxy `md` cao 96 px tràn xuống hàng streak rời phía dưới; ô trái header trống còn ô phải có nút Phụ huynh 153 px | Header **một hàng** ở mọi frame từ `md`: lời chào căn trái (`PageHeader align="start"`, Foxy `sm` 64 px), cụm streak + ⭐ + Phụ huynh bên phải như iPad dọc; hàng streak trong body chỉ còn `md:hidden`; khung bản đồ `max-h-[calc(100vh-120px)]` ăn phần cao của hàng đã bỏ |
+| Cụm streak/⭐ đè lên Foxy, lời chào lệch trái 45 px, ⭐ nằm dưới cáo | Header `md:h-16` nhưng Foxy `md` cao 96 px tràn xuống hàng streak rời phía dưới; ô trái header trống còn ô phải có nút Phụ huynh 153 px | Header **một hàng** ở mọi frame từ `md`: lời chào căn trái (`PageHeader align="start"`, Foxy `sm` 64 px), cụm streak + ⭐ + Phụ huynh bên phải như iPad dọc; hàng streak trong body chỉ còn `md:hidden` |
+| Thẻ nhiệm vụ tràn khỏi màn hình, cuộn xuống thì bản đồ chui sau header; giữa hai hàng đảo trống một mảng lớn | `100vh` **không phải** chỗ trang thật sự có: `PageShell` là `h-full` + padding safe-area, nên `calc(100vh − Npx)` đúng ở máy này thì sai ở máy khác (260 chừa thừa, 120 chừa thiếu). Dải đảo lại chừa đáy **cố định 244 px** = 29 % của khung 834 gốc nhưng tới 40 % của khung ~610 trên iPad 6 | Khung bản đồ **không còn phép tính `vh` và không còn `aspect-ratio`**: `ipad:flex-1 ipad:min-h-0 ipad:w-full` — `page-body` là flex column có chiều cao xác định nên khung nhận đúng phần còn lại ở mọi máy. Dải đảo chừa đáy theo tỉ lệ `bottom-[max(29%,156px)]` (`max()` là sàn để thẻ nhiệm vụ 128 px không bao giờ chồng lên đảo). Thêm `ipad:mt-4` làm khoảng thở dưới header |
+
+Số đo sau khi sửa (Chrome, đo trực tiếp — không frame nào còn cuộn): 1194×834 khung 694 / dải 493 · 1024×768 khung 628 · 1024×748 khung 608 / dải 432 · 1024×700 khung 560 / dải 398.
 
 **Ruling đảo ngược:** Phase 14 fix round 1 / reviewer Important #2 ("iPad ngang giữ pill chunky của bản đồ cũ trong body") bị bỏ — bằng chứng trên máy thật thắng ảnh headless. `ipad:` giờ không còn khác `md:` ở header Home.
 
-Bài học: ảnh Chromium không thay được Safari cho các thuộc tính `aspect-ratio`/`max-*`; hàng checklist iPad phải chạy trên máy thật trước khi chốt một frame.
+Bài học: (1) ảnh Chromium không thay được Safari cho `aspect-ratio`/`max-*`; (2) **không tính chiều cao khung bằng `vh`** khi shell đã là `h-full` + safe-area — để flex chia, vì `vh` tính cả phần thanh trạng thái và padding mà trang không có; (3) hàng checklist iPad phải chạy trên máy thật trước khi chốt một frame.
 
 ### Việc để lại
 
