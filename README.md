@@ -1915,6 +1915,19 @@ Ruling (i). Sáu trạng thái dưới đây đều ép được qua app thật 
     phải cờ hên xui — sửa bằng cách mở fold-row trước khi bấm "30'" nếu nó đang hiện, cùng khuôn
     `parent-dashboard-recordings-20` đã dùng cho panel "Bản ghi gần đây".
 
+### Sửa sau vòng 4 trên iPad thật (2026-09-09)
+
+Hai lỗi chỉ hiện trên iPad thế hệ 6 (Safari, 1024×768) mà mọi ảnh Edge headless đều không thấy — cả hai ở Home iPad ngang, "bản đồ cũ" vòng 3 cố ý chưa đụng:
+
+| Lỗi trên iPad | Nguyên nhân | Sửa |
+|---|---|---|
+| Bản đồ chỉ rộng ~727 px, dồn trái, trống 1/3 bên phải | Khung `aspect-[1194/834]` + `max-h-[calc(100vh-…)]` với width *auto*: WebKit chuyển cap chiều cao sang chiều rộng qua tỉ lệ (css-sizing-4 "transferred size"), Chromium thì giữ full width và chỉ cắt chiều cao | `ipad:w-full` — width tường minh thì không engine nào chuyển đổi (`13bb0d6`) |
+| Cụm streak/⭐ đè lên Foxy, lời chào lệch trái 45 px, ⭐ nằm dưới cáo | Header `md:h-16` nhưng Foxy `md` cao 96 px tràn xuống hàng streak rời phía dưới; ô trái header trống còn ô phải có nút Phụ huynh 153 px | Header **một hàng** ở mọi frame từ `md`: lời chào căn trái (`PageHeader align="start"`, Foxy `sm` 64 px), cụm streak + ⭐ + Phụ huynh bên phải như iPad dọc; hàng streak trong body chỉ còn `md:hidden`; khung bản đồ `max-h-[calc(100vh-120px)]` ăn phần cao của hàng đã bỏ |
+
+**Ruling đảo ngược:** Phase 14 fix round 1 / reviewer Important #2 ("iPad ngang giữ pill chunky của bản đồ cũ trong body") bị bỏ — bằng chứng trên máy thật thắng ảnh headless. `ipad:` giờ không còn khác `md:` ở header Home.
+
+Bài học: ảnh Chromium không thay được Safari cho các thuộc tính `aspect-ratio`/`max-*`; hàng checklist iPad phải chạy trên máy thật trước khi chốt một frame.
+
 ### Việc để lại
 
 - **Cả ba mốc chiều cao đều trượt trong đơn vị của spec** — phone 1235 (mục tiêu ≈1100), ipad 1032

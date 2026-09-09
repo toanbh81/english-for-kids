@@ -774,13 +774,18 @@ it('refuses to build a map with more topics than island slots', async () => {
  * the row 3 px down. jsdom cannot lay that out, so the guard is on the class list: any
  * `ipad:text-[...]` restore of a `text-<scale>` phone value has to restate the leading too.
  */
-it('restores the iPad leading, not just the size, on the star pill', () => {
+it('keeps the body streak row phone-only: no landscape comeback, no dead map-pill styles', () => {
   renderHome()
 
-  // Task 9: the star pill now renders twice (see `home-streak-row` above) — the map-styled
-  // classes under test live on both copies, so the phone one is picked by hand.
-  const pill = within(screen.getByTestId('home-streak-row')).getByText(/^⭐/)
-  expect(pill).toHaveClass('text-lg', 'ipad:text-[22px]', 'ipad:leading-normal')
+  // Real-iPad fix (2026-09-09): the row used to return at landscape (`ipad:flex`) as the map's
+  // chunky pills and collided with the Foxy overflowing the 64 px header. It is `md:hidden` at
+  // every wider frame now, so the ⭐ copy in it carries no `ipad:` styling at all.
+  const row = screen.getByTestId('home-streak-row')
+  expect(row).toHaveClass('md:hidden')
+  expect(row).not.toHaveClass('ipad:flex')
+  const pill = within(row).getByText(/^⭐/)
+  expect(pill).toHaveClass('text-lg')
+  expect(pill.className).not.toContain('ipad:')
 })
 
 /**
@@ -849,7 +854,7 @@ it('gives the iPad map frame an explicit full width so WebKit cannot shrink it v
   renderHome()
 
   const frame = screen.getByTestId('home-island-grid').parentElement!
-  expect(frame).toHaveClass('ipad:aspect-[1194/834]', 'ipad:w-full', 'ipad:max-h-[calc(100vh-260px)]')
+  expect(frame).toHaveClass('ipad:aspect-[1194/834]', 'ipad:w-full', 'ipad:max-h-[calc(100vh-120px)]')
 })
 
 it('phone islands drop to 110 so two rows survive two banners', () => {
@@ -883,4 +888,25 @@ it('streak, star total and the parent button move into the header from md up', (
   expect(within(right).getByRole('button', { name: 'Tuần này của con' })).toBeInTheDocument()
   expect(within(right).getByRole('link', { name: 'Phụ huynh' })).toBeInTheDocument()
   expect(screen.getByTestId('home-streak-row')).toHaveClass('md:hidden')
+})
+
+/**
+ * Real-iPad fix (2026-09-09): landscape is one header row too. The cluster is no longer hidden
+ * at `ipad`, the header is left-aligned (`align="start"` → `auto` back track) so the greeting
+ * hugs the left edge beside the right cluster, and the header Foxy is the 64 px `sm` that fits
+ * the 64 px row instead of the 96 px `md` that overflowed it on a real 1024×748 iPad.
+ */
+it('keeps the header cluster at landscape and left-aligns the greeting in a 64 px row', () => {
+  renderHome()
+  // header-right → the gap wrapper → [the streak/⭐ cluster, the parent link]; the button's own
+  // parent is StreakWeek's wrapper, so the cluster is addressed structurally.
+  const cluster = screen.getByTestId('header-right').firstElementChild!.firstElementChild!
+  expect(within(cluster as HTMLElement).getByRole('button', { name: 'Tuần này của con' })).toBeInTheDocument()
+  expect(cluster).toHaveClass('md:flex')
+  expect(cluster).not.toHaveClass('ipad:hidden')
+  expect(screen.getByRole('banner')).toHaveClass('grid-cols-[auto_1fr_56px]')
+  const headerFoxy = within(screen.getByRole('banner')).getByTestId('foxy')
+  const bodyFoxy = within(screen.getByTestId('page-body')).getByTestId('foxy')
+  expect(headerFoxy.querySelector('svg')?.getAttribute('width')).toBe('64')
+  expect(bodyFoxy.querySelector('svg')?.getAttribute('width')).toBe('96')
 })

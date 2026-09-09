@@ -323,12 +323,13 @@ export function Home() {
 
   /**
    * Task 9 / design decision 16: the streak week pill and the star total move into the header's
-   * right cell — but PORTRAIT only (fix round 1 / reviewer Important #2). At landscape the header
-   * falls back to its Phase-13 shape: Foxy + the full bubble in the header centre (see `ipad:flex`
-   * below), and the streak/⭐ pair back in the body as the map's own chunky pills
-   * (`home-streak-row`, `md:hidden ipad:flex`) — that's what `ipad:hidden` on this cluster is for.
-   * A landscape iPad matches `md:` too, so without it the compact cluster here and the full-size
-   * body pills would both render at once.
+   * right cell from `md` up — portrait AND landscape. Phase 14's fix round 1 (reviewer Important
+   * #2) had kept landscape on the old map's shape (Foxy + bubble centred in a 64 px header, the
+   * streak/⭐ pair as chunky pills in a body row below), but on a real iPad 6 (1024×748) that row
+   * collided with the 96 px Foxy hanging out of the header, the greeting sat 45 px left of centre
+   * (an empty left cell against a 153 px right cell), and the ⭐ pill landed under the fox. The
+   * header is now one row at every `md`+ frame: greeting on the left (`align="start"` below), this
+   * cluster on the right — the Phase 14 list-header language — and the map gets the row's height.
    *
    * `parentButton` is wrapped `contents max-md:hidden` (fix round 1 / Important #3): `contents`
    * makes the wrapper disappear from the box tree entirely, so from `md` up this cell renders the
@@ -337,7 +338,7 @@ export function Home() {
    */
   const headerCluster = (
     <>
-      <div className="hidden items-center gap-2 md:flex ipad:hidden">
+      <div className="hidden items-center gap-2 md:flex ipad:gap-3">
         <StreakWeek
           dots={weekDots(now, events)}
           streak={streak(now, events)}
@@ -369,7 +370,11 @@ export function Home() {
       </div>
 
       {/* Home has no destination to walk back to. */}
-      <PageHeader back={null} right={<div className="flex items-center gap-2 max-md:contents md:gap-3">{headerCluster}</div>}>
+      {/* `align="start"`: from `ipad` up the greeting lives in this header's centre cell and must
+        * hug the left edge, not float in whatever is left beside the right cluster. Below `ipad`
+        * the cell holds nothing visible (the sr-only h1), so the phone and portrait frames do not
+        * change; `back={null}` leaves the `auto` back track at 0. */}
+      <PageHeader back={null} align="start" right={<div className="flex items-center gap-2 max-md:contents md:gap-3">{headerCluster}</div>}>
         <h1 className="sr-only">Speak Up!</h1>
         {/* Fix wave I1/P4: the header used to also print `{say}` here, below `ipad` — the same
           * sentence the Foxy bubble prints a second time in the body just below (fix round 1's
@@ -379,8 +384,10 @@ export function Home() {
           * nothing of its own — same empty state the right cell already has there
           * (`headerCluster` is `hidden md:flex` + `max-md:hidden`) — so the bubble in the body
           * (below) is the sentence's one and only home. */}
+        {/* `size="sm"` (64 px): the header row is `md:h-16`, and a 96 px Foxy overflowed it by 16
+          * px top and bottom on a real iPad, landing on the row below. 64 is exactly the row. */}
         <div className="hidden items-center gap-3 ipad:flex">
-          <Foxy mood={mood} size="md" className="animate-bob" />
+          <Foxy mood={mood} size="sm" className="animate-bob" />
           <SpeechBubble
             title={<span className="text-coral-text">Chào bé! 👋</span>}
             subtitle={say}
@@ -413,11 +420,10 @@ export function Home() {
           />
         </div>
 
-        {/* The phone-only copy: from `md` up (portrait) the same numbers live in the header's
-          * right cell instead (`headerCluster` above); `ipad:flex` brings this row back at
-          * landscape, where the header cluster hides again and the map wants its own chunky
-          * pills here (fix round 1 / Important #2 and Minor #4). */}
-        <div data-testid="home-streak-row" className="flex flex-wrap items-center gap-2 ipad:gap-3 md:hidden ipad:flex">
+        {/* The phone-only copy: from `md` up — portrait and, since the real-iPad fix, landscape
+          * too — the same numbers live in the header's right cell instead (`headerCluster`
+          * above). The map no longer has its own chunky pills here. */}
+        <div data-testid="home-streak-row" className="flex flex-wrap items-center gap-2 md:hidden">
           <StreakWeek
             dots={weekDots(now, events)}
             streak={streak(now, events)}
@@ -426,15 +432,9 @@ export function Home() {
             stars={totalStars()}
             minutes={minutesByDay}
           />
-          {/* The star total is the design's 13 px line under the greeting on a phone and the
-            * chunky sun pill of the map from `ipad` up — one element, restyled, so the number
-            * is never in the page twice. */}
-          {/* `ipad:leading-normal` is not decoration. `text-lg` sets a 28 px line-height as well
-            * as an 18 px size, and `ipad:text-[22px]` restores only the size — so the pill came
-            * out 52 px tall instead of the map's 57 and dragged the row 3 px down with it. Any
-            * arbitrary-size restore has to restate the leading it is stepping on (1.5 is the
-            * inherited value the 22 px pill has always resolved against). */}
-          <div className="inline-flex items-center gap-2 rounded-[18px] font-display text-lg font-extrabold text-sun-700 ipad:bg-sun-50 ipad:px-5 ipad:py-3 ipad:text-[22px] ipad:leading-normal ipad:shadow-chunky-sun">
+          {/* The star total as the design's 13 px line under the greeting on a phone. This row is
+            * `md:hidden`, so it never needs the `ipad:` pill styles it used to carry. */}
+          <div className="inline-flex items-center gap-2 rounded-[18px] font-display text-lg font-extrabold text-sun-700">
             ⭐ {totalStars()}
           </div>
         </div>
@@ -456,7 +456,10 @@ export function Home() {
           * (the screenshot tool) keeps the stretched width and only clamps the height, which is the
           * layout every review shot shows. An explicit 100 % width is not `auto`, so no transfer
           * happens in either engine and both render the same full-width band. */}
-        <div className="relative space-y-2.5 md:space-y-3 ipad:aspect-[1194/834] ipad:w-full ipad:max-h-[calc(100vh-260px)]">
+        {/* `100vh-120px`: the map now starts right under the one-row header (20 px page top +
+          * 64 px header + 12 px body gap = 96) and keeps 24 px at the foot; the old 260 reserved
+          * the streak row that no longer renders from `md` up and left ~160 px of cream below. */}
+        <div className="relative space-y-2.5 md:space-y-3 ipad:aspect-[1194/834] ipad:w-full ipad:max-h-[calc(100vh-120px)]">
           {/* First under the greeting: on a phone the one thing the child is here to do must not
             * sit below the fold. It used to be last, which put "Bắt đầu" at y≈1221 on an 844 px
             * screen (design M1b). From `ipad` up it goes back to the bottom-left corner of the
