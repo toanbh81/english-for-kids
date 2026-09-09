@@ -1929,6 +1929,22 @@ Số đo sau khi sửa (Chrome, đo trực tiếp — không frame nào còn cu�
 
 **Ruling đảo ngược:** Phase 14 fix round 1 / reviewer Important #2 ("iPad ngang giữ pill chunky của bản đồ cũ trong body") bị bỏ — bằng chứng trên máy thật thắng ảnh headless. `ipad:` giờ không còn khác `md:` ở header Home.
 
+### Màn nghe truyện + màn hỏi trên iPad thật (2026-09-09)
+
+Năm lỗi giao diện người dùng báo sau khi thử `/story/:id` và `/story/:id/quiz` trên iPad 6:
+
+| Lỗi | Nguyên nhân | Sửa |
+|---|---|---|
+| Tên truyện bé như chú thích, dính sát khung cảnh | `text-[11px] text-ink-300` trong ô giữa header | `text-[13px] md:text-[15px] text-ink-500` + `mt-0.5`; ngăn xếp hai dòng vẫn nằm trong hàng header 56/64 |
+| Nút "Bỏ qua" đè lên nút ▶ | `PageFooter` là phần tử `relative` nên pseudo-element fade 40 px của nó vẽ **đè** lên nửa dưới nút ▶ (nút cách chân footer đúng 10 px) | Bọc `PlayerControls` trong `relative z-10` để nó vẽ trên lớp fade; footer thêm `mt-3` |
+| Chữ đang phát phình to làm khung cảnh nhảy lên xuống | Từ đang đọc đổi từ 32 px sang 44 px: đổi cả chiều cao dòng lẫn bề rộng, nên dòng **ngắt lại** và hàng chữ co giãn ~15 px mỗi từ; ảnh phía trên là phần tử co giãn nên nhận hết | **Mọi từ một cỡ** (21 px điện thoại / 32 px từ `md`), từ đang đọc phân biệt bằng màu coral trên nền `bg-coral-50` — màu không tốn layout. Một cỡ cũng khiến dòng chứa được nhiều từ hơn trước khi ngắt |
+| Hết một cảnh lại chớp một hộp đỏ rồi mất | Banner "🔇 Không phát được giọng đọc" hỏi `!hasAudio && playing`, mà `hasAudio` bị xoá suốt thời gian nạp **mỗi** cảnh → cảnh báo sai ở đúng lúc bé đang nhìn | Thêm `audioError` vào `useStoryPlayer`: chỉ bật khi phần tử audio báo lỗi hoặc `play()` bị từ chối; xoá khi nạp cảnh mới và khi thử lại. Dòng gợi ý "👆 Chạm 1 từ" cũng theo cờ này |
+| Màn hỏi: chọn xong thì lời thoại của cáo hiện ra, xô hàng thẻ đáp án xuống | Bong bóng nằm cùng hàng với khung câu hỏi, chỉ render khi có phản hồi | Chừa sẵn ô `min-h-[52px]` (`data-testid="quiz-foxy-line"`) như dải băng dưới chân màn hình vốn đã làm |
+
+Đo sau khi sửa (Chrome 1024×748): chiều cao ảnh cảnh **không đổi** suốt lúc phát và khi sang cảnh (286 px), hàng chữ giữ 56 px, hàng thẻ đáp án dịch **0 px** khi phản hồi hiện ra.
+
+**Ruling — lệch thiết kế §9 M6:** thiết kế cho từ đang đọc phình lên 44 px. Bỏ, vì nó làm ngắt dòng lại và rung cả khung ảnh trên máy thật; màu giữ nguyên ý nghĩa "từ này, ngay bây giờ" mà không tốn layout. Không chừa sẵn dòng thứ hai cho hàng chữ: đo trên cả ba truyện, từ `md` trở lên mọi cảnh đều gói gọn một dòng, chừa thừa sẽ ăn mất 58 px ảnh ở mọi cảnh.
+
 Bài học: (1) ảnh Chromium không thay được Safari cho `aspect-ratio`/`max-*`; (2) **không tính chiều cao khung bằng `vh`** khi shell đã là `h-full` + safe-area — để flex chia, vì `vh` tính cả phần thanh trạng thái và padding mà trang không có; (3) hàng checklist iPad phải chạy trên máy thật trước khi chốt một frame.
 
 ### Việc để lại

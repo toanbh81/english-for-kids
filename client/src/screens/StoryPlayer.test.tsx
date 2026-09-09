@@ -12,6 +12,7 @@ const state = vi.hoisted(() => ({
   // states set `hasTimings`/`hasAudio`/`playing` explicitly.
   hasTimings: true,
   hasAudio: true,
+  audioError: false,
   subtitles: false,
   ended: false,
   timings: [] as { start: number; end: number }[],
@@ -73,7 +74,7 @@ beforeEach(() => {
   localStorage.clear()
   Object.assign(state, {
     sceneIndex: 0, playing: false, rate: 1, tMs: 0, wordIndex: 1, hasTimings: true,
-    hasAudio: true, subtitles: false, ended: false, timings: [],
+    hasAudio: true, audioError: false, subtitles: false, ended: false, timings: [],
   })
   Object.values(actions).forEach(fn => fn.mockClear())
 })
@@ -89,7 +90,7 @@ it('the header carries the scene chip over the story name, above the picture', (
   // radius-full, 16px padding; task-5 review, Important #1).
   expect(sceneChip).toHaveClass('text-[15px]', 'rounded-r12', 'px-3.5', 'py-[7px]')
   expect(sceneChip).not.toHaveClass('text-lg', 'px-4', 'py-2', 'rounded-full')
-  expect(within(banner).getByText('🦊 The Little Fox')).toHaveClass('text-[11px]', 'text-ink-300')
+  expect(within(banner).getByText('🦊 The Little Fox')).toHaveClass('text-[13px]', 'md:text-[15px]', 'text-ink-500')
   expect(screen.queryByTestId('story-title')).toBeNull()
   expect(banner.compareDocumentPosition(screen.getByTestId('story-art')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
 })
@@ -112,7 +113,9 @@ it('shows the scene position in the header chip at every width, with the dots jo
 it('renders the words of scene 0 with wordIndex 1 active', () => {
   renderPlayer()
   const isButtons = screen.getAllByText('is') // scene 0 words: This is Foxy. Foxy is a little fox.
-  expect(isButtons[0]).toHaveClass('text-coral-text', 'text-[28px]', 'md:text-[44px]') // index 1
+  // One size for every word (real-iPad fix): the active one is coral on a coral pill, so the line
+  // cannot re-wrap and the picture above it cannot resize while the story plays.
+  expect(isButtons[0]).toHaveClass('text-coral-text', 'bg-coral-50', 'text-[21px]', 'md:text-[32px]') // index 1
   expect(screen.getByText('This')).toHaveClass('text-[#CDBFA9]') // index 0, already passed
   expect(screen.getByText('little')).toHaveClass('text-ink-900') // index 6, not yet reached
 })
@@ -194,10 +197,11 @@ it('hides the estimated-clock note once the scene has timings', () => {
   expect(screen.queryByText(/Không phát được giọng đọc/)).not.toBeInTheDocument()
 })
 
-it('shows a playback-failed note when a timed scene is playing without audio', () => {
+it('shows a playback-failed note only once the narration has actually failed', () => {
   state.hasTimings = true
   state.hasAudio = false
   state.playing = true
+  state.audioError = true
   renderPlayer()
   // The narration exists but is not coming out (missing mp3 / blocked autoplay) — a different
   // problem from "gen-story.mjs was never run", so it gets its own wording.
@@ -211,7 +215,7 @@ it('the two audio states are 44px Notices, the error one with a retry action', (
   expect(screen.getByRole('status')).toHaveTextContent('Chưa có giọng đọc — chữ chạy theo nhịp ước lượng')
 
   cleanup()
-  Object.assign(state, { hasTimings: true, hasAudio: false, playing: true })
+  Object.assign(state, { hasTimings: true, hasAudio: false, playing: true, audioError: true })
   renderPlayer()
   const err = screen.getByRole('status')
   expect(err).toHaveClass('bg-fix-50', 'border-fix-300')
@@ -225,6 +229,27 @@ it('stays quiet about audio on a timed scene that is not playing yet', () => {
   renderPlayer()
   expect(screen.queryByText('Không phát được giọng đọc')).not.toBeInTheDocument()
 })
+
+/**
+ * The banner asks `audioError`, not `!hasAudio && playing`. Every scene load clears `hasAudio`
+ * while playback carries on, so the old question was true for the length of each auto-advance and
+ * flashed a red "no sound" warning between scenes — the thing a child actually notices.
+ */
+it('does not flash the playback-failed note while the next scene is still loading', () => {
+  Object.assign(state, { hasTimings: true, hasAudio: false, playing: true, audioError: false })
+  renderPlayer()
+  expect(screen.queryByText(/Không phát được giọng đọc/)).not.toBeInTheDocument()
+  // The tap hint is the other half of the same swap: it used to vanish on the same condition.
+  expect(screen.getByText('👆 Chạm 1 từ để nghe lại')).toBeInTheDocument()
+})
+
+it('lifts the transport controls above the footer fade and keeps the skip button off them', () => {
+  renderPlayer()
+  const controls = screen.getByRole('button', { name: 'Phát' }).closest('div.relative.z-10')
+  expect(controls).not.toBeNull()
+  expect(screen.getByRole('link', { name: /Bỏ qua/ }).closest('footer')).toHaveClass('mt-3')
+})
+
 
 it('pulses a "Tiếp tục ▸" link to the quiz when the story has ended', () => {
   state.ended = true

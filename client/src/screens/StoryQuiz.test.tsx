@@ -252,7 +252,8 @@ it('drops Foxy\'s bubble on a phone, where the banner at the foot already says i
   // `hidden` is `display:none`, so on a phone it leaves the accessibility tree too — nothing is
   // lost, because the banner at the foot of the screen says the same thing in the same state and
   // is the assertion on the next line.
-  expect(screen.getByText('🦊 Chưa đúng, thử lại nhé').parentElement).toHaveClass('max-md:hidden')
+  // The rule now lives on the slot that reserves the bubble's space, not on the bubble itself.
+  expect(screen.getByText('🦊 Chưa đúng, thử lại nhé').closest('[data-testid=quiz-foxy-line]')).toHaveClass('hidden', 'md:block')
   expect(screen.getByText('Gần đúng rồi — thử lại nhé! 💪')).toBeInTheDocument()
 })
 
@@ -328,4 +329,21 @@ it('leaves every free-play exit exactly where it was', () => {
 
   fireEvent.click(screen.getByRole('link', { name: /Kể lại câu chuyện/ }))
   expect(screen.getByTestId('probe')).toHaveTextContent('/story/little-fox/retell null')
+})
+
+/**
+ * Real-iPad fix: the answer cards must not move when an answer is tapped. Foxy's bubble appears
+ * the moment feedback lands, and its column is in the same row as the question card — so growing
+ * it pushed the whole deck down under the child's finger, mid-tap.
+ */
+it('reserves Foxy bubble space so the answer cards never move when feedback lands', () => {
+  renderQuiz()
+  const q0 = story.quiz[0]
+
+  const slot = screen.getByTestId('quiz-foxy-line')
+  expect(slot).toHaveClass('min-h-[52px]')
+  expect(slot).toBeEmptyDOMElement()
+
+  fireEvent.click(screen.getByRole('button', { name: q0.options[q0.answer].label }))
+  expect(within(slot).getByText('🦊 Đúng rồi!')).toBeInTheDocument()
 })

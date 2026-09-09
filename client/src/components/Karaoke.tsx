@@ -8,11 +8,26 @@ type Props = {
   className?: string
 }
 
-/** The story line, one tappable word at a time: the word being read swells to 44 px coral,
- * words already read fade to the warm `#CDBFA9` of the handoff, the rest stay ink.
+/** The story line, one tappable word at a time: the word being read turns coral on a soft coral
+ * pill, words already read fade to the warm `#CDBFA9` of the handoff, the rest stay ink.
  *
- * On a phone those two sizes come down to the design's 28 / 21 px (§9 M6), which is what keeps
- * a seven-word line to two rows at 390 px instead of four.
+ * **Every word is the same size, and that is a fix, not a simplification.** The design (§9 M6) had
+ * the active word swell from 32 px to 44 px, which changes its line box AND its width: on a real
+ * iPad the line re-wrapped under the child's eyes and the row grew and shrank by ~15 px on every
+ * word, and since the picture above is the flexible one, the whole scene jumped up and down for
+ * the length of the story. Colour carries the same "this word, now" meaning at a constant size, so
+ * nothing above the line can move. The pill uses the padding the button already had, so it costs
+ * no layout either.
+ *
+ * One size also means the line holds MORE words before it wraps: the 44 px word was what pushed a
+ * seven-word sentence onto a second row. Measured on the three stories that ship, every scene is a
+ * single row from `md` up at 32 px, so no height is reserved here — a reserved second row would
+ * have cost the picture above 58 px on every scene to guard a wrap that never happens. A longer
+ * scene added later resizes the picture once, at that scene, which is not the per-word jump this
+ * fix is about.
+ *
+ * On a phone the sizes come down to the design's 21 px (§9 M6), which is what keeps a seven-word
+ * line to two rows at 390 px instead of four.
  *
  * **Named exception to the child 64 px floor (Q11 / R24):** a karaoke word is a SECONDARY target
  * (replay one word), not the screen's main action, so its hit is only 44×44 — `min-h-[44px]`,
@@ -24,12 +39,12 @@ export function Karaoke({ words, activeIndex, onWordTap, subtitle, className = '
       <div className="flex flex-wrap items-baseline justify-center gap-x-1 gap-y-0.5">
         {words.map((word, i) => (
           <button key={i} type="button" onClick={() => onWordTap(i)}
-            className={`min-h-[44px] inline-flex items-center justify-center px-1.5 py-2 font-display font-extrabold leading-tight transition-all ${
+            className={`min-h-[44px] inline-flex items-center justify-center rounded-r16 px-1.5 py-2 font-display text-[21px] font-extrabold leading-tight transition-colors md:text-[32px] ${
               i === activeIndex
-                ? 'text-[28px] text-coral-text md:text-[44px]'
+                ? 'bg-coral-50 text-coral-text'
                 : i < activeIndex
-                  ? 'text-[21px] text-[#CDBFA9] md:text-[32px]'
-                  : 'text-[21px] text-ink-900 md:text-[32px]'
+                  ? 'text-[#CDBFA9]'
+                  : 'text-ink-900'
             }`}>
             {word.w}
           </button>

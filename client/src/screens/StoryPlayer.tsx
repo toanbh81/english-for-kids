@@ -50,9 +50,12 @@ function StoryPlayerInner({ story, id, mission }: { story: Story; id: string; mi
         {/* R23/decision 24-25: the centre cell is a two-line stack now — the scene chip on top,
             the story's own name underneath it, both inside the header. There is no longer a
             separate title block in the body, so the name has exactly one home. */}
+        {/* The name was 11 px, which on a real iPad read as a caption stuck to the top of the
+            picture rather than as the story's title. 13/15 px with a hairline of space above it
+            still leaves the two-line stack inside the 56/64 px header row (chip 28 + 2 + 20). */}
         <div className="flex flex-col items-center">
           <Chip tone="teal" size="header">Cảnh {p.sceneIndex + 1}/{story.scenes.length}</Chip>
-          <span className="text-[11px] font-bold text-ink-300">{story.emoji} {story.title}</span>
+          <span className="mt-0.5 text-[13px] font-bold text-ink-500 md:text-[15px]">{story.emoji} {story.title}</span>
         </div>
         {/* Decorative, and it disappears below `md` — the chip above already spells the position
             out in words at every width. */}
@@ -83,7 +86,7 @@ function StoryPlayerInner({ story, id, mission }: { story: Story; id: string; mi
             visibly buttons, so the hint is the least load-bearing line on the frame. It also
             steps aside for either audio-state `Notice` below — one line of "how to use this
             screen" beats two competing for the same spot between the bar and the karaoke. */}
-        {!p.hasTimings || (!p.hasAudio && p.playing) ? null : (
+        {!p.hasTimings || p.audioError ? null : (
           <p className="text-center text-[13px] font-extrabold text-teal-600 short:hidden">👆 Chạm 1 từ để nghe lại</p>
         )}
 
@@ -93,7 +96,7 @@ function StoryPlayerInner({ story, id, mission }: { story: Story; id: string; mi
             place of the tap hint, the error one carrying a "Thử lại" action into `retry()`. */}
         {!p.hasTimings ? (
           <Notice kind="info" title="Chưa có giọng đọc — chữ chạy theo nhịp ước lượng" />
-        ) : !p.hasAudio && p.playing ? (
+        ) : p.audioError ? (
           <Notice kind="error" title="🔇 Không phát được giọng đọc" action={{ label: 'Thử lại', onClick: p.retry }} />
         ) : null}
 
@@ -105,6 +108,12 @@ function StoryPlayerInner({ story, id, mission }: { story: Story; id: string; mi
           className="max-md:flex-1 max-md:justify-center"
         />
 
+        {/* `relative z-10`: the footer below is a positioned element, so its 40 px fade
+            pseudo-element — which reaches 40 px up, straight over the ▶ button — painted on top of
+            it and washed the teal circle out. Lifting the controls into their own layer keeps the
+            fade doing its job over the cream beside them without touching the one control on this
+            screen a child actually presses. */}
+        <div className="relative z-10 shrink-0">
         <PlayerControls
           playing={p.playing}
           rate={p.rate}
@@ -118,9 +127,12 @@ function StoryPlayerInner({ story, id, mission }: { story: Story; id: string; mi
           onNext={p.nextScene}
           onSubtitles={p.toggleSubtitles}
         />
+        </div>
       </PageBody>
 
-      <PageFooter>
+      {/* `mt-3`: without it the ▶ circle's bottom edge and the skip button's top edge were 10 px
+          apart, which on the iPad read as one control sitting on the other. */}
+      <PageFooter className="mt-3">
         {/* The quiz is always one tap away; once the story ends the same link stops whispering
             and starts pulsing. */}
         {p.ended ? (

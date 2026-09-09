@@ -12,6 +12,15 @@ export type PlayerState = {
   /** The scene ships real per-word timings, i.e. narration exists to be played at all. */
   hasTimings: boolean
   hasAudio: boolean
+  /**
+   * Narration that has actually FAILED — the element reported an error, or `play()` was rejected.
+   *
+   * Not the same question as `!hasAudio`, and the screen must ask this one. `hasAudio` is false for
+   * the whole of every scene load, so a player that showed "🔇 Không phát được giọng đọc" whenever
+   * `!hasAudio && playing` flashed that red banner at every auto-advance, for as long as the next
+   * scene took to load — a warning about nothing, at the one moment the child is watching.
+   */
+  audioError: boolean
   subtitles: boolean
 }
 
@@ -69,6 +78,7 @@ export function useStoryPlayer(story: Story): StoryPlayer {
   const [rate, setRateState] = useState<0.75 | 1>(1)
   const [tMs, setTMs] = useState(NOT_STARTED)
   const [hasAudio, setHasAudio] = useState(false)
+  const [audioError, setAudioError] = useState(false)
   const [subtitles, setSubtitles] = useState(() => {
     // R29 / quyết định 28: đọc MỘT LẦN lúc mount, không nghe resize — xoay máy giữa chừng không
     // được tự tắt phụ đề dưới tay đứa trẻ.
@@ -141,6 +151,7 @@ export function useStoryPlayer(story: Story): StoryPlayer {
   }
   function attemptPlay(audio: HTMLAudioElement, atMs: number, token: number) {
     playResolvedRef.current = false // Low (a): a fresh attempt must re-earn "resolved" before hasAudio can flip true
+    setAudioError(false) // an attempt in flight is not a failure; only its rejection is
     audio.play().then(() => {
       if (loadTokenRef.current !== token) return
       playResolvedRef.current = true
@@ -149,6 +160,7 @@ export function useStoryPlayer(story: Story): StoryPlayer {
       if (loadTokenRef.current !== token) return
       hasAudioRef.current = false
       setHasAudio(false)
+      setAudioError(true)
       clockRef.current.rebase(atMs) // keep the fallback clock continuous from where we tried to start
     })
   }
@@ -211,6 +223,7 @@ export function useStoryPlayer(story: Story): StoryPlayer {
     setTMs(NOT_STARTED)
     setEnded(false)
     setHasAudio(false)
+    setAudioError(false) // a scene that has not finished loading has not failed
     hasAudioRef.current = false
     clockRef.current = createClock(rateRef.current) // Fix 1: keep the selected rate across scenes
 
@@ -235,6 +248,7 @@ export function useStoryPlayer(story: Story): StoryPlayer {
       if (loadTokenRef.current !== token) return
       hasAudioRef.current = false
       setHasAudio(false)
+      setAudioError(true)
     }
     const onEnded = () => {
       if (loadTokenRef.current !== token) return
@@ -337,7 +351,7 @@ export function useStoryPlayer(story: Story): StoryPlayer {
   }
 
   return {
-    sceneIndex, playing, rate, tMs, wordIndex, hasTimings: complete, hasAudio, subtitles, ended, timings,
+    sceneIndex, playing, rate, tMs, wordIndex, hasTimings: complete, hasAudio, audioError, subtitles, ended, timings,
     play, pause, toggle, setRate, nextScene, prevScene, goScene, replayWord, toggleSubtitles, retry,
   }
 }

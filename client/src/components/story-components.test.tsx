@@ -26,11 +26,14 @@ describe('Karaoke', () => {
     render(<Karaoke words={words} activeIndex={1} onWordTap={() => {}} />)
     const buttons = screen.getAllByRole('button')
     expect(buttons).toHaveLength(3)
-    // Phase 10: the size is written twice — the design's phone value unprefixed, the landscape
-    // one behind `md:` — so 1194 keeps the 44/32 px line it has always had.
-    expect(buttons[1]).toHaveClass('text-coral-text', 'text-[28px]', 'md:text-[44px]')
+    // Real-iPad fix: one size for every word — 21 px on a phone, 32 px from `md` up — because a
+    // word that swells re-wraps the line and resizes the picture above it on every word. The
+    // active word is told apart by colour on a coral pill, which costs no layout.
+    expect(buttons[1]).toHaveClass('text-coral-text', 'bg-coral-50', 'text-[21px]', 'md:text-[32px]')
     expect(buttons[0]).toHaveClass('text-[#CDBFA9]', 'text-[21px]', 'md:text-[32px]')
     expect(buttons[2]).toHaveClass('text-ink-900', 'text-[21px]', 'md:text-[32px]')
+    for (const b of buttons) expect(b.className).not.toMatch(/text-\[(28|44)px\]/)
+    expect(buttons[0].className).not.toContain('bg-coral-50')
   })
   it('a karaoke word is a 44px target, not 64 (Q11 named exception)', () => {
     render(<Karaoke words={[{ w: 'The' }]} activeIndex={0} onWordTap={() => {}} />)
@@ -38,6 +41,10 @@ describe('Karaoke', () => {
     expect(w).toHaveClass('min-h-[44px]', 'px-1.5', 'py-2')
     expect(w.className).not.toMatch(/min-w-\[64px\]/)
     expect(w.parentElement).toHaveClass('gap-x-1')
+    // No reserved second row: at one size every shipped scene is a single row from `md` up, and
+    // reserving one would cost the picture above 58 px on every scene to guard a wrap that does
+    // not happen.
+    expect(w.parentElement!.className).not.toContain('min-h-')
   })
   it('calls onWordTap with the tapped index', () => {
     const fn = vi.fn()

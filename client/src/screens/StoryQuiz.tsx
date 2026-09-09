@@ -171,8 +171,14 @@ function StoryQuizInner({ quiz, id, mission: inMission }: { quiz: QuizQ[]; id: s
             <Foxy mood={mood} size="md" />
             {/* Foxy's line and the banner at the foot of the screen say the same thing. On a phone
                 only the banner is kept: the bubble is what pushed the third answer card off the
-                bottom, and the fox's face has already changed mood beside it. */}
-            {foxySays && <SpeechBubble title={foxySays} className="text-center max-md:hidden" />}
+                bottom, and the fox's face has already changed mood beside it.
+                From `md` up the slot is reserved whether or not there is a line in it: the bubble
+                appears the instant an answer is tapped, and growing this column then pushed the
+                whole answer row down under the child's finger. The banner at the foot already had
+                its own fixed slot for exactly this reason. */}
+            <div data-testid="quiz-foxy-line" className="hidden min-h-[52px] md:block">
+              {foxySays && <SpeechBubble title={foxySays} className="text-center" />}
+            </div>
           </div>
           <div className="flex flex-1 items-center gap-2 rounded-[22px] rounded-bl-[6px] bg-white px-3 py-3 shadow-card-sm md:gap-3 md:px-5 md:py-4">
             <div className="flex-1 text-center">
