@@ -8,7 +8,7 @@ import { MISSION_ROUTE, MISSION_STATE, RETURN_LABEL, useMissionFlag } from '../p
 import { speakText } from '../story/speak'
 import { Foxy } from '../components/Foxy'
 import type { FoxyMood } from '../components/Foxy'
-import { BackButton, Button, Chip, HomeLabel, LinkText, NotFound, SpeechBubble, StarRow } from '../components/ui'
+import { BackButton, Button, Chip, HomeLabel, LinkText, NotFound, StarRow } from '../components/ui'
 import { PageShell, PageHeader, PageBody, PageFooter } from '../components/ui/page'
 
 const ADVANCE_MS = 900
@@ -158,7 +158,6 @@ function StoryQuizInner({ quiz, id, mission: inMission }: { quiz: QuizQ[]; id: s
   }
 
   const mood: FoxyMood = feedback === 'correct' ? 'happy' : feedback === 'wrong' ? 'surprised' : 'idle'
-  const foxySays = feedback === 'correct' ? '🦊 Đúng rồi!' : feedback === 'wrong' ? '🦊 Chưa đúng, thử lại nhé' : null
 
   return (
     <PageShell gutter="20">
@@ -167,18 +166,15 @@ function StoryQuizInner({ quiz, id, mission: inMission }: { quiz: QuizQ[]; id: s
       </PageHeader>
       <PageBody className="items-center gap-3">
         <div className="flex w-full max-w-3xl items-start justify-center gap-3 max-md:shrink-0 md:gap-4">
+          {/* Foxy alone. The bubble that used to hang under him said exactly what the banner at
+              the foot of the screen says, in the same two states, so the screen answered one tap
+              with the same sentence twice — once above the cards and once below them. It also had
+              nothing to line up with: it was the only thing in this column under a 96 px fox,
+              beside a question card it never matched the top or bottom of. The banner is the one
+              that stays: it is centred under the deck, it already has a fixed slot so the cards
+              cannot move, and it reads in the direction the child is already looking. */}
           <div className="flex shrink-0 flex-col items-center gap-2">
             <Foxy mood={mood} size="md" />
-            {/* Foxy's line and the banner at the foot of the screen say the same thing. On a phone
-                only the banner is kept: the bubble is what pushed the third answer card off the
-                bottom, and the fox's face has already changed mood beside it.
-                From `md` up the slot is reserved whether or not there is a line in it: the bubble
-                appears the instant an answer is tapped, and growing this column then pushed the
-                whole answer row down under the child's finger. The banner at the foot already had
-                its own fixed slot for exactly this reason. */}
-            <div data-testid="quiz-foxy-line" className="hidden min-h-[52px] md:block">
-              {foxySays && <SpeechBubble title={foxySays} className="text-center" />}
-            </div>
           </div>
           <div className="flex flex-1 items-center gap-2 rounded-[22px] rounded-bl-[6px] bg-white px-3 py-3 shadow-card-sm md:gap-3 md:px-5 md:py-4">
             <div className="flex-1 text-center">

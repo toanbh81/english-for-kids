@@ -75,9 +75,9 @@ it('a wrong first attempt on one question, corrected, still passes the other two
   const q0 = story.quiz[0]
   const wrongIndex0 = q0.options.findIndex((_, i) => i !== q0.answer)
   fireEvent.click(screen.getByRole('button', { name: q0.options[wrongIndex0].label }))
-  expect(screen.getByText('🦊 Chưa đúng, thử lại nhé')).toBeInTheDocument()
+  expect(screen.getByText('Gần đúng rồi — thử lại nhé! 💪')).toBeInTheDocument()
   fireEvent.click(screen.getByRole('button', { name: q0.options[q0.answer].label }))
-  expect(screen.getByText('🦊 Đúng rồi!')).toBeInTheDocument()
+  expect(screen.getByText('Đúng rồi! Giỏi quá! 🎉')).toBeInTheDocument()
   act(() => { vi.advanceTimersByTime(900) })
 
   // Questions 2 and 3: correct on first try.
@@ -142,7 +142,7 @@ it('ignores taps while the correct-answer advance is pending', () => {
   // Tap again during the 900ms pending window: should be ignored.
   const otherIndex = q0.options.findIndex((_, i) => i !== q0.answer)
   fireEvent.click(screen.getByRole('button', { name: q0.options[otherIndex].label }))
-  expect(screen.getByText('🦊 Đúng rồi!')).toBeInTheDocument()
+  expect(screen.getByText('Đúng rồi! Giỏi quá! 🎉')).toBeInTheDocument()
   act(() => { vi.advanceTimersByTime(900) })
   expect(screen.getByText('Câu 2/3')).toBeInTheDocument()
 })
@@ -242,19 +242,18 @@ it('an option with an image renders a 16:9 picture instead of the emoji', () => 
   expect(img).toHaveAttribute('src', '/art/fox.png')
 })
 
-it('drops Foxy\'s bubble on a phone, where the banner at the foot already says it', () => {
+it('answers a tap with ONE sentence, the banner under the deck', () => {
   renderQuiz()
   const q0 = story.quiz[0]
   const wrong = q0.options.findIndex((_, i) => i !== q0.answer)
   fireEvent.click(screen.getByRole('button', { name: q0.options[wrong].label }))
-  // In the DOM at every width, and laid out again from 768 up, where it is the landscape frame's
-  // bubble; below 768 it goes, because it is what pushed the third answer card under the fold.
-  // `hidden` is `display:none`, so on a phone it leaves the accessibility tree too — nothing is
-  // lost, because the banner at the foot of the screen says the same thing in the same state and
-  // is the assertion on the next line.
-  // The rule now lives on the slot that reserves the bubble's space, not on the bubble itself.
-  expect(screen.getByText('🦊 Chưa đúng, thử lại nhé').closest('[data-testid=quiz-foxy-line]')).toHaveClass('hidden', 'md:block')
+  // Foxy used to repeat the banner in a bubble hung under his chin: the same sentence twice for
+  // one tap, above the cards and below them, and the bubble lined up with nothing beside it. The
+  // banner is the one that stays — centred under the deck, in its own fixed slot.
   expect(screen.getByText('Gần đúng rồi — thử lại nhé! 💪')).toBeInTheDocument()
+  expect(screen.queryByText('🦊 Chưa đúng, thử lại nhé')).not.toBeInTheDocument()
+  // The fox still answers, with his face.
+  expect(screen.getByTestId('foxy')).toHaveAttribute('data-mood', 'surprised')
 })
 
 it('stacks the two secondary result exits full width on a phone and keeps the row from md up', () => {
@@ -332,18 +331,19 @@ it('leaves every free-play exit exactly where it was', () => {
 })
 
 /**
- * Real-iPad fix: the answer cards must not move when an answer is tapped. Foxy's bubble appears
- * the moment feedback lands, and its column is in the same row as the question card — so growing
- * it pushed the whole deck down under the child's finger, mid-tap.
+ * The answer cards must not move when an answer is tapped. What used to move them was Foxy's
+ * bubble appearing in the same row as the question card; the bubble is gone, so that row's height
+ * cannot change at all, and the banner below has had its own fixed slot since it was written.
  */
-it('reserves Foxy bubble space so the answer cards never move when feedback lands', () => {
+it('keeps the answer cards still when feedback lands', () => {
   renderQuiz()
   const q0 = story.quiz[0]
-
-  const slot = screen.getByTestId('quiz-foxy-line')
-  expect(slot).toHaveClass('min-h-[52px]')
-  expect(slot).toBeEmptyDOMElement()
+  const deck = screen.getByRole('button', { name: q0.options[0].label }).parentElement!
+  const before = deck.className
 
   fireEvent.click(screen.getByRole('button', { name: q0.options[q0.answer].label }))
-  expect(within(slot).getByText('🦊 Đúng rồi!')).toBeInTheDocument()
+
+  expect(screen.getByText('Đúng rồi! Giỏi quá! 🎉').parentElement).toHaveClass('h-[46px]', 'md:h-[60px]')
+  expect(deck.className).toBe(before)
+  expect(screen.queryByText('🦊 Đúng rồi!')).not.toBeInTheDocument()
 })

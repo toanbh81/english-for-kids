@@ -90,7 +90,12 @@ it('the header carries the scene chip over the story name, above the picture', (
   // radius-full, 16px padding; task-5 review, Important #1).
   expect(sceneChip).toHaveClass('text-[15px]', 'rounded-r12', 'px-3.5', 'py-[7px]')
   expect(sceneChip).not.toHaveClass('text-lg', 'px-4', 'py-2', 'rounded-full')
-  expect(within(banner).getByText('🦊 The Little Fox')).toHaveClass('text-[13px]', 'md:text-[15px]', 'text-ink-500')
+  const name = within(banner).getByText('🦊 The Little Fox')
+  expect(name).toHaveClass('text-[13px]', 'md:text-[15px]', 'text-ink-500')
+  // Stacked, chip + name came to 61 px inside a 64 px header row: the name sat flush on the
+  // header's bottom edge, 17 px above the picture, and ran into the scene-dots pill beside it.
+  // One row from `md` up — 37 px tall — is what gives it room and clears the dots.
+  expect(name.parentElement).toHaveClass('flex-col', 'md:flex-row', 'md:gap-2.5')
   expect(screen.queryByTestId('story-title')).toBeNull()
   expect(banner.compareDocumentPosition(screen.getByTestId('story-art')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
 })
@@ -247,7 +252,7 @@ it('lifts the transport controls above the footer fade and keeps the skip button
   renderPlayer()
   const controls = screen.getByRole('button', { name: 'Phát' }).closest('div.relative.z-10')
   expect(controls).not.toBeNull()
-  expect(screen.getByRole('link', { name: /Bỏ qua/ }).closest('footer')).toHaveClass('mt-3')
+  expect(screen.getByRole('link', { name: /Bỏ qua/ }).closest('footer')).toHaveClass('mt-6')
 })
 
 

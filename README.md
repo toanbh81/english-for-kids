@@ -1941,6 +1941,14 @@ Năm lỗi giao diện người dùng báo sau khi thử `/story/:id` và `/stor
 | Hết một cảnh lại chớp một hộp đỏ rồi mất | Banner "🔇 Không phát được giọng đọc" hỏi `!hasAudio && playing`, mà `hasAudio` bị xoá suốt thời gian nạp **mỗi** cảnh → cảnh báo sai ở đúng lúc bé đang nhìn | Thêm `audioError` vào `useStoryPlayer`: chỉ bật khi phần tử audio báo lỗi hoặc `play()` bị từ chối; xoá khi nạp cảnh mới và khi thử lại. Dòng gợi ý "👆 Chạm 1 từ" cũng theo cờ này |
 | Màn hỏi: chọn xong thì lời thoại của cáo hiện ra, xô hàng thẻ đáp án xuống | Bong bóng nằm cùng hàng với khung câu hỏi, chỉ render khi có phản hồi | Chừa sẵn ô `min-h-[52px]` (`data-testid="quiz-foxy-line"`) như dải băng dưới chân màn hình vốn đã làm |
 
+Vòng hai của cùng đợt (2026-09-09, người dùng thử trên web desktop 1900 px):
+
+| Lỗi | Nguyên nhân | Sửa |
+|---|---|---|
+| Tên truyện "bị đè" | Ngăn xếp chip + tên cao 61 px trong hàng header 64 px: tên không còn chỗ để căn giữa nên nằm sát mép dưới header (cách ảnh 17 px), và góc phải của nó chạm dải chấm cảnh bên cạnh (cách 10 px, chồng dọc 22 px) | Từ `md` trở lên header là **một hàng**: chip · tên · dải chấm cùng dòng, cao 37 px, tên cách ảnh 37 px và cách dải chấm 10 px theo chiều ngang. Điện thoại giữ hai dòng, bỏ `mt-0.5` cho khít 56 px |
+| Nút Play "bị đè" | Nút cách nút "Bỏ qua" 28 px, và dải mờ 40 px của chân trang quét ngang qua nó | `mt-6` cho chân trang → khoảng cách 34 px; `z-10` (vòng trước) giữ cụm điều khiển vẽ trên dải mờ |
+| Màn hỏi: một câu trả lời hiện **hai lần**, bong bóng trên không thẳng hàng với khung câu hỏi | Bong bóng của cáo và dải băng dưới cùng in đúng một câu, ở hai chỗ | **Bỏ hẳn bong bóng**, giữ dải băng dưới deck (đã có ô cố định nên thẻ không nhúc nhích). Cáo vẫn đổi nét mặt |
+
 Đo sau khi sửa (Chrome 1024×748): chiều cao ảnh cảnh **không đổi** suốt lúc phát và khi sang cảnh (286 px), hàng chữ giữ 56 px, hàng thẻ đáp án dịch **0 px** khi phản hồi hiện ra.
 
 **Ruling — lệch thiết kế §9 M6:** thiết kế cho từ đang đọc phình lên 44 px. Bỏ, vì nó làm ngắt dòng lại và rung cả khung ảnh trên máy thật; màu giữ nguyên ý nghĩa "từ này, ngay bây giờ" mà không tốn layout. Không chừa sẵn dòng thứ hai cho hàng chữ: đo trên cả ba truyện, từ `md` trở lên mọi cảnh đều gói gọn một dòng, chừa thừa sẽ ăn mất 58 px ảnh ở mọi cảnh.

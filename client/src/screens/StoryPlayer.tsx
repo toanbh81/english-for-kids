@@ -50,12 +50,18 @@ function StoryPlayerInner({ story, id, mission }: { story: Story; id: string; mi
         {/* R23/decision 24-25: the centre cell is a two-line stack now — the scene chip on top,
             the story's own name underneath it, both inside the header. There is no longer a
             separate title block in the body, so the name has exactly one home. */}
-        {/* The name was 11 px, which on a real iPad read as a caption stuck to the top of the
-            picture rather than as the story's title. 13/15 px with a hairline of space above it
-            still leaves the two-line stack inside the 56/64 px header row (chip 28 + 2 + 20). */}
-        <div className="flex flex-col items-center">
+        {/* Two lines on a phone, ONE row from `md` up. Stacked, the chip and the name came to 61 px
+            inside a 64 px header row: the name had no room to be centred, so it sat flush on the
+            header's bottom edge 17 px above the picture, and its right-hand corner ran into the
+            scene-dots pill beside it, which is centred against the whole 64 px. Side by side the
+            row is 37 px tall, the name is centred with the chip and the dots, and nothing is
+            within touching distance of the artwork. The name is 13/15 px, not the 11 px caption it
+            started as. */}
+        <div className="flex flex-col items-center md:flex-row md:gap-2.5">
           <Chip tone="teal" size="header">Cảnh {p.sceneIndex + 1}/{story.scenes.length}</Chip>
-          <span className="mt-0.5 text-[13px] font-bold text-ink-500 md:text-[15px]">{story.emoji} {story.title}</span>
+          {/* No margin between the two lines on a phone: the chip's own padding already separates
+              them, and 2 px more put the stack (37 + 18) over the 56 px row. */}
+          <span className="text-[13px] font-bold text-ink-500 md:text-[15px]">{story.emoji} {story.title}</span>
         </div>
         {/* Decorative, and it disappears below `md` — the chip above already spells the position
             out in words at every width. */}
@@ -130,9 +136,10 @@ function StoryPlayerInner({ story, id, mission }: { story: Story; id: string; mi
         </div>
       </PageBody>
 
-      {/* `mt-3`: without it the ▶ circle's bottom edge and the skip button's top edge were 10 px
-          apart, which on the iPad read as one control sitting on the other. */}
-      <PageFooter className="mt-3">
+      {/* `mt-6`: without it the ▶ circle's bottom edge and the skip button's top edge were 10 px
+          apart, which reads as one control sitting on the other. 24 px also carries most of the
+          footer's own 40 px fade band off the transport row (the `z-10` above covers the rest). */}
+      <PageFooter className="mt-6">
         {/* The quiz is always one tap away; once the story ends the same link stops whispering
             and starts pulsing. */}
         {p.ended ? (
